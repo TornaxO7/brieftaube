@@ -1,30 +1,50 @@
+use std::io;
+
 use color_eyre::eyre::Result;
-use ratatui::DefaultTerminal;
+use crossterm::event::{self, KeyCode};
+use ratatui::{DefaultTerminal, Frame};
 
 mod ui;
 
 /// Stores the app state
-#[derive(Debug, Default)]
-struct State {
+#[derive(Debug)]
+pub struct App {
+    is_running: bool,
+
     ui: ui::UiState,
 }
 
-impl State {
+impl App {
     pub fn new() -> Self {
-        Self::default()
-    }
-}
+        Self {
+            is_running: true,
 
-pub fn app(terminal: &mut DefaultTerminal) -> Result<()> {
-    let mut state = State::new();
-
-    loop {
-        terminal.draw(|frame| ui::render(&mut state.ui, frame))?;
-
-        if crossterm::event::read()?.is_key_press() {
-            break;
+            ui: ui::UiState::default(),
         }
     }
 
-    Ok(())
+    pub fn run(mut self, terminal: &mut DefaultTerminal) -> Result<()> {
+        while self.is_running {
+            terminal.draw(|frame| self.draw(frame))?;
+            self.handle_events()?;
+        }
+
+        Ok(())
+    }
+
+    fn draw(&self, frame: &mut Frame) {
+        frame.render_widget(&self.ui, frame.area());
+        // frame.render_widget(self, frame.area());
+    }
+
+    fn handle_events(&mut self) -> io::Result<()> {
+        if let Some(key) = event::read()?.as_key_press_event() {
+            match key.code {
+                KeyCode::Char('q') => self.is_running = false,
+                _ => {}
+            }
+        }
+
+        Ok(())
+    }
 }

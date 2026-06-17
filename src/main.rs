@@ -1,3 +1,4 @@
+use brieftaube::App;
 use color_eyre::eyre::Result;
 use std::{fs::OpenOptions, sync::OnceLock};
 use tracing::level_filters::LevelFilter;
@@ -7,12 +8,11 @@ use xdg::BaseDirectories;
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
 static XDG: OnceLock<BaseDirectories> = OnceLock::new();
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     color_eyre::install()?;
     init_logging()?;
 
-    ratatui::run(brieftaube::app)
+    ratatui::run(|terminal| App::new().run(terminal))
 }
 
 fn get_xdg() -> &'static BaseDirectories {

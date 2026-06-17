@@ -1,5 +1,10 @@
 use color_eyre::eyre::Result;
-use ratatui::{DefaultTerminal, Frame};
+use ratatui::{
+    DefaultTerminal, Frame,
+    buffer::Buffer,
+    layout::{Constraint, Layout, Rect},
+    widgets::Widget,
+};
 
 mod composer;
 mod mails;
@@ -43,10 +48,15 @@ impl Default for UiState {
     }
 }
 
-pub fn render(state: &mut UiState, frame: &mut Frame) {
-    match state.mode {
-        Mode::Mails => mails::render(&mut state.mails, frame),
-        Mode::Composer => composer::render(&state.composer, frame),
-        Mode::Pager => pager::render(&state.pager, frame),
+impl Widget for &UiState {
+    fn render(self, area: Rect, buf: &mut Buffer)
+    where
+        Self: Sized,
+    {
+        match self.mode {
+            Mode::Mails => self.mails.render(area, buf),
+            Mode::Composer => self.composer.render(area, buf),
+            Mode::Pager => self.pager.render(area, buf),
+        };
     }
 }

@@ -1,5 +1,5 @@
 use ratatui::{
-    layout::Rect,
+    symbols,
     widgets::{Block, Paragraph, Widget},
 };
 
@@ -7,12 +7,12 @@ use ratatui::{
 pub struct State {}
 
 impl Widget for &State {
-    fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer)
+    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
     where
         Self: Sized,
     {
         Widget::render(
-            Paragraph::new("This is an example mail").block(Block::bordered().title("Content")),
+            Paragraph::new("Statusbar content").block(Block::bordered()),
             area,
             buf,
         )

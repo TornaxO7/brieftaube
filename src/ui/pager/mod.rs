@@ -1,7 +1,14 @@
 use color_eyre::eyre::Result;
-use ratatui::{DefaultTerminal, Frame};
+use ratatui::{DefaultTerminal, Frame, widgets::Widget};
 
 #[derive(Debug, Default)]
 pub struct State {}
 
-pub fn render(state: &State, frame: &mut Frame) {}
+impl Widget for &State {
+    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
+    where
+        Self: Sized,
+    {
+        todo!()
+    }
+}

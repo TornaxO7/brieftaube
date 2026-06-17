@@ -1,31 +1,24 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    widgets::StatefulWidget,
+    widgets::{Block, List, ListDirection, ListState, StatefulWidget, Widget},
 };
 
 #[derive(Debug, Default)]
 pub struct State {}
 
-#[derive(Debug)]
-pub struct MailBoxListWidget {}
-
-impl MailBoxListWidget {
-    pub fn new() -> Self {
-        Self {}
+impl Widget for &State {
+    fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer)
+    where
+        Self: Sized,
+    {
+        StatefulWidget::render(
+            List::new(["Mailbox 1", "Mailbox 2", "Mailbox 3"])
+                .block(Block::bordered().title("Mailboxes"))
+                .highlight_symbol(">> ")
+                .direction(ListDirection::TopToBottom),
+            area,
+            buf,
+            &mut ListState::default().with_selected(Some(0)),
+        )
     }
-}
-
-impl StatefulWidget for MailBoxListWidget {
-    type State = State;
-
-    fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer, state: &mut Self::State) {
-        todo!()
-    }
-}
-
-pub fn render(state: &State, rect: Rect) {
-    let layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(vec![Constraint::Percentage(100)])
-        .split(rect);
 }
