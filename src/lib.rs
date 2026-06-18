@@ -1,8 +1,6 @@
-use std::io;
-
 use color_eyre::eyre::Result;
-use crossterm::event::{self, KeyCode};
 use ratatui::{DefaultTerminal, Frame};
+use std::io;
 
 mod ui;
 
@@ -42,7 +40,7 @@ impl App {
     }
 
     fn handle_events(&mut self) -> io::Result<()> {
-        if let Some(key) = event::read()?.as_key_press_event() {
+        if let Some(key) = crossterm::event::read()?.as_key_press_event() {
             if let Some(action) = self.ui.handle_event(key) {
                 match action {
                     Action::Quit => self.is_running = false,
