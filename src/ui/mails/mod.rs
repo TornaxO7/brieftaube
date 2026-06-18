@@ -144,8 +144,8 @@ impl Widget for &mut State {
 
         let [mail_boxes, mail_list, preview] = content.layout(&Layout::horizontal([
             Constraint::Percentage(10),
-            Constraint::Percentage(50),
-            Constraint::Percentage(40),
+            Constraint::Percentage(60),
+            Constraint::Percentage(30),
         ]));
 
         self.mailbox_list.render(mail_boxes, buf);
