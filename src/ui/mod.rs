@@ -9,6 +9,8 @@ mod pager;
 #[derive(Debug, Clone, Copy)]
 pub enum Action {
     Quit,
+
+    OpenComposer,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -29,14 +31,17 @@ pub struct State {
 
 impl State {
     pub fn handle_event(&mut self, event: KeyEvent) -> Option<super::Action> {
-        let action = match self.mode {
+        match self.mode {
             Mode::Mails => self.mails.handle_event(event),
             Mode::Composer => self.composer.handle_event(event),
             Mode::Pager => self.pager.handle_event(event),
-        };
-
-        action.map(|a| match a {
-            Action::Quit => super::Action::Quit,
+        }
+        .and_then(|a| match a {
+            Action::Quit => Some(super::Action::Quit),
+            Action::OpenComposer => {
+                self.mode = Mode::Composer;
+                None
+            }
         })
     }
 }
@@ -61,7 +66,7 @@ impl Default for State {
 
             mails: mails::State::new(),
             pager: pager::State::default(),
-            composer: composer::State::default(),
+            composer: composer::State::new(),
         }
     }
 }
