@@ -79,6 +79,17 @@ impl State {
         match event.code {
             KeyCode::Esc => return Some(HandleEventResult::Quit),
             KeyCode::Enter => {
+                let result = {
+                    let mut matches = self.nucleo.snapshot().matched_items(..);
+
+                    if let Some(idx) = self.list_state.selected() {
+                        HandleEventResult::Selected(matches.nth(idx).unwrap().data.0)
+                    } else {
+                        HandleEventResult::Quit
+                    }
+                };
+
+                // reset search
                 self.nucleo.pattern.reparse(
                     0,
                     "",
@@ -87,12 +98,7 @@ impl State {
                     false,
                 );
 
-                let mut matches = self.nucleo.snapshot().matched_items(..);
-                if let Some(action) = matches.next() {
-                    return Some(HandleEventResult::Selected(action.data.0));
-                } else {
-                    return Some(HandleEventResult::Quit);
-                }
+                return Some(result);
             }
             KeyCode::Down => {
                 self.list_state.select_next();
