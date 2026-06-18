@@ -14,10 +14,6 @@ impl State {
     pub fn new() -> Self {
         Self { is_focussed: true }
     }
-
-    pub fn set_focus(&mut self, is_focussed: bool) {
-        self.is_focussed = is_focussed;
-    }
 }
 
 impl Default for State {
@@ -33,6 +29,10 @@ impl State {
             KeyCode::Char(':') => Some(super::Action::OpenCommandPalette),
             _ => None,
         }
+    }
+
+    pub fn set_focus(&mut self, focussed: bool) {
+        self.is_focussed = focussed;
     }
 }
 

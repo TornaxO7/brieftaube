@@ -6,7 +6,9 @@ use ratatui::{
 };
 
 #[derive(Debug, Default)]
-pub struct State {}
+pub struct State {
+    is_focussed: bool,
+}
 
 impl State {
     pub fn handle_event(&mut self, event: KeyEvent) -> Option<super::Action> {
@@ -15,6 +17,10 @@ impl State {
             _ => None,
         }
     }
+
+    pub fn set_focus(&mut self, focussed: bool) {
+        self.is_focussed = focussed;
+    }
 }
 
 impl Widget for &State {
@@ -22,9 +28,21 @@ impl Widget for &State {
     where
         Self: Sized,
     {
+        let block = {
+            let mut block = Block::bordered().title("Mailboxes");
+
+            block = if self.is_focussed {
+                block.border_style(Style::new().green())
+            } else {
+                block
+            };
+
+            block
+        };
+
         StatefulWidget::render(
             List::new(["Mailbox 1", "Mailbox 2", "Mailbox 3"])
-                .block(Block::bordered().title("Mailboxes"))
+                .block(block)
                 .highlight_style(Style::new().blue())
                 .direction(ListDirection::TopToBottom),
             area,

@@ -13,7 +13,7 @@ mod mailbox_list;
 mod preview;
 mod statusbar;
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 enum Focus {
     MailboxList,
     #[default]
@@ -78,11 +78,18 @@ impl State {
     fn apply_action(&mut self, a: Action) -> Option<super::Action> {
         match a {
             Action::Quit => return Some(super::Action::Quit),
-            Action::FocusMailList => self.focus = Focus::MailList,
+            Action::FocusMailList => self.set_focus(Focus::MailList),
             Action::OpenCommandPalette => self.focus = Focus::CommandPalette,
         }
 
         None
+    }
+
+    fn set_focus(&mut self, focus: Focus) {
+        self.focus = focus;
+        self.mailbox_list.set_focus(focus == Focus::MailboxList);
+        self.mail_list.set_focus(focus == Focus::MailList);
+        self.preview.set_focus(focus == Focus::Preview);
     }
 }
 
