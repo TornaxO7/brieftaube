@@ -5,7 +5,9 @@ use ratatui::widgets::Widget;
 pub struct State {}
 
 impl State {
-    pub fn handle_event(&mut self, event: KeyEvent) {}
+    pub fn handle_event(&mut self, event: KeyEvent) -> Option<super::Action> {
+        None
+    }
 }
 
 impl Widget for &State {

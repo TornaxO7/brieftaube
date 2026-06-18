@@ -6,6 +6,11 @@ use ratatui::{DefaultTerminal, Frame};
 
 mod ui;
 
+#[derive(Debug)]
+enum Action {
+    Quit,
+}
+
 /// Stores the app state
 #[derive(Debug)]
 pub struct App {
@@ -44,7 +49,11 @@ impl App {
                 _ => {}
             }
 
-            self.ui.handle_event(key);
+            if let Some(action) = self.ui.handle_event(key) {
+                match action {
+                    Action::Quit => self.is_running = false,
+                }
+            }
         }
 
         Ok(())

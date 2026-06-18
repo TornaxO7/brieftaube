@@ -7,9 +7,15 @@ use ratatui::{
     widgets::Widget,
 };
 
+mod command_palette;
 mod composer;
 mod mails;
 mod pager;
+
+#[derive(Debug, Clone, Copy)]
+enum Action {
+    Quit,
+}
 
 #[derive(Debug, Clone, Copy)]
 enum Mode {
@@ -28,12 +34,16 @@ pub struct State {
 }
 
 impl State {
-    pub fn handle_event(&mut self, event: KeyEvent) {
-        match self.mode {
+    pub fn handle_event(&mut self, event: KeyEvent) -> Option<super::Action> {
+        let action = match self.mode {
             Mode::Mails => self.mails.handle_event(event),
             Mode::Composer => self.composer.handle_event(event),
             Mode::Pager => self.pager.handle_event(event),
-        }
+        };
+
+        action.map(|a| match a {
+            Action::Quit => super::Action::Quit,
+        })
     }
 }
 
