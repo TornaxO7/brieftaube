@@ -5,6 +5,7 @@ use ratatui::{
     layout::{Constraint, Layout},
     widgets::{Clear, Widget},
 };
+use serde::Serialize;
 use strum::{EnumMessage, EnumProperty, IntoEnumIterator, VariantArray};
 
 mod action;
@@ -13,16 +14,15 @@ mod mailbox_list;
 mod preview;
 mod statusbar;
 
-#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum Focus {
     MailboxList,
-    #[default]
     MailList,
     Preview,
     CommandPalette,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct State {
     focus: Focus,
 
@@ -37,21 +37,33 @@ pub struct State {
 impl State {
     pub fn new() -> Self {
         let options = Action::iter()
-            .filter_map(|variant| {
-                if variant.get_bool("intern").unwrap() {
-                    return None;
+            .enumerate()
+            .filter_map(|(idx, variant)| {
+                if let Some(is_intern) = variant.get_bool("intern") {
+                    if is_intern {
+                        return None;
+                    }
                 }
 
-                let name = toml::ser::to_string(&variant).unwrap();
+                let name = variant.to_string();
                 let description = variant.get_message().unwrap().to_string();
 
-                Some(Command { name, description })
+                Some(Command {
+                    idx,
+                    name,
+                    description,
+                })
             })
             .collect::<Vec<Command>>();
 
         Self {
             command_palette: super::command_palette::State::new(options),
-            ..Default::default()
+
+            focus: Focus::MailList,
+            mailbox_list: mailbox_list::State::new(),
+            mail_list: mail_list::State::new(),
+            preview: preview::State::new(),
+            statusbar: statusbar::State::new(),
         }
     }
 
@@ -66,7 +78,9 @@ impl State {
                     .map(|action| match action {
                         HandleEventResult::Quit => Action::FocusMailList,
                         HandleEventResult::Selected(idx) => {
+                            tracing::debug!("Selected: {}", idx);
                             self.command_palette.reset();
+                            self.apply_action(Action::FocusMailList);
                             Action::VARIANTS[idx]
                         }
                     })
@@ -76,6 +90,7 @@ impl State {
     }
 
     fn apply_action(&mut self, a: Action) -> Option<super::Action> {
+        tracing::debug!("Action: {:?}", a);
         match a {
             Action::Quit => return Some(super::Action::Quit),
 
@@ -93,7 +108,7 @@ impl State {
                 _ => {}
             },
 
-            Action::OpenCommandPalette => self.focus = Focus::CommandPalette,
+            Action::OpenCommandPalette => self.set_focus(Focus::CommandPalette),
         }
 
         None

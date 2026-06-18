@@ -10,6 +10,7 @@ crossterm = { version = "0.29", default-features = false, features = [
   "derive-more",
   "events",
 ] }
+nucleo = "0.5"
 ratatui = "0.30"
 ratatui-textarea = "0.9.2"
 serde = { version = "1.0", features = ["derive"] }

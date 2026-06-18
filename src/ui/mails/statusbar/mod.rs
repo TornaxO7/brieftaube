@@ -1,10 +1,13 @@
-use ratatui::{
-    symbols,
-    widgets::{Block, Paragraph, Widget},
-};
+use ratatui::widgets::{Block, Paragraph, Widget};
 
 #[derive(Debug, Default)]
 pub struct State {}
+
+impl State {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
 
 impl Widget for &State {
     fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)

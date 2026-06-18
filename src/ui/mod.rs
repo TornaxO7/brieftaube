@@ -1,11 +1,5 @@
-use color_eyre::eyre::Result;
 use crossterm::event::KeyEvent;
-use ratatui::{
-    DefaultTerminal, Frame,
-    buffer::Buffer,
-    layout::{Constraint, Layout, Rect},
-    widgets::Widget,
-};
+use ratatui::{buffer::Buffer, layout::Rect, widgets::Widget};
 
 mod command_palette;
 mod composer;
@@ -65,7 +59,7 @@ impl Default for State {
         Self {
             mode: Mode::Mails,
 
-            mails: mails::State::default(),
+            mails: mails::State::new(),
             pager: pager::State::default(),
             composer: composer::State::default(),
         }

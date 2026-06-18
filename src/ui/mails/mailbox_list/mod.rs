@@ -5,13 +5,18 @@ use ratatui::{
     widgets::{Block, List, ListDirection, ListState, StatefulWidget, Widget},
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct State {
     is_focussed: bool,
 }
 
 impl State {
+    pub fn new() -> Self {
+        Self { is_focussed: false }
+    }
+
     pub fn handle_event(&mut self, event: KeyEvent) -> Option<super::Action> {
+        tracing::debug!("{:?}", event.code);
         match event.code {
             KeyCode::Char('q') => Some(super::Action::Quit),
             _ => None,

@@ -43,12 +43,6 @@ impl App {
 
     fn handle_events(&mut self) -> io::Result<()> {
         if let Some(key) = event::read()?.as_key_press_event() {
-            // global keybindings
-            match key.code {
-                KeyCode::Char('q') => self.is_running = false,
-                _ => {}
-            }
-
             if let Some(action) = self.ui.handle_event(key) {
                 match action {
                     Action::Quit => self.is_running = false,
