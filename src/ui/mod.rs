@@ -10,7 +10,9 @@ mod pager;
 pub enum Action {
     Quit,
 
+    OpenMailList,
     OpenComposer,
+    OpenPager,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -38,8 +40,16 @@ impl State {
         }
         .and_then(|a| match a {
             Action::Quit => Some(super::Action::Quit),
+            Action::OpenMailList => {
+                self.mode = Mode::Mails;
+                None
+            }
             Action::OpenComposer => {
                 self.mode = Mode::Composer;
+                None
+            }
+            Action::OpenPager => {
+                self.mode = Mode::Pager;
                 None
             }
         })
@@ -65,7 +75,7 @@ impl Default for State {
             mode: Mode::Mails,
 
             mails: mails::State::new(),
-            pager: pager::State::default(),
+            pager: pager::State::new(),
             composer: composer::State::new(),
         }
     }

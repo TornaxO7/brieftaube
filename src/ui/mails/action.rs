@@ -44,4 +44,6 @@ pub enum Action {
 
     #[strum(message = "Create a new mail")]
     CreateNewMail,
+    #[strum(message = "Open mail in the pager.")]
+    OpenMailInPager,
 }

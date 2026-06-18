@@ -1,14 +1,15 @@
-use crate::ui::command_palette::{Command, HandleEventResult};
-use action::Action;
+use crate::ui::{
+    self,
+    command_palette::{Command, HandleEventResult},
+};
 use crossterm::event::KeyEvent;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     widgets::{Clear, Widget},
 };
-use strum::{EnumMessage, EnumProperty, IntoEnumIterator, VariantArray};
+use strum::{EnumMessage, EnumProperty};
 
-mod action;
 mod attachments;
 mod mail;
 
@@ -26,7 +27,7 @@ pub struct State {
 
     mail: mail::State,
     attachments: attachments::State,
-    command_palette: super::command_palette::State,
+    command_palette: ui::command_palette::State,
 }
 
 impl State {
@@ -56,11 +57,11 @@ impl State {
 
             mail: mail::State::new(),
             attachments: attachments::State::new(),
-            command_palette: super::command_palette::State::new(options),
+            command_palette: crate::ui::command_palette::State::new(options),
         }
     }
 
-    pub fn handle_event(&mut self, event: KeyEvent) -> Option<super::Action> {
+    pub fn handle_event(&mut self, event: KeyEvent) -> Option<ui::Action> {
         match self.focus {
             Focus::Mail => self.mail.handle_event(event),
             Focus::Attachments => self.attachments.handle_event(event),
@@ -80,9 +81,9 @@ impl State {
         .and_then(|a| self.apply_action(a))
     }
 
-    fn apply_action(&mut self, a: Action) -> Option<super::Action> {
+    fn apply_action(&mut self, a: Action) -> Option<ui::Action> {
         match a {
-            Action::Quit => return Some(super::Action::Quit),
+            Action::Quit => return Some(ui::Action::Quit),
             Action::OpenCommandPalette => self.set_focus(Focus::CommandPalette),
 
             Action::FocusMailPanel => self.set_focus(Focus::Mail),

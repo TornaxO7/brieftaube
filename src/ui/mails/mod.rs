@@ -117,6 +117,7 @@ impl State {
             Action::SelectPreviousMailBox => self.mailbox_list.select_previous(),
 
             Action::OpenCommandPalette => self.set_focus(Focus::CommandPalette),
+            Action::OpenMailInPager => return Some(super::Action::OpenPager),
 
             Action::CreateNewMail => return Some(super::Action::OpenComposer),
         }
