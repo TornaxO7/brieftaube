@@ -77,7 +77,10 @@ impl State {
 
     pub fn handle_event(&mut self, event: KeyEvent) -> Option<HandleEventResult> {
         match event.code {
-            KeyCode::Esc => return Some(HandleEventResult::Quit),
+            KeyCode::Esc => {
+                self.reset();
+                return Some(HandleEventResult::Quit);
+            }
             KeyCode::Enter => {
                 let result = {
                     let mut matches = self.nucleo.snapshot().matched_items(..);
@@ -89,15 +92,7 @@ impl State {
                     }
                 };
 
-                // reset search
-                self.nucleo.pattern.reparse(
-                    0,
-                    "",
-                    nucleo::pattern::CaseMatching::Smart,
-                    nucleo::pattern::Normalization::Smart,
-                    false,
-                );
-
+                self.reset();
                 return Some(result);
             }
             KeyCode::Down => {
@@ -127,6 +122,15 @@ impl State {
 
     pub fn reset(&mut self) {
         self.input.clear();
+
+        // reset search
+        self.nucleo.pattern.reparse(
+            0,
+            "",
+            nucleo::pattern::CaseMatching::Smart,
+            nucleo::pattern::Normalization::Smart,
+            false,
+        );
     }
 }
 

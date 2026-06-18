@@ -2,26 +2,102 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
-    widgets::{Block, List, ListState, Paragraph, StatefulWidget, Widget},
+    widgets::{Block, Clear, List, ListState, Paragraph, StatefulWidget, Widget},
 };
+
+mod action;
+mod attachments;
+mod mail;
+
+use action::Action;
+use strum::{EnumMessage, EnumProperty, IntoEnumIterator, VariantArray};
+
+use crate::ui::command_palette::{Command, HandleEventResult};
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, strum::IntoStaticStr)]
+#[strum(serialize_all = "Train-Case")]
+enum Focus {
+    CommandPalette,
+    Mail,
+    Attachments,
+}
 
 #[derive(Debug)]
 pub struct State {
-    attachments_state: ListState,
+    focus: Focus,
+
+    mail: mail::State,
+    attachments: attachments::State,
+    command_palette: super::command_palette::State,
 }
 
 impl State {
     pub fn new() -> Self {
+        let options = Action::iter()
+            .enumerate()
+            .filter_map(|(idx, variant)| {
+                if let Some(is_intern) = variant.get_bool("intern") {
+                    if is_intern {
+                        return None;
+                    }
+                }
+
+                let name = variant.to_string();
+                let description = variant.get_message().unwrap().to_string();
+
+                Some(Command {
+                    idx,
+                    name,
+                    description,
+                })
+            })
+            .collect::<Vec<Command>>();
+
         Self {
-            attachments_state: ListState::default(),
+            focus: Focus::Mail,
+
+            mail: mail::State::new(),
+            attachments: attachments::State::new(),
+            command_palette: super::command_palette::State::new(options),
         }
     }
 
     pub fn handle_event(&mut self, event: KeyEvent) -> Option<super::Action> {
-        match event.code {
-            KeyCode::Char('q') => Some(super::Action::Quit),
-            _ => None,
+        match self.focus {
+            Focus::Mail => self.mail.handle_event(event),
+            Focus::Attachments => self.attachments.handle_event(event),
+            Focus::CommandPalette => {
+                self.command_palette
+                    .handle_event(event)
+                    .map(|action| match action {
+                        HandleEventResult::Quit => Action::FocusMailPanel,
+                        HandleEventResult::Selected(idx) => {
+                            self.command_palette.reset();
+                            self.apply_action(Action::FocusMailPanel);
+                            Action::VARIANTS[idx]
+                        }
+                    })
+            }
         }
+        .and_then(|a| self.apply_action(a))
+    }
+
+    fn apply_action(&mut self, a: Action) -> Option<super::Action> {
+        match a {
+            Action::Quit => return Some(super::Action::Quit),
+            Action::OpenCommandPalette => self.set_focus(Focus::CommandPalette),
+
+            Action::FocusMailPanel => self.set_focus(Focus::Mail),
+            Action::FocusAttachmentsPanel => self.set_focus(Focus::Attachments),
+        }
+
+        None
+    }
+
+    fn set_focus(&mut self, focus: Focus) {
+        self.focus = focus;
+        self.mail.set_focus(focus == Focus::Mail);
+        self.attachments.set_focus(focus == Focus::Attachments);
     }
 }
 
@@ -35,18 +111,13 @@ impl Widget for &mut State {
             Constraint::Percentage(20),
         ]));
 
-        Widget::render(
-            Paragraph::new("Random shit go brrr").block(Block::bordered().title("Content")),
-            content,
-            buf,
-        );
+        self.mail.render(content, buf);
+        self.attachments.render(attachments, buf);
 
-        StatefulWidget::render(
-            List::new(["Attachment 1", "Attachment 2"])
-                .block(Block::bordered().title("Attachments")),
-            attachments,
-            buf,
-            &mut self.attachments_state,
-        );
+        if self.focus == Focus::CommandPalette {
+            let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
+            Clear.render(a, buf);
+            self.command_palette.render(a, buf);
+        }
     }
 }
