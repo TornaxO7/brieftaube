@@ -13,7 +13,10 @@ mod mailbox_list;
 mod preview;
 mod statusbar;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+const INIT_FOCUS: Focus = Focus::MailList;
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, strum::IntoStaticStr)]
+#[strum(serialize_all = "Train-Case")]
 enum Focus {
     MailboxList,
     MailList,
@@ -58,11 +61,11 @@ impl State {
         Self {
             command_palette: super::command_palette::State::new(options),
 
-            focus: Focus::MailList,
+            focus: INIT_FOCUS,
             mailbox_list: mailbox_list::State::new(),
             mail_list: mail_list::State::new(),
             preview: preview::State::new(),
-            statusbar: statusbar::State::new(),
+            statusbar: statusbar::State::new(INIT_FOCUS.into()),
         }
     }
 
