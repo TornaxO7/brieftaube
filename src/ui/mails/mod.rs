@@ -5,7 +5,6 @@ use ratatui::{
     layout::{Constraint, Layout},
     widgets::{Clear, Widget},
 };
-use serde::Serialize;
 use strum::{EnumMessage, EnumProperty, IntoEnumIterator, VariantArray};
 
 mod action;

@@ -1,4 +1,4 @@
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::{
     layout::Rect,
     style::Style,
@@ -24,6 +24,10 @@ impl Default for State {
 
 impl State {
     pub fn handle_event(&mut self, event: crossterm::event::KeyEvent) -> Option<super::Action> {
+        if event.modifiers.contains(KeyModifiers::CONTROL) && event.code == KeyCode::Char('k') {
+            return Some(super::Action::OpenCommandPalette);
+        }
+
         match event.code {
             KeyCode::Char('q') => Some(super::Action::Quit),
             KeyCode::Char(':') => Some(super::Action::OpenCommandPalette),
