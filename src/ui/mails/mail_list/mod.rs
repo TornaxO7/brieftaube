@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use crossterm::event::{KeyCode, KeyModifiers};
+use jmap_client::client::Client;
 use ratatui::{
     layout::Rect,
     style::Style,
@@ -13,17 +16,11 @@ pub struct State {
 }
 
 impl State {
-    pub fn new() -> Self {
+    pub async fn new(client: Arc<Client>) -> Self {
         Self {
             is_focussed: true,
             list_state: ListState::default().with_selected(Some(0)),
         }
-    }
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

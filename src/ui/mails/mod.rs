@@ -1,11 +1,14 @@
 use crate::ui::command_palette::{Command, HandleEventResult};
 use action::Action;
 use crossterm::event::KeyEvent;
+use jmap_client::client::Client;
 use ratatui::{
     layout::{Constraint, Layout},
     widgets::{Clear, Widget},
 };
+use std::sync::Arc;
 use strum::{EnumMessage, EnumProperty, IntoEnumIterator, VariantArray};
+use tokio::join;
 
 mod action;
 mod mail_list;
@@ -37,33 +40,41 @@ pub struct State {
 }
 
 impl State {
-    pub fn new() -> Self {
-        let options = Action::iter()
-            .enumerate()
-            .filter_map(|(idx, variant)| {
-                if let Some(is_intern) = variant.get_bool("intern") {
-                    if is_intern {
-                        return None;
+    pub async fn new(client: Arc<Client>) -> Self {
+        let command_palette = {
+            let options = Action::iter()
+                .enumerate()
+                .filter_map(|(idx, variant)| {
+                    if let Some(is_intern) = variant.get_bool("intern") {
+                        if is_intern {
+                            return None;
+                        }
                     }
-                }
 
-                let name = variant.to_string();
-                let description = variant.get_message().unwrap().to_string();
+                    let name = variant.to_string();
+                    let description = variant.get_message().unwrap().to_string();
 
-                Some(Command {
-                    idx,
-                    name,
-                    description,
+                    Some(Command {
+                        idx,
+                        name,
+                        description,
+                    })
                 })
-            })
-            .collect::<Vec<Command>>();
+                .collect::<Vec<Command>>();
+
+            super::command_palette::State::new(options)
+        };
+
+        let mailbox_list_future = mailbox_list::State::new(client.clone());
+        let mail_list_future = mail_list::State::new(client.clone());
+        let (mailbox_list, mail_list) = join!(mailbox_list_future, mail_list_future);
 
         Self {
-            command_palette: super::command_palette::State::new(options),
+            command_palette,
 
             focus: INIT_FOCUS,
-            mailbox_list: mailbox_list::State::new(),
-            mail_list: mail_list::State::new(),
+            mailbox_list,
+            mail_list,
             preview: preview::State::new(),
             statusbar: statusbar::State::new(INIT_FOCUS.into()),
         }

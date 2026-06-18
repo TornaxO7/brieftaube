@@ -1,20 +1,33 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use jmap_client::{client::Client, core::query::QueryResponse, mailbox::query::Filter};
 use ratatui::{
     layout::Rect,
     style::Style,
     widgets::{Block, List, ListDirection, ListState, StatefulWidget, Widget},
 };
+use std::sync::Arc;
+use tokio::sync::oneshot;
 
 #[derive(Debug)]
 pub struct State {
     is_focussed: bool,
 
     list_state: ListState,
+
+    rx: oneshot::Receiver<Result<QueryResponse, jmap_client::Error>>,
 }
 
 impl State {
-    pub fn new() -> Self {
+    pub async fn new(client: Arc<Client>) -> Self {
+        let (tx, rx) = oneshot::channel::<Result<QueryResponse, jmap_client::Error>>();
+
+        tokio::spawn(async move {
+            let mailboxes = client.mailbox_query(None::<Filter>, None::<Vec<_>>).await;
+            tx.send(mailboxes).unwrap()
+        });
+
         Self {
+            rx,
             is_focussed: false,
             list_state: ListState::default().with_selected(Some(0)),
         }

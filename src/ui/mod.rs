@@ -1,5 +1,9 @@
+use std::sync::Arc;
+
 use crossterm::event::KeyEvent;
 use ratatui::{buffer::Buffer, layout::Rect, widgets::Widget};
+
+use crate::backend::Client;
 
 mod command_palette;
 mod composer;
@@ -32,6 +36,16 @@ pub struct State {
 }
 
 impl State {
+    pub async fn new(client: Arc<Client>) -> Self {
+        Self {
+            mode: Mode::Mails,
+
+            mails: mails::State::new(client).await,
+            pager: pager::State::new(),
+            composer: composer::State::new(),
+        }
+    }
+
     pub fn handle_event(&mut self, event: KeyEvent) -> Option<super::Action> {
         match self.mode {
             Mode::Mails => self.mails.handle_event(event),
@@ -65,18 +79,6 @@ impl Widget for &mut State {
             Mode::Mails => self.mails.render(area, buf),
             Mode::Pager => self.pager.render(area, buf),
             Mode::Composer => self.composer.render(area, buf),
-        }
-    }
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            mode: Mode::Mails,
-
-            mails: mails::State::new(),
-            pager: pager::State::new(),
-            composer: composer::State::new(),
         }
     }
 }
