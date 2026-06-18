@@ -30,6 +30,7 @@ impl State {
     pub fn handle_event(&mut self, event: crossterm::event::KeyEvent) -> Option<super::Action> {
         match event.code {
             KeyCode::Char('q') => Some(super::Action::Quit),
+            KeyCode::Char(':') => Some(super::Action::OpenCommandPalette),
             _ => None,
         }
     }

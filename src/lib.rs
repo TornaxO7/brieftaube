@@ -37,8 +37,8 @@ impl App {
         Ok(())
     }
 
-    fn draw(&self, frame: &mut Frame) {
-        frame.render_widget(&self.ui, frame.area());
+    fn draw(&mut self, frame: &mut Frame) {
+        frame.render_widget(&mut self.ui, frame.area());
     }
 
     fn handle_events(&mut self) -> io::Result<()> {

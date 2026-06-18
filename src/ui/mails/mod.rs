@@ -3,7 +3,7 @@ use action::Action;
 use crossterm::event::KeyEvent;
 use ratatui::{
     layout::{Constraint, Layout},
-    widgets::Widget,
+    widgets::{Clear, Widget},
 };
 use strum::{EnumMessage, EnumProperty, IntoEnumIterator, VariantArray};
 
@@ -86,7 +86,7 @@ impl State {
     }
 }
 
-impl Widget for &State {
+impl Widget for &mut State {
     fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
     where
         Self: Sized,
@@ -108,7 +108,9 @@ impl Widget for &State {
         self.statusbar.render(statusbar, buf);
 
         if self.focus == Focus::CommandPalette {
-            self.command_palette.render(area, buf);
+            let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
+            Clear.render(a, buf);
+            self.command_palette.render(a, buf);
         }
     }
 }

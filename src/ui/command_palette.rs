@@ -3,7 +3,7 @@ use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
-    widgets::{List, ListDirection, ListState, Paragraph, StatefulWidget, Widget},
+    widgets::{Block, List, ListDirection, ListState, Paragraph, StatefulWidget, Widget},
 };
 use ratatui_textarea::TextArea;
 
@@ -58,7 +58,7 @@ impl State {
     }
 }
 
-impl Widget for &State {
+impl Widget for &mut State {
     fn render(self, area: Rect, buf: &mut Buffer)
     where
         Self: Sized,
@@ -72,17 +72,23 @@ impl Widget for &State {
         let [search, options] = left.layout(
             &Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Percentage(10), Constraint::Percentage(90)]),
+                .constraints([Constraint::Length(3), Constraint::Fill(0)]),
         );
 
-        Widget::render(Paragraph::new("This is a description"), description, buf);
+        Widget::render(
+            Paragraph::new("This is a description").block(Block::bordered().title("Description")),
+            description,
+            buf,
+        );
 
+        self.input.set_block(Block::bordered().title("Search"));
         self.input.render(search, buf);
 
         StatefulWidget::render(
             List::new(["Result 1", "Result 2"])
+                .block(Block::bordered().title("Commands"))
                 .highlight_style(Style::new().blue())
-                .direction(ListDirection::BottomToTop),
+                .direction(ListDirection::TopToBottom),
             options,
             buf,
             &mut ListState::default().with_selected(Some(0)),

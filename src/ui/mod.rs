@@ -47,7 +47,7 @@ impl State {
     }
 }
 
-impl Widget for &State {
+impl Widget for &mut State {
     fn render(self, area: Rect, buf: &mut Buffer)
     where
         Self: Sized,
