@@ -10,6 +10,11 @@ pub enum Action {
     OpenCommandPalette,
     #[strum(message = "Quit the application")]
     Quit,
+
     #[strum(message = "Focus mail list.")]
     FocusMailList,
+    #[strum(message = "Focus mailbox list.")]
+    FocusMailBoxList,
+    #[strum(message = "Focus mail preview.")]
+    FocusPreview,
 }

@@ -78,7 +78,11 @@ impl State {
     fn apply_action(&mut self, a: Action) -> Option<super::Action> {
         match a {
             Action::Quit => return Some(super::Action::Quit),
+
             Action::FocusMailList => self.set_focus(Focus::MailList),
+            Action::FocusMailBoxList => self.set_focus(Focus::MailboxList),
+            Action::FocusPreview => self.set_focus(Focus::Preview),
+
             Action::OpenCommandPalette => self.focus = Focus::CommandPalette,
         }
 
