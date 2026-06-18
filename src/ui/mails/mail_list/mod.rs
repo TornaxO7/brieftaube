@@ -8,11 +8,16 @@ use ratatui::{
 #[derive(Debug)]
 pub struct State {
     is_focussed: bool,
+
+    list_state: ListState,
 }
 
 impl State {
     pub fn new() -> Self {
-        Self { is_focussed: true }
+        Self {
+            is_focussed: true,
+            list_state: ListState::default().with_selected(Some(0)),
+        }
     }
 }
 
@@ -31,6 +36,8 @@ impl State {
         match event.code {
             KeyCode::Char('q') => Some(super::Action::Quit),
             KeyCode::Char(':') => Some(super::Action::OpenCommandPalette),
+            KeyCode::Up => Some(super::Action::SelectPreviousMail),
+            KeyCode::Down => Some(super::Action::SelectNextMail),
             _ => None,
         }
     }
@@ -40,7 +47,17 @@ impl State {
     }
 }
 
-impl Widget for &State {
+impl State {
+    pub fn select_next(&mut self) {
+        self.list_state.select_next();
+    }
+
+    pub fn select_previous(&mut self) {
+        self.list_state.select_previous();
+    }
+}
+
+impl Widget for &mut State {
     fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer)
     where
         Self: Sized,
@@ -64,7 +81,7 @@ impl Widget for &State {
                 .direction(ListDirection::TopToBottom),
             area,
             buf,
-            &mut ListState::default().with_selected(Some(0)),
+            &mut self.list_state,
         )
     }
 }

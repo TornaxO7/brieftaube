@@ -96,16 +96,22 @@ impl State {
             Action::FocusMailList => self.set_focus(Focus::MailList),
             Action::FocusMailBoxList => self.set_focus(Focus::MailboxList),
             Action::FocusPreview => self.set_focus(Focus::Preview),
-            Action::FocusRight => match self.focus {
+            Action::FocusRightPanel => match self.focus {
                 Focus::MailboxList => self.set_focus(Focus::MailList),
                 Focus::MailList => self.set_focus(Focus::Preview),
                 _ => {}
             },
-            Action::FocusLeft => match self.focus {
+            Action::FocusLeftPanel => match self.focus {
                 Focus::MailList => self.set_focus(Focus::MailboxList),
                 Focus::Preview => self.set_focus(Focus::MailList),
                 _ => {}
             },
+
+            Action::SelectNextMail => self.mail_list.select_next(),
+            Action::SelectPreviousMail => self.mail_list.select_previous(),
+
+            Action::SelectNextMailBox => self.mailbox_list.select_next(),
+            Action::SelectPreviousMailBox => self.mailbox_list.select_previous(),
 
             Action::OpenCommandPalette => self.set_focus(Focus::CommandPalette),
         }

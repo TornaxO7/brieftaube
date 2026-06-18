@@ -1,4 +1,4 @@
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::Rect,
     style::Style,
@@ -8,17 +8,28 @@ use ratatui::{
 #[derive(Debug)]
 pub struct State {
     is_focussed: bool,
+
+    list_state: ListState,
 }
 
 impl State {
     pub fn new() -> Self {
-        Self { is_focussed: false }
+        Self {
+            is_focussed: false,
+            list_state: ListState::default().with_selected(Some(0)),
+        }
     }
 
     pub fn handle_event(&mut self, event: KeyEvent) -> Option<super::Action> {
-        tracing::debug!("{:?}", event.code);
+        if event.modifiers.contains(KeyModifiers::CONTROL) && event.code == KeyCode::Char('k') {
+            return Some(super::Action::OpenCommandPalette);
+        }
+
         match event.code {
             KeyCode::Char('q') => Some(super::Action::Quit),
+            KeyCode::Char(':') => Some(super::Action::OpenCommandPalette),
+            KeyCode::Up => Some(super::Action::SelectPreviousMailBox),
+            KeyCode::Down => Some(super::Action::SelectNextMailBox),
             _ => None,
         }
     }
@@ -28,7 +39,18 @@ impl State {
     }
 }
 
-impl Widget for &State {
+/// API Public functions
+impl State {
+    pub fn select_next(&mut self) {
+        self.list_state.select_next();
+    }
+
+    pub fn select_previous(&mut self) {
+        self.list_state.select_previous();
+    }
+}
+
+impl Widget for &mut State {
     fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer)
     where
         Self: Sized,
@@ -52,7 +74,7 @@ impl Widget for &State {
                 .direction(ListDirection::TopToBottom),
             area,
             buf,
-            &mut ListState::default().with_selected(Some(0)),
+            &mut self.list_state,
         )
     }
 }
