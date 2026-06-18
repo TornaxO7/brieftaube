@@ -79,12 +79,28 @@ impl State {
         match event.code {
             KeyCode::Esc => return Some(HandleEventResult::Quit),
             KeyCode::Enter => {
+                self.nucleo.pattern.reparse(
+                    0,
+                    "",
+                    nucleo::pattern::CaseMatching::Smart,
+                    nucleo::pattern::Normalization::Smart,
+                    false,
+                );
+
                 let mut matches = self.nucleo.snapshot().matched_items(..);
                 if let Some(action) = matches.next() {
                     return Some(HandleEventResult::Selected(action.data.0));
                 } else {
                     return Some(HandleEventResult::Quit);
                 }
+            }
+            KeyCode::Down => {
+                self.list_state.select_next();
+                return None;
+            }
+            KeyCode::Up => {
+                self.list_state.select_previous();
+                return None;
             }
             _ => {}
         }
@@ -94,13 +110,6 @@ impl State {
         let search_term = self.input.lines().get(0).unwrap().as_str();
         self.nucleo.pattern.reparse(
             0,
-            search_term,
-            nucleo::pattern::CaseMatching::Smart,
-            nucleo::pattern::Normalization::Smart,
-            false,
-        );
-        self.nucleo.pattern.reparse(
-            1,
             search_term,
             nucleo::pattern::CaseMatching::Smart,
             nucleo::pattern::Normalization::Smart,
