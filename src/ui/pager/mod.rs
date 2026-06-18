@@ -1,8 +1,13 @@
 use color_eyre::eyre::Result;
+use crossterm::event::KeyEvent;
 use ratatui::{DefaultTerminal, Frame, widgets::Widget};
 
 #[derive(Debug, Default)]
 pub struct State {}
+
+impl State {
+    pub fn handle_event(&mut self, event: KeyEvent) {}
+}
 
 impl Widget for &State {
     fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)

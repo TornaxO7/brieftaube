@@ -11,7 +11,7 @@ mod ui;
 pub struct App {
     is_running: bool,
 
-    ui: ui::UiState,
+    ui: ui::State,
 }
 
 impl App {
@@ -19,7 +19,7 @@ impl App {
         Self {
             is_running: true,
 
-            ui: ui::UiState::default(),
+            ui: ui::State::default(),
         }
     }
 
@@ -34,15 +34,17 @@ impl App {
 
     fn draw(&self, frame: &mut Frame) {
         frame.render_widget(&self.ui, frame.area());
-        // frame.render_widget(self, frame.area());
     }
 
     fn handle_events(&mut self) -> io::Result<()> {
         if let Some(key) = event::read()?.as_key_press_event() {
+            // global keybindings
             match key.code {
                 KeyCode::Char('q') => self.is_running = false,
                 _ => {}
             }
+
+            self.ui.handle_event(key);
         }
 
         Ok(())

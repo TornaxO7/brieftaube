@@ -1,10 +1,16 @@
+use crossterm::event::KeyEvent;
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::Rect,
+    style::Style,
     widgets::{Block, List, ListDirection, ListState, StatefulWidget, Widget},
 };
 
 #[derive(Debug, Default)]
 pub struct State {}
+
+impl State {
+    pub fn handle_event(&mut self, event: KeyEvent) {}
+}
 
 impl Widget for &State {
     fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer)
@@ -14,7 +20,7 @@ impl Widget for &State {
         StatefulWidget::render(
             List::new(["Mailbox 1", "Mailbox 2", "Mailbox 3"])
                 .block(Block::bordered().title("Mailboxes"))
-                .highlight_symbol(">> ")
+                .highlight_style(Style::new().blue())
                 .direction(ListDirection::TopToBottom),
             area,
             buf,

@@ -1,4 +1,5 @@
 use color_eyre::eyre::Result;
+use crossterm::event::KeyEvent;
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
@@ -11,14 +12,6 @@ mod mails;
 mod pager;
 
 #[derive(Debug, Clone, Copy)]
-enum Focus {
-    MailboxList,
-    MailList,
-    Pager,
-    Composer,
-}
-
-#[derive(Debug, Clone, Copy)]
 enum Mode {
     Mails,
     Composer,
@@ -26,8 +19,7 @@ enum Mode {
 }
 
 #[derive(Debug)]
-pub struct UiState {
-    focus: Focus,
+pub struct State {
     mode: Mode,
 
     mails: mails::State,
@@ -35,28 +27,37 @@ pub struct UiState {
     composer: composer::State,
 }
 
-impl Default for UiState {
-    fn default() -> Self {
-        Self {
-            focus: Focus::MailList,
-            mode: Mode::Mails,
-
-            mails: mails::State::default(),
-            pager: pager::State::default(),
-            composer: composer::State::default(),
+impl State {
+    pub fn handle_event(&mut self, event: KeyEvent) {
+        match self.mode {
+            Mode::Mails => self.mails.handle_event(event),
+            Mode::Composer => self.composer.handle_event(event),
+            Mode::Pager => self.pager.handle_event(event),
         }
     }
 }
 
-impl Widget for &UiState {
+impl Widget for &State {
     fn render(self, area: Rect, buf: &mut Buffer)
     where
         Self: Sized,
     {
         match self.mode {
             Mode::Mails => self.mails.render(area, buf),
-            Mode::Composer => self.composer.render(area, buf),
             Mode::Pager => self.pager.render(area, buf),
-        };
+            Mode::Composer => self.composer.render(area, buf),
+        }
+    }
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            mode: Mode::Mails,
+
+            mails: mails::State::default(),
+            pager: pager::State::default(),
+            composer: composer::State::default(),
+        }
     }
 }
