@@ -1,10 +1,9 @@
+use crossterm::event::KeyCode;
 use ratatui::{
     layout::Rect,
     style::Style,
     widgets::{Block, List, ListDirection, ListState, StatefulWidget, Widget},
 };
-
-use crate::ui::Mode;
 
 #[derive(Debug)]
 pub struct State {
@@ -28,7 +27,12 @@ impl Default for State {
 }
 
 impl State {
-    pub fn handle_event(&mut self, event: crossterm::event::KeyEvent) {}
+    pub fn handle_event(&mut self, event: crossterm::event::KeyEvent) -> Option<super::Action> {
+        match event.code {
+            KeyCode::Char('q') => Some(super::Action::Quit),
+            _ => None,
+        }
+    }
 }
 
 impl Widget for &State {

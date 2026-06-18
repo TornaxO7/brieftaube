@@ -13,7 +13,7 @@ mod mails;
 mod pager;
 
 #[derive(Debug, Clone, Copy)]
-enum Action {
+pub enum Action {
     Quit,
 }
 

@@ -1,10 +1,13 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crate::ui::command_palette::{Command, HandleEventResult};
+use action::Action;
+use crossterm::event::KeyEvent;
 use ratatui::{
     layout::{Constraint, Layout},
     widgets::Widget,
 };
-use tracing::debug;
+use strum::{EnumMessage, EnumProperty, IntoEnumIterator, VariantArray};
 
+mod action;
 mod mail_list;
 mod mailbox_list;
 mod preview;
@@ -14,7 +17,7 @@ mod statusbar;
 enum Focus {
     MailboxList,
     #[default]
-    Mails,
+    MailList,
     Preview,
     CommandPalette,
 }
@@ -32,24 +35,52 @@ pub struct State {
 }
 
 impl State {
-    pub fn handle_event(&mut self, event: KeyEvent) -> Option<super::Action> {
-        match event.code {
-            KeyCode::Char(':') => {
-                self.focus = Focus::CommandPalette;
-                return None;
-            }
-            KeyCode::Char('q') => {
-                return Some(super::Action::Quit);
-            }
-            _ => {}
-        }
+    pub fn new() -> Self {
+        let options = Action::iter()
+            .filter_map(|variant| {
+                if variant.get_bool("intern").unwrap() {
+                    return None;
+                }
 
+                let name = toml::ser::to_string(&variant).unwrap();
+                let description = variant.get_message().unwrap().to_string();
+
+                Some(Command { name, description })
+            })
+            .collect::<Vec<Command>>();
+
+        Self {
+            command_palette: super::command_palette::State::new(options),
+            ..Default::default()
+        }
+    }
+
+    pub fn handle_event(&mut self, event: KeyEvent) -> Option<super::Action> {
         match self.focus {
             Focus::MailboxList => self.mailbox_list.handle_event(event),
-            Focus::Mails => self.mail_list.handle_event(event),
+            Focus::MailList => self.mail_list.handle_event(event),
             Focus::Preview => self.preview.handle_event(event),
-            Focus::CommandPalette => self.command_palette.handle_event(event),
-        };
+            Focus::CommandPalette => {
+                self.command_palette
+                    .handle_event(event)
+                    .map(|action| match action {
+                        HandleEventResult::Quit => Action::FocusMailList,
+                        HandleEventResult::Selected(idx) => {
+                            self.command_palette.reset();
+                            Action::VARIANTS[idx]
+                        }
+                    })
+            }
+        }
+        .and_then(|a| self.apply_action(a))
+    }
+
+    fn apply_action(&mut self, a: Action) -> Option<super::Action> {
+        match a {
+            Action::Quit => return Some(super::Action::Quit),
+            Action::FocusMailList => self.focus = Focus::MailList,
+            Action::OpenCommandPalette => self.focus = Focus::CommandPalette,
+        }
 
         None
     }

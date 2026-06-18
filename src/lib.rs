@@ -7,7 +7,7 @@ use ratatui::{DefaultTerminal, Frame};
 mod ui;
 
 #[derive(Debug)]
-enum Action {
+pub enum Action {
     Quit,
 }
 

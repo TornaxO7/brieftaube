@@ -1,4 +1,4 @@
-use crossterm::event::KeyEvent;
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::Rect,
     widgets::{Block, Paragraph, Widget},
@@ -8,7 +8,12 @@ use ratatui::{
 pub struct State {}
 
 impl State {
-    pub fn handle_event(&mut self, event: KeyEvent) {}
+    pub fn handle_event(&mut self, event: KeyEvent) -> Option<super::Action> {
+        match event.code {
+            KeyCode::Char('q') => Some(super::Action::Quit),
+            _ => None,
+        }
+    }
 }
 
 impl Widget for &State {
