@@ -82,6 +82,16 @@ impl State {
             Action::FocusMailList => self.set_focus(Focus::MailList),
             Action::FocusMailBoxList => self.set_focus(Focus::MailboxList),
             Action::FocusPreview => self.set_focus(Focus::Preview),
+            Action::FocusRight => match self.focus {
+                Focus::MailboxList => self.set_focus(Focus::MailList),
+                Focus::MailList => self.set_focus(Focus::Preview),
+                _ => {}
+            },
+            Action::FocusLeft => match self.focus {
+                Focus::MailList => self.set_focus(Focus::MailboxList),
+                Focus::Preview => self.set_focus(Focus::MailList),
+                _ => {}
+            },
 
             Action::OpenCommandPalette => self.focus = Focus::CommandPalette,
         }

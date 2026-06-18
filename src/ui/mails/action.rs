@@ -17,4 +17,8 @@ pub enum Action {
     FocusMailBoxList,
     #[strum(message = "Focus mail preview.")]
     FocusPreview,
+    #[strum(message = "Focus the right panel of the current panel.")]
+    FocusRight,
+    #[strum(message = "Focus the left panel of the current panel.")]
+    FocusLeft,
 }
