@@ -31,8 +31,8 @@ impl Widget for &mut State {
         Self: Sized,
     {
         let [content, attachments] = area.layout(&Layout::vertical([
-            Constraint::Percentage(40),
-            Constraint::Percentage(60),
+            Constraint::Percentage(80),
+            Constraint::Percentage(20),
         ]));
 
         Widget::render(
