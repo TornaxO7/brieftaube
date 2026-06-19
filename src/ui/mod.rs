@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use crossterm::event::KeyEvent;
+use jmap_client::client::Client;
 use ratatui::{buffer::Buffer, layout::Rect, widgets::Widget};
-
-use crate::backend::Client;
 
 mod command_palette;
 mod composer;

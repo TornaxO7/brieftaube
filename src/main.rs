@@ -13,7 +13,11 @@ async fn main() -> Result<()> {
     color_eyre::install()?;
     init_logging()?;
 
-    ratatui::run(|terminal| App::new().run(terminal))
+    let mut terminal = ratatui::init();
+    App::new().await.run(&mut terminal)?;
+    ratatui::restore();
+
+    Ok(())
 }
 
 fn get_xdg() -> &'static BaseDirectories {

@@ -25,6 +25,7 @@ impl App {
         let client = {
             let url = std::fs::read_to_string("/tmp/url.txt").unwrap();
             let password = std::fs::read_to_string("/tmp/password.txt").unwrap();
+
             let allow_redirects = std::fs::read_to_string("/tmp/redirects.txt").unwrap();
 
             Arc::new(
@@ -37,7 +38,7 @@ impl App {
             )
         };
 
-        let ui = ui::State::new(client).await;
+        let ui = ui::State::new(client.clone()).await;
 
         Self {
             is_running: true,
