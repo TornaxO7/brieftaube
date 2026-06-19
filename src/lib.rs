@@ -25,14 +25,13 @@ impl App {
         let client = {
             let url = std::fs::read_to_string("/tmp/url.txt").unwrap();
             let password = std::fs::read_to_string("/tmp/password.txt").unwrap();
-
             let allow_redirects = std::fs::read_to_string("/tmp/redirects.txt").unwrap();
 
             Arc::new(
                 Client::new()
-                    .credentials(("test", password.as_str()))
-                    .follow_redirects([allow_redirects])
-                    .connect(&url)
+                    .credentials(("test", password.trim()))
+                    .follow_redirects([allow_redirects.trim()])
+                    .connect(url.trim())
                     .await
                     .unwrap(),
             )
