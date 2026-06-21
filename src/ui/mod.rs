@@ -29,7 +29,7 @@ enum Mode {
 pub struct State {
     mode: Mode,
 
-    mails: mails::State,
+    mails: mails::Mails,
     pager: pager::State,
     composer: composer::State,
 }
@@ -39,7 +39,7 @@ impl State {
         Self {
             mode: Mode::Mails,
 
-            mails: mails::State::new(client).await,
+            mails: mails::Mails::new(client).await,
             pager: pager::State::new(),
             composer: composer::State::new(),
         }

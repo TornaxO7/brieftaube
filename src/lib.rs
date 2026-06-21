@@ -23,14 +23,15 @@ pub struct App {
 impl App {
     pub async fn new() -> Self {
         let client = {
-            let url = std::fs::read_to_string("/tmp/url.txt").unwrap();
+            let host = std::fs::read_to_string("/tmp/host.txt").unwrap();
             let password = std::fs::read_to_string("/tmp/password.txt").unwrap();
-            let allow_redirects = std::fs::read_to_string("/tmp/redirects.txt").unwrap();
+
+            let url = format!("http://{}", host.trim());
 
             Arc::new(
                 Client::new()
                     .credentials(("test", password.trim()))
-                    .follow_redirects([allow_redirects.trim()])
+                    .follow_redirects([host.trim()])
                     .connect(url.trim())
                     .await
                     .unwrap(),

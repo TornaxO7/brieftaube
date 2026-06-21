@@ -18,24 +18,16 @@ use strum::{EnumIter, EnumMessage, EnumProperty, VariantArray};
 pub enum Action {
     #[strum(props(intern = true))]
     OpenCommandPalette,
+    #[strum(props(intern = true))]
+    CloseCommandPalette,
+
     #[strum(message = "Quit the application")]
     Quit,
 
-    #[strum(message = "Focus mail list.")]
-    FocusMailList,
-    #[strum(message = "Focus mailbox list.")]
-    FocusMailBoxList,
-    #[strum(message = "Focus mail preview.")]
-    FocusPreview,
-    #[strum(message = "Focus the right panel of the current panel.")]
-    FocusRightPanel,
-    #[strum(message = "Focus the left panel of the current panel.")]
-    FocusLeftPanel,
-
     #[strum(message = "Select the next mailbox.")]
-    SelectNextMailBox,
+    SelectNextMailbox,
     #[strum(message = "Select the previous mailbox.")]
-    SelectPreviousMailBox,
+    SelectPreviousMailbox,
 
     #[strum(message = "Select the next mail.")]
     SelectNextMail,

@@ -1,45 +1,35 @@
-use crate::ui::command_palette::{Command, HandleEventResult};
-use action::Action;
-use crossterm::event::KeyEvent;
-use jmap_client::client::Client;
-use ratatui::{
-    layout::{Constraint, Layout},
-    widgets::{Clear, Widget},
-};
-use std::sync::Arc;
-use strum::{EnumMessage, EnumProperty, IntoEnumIterator, VariantArray};
-use tokio::join;
-
 mod action;
 mod mail_list;
 mod mailbox_list;
-mod preview;
-mod statusbar;
+mod state;
 
-const INIT_FOCUS: Focus = Focus::MailList;
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, strum::IntoStaticStr)]
-#[strum(serialize_all = "Train-Case")]
-enum Focus {
-    MailboxList,
-    MailList,
-    Preview,
-    CommandPalette,
-}
+use crate::ui::{
+    command_palette::{Command, HandleEventResult},
+    mails::mailbox_list::MailboxListWidget,
+};
+use action::Action;
+use crossterm::event::{KeyCode, KeyEvent};
+use jmap_client::client::Client;
+use ratatui::{
+    buffer::Buffer,
+    layout::{Constraint, Layout, Rect},
+    widgets::{Block, Clear, ListState, Paragraph, StatefulWidget, Widget},
+};
+use state::State;
+use std::sync::Arc;
+use strum::{EnumMessage, EnumProperty, IntoEnumIterator, VariantArray};
 
 #[derive(Debug)]
-pub struct State {
-    focus: Focus,
-
-    mailbox_list: mailbox_list::State,
-    mail_list: mail_list::State,
-    preview: preview::State,
-
-    statusbar: statusbar::State,
+pub struct Mails {
+    open_command_palette: bool,
     command_palette: super::command_palette::State,
+    state: State,
+
+    mailbox_list_state: ListState,
+    mail_list_state: ListState,
 }
 
-impl State {
+impl Mails {
     pub async fn new(client: Arc<Client>) -> Self {
         let command_palette = {
             let options = Action::iter()
@@ -65,41 +55,36 @@ impl State {
             super::command_palette::State::new(options)
         };
 
-        let mailbox_list_future = mailbox_list::State::new(client.clone());
-        let mail_list_future = mail_list::State::new(client.clone());
-        let (mailbox_list, mail_list) = join!(mailbox_list_future, mail_list_future);
+        let state = State::new(client);
 
         Self {
+            open_command_palette: false,
             command_palette,
+            state,
 
-            focus: INIT_FOCUS,
-            mailbox_list,
-            mail_list,
-            preview: preview::State::new(),
-            statusbar: statusbar::State::new(INIT_FOCUS.into()),
+            mailbox_list_state: ListState::default(),
+            mail_list_state: ListState::default(),
         }
     }
 
     pub fn handle_event(&mut self, event: KeyEvent) -> Option<super::Action> {
-        match self.focus {
-            Focus::MailboxList => self.mailbox_list.handle_event(event),
-            Focus::MailList => self.mail_list.handle_event(event),
-            Focus::Preview => self.preview.handle_event(event),
-            Focus::CommandPalette => {
-                self.command_palette
-                    .handle_event(event)
-                    .map(|action| match action {
-                        HandleEventResult::Quit => Action::FocusMailList,
-                        HandleEventResult::Selected(idx) => {
-                            tracing::debug!("Selected: {}", idx);
-                            self.command_palette.reset();
-                            self.apply_action(Action::FocusMailList);
-                            Action::VARIANTS[idx]
-                        }
-                    })
-            }
+        if self.open_command_palette {
+            return self.command_palette.handle_event(event).and_then(|result| {
+                self.command_palette.reset();
+                self.apply_action(Action::CloseCommandPalette);
+
+                match result {
+                    HandleEventResult::Quit => None,
+                    HandleEventResult::Selected(idx) => self.apply_action(Action::VARIANTS[idx]),
+                }
+            });
         }
-        .and_then(|a| self.apply_action(a))
+
+        match event.code {
+            KeyCode::Char('q') => Some(super::Action::Quit),
+            KeyCode::Char(':') => self.apply_action(Action::OpenCommandPalette),
+            _ => None,
+        }
     }
 
     fn apply_action(&mut self, a: Action) -> Option<super::Action> {
@@ -107,27 +92,15 @@ impl State {
         match a {
             Action::Quit => return Some(super::Action::Quit),
 
-            Action::FocusMailList => self.set_focus(Focus::MailList),
-            Action::FocusMailBoxList => self.set_focus(Focus::MailboxList),
-            Action::FocusPreview => self.set_focus(Focus::Preview),
-            Action::FocusRightPanel => match self.focus {
-                Focus::MailboxList => self.set_focus(Focus::MailList),
-                Focus::MailList => self.set_focus(Focus::Preview),
-                _ => {}
-            },
-            Action::FocusLeftPanel => match self.focus {
-                Focus::MailList => self.set_focus(Focus::MailboxList),
-                Focus::Preview => self.set_focus(Focus::MailList),
-                _ => {}
-            },
+            Action::SelectNextMailbox => self.mailbox_list_state.select_next(),
+            Action::SelectPreviousMailbox => self.mailbox_list_state.select_previous(),
 
-            Action::SelectNextMail => self.mail_list.select_next(),
-            Action::SelectPreviousMail => self.mail_list.select_previous(),
+            Action::SelectNextMail => self.mail_list_state.select_next(),
+            Action::SelectPreviousMail => self.mail_list_state.select_previous(),
 
-            Action::SelectNextMailBox => self.mailbox_list.select_next(),
-            Action::SelectPreviousMailBox => self.mailbox_list.select_previous(),
+            Action::OpenCommandPalette => self.open_command_palette = true,
+            Action::CloseCommandPalette => self.open_command_palette = false,
 
-            Action::OpenCommandPalette => self.set_focus(Focus::CommandPalette),
             Action::OpenMailInPager => return Some(super::Action::OpenPager),
 
             Action::CreateNewMail => return Some(super::Action::OpenComposer),
@@ -135,16 +108,9 @@ impl State {
 
         None
     }
-
-    fn set_focus(&mut self, focus: Focus) {
-        self.focus = focus;
-        self.mailbox_list.set_focus(focus == Focus::MailboxList);
-        self.mail_list.set_focus(focus == Focus::MailList);
-        self.preview.set_focus(focus == Focus::Preview);
-    }
 }
 
-impl Widget for &mut State {
+impl Widget for &mut Mails {
     fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
     where
         Self: Sized,
@@ -160,15 +126,41 @@ impl Widget for &mut State {
             Constraint::Percentage(30),
         ]));
 
-        self.mailbox_list.render(mail_boxes, buf);
-        self.mail_list.render(mail_list, buf);
-        self.preview.render(preview, buf);
-        self.statusbar.render(statusbar, buf);
+        self.render_mailbox_list(mail_boxes, buf);
 
-        if self.focus == Focus::CommandPalette {
+        // self.mailbox_list.render(mail_boxes, buf);
+        // self.mail_list.render(mail_list, buf);
+        // self.preview.render(preview, buf);
+        // self.statusbar.render(statusbar, buf);
+
+        if self.open_command_palette {
             let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
             Clear.render(a, buf);
             self.command_palette.render(a, buf);
         }
+    }
+}
+
+/// Render functions
+impl Mails {
+    fn render_mailbox_list(&mut self, area: Rect, buf: &mut Buffer) {
+        match self.state.get_mailbox_names() {
+            Some(names) => StatefulWidget::render(
+                MailboxListWidget::new(names),
+                area,
+                buf,
+                &mut self.mailbox_list_state,
+            ),
+            None => Widget::render(
+                Paragraph::new("Loading...").block(Block::bordered()),
+                area,
+                buf,
+            ),
+        }
+    }
+
+    fn render_mail_list(&mut self, area: Rect, buf: &mut Buffer) {
+        todo!()
+        // if let Some(selected_mailbox_id) = self.state.get_selected_mailbox() {}
     }
 }
