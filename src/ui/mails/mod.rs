@@ -5,7 +5,7 @@ mod state;
 
 use crate::ui::{
     command_palette::{Command, HandleEventResult},
-    mails::mailbox_list::MailboxListWidget,
+    mails::{mail_list::MailListWidget, mailbox_list::MailboxListWidget},
 };
 use action::Action;
 use crossterm::event::{KeyCode, KeyEvent};
@@ -127,9 +127,8 @@ impl Widget for &mut Mails {
         ]));
 
         self.render_mailbox_list(mail_boxes, buf);
+        self.render_mail_list(mail_list, buf);
 
-        // self.mailbox_list.render(mail_boxes, buf);
-        // self.mail_list.render(mail_list, buf);
         // self.preview.render(preview, buf);
         // self.statusbar.render(statusbar, buf);
 
@@ -146,7 +145,7 @@ impl Mails {
     fn render_mailbox_list(&mut self, area: Rect, buf: &mut Buffer) {
         match self.state.get_mailbox_names() {
             Some(names) => StatefulWidget::render(
-                MailboxListWidget::new(names),
+                MailboxListWidget::new(&names),
                 area,
                 buf,
                 &mut self.mailbox_list_state,
@@ -160,7 +159,21 @@ impl Mails {
     }
 
     fn render_mail_list(&mut self, area: Rect, buf: &mut Buffer) {
-        todo!()
+        if let Some(selected_mailbox_idx) = self.mailbox_list_state.selected() {
+            match self.state.get_mails(selected_mailbox_idx) {
+                Some(names) => StatefulWidget::render(
+                    MailListWidget::new(&names),
+                    area,
+                    buf,
+                    &mut self.mail_list_state,
+                ),
+                None => Widget::render(
+                    Paragraph::new("Loading...").block(Block::bordered()),
+                    area,
+                    buf,
+                ),
+            }
+        }
         // if let Some(selected_mailbox_id) = self.state.get_selected_mailbox() {}
     }
 }

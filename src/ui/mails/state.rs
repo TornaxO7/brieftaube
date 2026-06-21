@@ -4,20 +4,29 @@ use tokio::sync::mpsc;
 
 type MailboxId = String;
 
+enum MailsInMailbox {
+    NotInitialized,
+    Fetching,
+    Mails(Vec<Email>),
+}
+
 pub struct State {
     client: Arc<Client>,
 
     rx_mailboxes: mpsc::Receiver<Vec<Mailbox>>,
 
-    mailboxes: Option<Vec<Mailbox>>,
-    mails: HashMap<MailboxId, Vec<Email>>,
+    rx_mails: mpsc::Receiver<Vec<Email>>,
+    tx_mails: Arc<mpsc::Sender<Vec<Email>>>,
 
-    mailbox_names: Option<Vec<String>>,
+    mailboxes: Option<Vec<Mailbox>>,
+    /// Contains all mails for each mailbox.
+    mails: HashMap<MailboxId, Option<Vec<Email>>>,
 }
 
 impl State {
     pub fn new(client: Arc<Client>) -> Self {
         let (tx_mailboxes, rx_mailboxes) = mpsc::channel(1);
+        let (tx_mails, rx_mails) = mpsc::channel(1);
 
         let client2 = client.clone();
         tokio::spawn(async move {
@@ -42,31 +51,95 @@ impl State {
 
             rx_mailboxes,
 
+            rx_mails,
+            tx_mails: Arc::new(tx_mails),
+
             mailboxes: None,
             mails: HashMap::new(),
-
-            mailbox_names: None,
         }
     }
 
-    pub fn get_mailbox_names(&mut self) -> Option<&Vec<String>> {
-        if self.mailboxes.is_none() {
+    pub fn get_mailbox_names(&mut self) -> Option<Vec<String>> {
+        if let Some(mailboxes) = &self.mailboxes {
+            Some(
+                mailboxes
+                    .iter()
+                    .map(|mailbox| mailbox.name().unwrap().to_string())
+                    .collect(),
+            )
+        } else {
             match self.rx_mailboxes.try_recv() {
-                Ok(mailboxes) => {
-                    self.mailbox_names = Some(
-                        mailboxes
-                            .iter()
-                            .map(|mailbox| mailbox.name().unwrap().to_string())
-                            .collect::<Vec<String>>(),
-                    );
-                    self.mailboxes = Some(mailboxes);
-                }
+                Ok(mailboxes) => self.mailboxes = Some(mailboxes),
                 Err(mpsc::error::TryRecvError::Empty) => {}
                 Err(mpsc::error::TryRecvError::Disconnected) => todo!(),
             }
+            None
+        }
+    }
+
+    pub fn get_mails<'a>(&mut self, selected_mailbox_idx: usize) -> Option<Vec<String>> {
+        if let Some(mailboxes) = &self.mailboxes {
+            let selected_mailbox = mailboxes.get(selected_mailbox_idx).expect("Mailbox exists");
+            let selected_mailbox_id = selected_mailbox.id().unwrap();
+
+            if let Some(possible_mails) = self.mails.get(selected_mailbox_id) {
+                if let Some(mails) = possible_mails {
+                    return Some(
+                        mails
+                            .iter()
+                            .map(|mail| mail.subject().unwrap().to_string())
+                            .collect(),
+                    );
+                } else {
+                    // We are still waiting for te mails to come in
+                    match self.rx_mails.try_recv() {
+                        Ok(mails) => {
+                            let names = mails
+                                .iter()
+                                .map(|mail| mail.subject().unwrap_or("No subject").to_string())
+                                .collect::<Vec<String>>();
+                            self.mails
+                                .insert(selected_mailbox_id.to_string(), Some(mails));
+                            return Some(names);
+                        }
+                        Err(mpsc::error::TryRecvError::Empty) => {}
+                        Err(mpsc::error::TryRecvError::Disconnected) => todo!(),
+                    }
+                }
+            } else {
+                // indicate that fetching the mail started
+                self.mails.insert(selected_mailbox_id.to_string(), None);
+
+                let client2 = self.client.clone();
+                let mailbox_id = selected_mailbox.id().unwrap().to_string();
+
+                let tx = self.tx_mails.clone();
+                tokio::spawn(async move {
+                    // TODO: Error handling
+                    let mut query_response = client2
+                        .email_query(
+                            Some(jmap_client::email::query::Filter::in_mailbox(mailbox_id)),
+                            None::<Vec<_>>,
+                        )
+                        .await
+                        .unwrap();
+
+                    // TODO: Listen to changes
+                    let ids = query_response.take_ids();
+
+                    let mut mails = {
+                        let mut request = client2.build();
+                        request.get_email().ids(Some(ids));
+                        // TODO: Error handling
+                        request.send_get_email().await.unwrap()
+                    };
+
+                    tx.send(mails.take_list()).await.unwrap();
+                });
+            }
         }
 
-        self.mailbox_names.as_ref()
+        None
     }
 }
 
