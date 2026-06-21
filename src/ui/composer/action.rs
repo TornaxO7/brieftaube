@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use strum::{EnumIter, EnumMessage, EnumProperty, VariantArray};
+use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, VariantArray};
 
 #[derive(
     Serialize,
@@ -10,6 +10,7 @@ use strum::{EnumIter, EnumMessage, EnumProperty, VariantArray};
     EnumIter,
     EnumMessage,
     EnumProperty,
+    EnumString,
     VariantArray,
     strum::Display,
 )]

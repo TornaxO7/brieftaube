@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::ui::command_palette::{Command, HandleEventResult};
 use action::Action;
 use crossterm::event::KeyEvent;
@@ -26,14 +28,13 @@ pub struct State {
 
     mail: mail::State,
     attachments: attachments::State,
-    command_palette: super::command_palette::State,
+    command_palette: super::command_palette::CommandPalette,
 }
 
 impl State {
     pub fn new() -> Self {
         let options = Action::iter()
-            .enumerate()
-            .filter_map(|(idx, variant)| {
+            .filter_map(|variant| {
                 if let Some(is_intern) = variant.get_bool("intern") {
                     if is_intern {
                         return None;
@@ -43,11 +44,7 @@ impl State {
                 let name = variant.to_string();
                 let description = variant.get_message().unwrap().to_string();
 
-                Some(Command {
-                    idx,
-                    name,
-                    description,
-                })
+                Some(Command { name, description })
             })
             .collect::<Vec<Command>>();
 
@@ -56,7 +53,7 @@ impl State {
 
             mail: mail::State::new(),
             attachments: attachments::State::new(),
-            command_palette: super::command_palette::State::new(options),
+            command_palette: super::command_palette::CommandPalette::new(options),
         }
     }
 
@@ -69,10 +66,10 @@ impl State {
                     .handle_event(event)
                     .map(|action| match action {
                         HandleEventResult::Quit => Action::FocusMailPanel,
-                        HandleEventResult::Selected(idx) => {
+                        HandleEventResult::Selected(cmd_name) => {
                             self.command_palette.reset();
                             self.apply_action(Action::FocusMailPanel);
-                            Action::VARIANTS[idx]
+                            Action::from_str(cmd_name.as_str()).unwrap()
                         }
                     })
             }

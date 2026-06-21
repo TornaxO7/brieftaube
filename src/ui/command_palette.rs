@@ -10,58 +10,59 @@ use ratatui::{
 };
 use ratatui_textarea::TextArea;
 
+type CommandName = String;
+type CommandDescription = String;
+
 #[derive(Debug, Clone)]
 pub struct Command {
-    pub idx: usize,
-    pub name: String,
-    pub description: String,
+    pub name: CommandName,
+    pub description: CommandDescription,
 }
 
 impl Command {
-    pub fn new<S: ToString>(idx: usize, name: S, description: S) -> Self {
+    pub fn new<S: ToString>(name: S, description: S) -> Self {
         Self {
-            idx,
             name: name.to_string(),
             description: description.to_string(),
         }
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum HandleEventResult {
-    Selected(usize),
+    Selected(CommandName),
     Quit,
 }
 
-pub struct State {
+pub struct CommandPalette {
     input: TextArea<'static>,
-    nucleo: Nucleo<(usize, String, String)>,
+    nucleo: Nucleo<(CommandName, CommandDescription)>,
 
     list_state: ListState,
 }
 
-impl std::fmt::Debug for State {
+impl std::fmt::Debug for CommandPalette {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("State").field("input", &self.input).finish()
     }
 }
 
-impl Default for State {
+impl Default for CommandPalette {
     fn default() -> Self {
         Self::new(vec![])
     }
 }
 
-impl State {
+impl CommandPalette {
     pub fn new(commands: Vec<Command>) -> Self {
-        let nucleo: Nucleo<(usize, String, String)> =
+        let nucleo: Nucleo<(String, String)> =
             Nucleo::new(nucleo::Config::DEFAULT, Arc::new(|| {}), None, 2);
 
         let inj = nucleo.injector();
         for c in commands.into_iter() {
             inj.push(
-                (c.idx, c.name, c.description),
-                |&(_idx, ref name, ref description), row| {
+                (c.name, c.description),
+                |&(ref name, ref description), row| {
                     row[0] = (*name).clone().into();
                     row[1] = (*description).clone().into();
                 },
@@ -86,7 +87,7 @@ impl State {
                     let mut matches = self.nucleo.snapshot().matched_items(..);
 
                     if let Some(idx) = self.list_state.selected() {
-                        HandleEventResult::Selected(matches.nth(idx).unwrap().data.0)
+                        HandleEventResult::Selected(matches.nth(idx).unwrap().data.0.clone())
                     } else {
                         HandleEventResult::Quit
                     }
@@ -134,7 +135,7 @@ impl State {
     }
 }
 
-impl Widget for &mut State {
+impl Widget for &mut CommandPalette {
     fn render(self, area: Rect, buf: &mut Buffer)
     where
         Self: Sized,
@@ -161,7 +162,7 @@ impl Widget for &mut State {
         if let Some(selected) = self.list_state.selected() {
             if let Some(description_content) = matches.get(selected) {
                 Widget::render(
-                    Paragraph::new(description_content.data.2.as_str())
+                    Paragraph::new(description_content.data.1.as_str())
                         .wrap(Wrap { trim: true })
                         .block(Block::bordered().title("Description")),
                     description,

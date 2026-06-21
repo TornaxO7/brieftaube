@@ -16,13 +16,13 @@ use ratatui::{
     widgets::{Block, Clear, ListState, Paragraph, StatefulWidget, Widget},
 };
 use state::State;
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 use strum::{EnumMessage, EnumProperty, IntoEnumIterator, VariantArray};
 
 #[derive(Debug)]
 pub struct Mails {
     open_command_palette: bool,
-    command_palette: super::command_palette::State,
+    command_palette: super::command_palette::CommandPalette,
     state: State,
 
     mailbox_list_state: ListState,
@@ -33,8 +33,7 @@ impl Mails {
     pub async fn new(client: Arc<Client>) -> Self {
         let command_palette = {
             let options = Action::iter()
-                .enumerate()
-                .filter_map(|(idx, variant)| {
+                .filter_map(|variant| {
                     if let Some(is_intern) = variant.get_bool("intern") {
                         if is_intern {
                             return None;
@@ -44,15 +43,11 @@ impl Mails {
                     let name = variant.to_string();
                     let description = variant.get_message().unwrap().to_string();
 
-                    Some(Command {
-                        idx,
-                        name,
-                        description,
-                    })
+                    Some(Command { name, description })
                 })
                 .collect::<Vec<Command>>();
 
-            super::command_palette::State::new(options)
+            super::command_palette::CommandPalette::new(options)
         };
 
         let state = State::new(client);
@@ -75,7 +70,9 @@ impl Mails {
 
                 match result {
                     HandleEventResult::Quit => None,
-                    HandleEventResult::Selected(idx) => self.apply_action(Action::VARIANTS[idx]),
+                    HandleEventResult::Selected(cmd_name) => {
+                        self.apply_action(Action::from_str(&cmd_name).unwrap())
+                    }
                 }
             });
         }
