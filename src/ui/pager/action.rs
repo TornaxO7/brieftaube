@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, VariantArray};
 
+use crate::ui::command_palette::CommandPaletteEntry;
+
 #[derive(
     Serialize,
     Deserialize,
@@ -30,3 +32,5 @@ pub enum Action {
     #[strum(message = "Go back to mail list.")]
     OpenMailList,
 }
+
+impl CommandPaletteEntry for Action {}

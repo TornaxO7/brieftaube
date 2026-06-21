@@ -1,3 +1,4 @@
+use crate::ui::command_palette::CommandPaletteEntry;
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, VariantArray};
 
@@ -27,3 +28,5 @@ pub enum Action {
     #[strum(message = "Focus 'Attachments' panel")]
     FocusAttachmentsPanel,
 }
+
+impl CommandPaletteEntry for Action {}

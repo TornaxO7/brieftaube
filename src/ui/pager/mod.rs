@@ -1,6 +1,8 @@
-use std::str::FromStr;
+mod action;
+mod attachment;
+mod mail;
 
-use crate::ui::command_palette::{Command, HandleEventResult};
+use crate::ui::command_palette::HandleEventResult;
 use action::Action;
 use crossterm::event::KeyEvent;
 use ratatui::{
@@ -8,11 +10,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     widgets::{Clear, Widget},
 };
-use strum::{EnumMessage, EnumProperty, IntoEnumIterator};
-
-mod action;
-mod attachment;
-mod mail;
+use std::str::FromStr;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, strum::IntoStaticStr)]
 #[strum(serialize_all = "Train-Case")]
@@ -28,32 +26,17 @@ pub struct State {
 
     mail: mail::State,
     attachments: attachment::State,
-    command_palette: super::command_palette::CommandPalette,
+    command_palette: super::command_palette::CommandPalette<Action>,
 }
 
 impl State {
     pub fn new() -> Self {
-        let options = Action::iter()
-            .filter_map(|variant| {
-                if let Some(is_intern) = variant.get_bool("intern") {
-                    if is_intern {
-                        return None;
-                    }
-                }
-
-                let name = variant.to_string();
-                let description = variant.get_message().unwrap().to_string();
-
-                Some(Command { name, description })
-            })
-            .collect::<Vec<Command>>();
-
         Self {
             focus: Focus::Mail,
 
             mail: mail::State::new(),
             attachments: attachment::State::new(),
-            command_palette: super::command_palette::CommandPalette::new(options),
+            command_palette: super::command_palette::CommandPalette::new(),
         }
     }
 

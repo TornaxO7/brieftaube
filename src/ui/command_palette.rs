@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fmt::Display, marker::PhantomData, sync::Arc};
 
 use crossterm::event::{KeyCode, KeyEvent};
 use nucleo::Nucleo;
@@ -9,9 +9,15 @@ use ratatui::{
     widgets::{Block, List, ListDirection, ListState, Paragraph, StatefulWidget, Widget, Wrap},
 };
 use ratatui_textarea::TextArea;
+use strum::{EnumMessage, EnumProperty, IntoEnumIterator};
 
 type CommandName = String;
 type CommandDescription = String;
+
+pub trait CommandPaletteEntry:
+    IntoEnumIterator + EnumMessage + EnumProperty + Display + std::fmt::Debug
+{
+}
 
 #[derive(Debug, Clone)]
 pub struct Command {
@@ -34,45 +40,47 @@ pub enum HandleEventResult {
     Quit,
 }
 
-pub struct CommandPalette {
+pub struct CommandPalette<E: CommandPaletteEntry> {
     input: TextArea<'static>,
     nucleo: Nucleo<(CommandName, CommandDescription)>,
 
     list_state: ListState,
+    _phantom: PhantomData<E>,
 }
 
-impl std::fmt::Debug for CommandPalette {
+impl<E: CommandPaletteEntry> std::fmt::Debug for CommandPalette<E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("State").field("input", &self.input).finish()
     }
 }
 
-impl Default for CommandPalette {
-    fn default() -> Self {
-        Self::new(vec![])
-    }
-}
-
-impl CommandPalette {
-    pub fn new(commands: Vec<Command>) -> Self {
+impl<E: CommandPaletteEntry> CommandPalette<E> {
+    pub fn new() -> Self {
         let nucleo: Nucleo<(String, String)> =
             Nucleo::new(nucleo::Config::DEFAULT, Arc::new(|| {}), None, 2);
 
         let inj = nucleo.injector();
-        for c in commands.into_iter() {
-            inj.push(
-                (c.name, c.description),
-                |&(ref name, ref description), row| {
-                    row[0] = (*name).clone().into();
-                    row[1] = (*description).clone().into();
-                },
-            );
+        for c in E::iter() {
+            if let Some(is_intern) = c.get_bool("intern") {
+                if is_intern {
+                    continue;
+                }
+            }
+
+            let name = c.to_string();
+            let description = c.get_message().unwrap().to_string();
+
+            inj.push((name, description), |&(ref name, ref description), row| {
+                row[0] = (*name).clone().into();
+                row[1] = (*description).clone().into();
+            });
         }
 
         Self {
             input: TextArea::default(),
             nucleo,
             list_state: ListState::default().with_selected(Some(0)),
+            _phantom: PhantomData,
         }
     }
 
@@ -135,7 +143,7 @@ impl CommandPalette {
     }
 }
 
-impl Widget for &mut CommandPalette {
+impl<E: CommandPaletteEntry> Widget for &mut CommandPalette<E> {
     fn render(self, area: Rect, buf: &mut Buffer)
     where
         Self: Sized,

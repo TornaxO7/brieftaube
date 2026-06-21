@@ -4,7 +4,7 @@ mod mailbox_list;
 mod state;
 
 use crate::ui::{
-    command_palette::{Command, HandleEventResult},
+    command_palette::HandleEventResult,
     mails::{mail_list::MailListWidget, mailbox_list::MailboxListWidget},
 };
 use action::Action;
@@ -17,12 +17,11 @@ use ratatui::{
 };
 use state::State;
 use std::{str::FromStr, sync::Arc};
-use strum::{EnumMessage, EnumProperty, IntoEnumIterator, VariantArray};
 
 #[derive(Debug)]
 pub struct Mails {
     open_command_palette: bool,
-    command_palette: super::command_palette::CommandPalette,
+    command_palette: super::command_palette::CommandPalette<Action>,
     state: State,
 
     mailbox_list_state: ListState,
@@ -31,25 +30,7 @@ pub struct Mails {
 
 impl Mails {
     pub async fn new(client: Arc<Client>) -> Self {
-        let command_palette = {
-            let options = Action::iter()
-                .filter_map(|variant| {
-                    if let Some(is_intern) = variant.get_bool("intern") {
-                        if is_intern {
-                            return None;
-                        }
-                    }
-
-                    let name = variant.to_string();
-                    let description = variant.get_message().unwrap().to_string();
-
-                    Some(Command { name, description })
-                })
-                .collect::<Vec<Command>>();
-
-            super::command_palette::CommandPalette::new(options)
-        };
-
+        let command_palette = super::command_palette::CommandPalette::new();
         let state = State::new(client);
 
         Self {
