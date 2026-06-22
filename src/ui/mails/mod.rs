@@ -78,10 +78,8 @@ impl Mails {
 
             Action::OpenCommandPalette => self.open_command_palette = true,
             Action::CloseCommandPalette => self.open_command_palette = false,
-
-            Action::OpenMailInPager => return Some(super::Action::OpenPager),
-
-            Action::CreateNewMail => return Some(super::Action::OpenComposer),
+            // Action::OpenMailInPager => return Some(super::Action::OpenPager),
+            // Action::CreateNewMail => return Some(super::Action::OpenComposer),
         }
 
         None
