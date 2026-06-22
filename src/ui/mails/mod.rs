@@ -163,8 +163,7 @@ impl Widget for &mut Mails {
 
         self.render_mailbox_list(mail_boxes, buf);
         self.render_mail_list(mail_list, buf);
-
-        // self.preview.render(preview, buf);
+        self.render_preview(preview, buf);
         // self.statusbar.render(statusbar, buf);
 
         if let Some(command_palette) = &mut self.palette {
@@ -209,6 +208,22 @@ impl Mails {
                 ),
             }
         }
-        // if let Some(selected_mailbox_id) = self.state.get_selected_mailbox() {}
+    }
+
+    fn render_preview(&mut self, area: Rect, buf: &mut Buffer) {
+        if let Some(selected_mailbox_idx) = self.mailbox_list_state.selected() {
+            if let Some(selected_mail_idx) = self.mail_list_state.selected() {
+                if let Some(mail) = self.state.get_mail(selected_mailbox_idx, selected_mail_idx) {
+                    Widget::render(Paragraph::new(mail.preview().unwrap()), area, buf);
+                    return;
+                }
+            }
+        }
+
+        Widget::render(
+            Paragraph::new("No mail selected").block(Block::bordered()),
+            area,
+            buf,
+        );
     }
 }

@@ -1,6 +1,7 @@
 use jmap_client::{client::Client, email::Email, mailbox::Mailbox};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::mpsc;
+use tracing::debug;
 
 type MailboxId = String;
 
@@ -137,6 +138,27 @@ impl State {
                     tx.send(mails.take_list()).await.unwrap();
                 });
             }
+        }
+
+        None
+    }
+
+    pub fn get_mail(&self, selected_mailbox_idx: usize, selected_mail_idx: usize) -> Option<Email> {
+        if let Some(mailboxes) = &self.mailboxes {
+            let mailbox = &mailboxes[selected_mailbox_idx];
+
+            if let Some(mails) = self.mails.get(mailbox.id().unwrap()) {
+                if let Some(mails) = mails {
+                    return Some(mails[selected_mail_idx].clone());
+                }
+            }
+
+            debug!(
+                "No mails available yet for mailbox '{}'",
+                mailbox.name().unwrap_or_default()
+            );
+        } else {
+            debug!("No mailboxes available yet");
         }
 
         None
