@@ -20,7 +20,10 @@ use std::{str::FromStr, sync::Arc};
 
 #[derive(Debug)]
 enum PaletteType {
+    /// Palette is displaying commands
     Command,
+
+    /// Palette is displaying mailboxes
     Mailbox,
 }
 
@@ -69,7 +72,7 @@ impl Mails {
                                 actions.push(Action::from_str(&value).unwrap().into())
                             }
                             PaletteType::Mailbox => {
-                                todo!()
+                                actions.push(Action::SelectMailbox(value).into());
                             }
                         }
                     }
@@ -95,6 +98,18 @@ impl Mails {
 
             Action::SelectNextMailbox => self.mailbox_list_state.select_next(),
             Action::SelectPreviousMailbox => self.mailbox_list_state.select_previous(),
+            Action::SelectMailbox(selected_name) => {
+                let mailbox_names = self.state.get_mailbox_names().unwrap();
+
+                for (idx, name) in mailbox_names.into_iter().enumerate() {
+                    if name == selected_name {
+                        self.mailbox_list_state.select(Some(idx));
+                        return None;
+                    }
+                }
+
+                unreachable!("Man... why does this happen? ._.");
+            }
 
             Action::SelectNextMail => self.mail_list_state.select_next(),
             Action::SelectPreviousMail => self.mail_list_state.select_previous(),

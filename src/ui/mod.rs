@@ -9,7 +9,7 @@ mod command_palette;
 mod mails;
 // mod pager;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Action {
     Quit,
 

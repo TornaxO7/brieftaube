@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
-use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator, VariantArray};
+use strum::{
+    EnumDiscriminants, EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator,
+    VariantArray,
+};
 
 use crate::ui::command_palette::Entry;
 
@@ -8,12 +11,10 @@ use crate::ui::command_palette::Entry;
     Deserialize,
     Debug,
     Clone,
-    Copy,
     EnumIter,
     EnumMessage,
     EnumProperty,
     EnumString,
-    VariantArray,
     strum::Display,
 )]
 #[serde(rename_all = "snake_case")]
@@ -29,6 +30,8 @@ pub enum Action {
 
     #[strum(message = "Open palette to selecet the mailbox.")]
     OpenMailboxPalette,
+    #[strum(message = "Select the given mailbox", props(intern = true))]
+    SelectMailbox(String),
     #[strum(message = "Select the next mailbox.")]
     SelectNextMailbox,
     #[strum(message = "Select the previous mailbox.")]
