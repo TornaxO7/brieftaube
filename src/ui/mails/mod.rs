@@ -3,10 +3,7 @@ mod mail_list;
 mod mailbox_list;
 mod state;
 
-use crate::ui::{
-    command_palette::HandleEventResult,
-    mails::{mail_list::MailListWidget, mailbox_list::MailboxListWidget},
-};
+use crate::ui::mails::{mail_list::MailListWidget, mailbox_list::MailboxListWidget};
 use action::Action;
 use crossterm::event::{KeyCode, KeyEvent};
 use jmap_client::client::Client;
@@ -16,12 +13,12 @@ use ratatui::{
     widgets::{Block, Clear, ListState, Paragraph, StatefulWidget, Widget},
 };
 use state::State;
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct Mails {
     open_command_palette: bool,
-    command_palette: super::command_palette::CommandPalette<Action>,
+    command_palette: Option<super::command_palette::CommandPalette>,
     state: State,
 
     mailbox_list_state: ListState,
@@ -30,12 +27,11 @@ pub struct Mails {
 
 impl Mails {
     pub async fn new(client: Arc<Client>) -> Self {
-        let command_palette = super::command_palette::CommandPalette::new();
         let state = State::new(client);
 
         Self {
             open_command_palette: false,
-            command_palette,
+            command_palette: None,
             state,
 
             mailbox_list_state: ListState::default(),
@@ -44,17 +40,18 @@ impl Mails {
     }
 
     pub fn handle_event(&mut self, event: KeyEvent) -> Option<super::Action> {
-        if self.open_command_palette {
-            return self.command_palette.handle_event(event).and_then(|result| {
-                self.command_palette.reset();
-                self.apply_action(Action::CloseCommandPalette);
+        if let Some(command_palette) = &mut self.command_palette {
+            return command_palette.handle_event(event).and_then(|result| {
+                // command_palette.reset();
+                // self.apply_action(Action::CloseCommandPalette);
 
-                match result {
-                    HandleEventResult::Quit => None,
-                    HandleEventResult::Selected(cmd_name) => {
-                        self.apply_action(Action::from_str(&cmd_name).unwrap())
-                    }
-                }
+                // match result {
+                //     HandleEventResult::Quit => None,
+                //     HandleEventResult::Selected(cmd_name) => {
+                //         self.apply_action(Action::from_str(&cmd_name).unwrap())
+                //     }
+                // }
+                todo!()
             });
         }
 
@@ -108,10 +105,10 @@ impl Widget for &mut Mails {
         // self.preview.render(preview, buf);
         // self.statusbar.render(statusbar, buf);
 
-        if self.open_command_palette {
+        if let Some(command_palette) = &mut self.command_palette {
             let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
             Clear.render(a, buf);
-            self.command_palette.render(a, buf);
+            command_palette.render(a, buf);
         }
     }
 }

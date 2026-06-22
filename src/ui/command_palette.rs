@@ -1,5 +1,3 @@
-use std::{fmt::Display, marker::PhantomData, sync::Arc};
-
 use crossterm::event::{KeyCode, KeyEvent};
 use nucleo::Nucleo;
 use ratatui::{
@@ -9,23 +7,19 @@ use ratatui::{
     widgets::{Block, List, ListDirection, ListState, Paragraph, StatefulWidget, Widget, Wrap},
 };
 use ratatui_textarea::TextArea;
-use strum::{EnumMessage, EnumProperty, IntoEnumIterator};
+use std::sync::Arc;
+use strum::{EnumMessage, IntoEnumIterator};
 
-type CommandName = String;
-type CommandDescription = String;
-
-pub trait CommandPaletteEntry:
-    IntoEnumIterator + EnumMessage + EnumProperty + Display + std::fmt::Debug
-{
-}
+type EntryName = String;
+type EntryDescription = String;
 
 #[derive(Debug, Clone)]
-pub struct Command {
-    pub name: CommandName,
-    pub description: CommandDescription,
+pub struct Entry {
+    pub name: String,
+    pub description: String,
 }
 
-impl Command {
+impl Entry {
     pub fn new<S: ToString>(name: S, description: S) -> Self {
         Self {
             name: name.to_string(),
@@ -36,51 +30,43 @@ impl Command {
 
 #[derive(Debug, Clone)]
 pub enum HandleEventResult {
-    Selected(CommandName),
+    Selected(EntryName),
     Quit,
 }
 
-pub struct CommandPalette<E: CommandPaletteEntry> {
+pub struct CommandPalette {
     input: TextArea<'static>,
-    nucleo: Nucleo<(CommandName, CommandDescription)>,
+    nucleo: Nucleo<(EntryName, EntryDescription)>,
 
     list_state: ListState,
-    _phantom: PhantomData<E>,
 }
 
-impl<E: CommandPaletteEntry> std::fmt::Debug for CommandPalette<E> {
+impl std::fmt::Debug for CommandPalette {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("State").field("input", &self.input).finish()
     }
 }
 
-impl<E: CommandPaletteEntry> CommandPalette<E> {
-    pub fn new() -> Self {
+impl CommandPalette {
+    pub fn new(entries: Vec<Entry>) -> Self {
         let nucleo: Nucleo<(String, String)> =
             Nucleo::new(nucleo::Config::DEFAULT, Arc::new(|| {}), None, 2);
 
         let inj = nucleo.injector();
-        for c in E::iter() {
-            if let Some(is_intern) = c.get_bool("intern") {
-                if is_intern {
-                    continue;
-                }
-            }
-
-            let name = c.to_string();
-            let description = c.get_message().unwrap().to_string();
-
-            inj.push((name, description), |&(ref name, ref description), row| {
-                row[0] = (*name).clone().into();
-                row[1] = (*description).clone().into();
-            });
+        for e in entries {
+            inj.push(
+                (e.name, e.description),
+                |&(ref name, ref description), row| {
+                    row[0] = (*name).clone().into();
+                    row[1] = (*description).clone().into();
+                },
+            );
         }
 
         Self {
             input: TextArea::default(),
             nucleo,
             list_state: ListState::default().with_selected(Some(0)),
-            _phantom: PhantomData,
         }
     }
 
@@ -143,7 +129,7 @@ impl<E: CommandPaletteEntry> CommandPalette<E> {
     }
 }
 
-impl<E: CommandPaletteEntry> Widget for &mut CommandPalette<E> {
+impl Widget for &mut CommandPalette {
     fn render(self, area: Rect, buf: &mut Buffer)
     where
         Self: Sized,
