@@ -13,9 +13,16 @@ mod mails;
 pub enum Action {
     Quit,
 
+    MailList(mails::Action),
     OpenMailList,
     // OpenComposer,
     // OpenPager,
+}
+
+impl From<mails::Action> for Action {
+    fn from(action: mails::Action) -> Self {
+        Self::MailList(action)
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -46,16 +53,28 @@ impl State {
     }
 
     pub fn handle_event(&mut self, event: KeyEvent) -> Option<super::Action> {
-        match self.mode {
+        let sub_actions = match self.mode {
             Mode::Mails => self.mails.handle_event(event),
             // Mode::Composer => self.composer.handle_event(event),
             // Mode::Pager => self.pager.handle_event(event),
+        };
+
+        for action in sub_actions {
+            self.apply_action(action);
         }
-        .and_then(|a| match a {
-            Action::Quit => Some(super::Action::Quit),
-            Action::OpenMailList => {
-                self.mode = Mode::Mails;
-                None
+
+        None
+    }
+
+    fn apply_action(&mut self, action: Action) -> Option<super::Action> {
+        match action {
+            Action::Quit => return Some(super::Action::Quit),
+            Action::OpenMailList => self.mode = Mode::Mails,
+            Action::MailList(action) => {
+                return self
+                    .mails
+                    .apply_action(action)
+                    .and_then(|action| self.apply_action(action));
             } // Action::OpenComposer => {
               //     self.mode = Mode::Composer;
               //     None
@@ -64,7 +83,9 @@ impl State {
               //     self.mode = Mode::Pager;
               //     None
               // }
-        })
+        }
+
+        None
     }
 }
 

@@ -3,8 +3,11 @@ mod mail_list;
 mod mailbox_list;
 mod state;
 
-use crate::ui::mails::{mail_list::MailListWidget, mailbox_list::MailboxListWidget};
-use action::Action;
+use crate::ui::{
+    command_palette::{self, CommandPalette},
+    mails::{mail_list::MailListWidget, mailbox_list::MailboxListWidget},
+};
+pub use action::Action;
 use crossterm::event::{KeyCode, KeyEvent};
 use jmap_client::client::Client;
 use ratatui::{
@@ -13,12 +16,23 @@ use ratatui::{
     widgets::{Block, Clear, ListState, Paragraph, StatefulWidget, Widget},
 };
 use state::State;
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
+
+#[derive(Debug)]
+enum PaletteType {
+    Command,
+    Mailbox,
+}
+
+#[derive(Debug)]
+struct PaletteCtx {
+    palette: CommandPalette,
+    ty: PaletteType,
+}
 
 #[derive(Debug)]
 pub struct Mails {
-    open_command_palette: bool,
-    command_palette: Option<super::command_palette::CommandPalette>,
+    palette: Option<PaletteCtx>,
     state: State,
 
     mailbox_list_state: ListState,
@@ -30,8 +44,7 @@ impl Mails {
         let state = State::new(client);
 
         Self {
-            open_command_palette: false,
-            command_palette: None,
+            palette: None,
             state,
 
             mailbox_list_state: ListState::default(),
@@ -39,30 +52,43 @@ impl Mails {
         }
     }
 
-    pub fn handle_event(&mut self, event: KeyEvent) -> Option<super::Action> {
-        if let Some(command_palette) = &mut self.command_palette {
-            return command_palette.handle_event(event).and_then(|result| {
-                // command_palette.reset();
-                // self.apply_action(Action::CloseCommandPalette);
+    pub fn handle_event(&mut self, event: KeyEvent) -> Vec<super::Action> {
+        let mut actions = Vec::new();
 
-                // match result {
-                //     HandleEventResult::Quit => None,
-                //     HandleEventResult::Selected(cmd_name) => {
-                //         self.apply_action(Action::from_str(&cmd_name).unwrap())
-                //     }
-                // }
-                todo!()
-            });
+        if let Some(command_palette) = &mut self.palette {
+            if let Some(result) = command_palette.palette.handle_event(event) {
+                actions.push(Action::CloseCommandPalette.into());
+
+                match result {
+                    command_palette::HandleEventResult::Quit => {
+                        actions.push(super::Action::Quit);
+                    }
+                    command_palette::HandleEventResult::Selected(value) => {
+                        match command_palette.ty {
+                            PaletteType::Command => {
+                                actions.push(Action::from_str(&value).unwrap().into())
+                            }
+                            PaletteType::Mailbox => {
+                                todo!()
+                            }
+                        }
+                    }
+                }
+            }
+
+            return actions;
         }
 
         match event.code {
-            KeyCode::Char('q') => Some(super::Action::Quit),
-            KeyCode::Char(':') => self.apply_action(Action::OpenCommandPalette),
-            _ => None,
-        }
+            KeyCode::Char('q') => actions.push(super::Action::Quit),
+            KeyCode::Char(':') => actions.push(Action::OpenCommandPalette.into()),
+            _ => {}
+        };
+
+        actions
     }
 
-    fn apply_action(&mut self, a: Action) -> Option<super::Action> {
+    pub fn apply_action(&mut self, a: Action) -> Option<super::Action> {
         tracing::debug!("Action: {:?}", a);
         match a {
             Action::Quit => return Some(super::Action::Quit),
@@ -73,8 +99,29 @@ impl Mails {
             Action::SelectNextMail => self.mail_list_state.select_next(),
             Action::SelectPreviousMail => self.mail_list_state.select_previous(),
 
-            Action::OpenCommandPalette => self.open_command_palette = true,
-            Action::CloseCommandPalette => self.open_command_palette = false,
+            Action::OpenMailboxPalette => {
+                if let Some(mailbox_names) = self.state.get_mailbox_names() {
+                    let entries = mailbox_names
+                        .into_iter()
+                        .map(|mailbox_name| command_palette::Entry {
+                            name: mailbox_name,
+                            description: "".to_string(),
+                        })
+                        .collect::<Vec<command_palette::Entry>>();
+
+                    self.palette = Some(PaletteCtx {
+                        palette: CommandPalette::new(entries),
+                        ty: PaletteType::Mailbox,
+                    });
+                }
+            }
+            Action::OpenCommandPalette => {
+                self.palette = Some(PaletteCtx {
+                    palette: CommandPalette::new(Action::palette_options()),
+                    ty: PaletteType::Command,
+                })
+            }
+            Action::CloseCommandPalette => self.palette = None,
             // Action::OpenMailInPager => return Some(super::Action::OpenPager),
             // Action::CreateNewMail => return Some(super::Action::OpenComposer),
         }
@@ -105,10 +152,10 @@ impl Widget for &mut Mails {
         // self.preview.render(preview, buf);
         // self.statusbar.render(statusbar, buf);
 
-        if let Some(command_palette) = &mut self.command_palette {
+        if let Some(command_palette) = &mut self.palette {
             let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
             Clear.render(a, buf);
-            command_palette.render(a, buf);
+            command_palette.palette.render(a, buf);
         }
     }
 }

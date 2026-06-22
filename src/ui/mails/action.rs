@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
-use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, VariantArray};
+use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator, VariantArray};
+
+use crate::ui::command_palette::Entry;
 
 #[derive(
     Serialize,
@@ -25,6 +27,8 @@ pub enum Action {
     #[strum(message = "Quit the application")]
     Quit,
 
+    #[strum(message = "Open palette to selecet the mailbox.")]
+    OpenMailboxPalette,
     #[strum(message = "Select the next mailbox.")]
     SelectNextMailbox,
     #[strum(message = "Select the previous mailbox.")]
@@ -38,4 +42,23 @@ pub enum Action {
     // CreateNewMail,
     // #[strum(message = "Open mail in the pager.")]
     // OpenMailInPager,
+}
+
+impl Action {
+    pub fn palette_options() -> Vec<Entry> {
+        Self::iter()
+            .filter_map(|action| {
+                if let Some(is_intern) = action.get_bool("intern") {
+                    if is_intern {
+                        return None;
+                    }
+                }
+
+                let name = action.to_string();
+                let description = action.get_message().unwrap_or_default().to_string();
+
+                Some(Entry { name, description })
+            })
+            .collect()
+    }
 }

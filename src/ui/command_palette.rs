@@ -8,24 +8,18 @@ use ratatui::{
 };
 use ratatui_textarea::TextArea;
 use std::sync::Arc;
-use strum::{EnumMessage, IntoEnumIterator};
 
 type EntryName = String;
 type EntryDescription = String;
+
+pub trait ToEntry {
+    fn to_entry(&self) -> Entry;
+}
 
 #[derive(Debug, Clone)]
 pub struct Entry {
     pub name: String,
     pub description: String,
-}
-
-impl Entry {
-    pub fn new<S: ToString>(name: S, description: S) -> Self {
-        Self {
-            name: name.to_string(),
-            description: description.to_string(),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
