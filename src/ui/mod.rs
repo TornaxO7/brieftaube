@@ -60,7 +60,9 @@ impl State {
         };
 
         for action in sub_actions {
-            self.apply_action(action);
+            if let Some(app_action) = self.apply_action(action) {
+                return Some(app_action);
+            }
         }
 
         None

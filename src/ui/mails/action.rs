@@ -1,10 +1,6 @@
-use serde::{Deserialize, Serialize};
-use strum::{
-    EnumDiscriminants, EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator,
-    VariantArray,
-};
-
 use crate::ui::command_palette::Entry;
+use serde::{Deserialize, Serialize};
+use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator};
 
 #[derive(
     Serialize,
