@@ -17,7 +17,6 @@ use ratatui::{
 };
 use state::State;
 use std::{str::FromStr, sync::Arc};
-use tracing::debug;
 
 #[derive(Debug)]
 enum PaletteType {
@@ -151,7 +150,7 @@ impl Widget for &mut Mails {
     where
         Self: Sized,
     {
-        let [content, statusbar] = area.layout(&Layout::vertical([
+        let [content, _statusbar] = area.layout(&Layout::vertical([
             Constraint::Fill(0),
             Constraint::Length(3),
         ]));
@@ -208,6 +207,12 @@ impl Mails {
                     buf,
                 ),
             }
+        } else {
+            Widget::render(
+                Paragraph::new("No mailbox selected").block(Block::bordered().title("Mails")),
+                area,
+                buf,
+            )
         }
     }
 
@@ -222,7 +227,7 @@ impl Mails {
         }
 
         Widget::render(
-            Paragraph::new("No mail selected").block(Block::bordered()),
+            Paragraph::new("No mail selected").block(Block::bordered().title("Mail preview")),
             area,
             buf,
         );
