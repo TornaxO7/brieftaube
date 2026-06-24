@@ -25,7 +25,7 @@ pub struct Entry {
 #[derive(Debug, Clone)]
 pub enum HandleEventResult {
     Selected(EntryName),
-    Quit,
+    Cancel,
 }
 
 pub struct CommandPalette {
@@ -68,7 +68,7 @@ impl CommandPalette {
         match event.code {
             KeyCode::Esc => {
                 self.reset();
-                return Some(HandleEventResult::Quit);
+                return Some(HandleEventResult::Cancel);
             }
             KeyCode::Enter => {
                 let result = {
@@ -77,7 +77,7 @@ impl CommandPalette {
                     if let Some(idx) = self.list_state.selected() {
                         HandleEventResult::Selected(matches.nth(idx).unwrap().data.0.clone())
                     } else {
-                        HandleEventResult::Quit
+                        HandleEventResult::Cancel
                     }
                 };
 

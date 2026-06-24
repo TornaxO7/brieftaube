@@ -24,7 +24,7 @@ pub enum Action {
     #[strum(message = "Quit the application")]
     Quit,
 
-    #[strum(message = "Open palette to selecet the mailbox.")]
+    #[strum(message = "Select mailbox by using the palette.")]
     OpenMailboxPalette,
     #[strum(message = "Select the given mailbox", props(intern = true))]
     SelectMailbox(String),

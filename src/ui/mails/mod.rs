@@ -63,8 +63,8 @@ impl Mails {
                 actions.push(Action::CloseCommandPalette.into());
 
                 match result {
-                    command_palette::HandleEventResult::Quit => {
-                        actions.push(super::Action::Quit);
+                    command_palette::HandleEventResult::Cancel => {
+                        actions.push(Action::CloseCommandPalette.into());
                     }
                     command_palette::HandleEventResult::Selected(value) => {
                         match command_palette.ty {
