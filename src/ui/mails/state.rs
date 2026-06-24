@@ -5,12 +5,6 @@ use tracing::debug;
 
 type MailboxId = String;
 
-enum MailsInMailbox {
-    NotInitialized,
-    Fetching,
-    Mails(Vec<Email>),
-}
-
 pub struct State {
     client: Arc<Client>,
 
