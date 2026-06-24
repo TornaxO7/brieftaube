@@ -152,7 +152,7 @@ impl Widget for &mut CommandPalette {
                 Widget::render(
                     Paragraph::new(description_content.data.1.as_str())
                         .wrap(Wrap { trim: true })
-                        .block(Block::bordered().title("Description")),
+                        .block(Block::bordered()),
                     description,
                     buf,
                 );
@@ -168,12 +168,12 @@ impl Widget for &mut CommandPalette {
         {
             let options_content: Vec<&str> = matches
                 .iter()
-                .map(|output| output.data.1.as_str())
+                .map(|output| output.data.0.as_str())
                 .collect();
 
             StatefulWidget::render(
                 List::new(options_content)
-                    .block(Block::bordered().title("Commands"))
+                    .block(Block::bordered())
                     .highlight_style(Style::new().blue())
                     .direction(ListDirection::TopToBottom),
                 options,

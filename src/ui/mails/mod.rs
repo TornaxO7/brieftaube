@@ -17,6 +17,7 @@ use ratatui::{
 };
 use state::State;
 use std::{str::FromStr, sync::Arc};
+use tracing::debug;
 
 #[derive(Debug)]
 enum PaletteType {
