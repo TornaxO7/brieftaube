@@ -18,6 +18,10 @@ use ratatui::{
 use state::State;
 use std::{str::FromStr, sync::Arc};
 
+const MAILBOX_PANEL_TITLE: &str = "Mailboxes";
+const MAIL_LIST_PANEL_TITLE: &str = "Mails";
+const PREVIEW_PANEL_TITLE: &str = "Mail content";
+
 #[derive(Debug)]
 enum PaletteType {
     /// Palette is displaying commands
@@ -179,13 +183,13 @@ impl Mails {
     fn render_mailbox_list(&mut self, area: Rect, buf: &mut Buffer) {
         match self.state.get_mailbox_names() {
             Some(names) => StatefulWidget::render(
-                MailboxListWidget::new(&names),
+                MailboxListWidget::new(&names).block(Block::bordered().title(MAILBOX_PANEL_TITLE)),
                 area,
                 buf,
                 &mut self.mailbox_list_state,
             ),
             None => Widget::render(
-                Paragraph::new("Loading...").block(Block::bordered()),
+                Paragraph::new("Loading...").block(Block::bordered().title(MAILBOX_PANEL_TITLE)),
                 area,
                 buf,
             ),
@@ -196,20 +200,23 @@ impl Mails {
         if let Some(selected_mailbox_idx) = self.mailbox_list_state.selected() {
             match self.state.get_mails(selected_mailbox_idx) {
                 Some(names) => StatefulWidget::render(
-                    MailListWidget::new(&names),
+                    MailListWidget::new(&names)
+                        .block(Block::bordered().title(MAIL_LIST_PANEL_TITLE)),
                     area,
                     buf,
                     &mut self.mail_list_state,
                 ),
                 None => Widget::render(
-                    Paragraph::new("Loading...").block(Block::bordered()),
+                    Paragraph::new("Loading...")
+                        .block(Block::bordered().title(MAIL_LIST_PANEL_TITLE)),
                     area,
                     buf,
                 ),
             }
         } else {
             Widget::render(
-                Paragraph::new("No mailbox selected").block(Block::bordered().title("Mails")),
+                Paragraph::new("No mailbox selected")
+                    .block(Block::bordered().title(MAIL_LIST_PANEL_TITLE)),
                 area,
                 buf,
             )
@@ -220,14 +227,19 @@ impl Mails {
         if let Some(selected_mailbox_idx) = self.mailbox_list_state.selected() {
             if let Some(selected_mail_idx) = self.mail_list_state.selected() {
                 if let Some(mail) = self.state.get_mail(selected_mailbox_idx, selected_mail_idx) {
-                    Widget::render(Paragraph::new(mail.preview().unwrap()), area, buf);
+                    Widget::render(
+                        Paragraph::new(mail.preview().unwrap())
+                            .block(Block::bordered().title(PREVIEW_PANEL_TITLE)),
+                        area,
+                        buf,
+                    );
                     return;
                 }
             }
         }
 
         Widget::render(
-            Paragraph::new("No mail selected").block(Block::bordered().title("Mail preview")),
+            Paragraph::new("No mail selected").block(Block::bordered().title(PREVIEW_PANEL_TITLE)),
             area,
             buf,
         );
