@@ -3,13 +3,15 @@ mod mail_list;
 mod mailbox_list;
 mod state;
 
-use crate::ui::{
-    command_palette::{self, CommandPalette},
-    mails::{mail_list::MailListWidget, mailbox_list::MailboxListWidget},
+use crate::{
+    backend,
+    ui::{
+        command_palette::{self, CommandPalette},
+        mails::{mail_list::MailListWidget, mailbox_list::MailboxListWidget},
+    },
 };
 pub use action::Action;
 use crossterm::event::{KeyCode, KeyEvent};
-use jmap_client::client::Client;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
@@ -47,8 +49,8 @@ pub struct Mails {
 }
 
 impl Mails {
-    pub async fn new(client: Arc<Client>) -> Self {
-        let state = State::new(client);
+    pub async fn new(account: Arc<backend::Account>) -> Self {
+        let state = State::new(account);
 
         Self {
             palette: None,

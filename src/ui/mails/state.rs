@@ -1,4 +1,5 @@
-use jmap_client::{client::Client, email::Email, mailbox::Mailbox};
+use crate::backend;
+use jmap_client::{email::Email, mailbox::Mailbox};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::mpsc;
 use tracing::debug;
@@ -6,7 +7,7 @@ use tracing::debug;
 type MailboxId = String;
 
 pub struct State {
-    client: Arc<Client>,
+    account: Arc<backend::Account>,
 
     rx_mailboxes: mpsc::Receiver<Vec<Mailbox>>,
 
@@ -19,14 +20,14 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(client: Arc<Client>) -> Self {
+    pub fn new(account: Arc<backend::Account>) -> Self {
         let (tx_mailboxes, rx_mailboxes) = mpsc::channel(1);
         let (tx_mails, rx_mails) = mpsc::channel(1);
 
-        let client2 = client.clone();
+        let account2 = account.clone();
         tokio::spawn(async move {
             let mut mailbox_response = {
-                let mut request = client2.build();
+                let mut request = account2.client.build();
                 request.get_mailbox().ids::<[_; 0], String>(None);
                 // TODO: Error handling
                 request.send_get_mailbox().await.unwrap()
@@ -42,7 +43,7 @@ impl State {
         });
 
         Self {
-            client,
+            account,
 
             rx_mailboxes,
 
@@ -89,6 +90,8 @@ impl State {
                     // We are still waiting for te mails to come in
                     match self.rx_mails.try_recv() {
                         Ok(mails) => {
+                            std::fs::write("/tmp/dump.txt", format!("{:#?}", &mails)).unwrap();
+
                             let names = mails
                                 .iter()
                                 .map(|mail| mail.subject().unwrap_or("No subject").to_string())
@@ -105,15 +108,23 @@ impl State {
                 // indicate that fetching the mail started
                 self.mails.insert(selected_mailbox_id.to_string(), None);
 
-                let client2 = self.client.clone();
+                let account = self.account.clone();
                 let mailbox_id = selected_mailbox.id().unwrap().to_string();
 
                 let tx = self.tx_mails.clone();
                 tokio::spawn(async move {
                     // TODO: Error handling
-                    let mut query_response = client2
+                    let mut query_response = account
+                        .client
                         .email_query(
-                            Some(jmap_client::email::query::Filter::in_mailbox(mailbox_id)),
+                            Some(jmap_client::core::query::Filter::and([
+                                jmap_client::email::query::Filter::in_mailbox(mailbox_id).into(),
+                                jmap_client::core::query::Filter::not([
+                                    jmap_client::email::query::Filter::From {
+                                        value: account.address.clone(),
+                                    },
+                                ]),
+                            ])),
                             None::<Vec<_>>,
                         )
                         .await
@@ -123,7 +134,7 @@ impl State {
                     let ids = query_response.take_ids();
 
                     let mut mails = {
-                        let mut request = client2.build();
+                        let mut request = account.client.build();
                         request.get_email().ids(Some(ids));
                         // TODO: Error handling
                         request.send_get_email().await.unwrap()

@@ -1,36 +1,36 @@
-use jmap_client::mailbox::query::Filter;
+use jmap_client::client::Client;
 
-pub struct Client {
-    intern: jmap_client::client::Client,
+pub struct Account {
+    /// Email address
+    pub address: String,
+    pub client: jmap_client::client::Client,
 }
 
-impl Client {
+impl Account {
     pub async fn new() -> Self {
-        let url = std::fs::read_to_string("/tmp/url.txt").unwrap();
-        let password = std::fs::read_to_string("/tmp/password.txt").unwrap();
-        let allow_redirects = std::fs::read_to_string("/tmp/redirects.txt").unwrap();
+        // TODO: Make it configureable
+        let home = std::env::var("HOME").unwrap();
+        let address = std::fs::read_to_string(format!("{}/stalwart-account.txt", home)).unwrap();
+        let client = {
+            let host = std::fs::read_to_string(format!("{}/stalwart-host.txt", home)).unwrap();
+            let password =
+                std::fs::read_to_string(format!("{}/stalwart-password.txt", home)).unwrap();
 
-        let intern = jmap_client::client::Client::new()
-            .credentials(("test", password.as_str()))
-            .follow_redirects([allow_redirects])
-            .connect(&url)
-            .await
-            .unwrap();
+            let url = format!("http://{}", host.trim());
 
-        Self { intern }
-    }
+            Client::new()
+                .credentials((address.as_str(), password.trim()))
+                .follow_redirects([host.trim()])
+                .connect(url.trim())
+                .await
+                .unwrap()
+        };
 
-    pub async fn get_mailboxes(&mut self) -> Vec<String> {
-        self.intern
-            .mailbox_query(None::<Filter>, None::<Vec<_>>)
-            .await
-            .unwrap();
-
-        todo!()
+        Self { client, address }
     }
 }
 
-impl std::fmt::Debug for Client {
+impl std::fmt::Debug for Account {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Client").finish()
     }

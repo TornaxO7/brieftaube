@@ -1,10 +1,8 @@
+use color_eyre::eyre::Result;
+use ratatui::{DefaultTerminal, Frame};
 use std::sync::Arc;
 
-use color_eyre::eyre::Result;
-use jmap_client::client::Client;
-use ratatui::{DefaultTerminal, Frame};
-
-// mod backend;
+mod backend;
 mod ui;
 
 #[derive(Debug)]
@@ -16,33 +14,18 @@ pub enum Action {
 pub struct App {
     is_running: bool,
 
-    client: Arc<Client>,
+    account: Arc<backend::Account>,
     ui: ui::State,
 }
 
 impl App {
     pub async fn new() -> Self {
-        let client = {
-            let host = std::fs::read_to_string("/tmp/host.txt").unwrap();
-            let password = std::fs::read_to_string("/tmp/password.txt").unwrap();
-
-            let url = format!("http://{}", host.trim());
-
-            Arc::new(
-                Client::new()
-                    .credentials(("test", password.trim()))
-                    .follow_redirects([host.trim()])
-                    .connect(url.trim())
-                    .await
-                    .unwrap(),
-            )
-        };
-
-        let ui = ui::State::new(client.clone()).await;
+        let account = Arc::new(backend::Account::new().await);
+        let ui = ui::State::new(account.clone()).await;
 
         Self {
             is_running: true,
-            client,
+            account,
             ui,
         }
     }

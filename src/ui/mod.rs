@@ -1,8 +1,7 @@
-use std::sync::Arc;
-
+use crate::backend::Account;
 use crossterm::event::KeyEvent;
-use jmap_client::client::Client;
 use ratatui::{buffer::Buffer, layout::Rect, widgets::Widget};
+use std::sync::Arc;
 
 mod command_palette;
 // mod composer;
@@ -42,11 +41,11 @@ pub struct State {
 }
 
 impl State {
-    pub async fn new(client: Arc<Client>) -> Self {
+    pub async fn new(account: Arc<Account>) -> Self {
         Self {
             mode: Mode::Mails,
 
-            mails: mails::Mails::new(client).await,
+            mails: mails::Mails::new(account).await,
             // pager: pager::State::new(),
             // composer: composer::State::new(),
         }

@@ -12,10 +12,6 @@ use std::sync::Arc;
 type EntryName = String;
 type EntryDescription = String;
 
-pub trait ToEntry {
-    fn to_entry(&self) -> Entry;
-}
-
 #[derive(Debug, Clone)]
 pub struct Entry {
     pub name: String,
