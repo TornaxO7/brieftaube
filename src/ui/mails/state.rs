@@ -85,8 +85,6 @@ impl State {
                     // We are still waiting for te mails to come in
                     match self.rx_mails.try_recv() {
                         Ok(mails) => {
-                            std::fs::write("/tmp/dump.txt", format!("{:#?}", &mails)).unwrap();
-
                             self.mails
                                 .insert(selected_mailbox_id.to_string(), Some(mails.clone()));
                             return Some(mails);
@@ -109,7 +107,7 @@ impl State {
                         let mut request = account.client.build();
 
                         let query = request.query_email();
-                        query.arguments().collapse_threads(true);
+                        query.arguments().collapse_threads(false);
                         query.filter(jmap_client::core::query::Filter::and([
                             jmap_client::email::query::Filter::in_mailbox(mailbox_id).into(),
                             jmap_client::core::query::Filter::not([
