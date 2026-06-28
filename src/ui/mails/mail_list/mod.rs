@@ -70,7 +70,7 @@ impl<'a> StatefulWidget for MailListWidget<'a> {
             (entry, ENTRY_SIZE)
         });
 
-        let mut list = ListView::new(entry_builder, self.mails.len());
+        let mut list = ListView::new(entry_builder, self.mails.len()).infinite_scrolling(false);
         if let Some(block) = self.block {
             list = list.block(block);
         }

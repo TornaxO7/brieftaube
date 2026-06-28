@@ -91,6 +91,8 @@ impl Mails {
         match event.code {
             KeyCode::Char('q') => actions.push(super::Action::Quit),
             KeyCode::Char(':') => actions.push(Action::OpenCommandPalette.into()),
+            KeyCode::Char('j') => actions.push(Action::SelectNextMail.into()),
+            KeyCode::Char('k') => actions.push(Action::SelectPreviousMail.into()),
             _ => {}
         };
 
