@@ -180,14 +180,34 @@ impl State {
 
     pub fn select_mailbox(&mut self, idx: usize) {
         self.mailbox_list_state.select(Some(idx));
+        // TODO: select first entry (if available)
+        self.mail_list_state.select(None);
     }
 
     pub fn select_next_mail(&mut self) {
-        self.mail_list_state.next();
+        if let Some(idx) = self.selected_mailbox_idx() {
+            if let Some(mails) = self.get_mails(idx) {
+                if !mails.is_empty() {
+                    self.mail_list_state.next();
+                    return;
+                }
+            }
+        }
+
+        self.mail_list_state.select(None);
     }
 
     pub fn select_previous_mail(&mut self) {
-        self.mail_list_state.previous();
+        if let Some(idx) = self.selected_mailbox_idx() {
+            if let Some(mails) = self.get_mails(idx) {
+                if !mails.is_empty() {
+                    self.mail_list_state.previous();
+                    return;
+                }
+            }
+        }
+
+        self.mail_list_state.select(None);
     }
 
     pub fn selected_mailbox_idx(&self) -> Option<usize> {
