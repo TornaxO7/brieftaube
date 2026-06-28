@@ -105,21 +105,22 @@ impl State {
                 let tx = self.tx_mails.clone();
                 tokio::spawn(async move {
                     // TODO: Error handling
-                    let mut query_response = account
-                        .client
-                        .email_query(
-                            Some(jmap_client::core::query::Filter::and([
-                                jmap_client::email::query::Filter::in_mailbox(mailbox_id).into(),
-                                jmap_client::core::query::Filter::not([
-                                    jmap_client::email::query::Filter::From {
-                                        value: account.address.clone(),
-                                    },
-                                ]),
-                            ])),
-                            None::<Vec<_>>,
-                        )
-                        .await
-                        .unwrap();
+                    let mut query_response = {
+                        let mut request = account.client.build();
+
+                        let query = request.query_email();
+                        query.arguments().collapse_threads(true);
+                        query.filter(jmap_client::core::query::Filter::and([
+                            jmap_client::email::query::Filter::in_mailbox(mailbox_id).into(),
+                            jmap_client::core::query::Filter::not([
+                                jmap_client::email::query::Filter::From {
+                                    value: account.address.clone(),
+                                },
+                            ]),
+                        ]));
+
+                        request.send_query_email().await.unwrap()
+                    };
 
                     // TODO: Listen to changes
                     let ids = query_response.take_ids();
