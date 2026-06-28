@@ -46,9 +46,8 @@ impl<'a> StatefulWidget for MailListWidget<'a> {
                 let date = {
                     if let Some(time) = mail.received_at() {
                         let time = DateTime::from_timestamp_millis(time).unwrap();
-                        let naiv = time.naive_local();
 
-                        naiv.format("%d-%m-%Y").to_string()
+                        time.format("%b %e").to_string()
                     } else {
                         "<No date>".to_string()
                     }
