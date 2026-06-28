@@ -73,32 +73,23 @@ impl State {
         }
     }
 
-    pub fn get_mails<'a>(&mut self, selected_mailbox_idx: usize) -> Option<Vec<String>> {
+    pub fn get_mails<'a>(&mut self, selected_mailbox_idx: usize) -> Option<Vec<Email>> {
         if let Some(mailboxes) = &self.mailboxes {
             let selected_mailbox = mailboxes.get(selected_mailbox_idx).expect("Mailbox exists");
             let selected_mailbox_id = selected_mailbox.id().unwrap();
 
             if let Some(possible_mails) = self.mails.get(selected_mailbox_id) {
                 if let Some(mails) = possible_mails {
-                    return Some(
-                        mails
-                            .iter()
-                            .map(|mail| mail.subject().unwrap().to_string())
-                            .collect(),
-                    );
+                    return Some(mails.clone());
                 } else {
                     // We are still waiting for te mails to come in
                     match self.rx_mails.try_recv() {
                         Ok(mails) => {
                             std::fs::write("/tmp/dump.txt", format!("{:#?}", &mails)).unwrap();
 
-                            let names = mails
-                                .iter()
-                                .map(|mail| mail.subject().unwrap_or("No subject").to_string())
-                                .collect::<Vec<String>>();
                             self.mails
-                                .insert(selected_mailbox_id.to_string(), Some(mails));
-                            return Some(names);
+                                .insert(selected_mailbox_id.to_string(), Some(mails.clone()));
+                            return Some(mails);
                         }
                         Err(mpsc::error::TryRecvError::Empty) => {}
                         Err(mpsc::error::TryRecvError::Disconnected) => todo!(),

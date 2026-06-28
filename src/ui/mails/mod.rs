@@ -15,7 +15,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
-    widgets::{Block, Clear, ListState, Paragraph, StatefulWidget, Widget},
+    widgets::{self, Block, Clear, Paragraph, StatefulWidget, Widget},
 };
 use state::State;
 use std::{str::FromStr, sync::Arc};
@@ -44,8 +44,8 @@ pub struct Mails {
     palette: Option<PaletteCtx>,
     state: State,
 
-    mailbox_list_state: ListState,
-    mail_list_state: ListState,
+    mailbox_list_state: widgets::ListState,
+    mail_list_state: tui_widget_list::ListState,
 }
 
 impl Mails {
@@ -56,8 +56,8 @@ impl Mails {
             palette: None,
             state,
 
-            mailbox_list_state: ListState::default(),
-            mail_list_state: ListState::default(),
+            mailbox_list_state: widgets::ListState::default(),
+            mail_list_state: tui_widget_list::ListState::default(),
         }
     }
 
@@ -117,8 +117,8 @@ impl Mails {
                 unreachable!("Man... why does this happen? ._.");
             }
 
-            Action::SelectNextMail => self.mail_list_state.select_next(),
-            Action::SelectPreviousMail => self.mail_list_state.select_previous(),
+            Action::SelectNextMail => self.mail_list_state.next(),
+            Action::SelectPreviousMail => self.mail_list_state.previous(),
 
             Action::OpenMailboxPalette => {
                 if let Some(mailbox_names) = self.state.get_mailbox_names() {
@@ -227,7 +227,7 @@ impl Mails {
 
     fn render_preview(&mut self, area: Rect, buf: &mut Buffer) {
         if let Some(selected_mailbox_idx) = self.mailbox_list_state.selected() {
-            if let Some(selected_mail_idx) = self.mail_list_state.selected() {
+            if let Some(selected_mail_idx) = self.mail_list_state.selected {
                 if let Some(mail) = self.state.get_mail(selected_mailbox_idx, selected_mail_idx) {
                     Widget::render(
                         Paragraph::new(mail.preview().unwrap())

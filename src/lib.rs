@@ -14,7 +14,7 @@ pub enum Action {
 pub struct App {
     is_running: bool,
 
-    account: Arc<backend::Account>,
+    _account: Arc<backend::Account>,
     ui: ui::State,
 }
 
@@ -25,7 +25,7 @@ impl App {
 
         Self {
             is_running: true,
-            account,
+            _account: account,
             ui,
         }
     }
