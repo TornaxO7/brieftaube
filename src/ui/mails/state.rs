@@ -108,14 +108,15 @@ impl State {
 
                         let query = request.query_email();
                         query.arguments().collapse_threads(false);
-                        query.filter(jmap_client::core::query::Filter::and([
-                            jmap_client::email::query::Filter::in_mailbox(mailbox_id).into(),
-                            jmap_client::core::query::Filter::not([
-                                jmap_client::email::query::Filter::From {
-                                    value: account.address.clone(),
-                                },
-                            ]),
-                        ]));
+                        query.filter(jmap_client::email::query::Filter::in_mailbox(mailbox_id));
+                        // query.filter(jmap_client::core::query::Filter::and([
+                        //     jmap_client::email::query::Filter::in_mailbox(mailbox_id).into(),
+                        //     jmap_client::core::query::Filter::not([
+                        //         jmap_client::email::query::Filter::From {
+                        //             value: account.address.clone(),
+                        //         },
+                        //     ]),
+                        // ]));
 
                         request.send_query_email().await.unwrap()
                     };

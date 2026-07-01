@@ -2,31 +2,22 @@ use jmap_client::client::Client;
 
 pub struct Account {
     /// Email address
-    pub address: String,
     pub client: jmap_client::client::Client,
 }
 
 impl Account {
     pub async fn new() -> Self {
+        let config = crate::config::Config::load().unwrap();
+
         // TODO: Make it configureable
-        let home = std::env::var("HOME").unwrap();
-        let address = std::fs::read_to_string(format!("{}/stalwart-account.txt", home)).unwrap();
-        let client = {
-            let host = std::fs::read_to_string(format!("{}/stalwart-host.txt", home)).unwrap();
-            let password =
-                std::fs::read_to_string(format!("{}/stalwart-password.txt", home)).unwrap();
+        let client = Client::new()
+            .credentials((config.address.trim(), config.password.trim()))
+            .follow_redirects([config.host.trim()])
+            .connect(&format!("http://{}", config.host.trim()))
+            .await
+            .unwrap();
 
-            let url = format!("http://{}", host.trim());
-
-            Client::new()
-                .credentials((address.as_str(), password.trim()))
-                .follow_redirects([host.trim()])
-                .connect(url.trim())
-                .await
-                .unwrap()
-        };
-
-        Self { client, address }
+        Self { client }
     }
 }
 
