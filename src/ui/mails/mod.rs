@@ -15,7 +15,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
-    widgets::{self, Block, Clear, Paragraph, StatefulWidget, Widget},
+    widgets::{Block, Clear, Paragraph, StatefulWidget, Widget},
 };
 use state::State;
 use std::{str::FromStr, sync::Arc};
@@ -43,9 +43,6 @@ struct PaletteCtx {
 pub struct Mails {
     palette: Option<PaletteCtx>,
     state: State,
-
-    mailbox_list_state: widgets::ListState,
-    mail_list_state: tui_widget_list::ListState,
 }
 
 impl Mails {
@@ -55,9 +52,6 @@ impl Mails {
         Self {
             palette: None,
             state,
-
-            mailbox_list_state: widgets::ListState::default(),
-            mail_list_state: tui_widget_list::ListState::default(),
         }
     }
 
@@ -104,14 +98,14 @@ impl Mails {
         match a {
             Action::Quit => return Some(super::Action::Quit),
 
-            Action::SelectNextMailbox => self.mailbox_list_state.select_next(),
-            Action::SelectPreviousMailbox => self.mailbox_list_state.select_previous(),
+            Action::SelectNextMailbox => self.state.select_next_mailbox(),
+            Action::SelectPreviousMailbox => self.state.select_previous_mailbox(),
             Action::SelectMailbox(selected_name) => {
                 let mailbox_names = self.state.get_mailbox_names().unwrap();
 
                 for (idx, name) in mailbox_names.into_iter().enumerate() {
                     if name == selected_name {
-                        self.mailbox_list_state.select(Some(idx));
+                        self.state.select_mailbox(idx);
                         return None;
                     }
                 }
@@ -119,8 +113,8 @@ impl Mails {
                 unreachable!("Man... why does this happen? ._.");
             }
 
-            Action::SelectNextMail => self.mail_list_state.next(),
-            Action::SelectPreviousMail => self.mail_list_state.previous(),
+            Action::SelectNextMail => self.state.select_next_mail(),
+            Action::SelectPreviousMail => self.state.select_previous_mail(),
 
             Action::OpenMailboxPalette => {
                 if let Some(mailbox_names) = self.state.get_mailbox_names() {
@@ -190,7 +184,7 @@ impl Mails {
                 MailboxListWidget::new(&names).block(Block::bordered().title(MAILBOX_PANEL_TITLE)),
                 area,
                 buf,
-                &mut self.mailbox_list_state,
+                self.state.get_mailbox_list_state_mut(),
             ),
             None => Widget::render(
                 Paragraph::new("Loading...").block(Block::bordered().title(MAILBOX_PANEL_TITLE)),
@@ -201,14 +195,14 @@ impl Mails {
     }
 
     fn render_mail_list(&mut self, area: Rect, buf: &mut Buffer) {
-        if let Some(selected_mailbox_idx) = self.mailbox_list_state.selected() {
+        if let Some(selected_mailbox_idx) = self.state.selected_mailbox_idx() {
             match self.state.get_mails(selected_mailbox_idx) {
                 Some(names) => StatefulWidget::render(
                     MailListWidget::new(&names)
                         .block(Block::bordered().title(MAIL_LIST_PANEL_TITLE)),
                     area,
                     buf,
-                    &mut self.mail_list_state,
+                    self.state.get_mail_list_state_mut(),
                 ),
                 None => Widget::render(
                     Paragraph::new("Loading...")
@@ -228,8 +222,8 @@ impl Mails {
     }
 
     fn render_preview(&mut self, area: Rect, buf: &mut Buffer) {
-        if let Some(selected_mailbox_idx) = self.mailbox_list_state.selected() {
-            if let Some(selected_mail_idx) = self.mail_list_state.selected {
+        if let Some(selected_mailbox_idx) = self.state.selected_mailbox_idx() {
+            if let Some(selected_mail_idx) = self.state.selected_mail_list_idx() {
                 if let Some(mail) = self.state.get_mail(selected_mailbox_idx, selected_mail_idx) {
                     Widget::render(
                         Paragraph::new(mail.preview().unwrap())

@@ -1,5 +1,6 @@
 use crate::backend;
 use jmap_client::{email::Email, mailbox::Mailbox};
+use ratatui::widgets;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::mpsc;
 use tracing::debug;
@@ -17,6 +18,9 @@ pub struct State {
     mailboxes: Option<Vec<Mailbox>>,
     /// Contains all mails for each mailbox.
     mails: HashMap<MailboxId, Option<Vec<Email>>>,
+
+    mailbox_list_state: widgets::ListState,
+    mail_list_state: tui_widget_list::ListState,
 }
 
 impl State {
@@ -52,6 +56,9 @@ impl State {
 
             mailboxes: None,
             mails: HashMap::new(),
+
+            mailbox_list_state: widgets::ListState::default(),
+            mail_list_state: tui_widget_list::ListState::default(),
         }
     }
 
@@ -158,6 +165,66 @@ impl State {
         }
 
         None
+    }
+
+    pub fn select_next_mailbox(&mut self) {
+        self.mailbox_list_state.select_next();
+        // TODO: select first entry (if available)
+        self.mail_list_state.select(None);
+    }
+
+    pub fn select_previous_mailbox(&mut self) {
+        self.mailbox_list_state.select_previous();
+        // TODO: select first entry (if available)
+        self.mail_list_state.select(None);
+    }
+
+    pub fn select_mailbox(&mut self, idx: usize) {
+        self.mailbox_list_state.select(Some(idx));
+        // TODO: select first entry (if available)
+        self.mail_list_state.select(None);
+    }
+
+    pub fn select_next_mail(&mut self) {
+        if let Some(idx) = self.selected_mailbox_idx() {
+            if let Some(mails) = self.get_mails(idx) {
+                if !mails.is_empty() {
+                    self.mail_list_state.next();
+                    return;
+                }
+            }
+        }
+
+        self.mail_list_state.select(None);
+    }
+
+    pub fn select_previous_mail(&mut self) {
+        if let Some(idx) = self.selected_mailbox_idx() {
+            if let Some(mails) = self.get_mails(idx) {
+                if !mails.is_empty() {
+                    self.mail_list_state.previous();
+                    return;
+                }
+            }
+        }
+
+        self.mail_list_state.select(None);
+    }
+
+    pub fn selected_mailbox_idx(&self) -> Option<usize> {
+        self.mailbox_list_state.selected()
+    }
+
+    pub fn selected_mail_list_idx(&self) -> Option<usize> {
+        self.mail_list_state.selected
+    }
+
+    pub fn get_mailbox_list_state_mut(&mut self) -> &mut widgets::ListState {
+        &mut self.mailbox_list_state
+    }
+
+    pub fn get_mail_list_state_mut(&mut self) -> &mut tui_widget_list::ListState {
+        &mut self.mail_list_state
     }
 }
 

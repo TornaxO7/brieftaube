@@ -9,7 +9,6 @@ impl Account {
     pub async fn new() -> Self {
         let config = crate::config::Config::load().unwrap();
 
-        // TODO: Make it configureable
         let client = Client::new()
             .credentials((config.address.trim(), config.password.trim()))
             .follow_redirects([config.host.trim()])
