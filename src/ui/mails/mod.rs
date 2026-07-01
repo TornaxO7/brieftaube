@@ -14,7 +14,7 @@ pub use action::Action;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Layout, Rect},
+    layout::{Constraint, HorizontalAlignment, Layout, Rect},
     widgets::{Block, Clear, Paragraph, StatefulWidget, Widget},
 };
 use state::State;
@@ -152,9 +152,9 @@ impl Widget for &mut Mails {
     where
         Self: Sized,
     {
-        let [content, _statusbar] = area.layout(&Layout::vertical([
-            Constraint::Fill(0),
+        let [headerbar, content] = area.layout(&Layout::vertical([
             Constraint::Length(3),
+            Constraint::Fill(0),
         ]));
 
         let [mail_boxes, mail_list, preview] = content.layout(&Layout::horizontal([
@@ -166,7 +166,7 @@ impl Widget for &mut Mails {
         self.render_mailbox_list(mail_boxes, buf);
         self.render_mail_list(mail_list, buf);
         self.render_preview(preview, buf);
-        // self.statusbar.render(statusbar, buf);
+        self.render_headerbar(headerbar, buf);
 
         if let Some(command_palette) = &mut self.palette {
             let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
@@ -239,6 +239,35 @@ impl Mails {
         Widget::render(
             Paragraph::new("No mail selected").block(Block::bordered().title(PREVIEW_PANEL_TITLE)),
             area,
+            buf,
+        );
+    }
+
+    fn render_headerbar(&mut self, area: Rect, buf: &mut Buffer) {
+        let block = Block::bordered();
+        let header_area = block.inner(area);
+
+        let [left, center, right] = Layout::horizontal([
+            Constraint::Fill(0),
+            Constraint::Fill(0),
+            Constraint::Fill(0),
+        ])
+        .areas(header_area);
+
+        Widget::render(block, area, buf);
+        Widget::render(
+            Paragraph::new("Left").alignment(HorizontalAlignment::Left),
+            left,
+            buf,
+        );
+        Widget::render(
+            Paragraph::new("Center").alignment(HorizontalAlignment::Center),
+            center,
+            buf,
+        );
+        Widget::render(
+            Paragraph::new("Right").alignment(HorizontalAlignment::Right),
+            right,
             buf,
         );
     }
