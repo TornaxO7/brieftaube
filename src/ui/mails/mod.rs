@@ -1,13 +1,12 @@
 mod action;
 mod mail_list;
-mod mailbox_list;
 mod state;
 
 use crate::{
     backend,
     ui::{
         command_palette::{self, CommandPalette},
-        mails::{mail_list::MailListWidget, mailbox_list::MailboxListWidget},
+        mails::mail_list::MailListWidget,
     },
 };
 pub use action::Action;
@@ -20,7 +19,6 @@ use ratatui::{
 use state::State;
 use std::{str::FromStr, sync::Arc};
 
-const MAILBOX_PANEL_TITLE: &str = "Mailboxes";
 const MAIL_LIST_PANEL_TITLE: &str = "Mails";
 const PREVIEW_PANEL_TITLE: &str = "Mail content";
 
@@ -28,9 +26,6 @@ const PREVIEW_PANEL_TITLE: &str = "Mail content";
 enum PaletteType {
     /// Palette is displaying commands
     Command,
-
-    /// Palette is displaying mailboxes
-    Mailbox,
 }
 
 #[derive(Debug)]
@@ -55,6 +50,10 @@ impl Mails {
         }
     }
 
+    pub fn open_mailbox(&mut self, mailbox_id: super::MailboxId) {
+        self.state.open_mailbox(mailbox_id);
+    }
+
     pub fn handle_event(&mut self, event: KeyEvent) -> Vec<super::Action> {
         let mut actions = Vec::new();
 
@@ -70,9 +69,6 @@ impl Mails {
                         match command_palette.ty {
                             PaletteType::Command => {
                                 actions.push(Action::from_str(&value).unwrap().into())
-                            }
-                            PaletteType::Mailbox => {
-                                actions.push(Action::SelectMailbox(value).into());
                             }
                         }
                     }
@@ -98,39 +94,11 @@ impl Mails {
         match a {
             Action::Quit => return Some(super::Action::Quit),
 
-            Action::SelectNextMailbox => self.state.select_next_mailbox(),
-            Action::SelectPreviousMailbox => self.state.select_previous_mailbox(),
-            Action::SelectMailbox(selected_name) => {
-                let mailbox_names = self.state.get_mailbox_names().unwrap();
-
-                for (idx, name) in mailbox_names.into_iter().enumerate() {
-                    if name == selected_name {
-                        self.state.select_mailbox(idx);
-                        return None;
-                    }
-                }
-
-                unreachable!("Man... why does this happen? ._.");
-            }
-
             Action::SelectNextMail => self.state.select_next_mail(),
             Action::SelectPreviousMail => self.state.select_previous_mail(),
 
-            Action::OpenMailboxPalette => {
-                if let Some(mailbox_names) = self.state.get_mailbox_names() {
-                    let entries = mailbox_names
-                        .into_iter()
-                        .map(|mailbox_name| command_palette::Entry {
-                            name: mailbox_name,
-                            description: "".to_string(),
-                        })
-                        .collect::<Vec<command_palette::Entry>>();
-
-                    self.palette = Some(PaletteCtx {
-                        palette: CommandPalette::new(entries),
-                        ty: PaletteType::Mailbox,
-                    });
-                }
+            Action::OpenMailboxList => {
+                return Some(super::Action::OpenMailboxList);
             }
             Action::OpenCommandPalette => {
                 self.palette = Some(PaletteCtx {
@@ -157,13 +125,11 @@ impl Widget for &mut Mails {
             Constraint::Fill(0),
         ]));
 
-        let [mail_boxes, mail_list, preview] = content.layout(&Layout::horizontal([
-            Constraint::Percentage(10),
+        let [mail_list, preview] = content.layout(&Layout::horizontal([
             Constraint::Percentage(60),
-            Constraint::Percentage(30),
+            Constraint::Percentage(40),
         ]));
 
-        self.render_mailbox_list(mail_boxes, buf);
         self.render_mail_list(mail_list, buf);
         self.render_preview(preview, buf);
         self.render_headerbar(headerbar, buf);
@@ -178,61 +144,36 @@ impl Widget for &mut Mails {
 
 /// Render functions
 impl Mails {
-    fn render_mailbox_list(&mut self, area: Rect, buf: &mut Buffer) {
-        match self.state.get_mailbox_names() {
+    fn render_mail_list(&mut self, area: Rect, buf: &mut Buffer) {
+        match self.state.get_mails() {
             Some(names) => StatefulWidget::render(
-                MailboxListWidget::new(&names).block(Block::bordered().title(MAILBOX_PANEL_TITLE)),
+                MailListWidget::new(&names).block(
+                    Block::bordered()
+                        .title(MAIL_LIST_PANEL_TITLE)
+                        .title_alignment(HorizontalAlignment::Center),
+                ),
                 area,
                 buf,
-                self.state.get_mailbox_list_state_mut(),
+                self.state.get_mail_list_state_mut(),
             ),
             None => Widget::render(
-                Paragraph::new("Loading...").block(Block::bordered().title(MAILBOX_PANEL_TITLE)),
+                Paragraph::new("Loading...").block(Block::bordered().title(MAIL_LIST_PANEL_TITLE)),
                 area,
                 buf,
             ),
-        }
-    }
-
-    fn render_mail_list(&mut self, area: Rect, buf: &mut Buffer) {
-        if let Some(selected_mailbox_idx) = self.state.selected_mailbox_idx() {
-            match self.state.get_mails(selected_mailbox_idx) {
-                Some(names) => StatefulWidget::render(
-                    MailListWidget::new(&names)
-                        .block(Block::bordered().title(MAIL_LIST_PANEL_TITLE)),
-                    area,
-                    buf,
-                    self.state.get_mail_list_state_mut(),
-                ),
-                None => Widget::render(
-                    Paragraph::new("Loading...")
-                        .block(Block::bordered().title(MAIL_LIST_PANEL_TITLE)),
-                    area,
-                    buf,
-                ),
-            }
-        } else {
-            Widget::render(
-                Paragraph::new("No mailbox selected")
-                    .block(Block::bordered().title(MAIL_LIST_PANEL_TITLE)),
-                area,
-                buf,
-            )
         }
     }
 
     fn render_preview(&mut self, area: Rect, buf: &mut Buffer) {
-        if let Some(selected_mailbox_idx) = self.state.selected_mailbox_idx() {
-            if let Some(selected_mail_idx) = self.state.selected_mail_list_idx() {
-                if let Some(mail) = self.state.get_mail(selected_mailbox_idx, selected_mail_idx) {
-                    Widget::render(
-                        Paragraph::new(mail.preview().unwrap())
-                            .block(Block::bordered().title(PREVIEW_PANEL_TITLE)),
-                        area,
-                        buf,
-                    );
-                    return;
-                }
+        if let Some(selected_mail_idx) = self.state.selected_mail_list_idx() {
+            if let Some(mail) = self.state.get_mail(selected_mail_idx) {
+                Widget::render(
+                    Paragraph::new(mail.preview().unwrap())
+                        .block(Block::bordered().title(PREVIEW_PANEL_TITLE)),
+                    area,
+                    buf,
+                );
+                return;
             }
         }
 

@@ -25,13 +25,7 @@ pub enum Action {
     Quit,
 
     #[strum(message = "Select mailbox by using the palette.")]
-    OpenMailboxPalette,
-    #[strum(message = "Select the given mailbox", props(intern = true))]
-    SelectMailbox(String),
-    #[strum(message = "Select the next mailbox.")]
-    SelectNextMailbox,
-    #[strum(message = "Select the previous mailbox.")]
-    SelectPreviousMailbox,
+    OpenMailboxList,
 
     #[strum(message = "Select the next mail.")]
     SelectNextMail,
