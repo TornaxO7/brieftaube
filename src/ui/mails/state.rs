@@ -36,24 +36,6 @@ impl State {
         self.selected_mailbox_id = Some(mailbox_id);
     }
 
-    // pub fn get_mailbox_names(&mut self) -> Option<Vec<String>> {
-    //     if let Some(mailboxes) = &self.mailboxes {
-    //         Some(
-    //             mailboxes
-    //                 .iter()
-    //                 .map(|mailbox| mailbox.name().unwrap().to_string())
-    //                 .collect(),
-    //         )
-    //     } else {
-    //         match self.rx_mailboxes.try_recv() {
-    //             Ok(mailboxes) => self.mailboxes = Some(mailboxes),
-    //             Err(mpsc::error::TryRecvError::Empty) => {}
-    //             Err(mpsc::error::TryRecvError::Disconnected) => todo!(),
-    //         }
-    //         None
-    //     }
-    // }
-
     pub fn get_mails<'a>(&mut self) -> Option<Vec<Email>> {
         if let Some(selected_mailbox_id) = self.selected_mailbox_id.clone() {
             if let Some(possible_mails) = self.mails.get(&selected_mailbox_id) {
@@ -67,9 +49,11 @@ impl State {
                                 .insert(selected_mailbox_id.to_string(), Some(mails.clone()));
                             return Some(mails);
                         }
-                        Err(mpsc::error::TryRecvError::Empty) => todo!(),
+                        Err(mpsc::error::TryRecvError::Empty) => {}
                         Err(mpsc::error::TryRecvError::Disconnected) => todo!(),
                     }
+
+                    return None;
                 }
             } else {
                 // indicate that fetching the mail started
