@@ -120,6 +120,8 @@ impl Widget for &mut Mails {
     where
         Self: Sized,
     {
+        self.state.update();
+
         let [headerbar, content] = area.layout(&Layout::vertical([
             Constraint::Length(3),
             Constraint::Fill(0),

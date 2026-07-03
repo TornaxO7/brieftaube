@@ -10,6 +10,8 @@ mod mails;
 // mod pager;
 
 type MailboxId = String;
+type ThreadId = String;
+type MailId = String;
 
 #[derive(Debug, Clone)]
 pub enum Action {

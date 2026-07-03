@@ -34,7 +34,7 @@ impl<'a> StatefulWidget for MailListWidget<'a> {
             let mail = &self.mails[context.index];
 
             let entry = {
-                let subject = mail.subject().unwrap_or("<No subject>");
+                let subject = mail.subject().unwrap();
                 let from = {
                     if let Some(addresses) = mail.from() {
                         addresses.first().unwrap().email()
