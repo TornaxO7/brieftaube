@@ -83,6 +83,7 @@ impl Mails {
             KeyCode::Char(':') => actions.push(Action::OpenCommandPalette.into()),
             KeyCode::Char('j') => actions.push(Action::SelectNextMail.into()),
             KeyCode::Char('k') => actions.push(Action::SelectPreviousMail.into()),
+            KeyCode::Char('h') => actions.push(Action::OpenMailboxList.into()),
             _ => {}
         };
 
