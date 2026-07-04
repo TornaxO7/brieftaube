@@ -148,16 +148,16 @@ impl Widget for &mut Mails {
 /// Render functions
 impl Mails {
     fn render_mail_list(&mut self, area: Rect, buf: &mut Buffer) {
-        match self.state.get_mails() {
-            Some(names) => StatefulWidget::render(
-                MailListWidget::new(&names).block(
+        match self.state.get_render_mail_list_data() {
+            Some((mails, state)) => StatefulWidget::render(
+                MailListWidget::new(mails).block(
                     Block::bordered()
                         .title(MAIL_LIST_PANEL_TITLE)
                         .title_alignment(HorizontalAlignment::Center),
                 ),
                 area,
                 buf,
-                self.state.get_mail_list_state_mut(),
+                state,
             ),
             None => Widget::render(
                 Paragraph::new("Loading...").block(Block::bordered().title(MAIL_LIST_PANEL_TITLE)),
@@ -168,23 +168,19 @@ impl Mails {
     }
 
     fn render_preview(&mut self, area: Rect, buf: &mut Buffer) {
-        if let Some(selected_mail_idx) = self.state.selected_mail_list_idx() {
-            if let Some(mail) = self.state.get_mail(selected_mail_idx) {
-                Widget::render(
-                    Paragraph::new(mail.preview().unwrap())
-                        .block(Block::bordered().title(PREVIEW_PANEL_TITLE)),
-                    area,
-                    buf,
-                );
-                return;
-            }
+        match self.state.get_render_preview_data() {
+            Some(data) => Widget::render(
+                Paragraph::new(data).block(Block::bordered().title(PREVIEW_PANEL_TITLE)),
+                area,
+                buf,
+            ),
+            None => Widget::render(
+                Paragraph::new("No mail selected")
+                    .block(Block::bordered().title(PREVIEW_PANEL_TITLE)),
+                area,
+                buf,
+            ),
         }
-
-        Widget::render(
-            Paragraph::new("No mail selected").block(Block::bordered().title(PREVIEW_PANEL_TITLE)),
-            area,
-            buf,
-        );
     }
 
     fn render_headerbar(&mut self, area: Rect, buf: &mut Buffer) {

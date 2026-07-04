@@ -32,6 +32,11 @@ impl<'a> StatefulWidget for MailListWidget<'a> {
             const ENTRY_SIZE: u16 = 4;
 
             let mail = &self.mails[context.index];
+            let starts_new_thread = context.index == 0 || {
+                let prev_mail = &self.mails[context.index - 1];
+
+                prev_mail.thread_id().unwrap() != mail.thread_id().unwrap()
+            };
 
             let entry = {
                 let subject = mail.subject().unwrap();
@@ -63,6 +68,8 @@ impl<'a> StatefulWidget for MailListWidget<'a> {
                     subject,
                     from,
                     date,
+
+                    starts_new_thread,
                     style,
                 }
             };
@@ -84,14 +91,24 @@ struct MailListEntry<'a> {
     subject: &'a str,
     date: String,
 
+    starts_new_thread: bool,
     style: Style,
 }
 
 impl<'a> Widget for MailListEntry<'a> {
-    fn render(self, area: Rect, buf: &mut Buffer)
+    fn render(self, a: Rect, buf: &mut Buffer)
     where
         Self: Sized,
     {
+        let area = if self.starts_new_thread {
+            a
+        } else {
+            let [_left_padding, right] =
+                Layout::horizontal([Constraint::Percentage(5), Constraint::Fill(0)]).areas(a);
+
+            right
+        };
+
         let entry_block = Block::bordered().style(self.style);
         let entry_area = entry_block.inner(area);
 
