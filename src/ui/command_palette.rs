@@ -4,7 +4,9 @@ use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
-    widgets::{Block, List, ListDirection, ListState, Paragraph, StatefulWidget, Widget, Wrap},
+    widgets::{
+        Block, List, ListDirection, ListState, Padding, Paragraph, StatefulWidget, Widget, Wrap,
+    },
 };
 use ratatui_textarea::TextArea;
 use std::sync::Arc;
@@ -124,6 +126,9 @@ impl Widget for &mut CommandPalette {
     where
         Self: Sized,
     {
+        let command_palette_block = Block::default().padding(Padding::symmetric(2, 2));
+        let area = command_palette_block.inner(area);
+
         let [left, description] = area.layout(
             &Layout::default()
                 .direction(Direction::Horizontal)
