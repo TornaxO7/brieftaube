@@ -41,22 +41,22 @@ impl<'a> StatefulWidget for MailListWidget<'a> {
             let entry = {
                 let subject = mail.subject().unwrap();
                 let from = {
-                    if let Some(addresses) = mail.from() {
-                        addresses.first().unwrap().email()
-                    } else {
-                        "<No address>"
+                    let addresses = mail.from().unwrap();
+
+                    let mut iter = addresses.iter();
+                    let mut s = format!("{}", iter.next().unwrap().email());
+
+                    for addr in iter {
+                        s.push_str(&format!(", {}", addr.email()));
                     }
+
+                    s
                 };
 
-                let date = {
-                    if let Some(time) = mail.received_at() {
-                        let time = DateTime::from_timestamp_millis(time).unwrap();
-
-                        time.format("%b %e").to_string()
-                    } else {
-                        "<No date>".to_string()
-                    }
-                };
+                let date = DateTime::from_timestamp_millis(mail.received_at().unwrap())
+                    .unwrap()
+                    .format("%b %e, %M:%H")
+                    .to_string();
 
                 let style = if context.is_selected {
                     Style::new().green()
@@ -87,7 +87,7 @@ impl<'a> StatefulWidget for MailListWidget<'a> {
 }
 
 struct MailListEntry<'a> {
-    from: &'a str,
+    from: String,
     subject: &'a str,
     date: String,
 
