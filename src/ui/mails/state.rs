@@ -111,6 +111,18 @@ impl State {
         None
     }
 
+    pub fn get_selected_mail(&self) -> Option<&Email> {
+        if let Some(id) = self.selected_mailbox_id.as_ref() {
+            if let Some(mails) = self.mails.get(id) {
+                if let Some(idx) = self.list_state.selected {
+                    return mails.get(idx);
+                }
+            }
+        }
+
+        None
+    }
+
     pub fn select_next_mail(&mut self) {
         self.list_state.next();
     }

@@ -48,9 +48,9 @@ impl Mailboxes {
             Action::SelectPreviousMailbox => self.state.select_previous_mailbox(),
             Action::OpenSelectedMailbox => {
                 if let Some(selected_mailbox) = self.state.get_mut_selected_mailbox() {
-                    return Some(super::Action::OpenMailList(
+                    return Some(super::Action::OpenMailList(Some(
                         selected_mailbox.take_id().clone(),
-                    ));
+                    )));
                 }
             }
         }

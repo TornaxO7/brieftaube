@@ -7,9 +7,10 @@ mod command_palette;
 mod mailboxes;
 mod mails;
 // mod composer;
-// mod pager;
+mod mail_viewer;
 
 type MailboxId = String;
+type MailId = String;
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -17,10 +18,12 @@ pub enum Action {
 
     MailboxList(mailboxes::Action),
     MailList(mails::Action),
-    OpenMailList(MailboxId),
+    MailViewer(mail_viewer::Action),
+
+    OpenMailList(Option<MailboxId>),
+    OpenMailViewer(Option<MailId>),
     OpenMailboxList,
     // OpenComposer,
-    // OpenPager,
 }
 
 impl From<mails::Action> for Action {
@@ -35,12 +38,18 @@ impl From<mailboxes::Action> for Action {
     }
 }
 
+impl From<mail_viewer::Action> for Action {
+    fn from(action: mail_viewer::Action) -> Self {
+        Self::MailViewer(action)
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 enum Mode {
     Mails,
     Mailboxes,
     // Composer,
-    // Pager,
+    MailViewer,
 }
 
 #[derive(Debug)]
@@ -49,7 +58,7 @@ pub struct State {
 
     mails: mails::Mails,
     mailboxes: mailboxes::Mailboxes,
-    // pager: pager::State,
+    mail_viewer: mail_viewer::MailViewer,
     // composer: composer::State,
 }
 
@@ -60,8 +69,7 @@ impl State {
 
             mails: mails::Mails::new(account.clone()).await,
             mailboxes: mailboxes::Mailboxes::new(account.clone()).await,
-            // pager: pager::State::new(),
-            // composer: composer::State::new(),
+            mail_viewer: mail_viewer::MailViewer::new(account.clone()),
         }
     }
 
@@ -69,8 +77,8 @@ impl State {
         let sub_actions = match self.mode {
             Mode::Mails => self.mails.handle_event(event),
             Mode::Mailboxes => self.mailboxes.handle_event(event),
-            // Mode::Composer => self.composer.handle_event(event),
-            // Mode::Pager => self.pager.handle_event(event),
+            Mode::MailViewer => self.mail_viewer.handle_event(event), // Mode::Composer => self.composer.handle_event(event),
+                                                                      // Mode::Pager => self.pager.handle_event(event),
         };
 
         for action in sub_actions {
@@ -101,14 +109,17 @@ impl State {
                     .mailboxes
                     .apply_action(action)
                     .and_then(|action| self.apply_action(action));
-            } // Action::OpenComposer => {
-              //     self.mode = Mode::Composer;
-              //     None
-              // }
-              // Action::OpenPager => {
-              //     self.mode = Mode::Pager;
-              //     None
-              // }
+            }
+            Action::MailViewer(action) => {
+                return self
+                    .mail_viewer
+                    .apply_action(action)
+                    .and_then(|action| self.apply_action(action));
+            }
+            Action::OpenMailViewer(mail) => {
+                self.mode = Mode::MailViewer;
+                self.mail_viewer.open_mail(mail);
+            }
         }
 
         None
@@ -123,6 +134,7 @@ impl Widget for &mut State {
         match self.mode {
             Mode::Mails => self.mails.render(area, buf),
             Mode::Mailboxes => self.mailboxes.render(area, buf),
+            Mode::MailViewer => self.mail_viewer.render(area, buf),
             // Mode::Pager => self.pager.render(area, buf),
             // Mode::Composer => self.composer.render(area, buf),
         }

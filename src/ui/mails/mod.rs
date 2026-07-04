@@ -50,8 +50,10 @@ impl Mails {
         }
     }
 
-    pub fn open_mailbox(&mut self, mailbox_id: super::MailboxId) {
-        self.state.open_mailbox(mailbox_id);
+    pub fn open_mailbox(&mut self, mailbox_id: Option<super::MailboxId>) {
+        if let Some(id) = mailbox_id {
+            self.state.open_mailbox(id);
+        }
     }
 
     pub fn handle_event(&mut self, event: KeyEvent) -> Vec<super::Action> {
@@ -62,9 +64,7 @@ impl Mails {
                 actions.push(Action::CloseCommandPalette.into());
 
                 match result {
-                    command_palette::HandleEventResult::Cancel => {
-                        actions.push(Action::CloseCommandPalette.into());
-                    }
+                    command_palette::HandleEventResult::Cancel => {}
                     command_palette::HandleEventResult::Selected(value) => {
                         match command_palette.ty {
                             PaletteType::Command => {
@@ -84,6 +84,13 @@ impl Mails {
             KeyCode::Char('j') => actions.push(Action::SelectNextMail.into()),
             KeyCode::Char('k') => actions.push(Action::SelectPreviousMail.into()),
             KeyCode::Char('h') => actions.push(Action::OpenMailboxList.into()),
+            KeyCode::Char('l') => {
+                if let Some(selected_mail) = self.state.get_selected_mail() {
+                    actions.push(super::Action::OpenMailViewer(Some(
+                        selected_mail.id().unwrap().to_owned(),
+                    )));
+                }
+            }
             _ => {}
         };
 
