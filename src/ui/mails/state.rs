@@ -2,7 +2,6 @@ use crate::{backend, ui::MailboxId};
 use jmap_client::email::Email;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::mpsc;
-use tracing::debug;
 
 pub struct State {
     account: Arc<backend::Account>,
@@ -46,10 +45,9 @@ impl State {
             let initial_mails_ids = {
                 let mut request = client.build();
                 let query = request.query_email();
-                query.arguments().collapse_threads(true);
                 query
                     .filter(jmap_client::email::query::Filter::in_mailbox(mailbox_id))
-                    .limit(10)
+                    .limit(100)
                     .calculate_total(true)
                     .position(0)
                     .sort([jmap_client::email::query::Comparator::received_at().descending()]);
@@ -57,53 +55,23 @@ impl State {
                 request.send_query_email().await.unwrap()
             };
 
-            let mails_with_thread_id = {
+            let mut mails = {
                 let mut request = client.build();
                 request
                     .get_email()
                     .ids(Some(initial_mails_ids.ids()))
-                    .properties([jmap_client::email::Property::ThreadId]);
+                    .properties([
+                        jmap_client::email::Property::Subject,
+                        jmap_client::email::Property::From,
+                        jmap_client::email::Property::ReceivedAt,
+                        jmap_client::email::Property::Preview,
+                        jmap_client::email::Property::ThreadId,
+                    ]);
 
                 request.send_get_email().await.unwrap()
             };
 
-            let thread_mail_ids = {
-                let thread_ids = mails_with_thread_id
-                    .list()
-                    .iter()
-                    .map(|mail| mail.thread_id().unwrap())
-                    .collect::<Vec<&str>>();
-
-                let mut request = client.build();
-                request.get_thread().ids(Some(thread_ids));
-
-                request.send_get_thread().await.unwrap()
-            };
-
-            let thread_mails = {
-                let mut mails = Vec::new();
-
-                for thread_mail_id in thread_mail_ids.list() {
-                    let mut request = client.build();
-                    request
-                        .get_email()
-                        .ids(Some(thread_mail_id.email_ids()))
-                        .properties([
-                            jmap_client::email::Property::Subject,
-                            jmap_client::email::Property::From,
-                            jmap_client::email::Property::ReceivedAt,
-                            jmap_client::email::Property::Preview,
-                            jmap_client::email::Property::ThreadId,
-                        ]);
-
-                    let mut response = request.send_get_email().await.unwrap();
-                    mails.extend(response.take_list());
-                }
-
-                mails
-            };
-
-            tx.send(thread_mails).await.unwrap();
+            tx.send(mails.take_list()).await.unwrap();
         });
     }
 
