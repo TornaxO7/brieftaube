@@ -55,7 +55,7 @@ impl<'a> StatefulWidget for MailListWidget<'a> {
 
                 let date = DateTime::from_timestamp_millis(mail.received_at().unwrap())
                     .unwrap()
-                    .format("%b %e, %M:%H")
+                    .format("%b %e, %H:%M")
                     .to_string();
 
                 let style = if context.is_selected {
@@ -104,7 +104,7 @@ impl<'a> Widget for MailListEntry<'a> {
             a
         } else {
             let [_left_padding, right] =
-                Layout::horizontal([Constraint::Percentage(5), Constraint::Fill(0)]).areas(a);
+                Layout::horizontal([Constraint::Percentage(2), Constraint::Fill(0)]).areas(a);
 
             right
         };
