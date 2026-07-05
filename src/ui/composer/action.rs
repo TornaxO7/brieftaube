@@ -1,18 +1,16 @@
-use crate::ui::command_palette::CommandPaletteEntry;
+use crate::ui::command_palette::Entry;
 use serde::{Deserialize, Serialize};
-use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, VariantArray};
+use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator};
 
 #[derive(
     Serialize,
     Deserialize,
     Debug,
     Clone,
-    Copy,
     EnumIter,
     EnumMessage,
     EnumProperty,
     EnumString,
-    VariantArray,
     strum::Display,
 )]
 #[serde(rename_all = "snake_case")]
@@ -20,13 +18,37 @@ use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, VariantArray};
 pub enum Action {
     #[strum(props(intern = true))]
     OpenCommandPalette,
+    #[strum(props(intern = true))]
+    CloseCommandPalette,
     #[strum(message = "Quit the application")]
     Quit,
 
-    #[strum(message = "Focus 'Mail' panel")]
-    FocusMailPanel,
-    #[strum(message = "Focus 'Attachments' panel")]
-    FocusAttachmentsPanel,
-}
+    #[strum(message = "Go back to mail list.")]
+    OpenMailList,
 
-impl CommandPaletteEntry for Action {}
+    #[strum(message = "Scroll down")]
+    ScrollDown,
+    #[strum(message = "Scroll up")]
+    ScrollUp,
+
+    #[strum(message = "Open the mail in your editor :)")]
+    OpenMailInEditor,
+}
+impl Action {
+    pub fn palette_options() -> Vec<Entry> {
+        Self::iter()
+            .filter_map(|action| {
+                if let Some(is_intern) = action.get_bool("intern") {
+                    if is_intern {
+                        return None;
+                    }
+                }
+
+                let name = action.to_string();
+                let description = action.get_message().unwrap_or_default().to_string();
+
+                Some(Entry { name, description })
+            })
+            .collect()
+    }
+}

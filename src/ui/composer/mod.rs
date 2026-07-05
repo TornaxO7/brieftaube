@@ -1,101 +1,154 @@
 mod action;
-mod attachments;
-mod mail;
+mod mail_template;
+mod state;
 
-use crate::ui::command_palette::HandleEventResult;
-use action::Action;
-use crossterm::event::KeyEvent;
+use crate::{
+    backend::Account,
+    ui::{
+        command_palette::{CommandPalette, HandleEventResult},
+        composer::mail_template::MailTemplate,
+    },
+};
+pub use action::Action;
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
-    widgets::{Clear, Widget},
+    widgets::{Block, Clear, Paragraph, Widget},
 };
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, strum::IntoStaticStr)]
-#[strum(serialize_all = "Train-Case")]
-enum Focus {
-    CommandPalette,
-    Mail,
-    Attachments,
+#[derive(Debug)]
+enum PaletteType {
+    /// Palette is displaying commands
+    Command,
 }
 
 #[derive(Debug)]
-pub struct State {
-    focus: Focus,
-
-    mail: mail::State,
-    attachments: attachments::State,
-    command_palette: super::command_palette::CommandPalette<Action>,
+struct PaletteCtx {
+    palette: CommandPalette,
+    ty: PaletteType,
+}
+#[derive(Debug)]
+pub struct Composer {
+    state: state::State,
+    palette: Option<PaletteCtx>,
 }
 
-impl State {
-    pub fn new() -> Self {
+impl Composer {
+    pub fn new(account: Arc<Account>) -> Self {
         Self {
-            focus: Focus::Mail,
-
-            mail: mail::State::new(),
-            attachments: attachments::State::new(),
-            command_palette: super::command_palette::CommandPalette::new(),
+            state: state::State::new(account),
+            palette: None,
         }
     }
 
-    pub fn handle_event(&mut self, event: KeyEvent) -> Option<super::Action> {
-        match self.focus {
-            Focus::Mail => self.mail.handle_event(event),
-            Focus::Attachments => self.attachments.handle_event(event),
-            Focus::CommandPalette => {
-                self.command_palette
-                    .handle_event(event)
-                    .map(|action| match action {
-                        HandleEventResult::Quit => Action::FocusMailPanel,
-                        HandleEventResult::Selected(cmd_name) => {
-                            self.command_palette.reset();
-                            self.apply_action(Action::FocusMailPanel);
-                            Action::from_str(cmd_name.as_str()).unwrap()
+    pub fn reset(&mut self) {
+        self.state.reset();
+    }
+
+    pub fn handle_event(&mut self, event: KeyEvent) -> Vec<super::Action> {
+        let mut actions = Vec::new();
+
+        if let Some(command_palette) = &mut self.palette {
+            if let Some(result) = command_palette.palette.handle_event(event) {
+                actions.push(Action::CloseCommandPalette.into());
+
+                match result {
+                    HandleEventResult::Cancel => {}
+                    HandleEventResult::Selected(value) => match command_palette.ty {
+                        PaletteType::Command => {
+                            actions.push(Action::from_str(&value).unwrap().into())
                         }
-                    })
+                    },
+                };
             }
+
+            return actions;
         }
-        .and_then(|a| self.apply_action(a))
+
+        match event.code {
+            KeyCode::Char('j') => actions.push(Action::ScrollDown.into()),
+            KeyCode::Char('k') => actions.push(Action::ScrollUp.into()),
+            KeyCode::Char('q') => actions.push(super::Action::Quit),
+            KeyCode::Char('h') => actions.push(super::Action::OpenMailList(None)),
+            KeyCode::Char('e') => actions.push(Action::OpenMailInEditor.into()),
+            _ => {}
+        };
+
+        actions
     }
 
-    fn apply_action(&mut self, a: Action) -> Option<super::Action> {
+    pub fn apply_action(&mut self, a: Action) -> Option<super::Action> {
         match a {
             Action::Quit => return Some(super::Action::Quit),
-            Action::OpenCommandPalette => self.set_focus(Focus::CommandPalette),
+            Action::OpenCommandPalette => {
+                self.palette = Some(PaletteCtx {
+                    palette: CommandPalette::new(Action::palette_options()),
+                    ty: PaletteType::Command,
+                })
+            }
+            Action::CloseCommandPalette => self.palette = None,
+            Action::ScrollUp => self.state.scroll_up(),
+            Action::ScrollDown => self.state.scroll_down(),
 
-            Action::FocusMailPanel => self.set_focus(Focus::Mail),
-            Action::FocusAttachmentsPanel => self.set_focus(Focus::Attachments),
+            Action::OpenMailList => return Some(super::Action::OpenMailList(None)),
+            Action::OpenMailInEditor => self.state.open_mail_in_editor(),
         }
 
         None
     }
-
-    fn set_focus(&mut self, focus: Focus) {
-        self.focus = focus;
-        self.mail.set_focus(focus == Focus::Mail);
-        self.attachments.set_focus(focus == Focus::Attachments);
-    }
 }
 
-impl Widget for &mut State {
+impl Widget for &mut Composer {
     fn render(self, area: Rect, buf: &mut Buffer)
     where
         Self: Sized,
     {
-        let [content, attachments] = area.layout(&Layout::vertical([
-            Constraint::Percentage(80),
-            Constraint::Percentage(20),
-        ]));
+        self.state.update();
 
-        self.mail.render(content, buf);
-        self.attachments.render(attachments, buf);
+        let mail = self.state.get_mail();
 
-        if self.focus == Focus::CommandPalette {
+        let [top, bottom] =
+            Layout::vertical([Constraint::Percentage(80), Constraint::Fill(0)]).areas(area);
+
+        render_mail_content(mail, top, buf);
+        render_attachment_list(mail, bottom, buf);
+
+        if let Some(cmd) = &mut self.palette {
             let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
             Clear.render(a, buf);
-            self.command_palette.render(a, buf);
+            cmd.palette.render(a, buf);
         }
     }
 }
+
+/// Rendering implementations
+fn render_mail_content(mail: &MailTemplate, area: Rect, buf: &mut Buffer) {
+    tracing::debug!("{:#?}", mail);
+    let content = mail.renderable();
+    Widget::render(Paragraph::new(content).block(Block::bordered()), area, buf)
+}
+
+fn render_attachment_list(_mail: &MailTemplate, _area: Rect, _buf: &mut Buffer) {
+    // TODO
+}
+
+// #[derive(Debug)]
+// struct AttachmentWidget<'a> {
+//     name: &'a str,
+//     ty: &'a str,
+// }
+
+// impl<'a> Widget for AttachmentWidget<'a> {
+//     fn render(self, area: Rect, buf: &mut Buffer)
+//     where
+//         Self: Sized,
+//     {
+//         let [left, right] =
+//             Layout::horizontal([Constraint::Fill(0), Constraint::Fill(0)]).areas(area);
+
+//         Widget::render(Paragraph::new(self.name).left_aligned(), left, buf);
+//         Widget::render(Paragraph::new(self.ty).right_aligned(), right, buf);
+//     }
+// }

@@ -4,10 +4,10 @@ use ratatui::{buffer::Buffer, layout::Rect, widgets::Widget};
 use std::sync::Arc;
 
 mod command_palette;
+mod composer;
+mod mail_viewer;
 mod mailboxes;
 mod mails;
-// mod composer;
-mod mail_viewer;
 
 type MailboxId = String;
 type MailId = String;
@@ -19,11 +19,12 @@ pub enum Action {
     MailboxList(mailboxes::Action),
     MailList(mails::Action),
     MailViewer(mail_viewer::Action),
+    Composer(composer::Action),
 
     OpenMailList(Option<MailboxId>),
     OpenMailViewer(Option<MailId>),
     OpenMailboxList,
-    // OpenComposer,
+    OpenComposer,
 }
 
 impl From<mails::Action> for Action {
@@ -44,11 +45,17 @@ impl From<mail_viewer::Action> for Action {
     }
 }
 
+impl From<composer::Action> for Action {
+    fn from(action: composer::Action) -> Self {
+        Self::Composer(action)
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 enum Mode {
     Mails,
     Mailboxes,
-    // Composer,
+    Composer,
     MailViewer,
 }
 
@@ -59,7 +66,7 @@ pub struct State {
     mails: mails::Mails,
     mailboxes: mailboxes::Mailboxes,
     mail_viewer: mail_viewer::MailViewer,
-    // composer: composer::State,
+    composer: composer::Composer,
 }
 
 impl State {
@@ -70,6 +77,7 @@ impl State {
             mails: mails::Mails::new(account.clone()).await,
             mailboxes: mailboxes::Mailboxes::new(account.clone()).await,
             mail_viewer: mail_viewer::MailViewer::new(account.clone()),
+            composer: composer::Composer::new(account.clone()),
         }
     }
 
@@ -77,8 +85,8 @@ impl State {
         let sub_actions = match self.mode {
             Mode::Mails => self.mails.handle_event(event),
             Mode::Mailboxes => self.mailboxes.handle_event(event),
-            Mode::MailViewer => self.mail_viewer.handle_event(event), // Mode::Composer => self.composer.handle_event(event),
-                                                                      // Mode::Pager => self.pager.handle_event(event),
+            Mode::MailViewer => self.mail_viewer.handle_event(event),
+            Mode::Composer => self.composer.handle_event(event),
         };
 
         for action in sub_actions {
@@ -93,11 +101,19 @@ impl State {
     fn apply_action(&mut self, action: Action) -> Option<super::Action> {
         match action {
             Action::Quit => return Some(super::Action::Quit),
+            Action::OpenMailboxList => self.mode = Mode::Mailboxes,
             Action::OpenMailList(mailbox_id) => {
                 self.mode = Mode::Mails;
                 self.mails.open_mailbox(mailbox_id);
             }
-            Action::OpenMailboxList => self.mode = Mode::Mailboxes,
+            Action::OpenMailViewer(mail) => {
+                self.mode = Mode::MailViewer;
+                self.mail_viewer.open_mail(mail);
+            }
+            Action::OpenComposer => {
+                self.mode = Mode::Composer;
+            }
+
             Action::MailList(action) => {
                 return self
                     .mails
@@ -116,9 +132,11 @@ impl State {
                     .apply_action(action)
                     .and_then(|action| self.apply_action(action));
             }
-            Action::OpenMailViewer(mail) => {
-                self.mode = Mode::MailViewer;
-                self.mail_viewer.open_mail(mail);
+            Action::Composer(action) => {
+                return self
+                    .composer
+                    .apply_action(action)
+                    .and_then(|action| self.apply_action(action));
             }
         }
 
@@ -135,8 +153,7 @@ impl Widget for &mut State {
             Mode::Mails => self.mails.render(area, buf),
             Mode::Mailboxes => self.mailboxes.render(area, buf),
             Mode::MailViewer => self.mail_viewer.render(area, buf),
-            // Mode::Pager => self.pager.render(area, buf),
-            // Mode::Composer => self.composer.render(area, buf),
+            Mode::Composer => self.composer.render(area, buf),
         }
     }
 }

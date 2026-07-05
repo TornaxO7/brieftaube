@@ -30,6 +30,7 @@ impl Mailboxes {
             KeyCode::Char('q') => actions.push(super::Action::Quit),
             KeyCode::Char('j') => actions.push(Action::SelectNextMailbox.into()),
             KeyCode::Char('k') => actions.push(Action::SelectPreviousMailbox.into()),
+            KeyCode::Char('n') => actions.push(super::Action::OpenComposer),
             KeyCode::Enter | KeyCode::Char('l') => actions.push(Action::OpenSelectedMailbox.into()),
             _ => {}
         }

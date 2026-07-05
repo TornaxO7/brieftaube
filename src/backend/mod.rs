@@ -1,13 +1,16 @@
-use jmap_client::client::Client;
+use jmap_client::{Set, client::Client, email::EmailAddress};
 
 pub struct Account {
     /// Email address
     pub client: jmap_client::client::Client,
+
+    pub address: String,
 }
 
 impl Account {
     pub async fn new() -> Self {
         let config = crate::config::Config::load().unwrap();
+        let address = config.address.clone();
 
         let client = Client::new()
             .credentials((config.address.trim(), config.password.trim()))
@@ -16,7 +19,7 @@ impl Account {
             .await
             .unwrap();
 
-        Self { client }
+        Self { client, address }
     }
 }
 
