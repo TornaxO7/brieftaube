@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 chrono = "0.4"
+chumsky = "0.13"
 color-eyre = "0.6"
 crossterm = { version = "0.29", default-features = false, features = [
   "bracketed-paste",

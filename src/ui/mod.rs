@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 mod command_palette;
 mod composer;
+mod keybindmanager;
 mod mail_viewer;
 mod mailboxes;
 mod mails;

@@ -2,40 +2,42 @@ mod action;
 mod list;
 mod state;
 
-use crate::backend;
+use crate::{backend, ui::keybindmanager::KeybindManager};
 pub use action::Action;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::HorizontalAlignment,
     widgets::{Block, Paragraph, StatefulWidget, Widget},
 };
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 #[derive(Debug)]
 pub struct Mailboxes {
     state: state::State,
+
+    keybindings: KeybindManager<super::Action>,
 }
 
 impl Mailboxes {
     pub async fn new(account: Arc<backend::Account>) -> Self {
         Self {
             state: state::State::new(account),
+            keybindings: KeybindManager::new(HashMap::from([
+                ("q", Action::Quit.into()),
+                ("j", Action::SelectNextMailbox.into()),
+                ("k", Action::SelectPreviousMailbox.into()),
+                ("n", super::Action::OpenComposer),
+                ("<CR>", Action::OpenSelectedMailbox.into()),
+                ("l", Action::OpenSelectedMailbox.into()),
+            ])),
         }
     }
 
     pub fn handle_event(&mut self, event: KeyEvent) -> Vec<super::Action> {
-        let mut actions = Vec::new();
-
-        match event.code {
-            KeyCode::Char('q') => actions.push(super::Action::Quit),
-            KeyCode::Char('j') => actions.push(Action::SelectNextMailbox.into()),
-            KeyCode::Char('k') => actions.push(Action::SelectPreviousMailbox.into()),
-            KeyCode::Char('n') => actions.push(super::Action::OpenComposer),
-            KeyCode::Enter | KeyCode::Char('l') => actions.push(Action::OpenSelectedMailbox.into()),
-            _ => {}
+        match self.keybindings.handle_event(event) {
+            Some(action) => vec![action],
+            None => vec![],
         }
-
-        actions
     }
 
     pub fn apply_action(&mut self, a: Action) -> Option<super::Action> {
