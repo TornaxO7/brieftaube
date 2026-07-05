@@ -36,6 +36,7 @@ impl State {
 
     pub fn open_mailbox(&mut self, mailbox_id: MailboxId) {
         self.selected_mailbox_id = Some(mailbox_id.clone());
+        self.list_state.selected = None;
 
         let account = self.account.clone();
         let tx = self.tx.clone();
@@ -103,7 +104,7 @@ impl State {
         if let Some(id) = self.selected_mailbox_id.as_ref() {
             if let Some(mails) = self.mails.get(id) {
                 if let Some(idx) = self.list_state.selected {
-                    return Some(mails[idx].preview().unwrap());
+                    return mails.get(idx).map(|mail| mail.preview().unwrap());
                 }
             }
         }
