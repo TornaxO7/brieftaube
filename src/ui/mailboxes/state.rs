@@ -56,6 +56,13 @@ impl State {
             Err(mpsc::error::TryRecvError::Empty) => {}
             Err(mpsc::error::TryRecvError::Disconnected) => todo!(),
         }
+
+        let select_first_entry =
+            self.mailboxes.is_some() && self.mailbox_list_state.selected.is_none();
+
+        if select_first_entry {
+            self.mailbox_list_state.next();
+        }
     }
 
     pub fn get_mailboxes(&mut self) -> Option<Vec<Mailbox>> {

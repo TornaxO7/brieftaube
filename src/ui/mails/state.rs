@@ -86,6 +86,15 @@ impl State {
                 Err(mpsc::error::TryRecvError::Disconnected) => todo!(),
             }
         }
+
+        if let Some(selected_mailbox_id) = self.selected_mailbox_id.as_ref() {
+            let select_first_entry =
+                self.mails.get(selected_mailbox_id).is_some() && self.list_state.selected.is_none();
+
+            if select_first_entry {
+                self.list_state.next();
+            }
+        }
     }
 
     pub fn get_render_mail_list_data(
