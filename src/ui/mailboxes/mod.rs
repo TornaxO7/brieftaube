@@ -4,7 +4,7 @@ mod state;
 
 use crate::{backend, ui::keybindmanager::KeybindManager};
 pub use action::Action;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::KeyEvent;
 use ratatui::{
     layout::HorizontalAlignment,
     widgets::{Block, Paragraph, StatefulWidget, Widget},

@@ -70,6 +70,15 @@ fn parse_keybinding<'src>()
         keybinding_with_modifier(),
         keybinding_char(),
     ))
+    .validate(|event, e, emitter| {
+        if event.code == KeyCode::Esc {
+            emitter.emit(Rich::custom(
+                e.span(),
+                format!("You are not allowed to map the escape key!"),
+            ))
+        }
+        event
+    })
     .repeated()
     .at_least(1)
     .collect()
@@ -93,12 +102,13 @@ fn keybinding_char<'src>()
 fn keybinding_special<'src>()
 -> impl Parser<'src, &'src str, KeyEvent, chumsky::extra::Err<Rich<'src, char>>> {
     just('<')
-        .ignore_then(choice((just("CR"), just("BS"))))
+        .ignore_then(choice((just("CR"), just("BS"), just("ESC"))))
         .then_ignore(just('>'))
         .map(|s| {
             let code = match s {
                 "CR" => KeyCode::Enter,
                 "BS" => KeyCode::Backspace,
+                "ESC" => KeyCode::Esc,
                 _ => todo!(),
             };
 
@@ -162,5 +172,11 @@ mod tests {
             parse_keybinding().parse("<A-s>").unwrap(),
             vec![KeyEvent::new(KeyCode::Char('s'), KeyModifiers::ALT)]
         );
+    }
+
+    #[test]
+    #[should_panic]
+    fn esc_keybinding() {
+        parse_keybinding().parse("<ESC>").unwrap();
     }
 }
