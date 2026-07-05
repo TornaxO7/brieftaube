@@ -10,7 +10,7 @@ use crate::{
     },
 };
 pub use action::Action;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::KeyEvent;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
