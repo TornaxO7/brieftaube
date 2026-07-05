@@ -156,16 +156,18 @@ impl Widget for &mut Mails {
 impl Mails {
     fn render_mail_list(&mut self, area: Rect, buf: &mut Buffer) {
         match self.state.get_render_mail_list_data() {
-            Some((mails, state)) => StatefulWidget::render(
-                MailListWidget::new(mails).block(
-                    Block::bordered()
-                        .title(MAIL_LIST_PANEL_TITLE)
-                        .title_alignment(HorizontalAlignment::Center),
-                ),
-                area,
-                buf,
-                state,
-            ),
+            Some((mails, state)) => {
+                StatefulWidget::render(
+                    MailListWidget::new(mails).block(
+                        Block::bordered()
+                            .title(MAIL_LIST_PANEL_TITLE)
+                            .title_alignment(HorizontalAlignment::Center),
+                    ),
+                    area,
+                    buf,
+                    state,
+                );
+            }
             None => Widget::render(
                 Paragraph::new("Loading...").block(Block::bordered().title(MAIL_LIST_PANEL_TITLE)),
                 area,

@@ -1,5 +1,9 @@
 use crate::{backend::Account, ui::MailboxId};
 use chrono::Local;
+use jmap_client::{
+    Set,
+    email::{EmailBodyPart, EmailBodyValue},
+};
 use mail_parser::MessageParser;
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::mpsc;
@@ -122,7 +126,12 @@ Subject:
                         parsed.to().unwrap(),
                     ))
                     .subject(parsed.subject().unwrap())
-                    .mailbox_id(&draft_id, true);
+                    .mailbox_id(&draft_id, true)
+                    .body_value(
+                        "1".to_string(),
+                        EmailBodyValue::from(parsed.body_text(0).unwrap().to_string()),
+                    )
+                    .text_body(EmailBodyPart::new().part_id("1").content_type("text/plain"));
 
                 request.send_set_email().await.unwrap();
             });

@@ -4,9 +4,10 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 
 pub struct State {
-    account: Arc<backend::Account>,
+    _account: Arc<backend::Account>,
 
-    rx_mailboxes: mpsc::Receiver<Vec<Mailbox>>,
+    _tx: Arc<mpsc::Sender<Vec<Mailbox>>>,
+    rx: mpsc::Receiver<Vec<Mailbox>>,
     mailboxes: Option<Vec<Mailbox>>,
 
     mailbox_list_state: tui_widget_list::ListState,
@@ -14,43 +15,51 @@ pub struct State {
 
 impl State {
     pub fn new(account: Arc<backend::Account>) -> Self {
-        let (tx_mailboxes, rx_mailboxes) = mpsc::channel(1);
+        let (tx, rx) = mpsc::channel(1);
 
+        let tx = Arc::new(tx);
+
+        let tx2 = tx.clone();
         let account2 = account.clone();
         tokio::spawn(async move {
             let mut response = {
                 let mut request = account2.client.build();
-                request.get_mailbox().ids::<[_; 0], String>(None);
+                request
+                    .get_mailbox()
+                    .ids::<[_; 0], String>(None)
+                    .properties([
+                        jmap_client::mailbox::Property::Id,
+                        jmap_client::mailbox::Property::Name,
+                        jmap_client::mailbox::Property::Role,
+                        jmap_client::mailbox::Property::TotalEmails,
+                        jmap_client::mailbox::Property::UnreadEmails,
+                    ]);
                 request.send_get_mailbox().await.unwrap()
             };
 
-            tx_mailboxes.send(response.take_list()).await.unwrap();
+            tx2.send(response.take_list()).await.unwrap();
         });
 
         Self {
-            account,
+            _account: account,
             mailboxes: None,
-            rx_mailboxes,
+            rx,
+            _tx: tx,
 
             mailbox_list_state: tui_widget_list::ListState::default(),
         }
     }
 
-    pub fn get_mailboxes(&mut self) -> Option<Vec<Mailbox>> {
-        if let Some(mailboxes) = self.mailboxes.clone() {
-            Some(mailboxes)
-        } else {
-            match self.rx_mailboxes.try_recv() {
-                Ok(mailboxes) => {
-                    self.mailboxes = Some(mailboxes);
-                    return self.mailboxes.clone();
-                }
-                Err(mpsc::error::TryRecvError::Empty) => {}
-                Err(mpsc::error::TryRecvError::Disconnected) => todo!(),
-            }
-
-            None
+    pub fn update(&mut self) {
+        match self.rx.try_recv() {
+            Ok(mailboxes) => self.mailboxes = Some(mailboxes),
+            Err(mpsc::error::TryRecvError::Empty) => {}
+            Err(mpsc::error::TryRecvError::Disconnected) => todo!(),
         }
+    }
+
+    pub fn get_mailboxes(&mut self) -> Option<Vec<Mailbox>> {
+        self.mailboxes.clone()
     }
 
     pub fn get_mut_selected_mailbox(&mut self) -> Option<&mut Mailbox> {

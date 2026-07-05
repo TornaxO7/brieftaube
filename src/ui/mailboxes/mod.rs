@@ -49,8 +49,9 @@ impl Mailboxes {
             Action::SelectPreviousMailbox => self.state.select_previous_mailbox(),
             Action::OpenSelectedMailbox => {
                 if let Some(selected_mailbox) = self.state.get_mut_selected_mailbox() {
+                    assert!(selected_mailbox.id().is_some());
                     return Some(super::Action::OpenMailList(Some(
-                        selected_mailbox.take_id().clone(),
+                        selected_mailbox.id().unwrap().to_string(),
                     )));
                 }
             }
@@ -65,6 +66,8 @@ impl Widget for &mut Mailboxes {
     where
         Self: Sized,
     {
+        self.state.update();
+
         if let Some(mailboxes) = self.state.get_mailboxes() {
             StatefulWidget::render(
                 list::List::new(&mailboxes).block(

@@ -42,7 +42,7 @@ impl<'a> StatefulWidget for List<'a> {
 
             let mailbox = &self.mailboxes[context.index];
 
-            let name = mailbox.name().unwrap_or("<No name>");
+            let name = mailbox.name().unwrap();
             let unread_mails = mailbox.unread_emails();
             let total_mails = mailbox.total_emails();
 
