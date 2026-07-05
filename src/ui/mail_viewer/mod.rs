@@ -6,18 +6,19 @@ use crate::{
     ui::{
         MailId,
         command_palette::{CommandPalette, HandleEventResult},
+        keybindmanager::KeybindManager,
     },
 };
 pub use action::Action;
 use chrono::DateTime;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::KeyEvent;
 use jmap_client::email::{Email, EmailAddress};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     widgets::{Block, Clear, Paragraph, StatefulWidget, Widget},
 };
-use std::{str::FromStr, sync::Arc};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 use tui_widget_list::{ListBuilder, ListView};
 
 #[derive(Debug)]
@@ -35,6 +36,7 @@ struct PaletteCtx {
 pub struct MailViewer {
     state: state::State,
     palette: Option<PaletteCtx>,
+    keybindings: KeybindManager<super::Action>,
 }
 
 impl MailViewer {
@@ -42,6 +44,12 @@ impl MailViewer {
         Self {
             state: state::State::new(account),
             palette: None,
+            keybindings: KeybindManager::new(HashMap::from([
+                ("j", Action::ScrollDown.into()),
+                ("k", Action::ScrollUp.into()),
+                ("q", Action::Quit.into()),
+                ("h", super::Action::OpenMailList(None)),
+            ])),
         }
     }
 
@@ -71,13 +79,9 @@ impl MailViewer {
             return actions;
         }
 
-        match event.code {
-            KeyCode::Char('j') => actions.push(Action::ScrollDown.into()),
-            KeyCode::Char('k') => actions.push(Action::ScrollUp.into()),
-            KeyCode::Char('q') => actions.push(super::Action::Quit),
-            KeyCode::Char('h') => actions.push(super::Action::OpenMailList(None)),
-            _ => {}
-        };
+        if let Some(action) = self.keybindings.handle_event(event) {
+            actions.push(action);
+        }
 
         actions
     }
