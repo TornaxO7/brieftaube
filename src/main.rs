@@ -7,11 +7,13 @@ use ratatui::{DefaultTerminal, Frame};
 use std::{
     fs::OpenOptions,
     sync::{Arc, OnceLock},
+    time::Duration,
 };
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
 use xdg::BaseDirectories;
 
+const INPUT_TIMEOUT: Duration = Duration::from_millis(250);
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
 static XDG: OnceLock<BaseDirectories> = OnceLock::new();
 
@@ -66,10 +68,15 @@ impl App {
     }
 
     fn handle_events(&mut self) -> std::io::Result<()> {
-        if let Some(key) = crossterm::event::read()?.as_key_press_event() {
-            if let Some(action) = self.ui.handle_event(key) {
-                match action {
-                    Action::Quit => self.is_running = false,
+        if crossterm::event::poll(INPUT_TIMEOUT).expect("Poll for event") {
+            if let Some(key) = crossterm::event::read()
+                .expect("Read event")
+                .as_key_press_event()
+            {
+                if let Some(action) = self.ui.handle_event(key) {
+                    match action {
+                        Action::Quit => self.is_running = false,
+                    }
                 }
             }
         }
