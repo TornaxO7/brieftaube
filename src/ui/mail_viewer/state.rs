@@ -35,6 +35,7 @@ impl State {
     }
 
     pub fn open_mail(&mut self, id: MailId) {
+        self.mail = None;
         let account = self.account.clone();
         let tx = self.tx.clone();
 
