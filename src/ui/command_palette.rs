@@ -126,7 +126,7 @@ impl Widget for &mut CommandPalette {
     where
         Self: Sized,
     {
-        let command_palette_block = Block::default().padding(Padding::symmetric(2, 2));
+        let command_palette_block = Block::default().padding(Padding::symmetric(1, 1));
         let area = command_palette_block.inner(area);
 
         let [left, description] = area.layout(
