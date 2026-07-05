@@ -1,9 +1,6 @@
 use crate::{backend::Account, ui::MailboxId};
 use chrono::Local;
-use jmap_client::{
-    Set,
-    email::{EmailBodyPart, EmailBodyValue},
-};
+use jmap_client::email::{EmailBodyPart, EmailBodyValue};
 use mail_parser::MessageParser;
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::mpsc;
