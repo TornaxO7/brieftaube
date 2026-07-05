@@ -4,7 +4,10 @@ mod state;
 
 use crate::{
     backend::Account,
-    ui::command_palette::{CommandPalette, HandleEventResult},
+    ui::{
+        command_palette::{CommandPalette, HandleEventResult},
+        keybindmanager::KeybindManager,
+    },
 };
 pub use action::Action;
 use crossterm::event::{KeyCode, KeyEvent};
@@ -13,7 +16,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     widgets::{Block, Clear, Paragraph, Widget},
 };
-use std::{str::FromStr, sync::Arc};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 #[derive(Debug)]
 enum PaletteType {
@@ -31,6 +34,7 @@ struct PaletteCtx {
 pub struct Composer {
     state: state::State,
     palette: Option<PaletteCtx>,
+    keybindings: KeybindManager<super::Action>,
 }
 
 impl Composer {
@@ -38,6 +42,14 @@ impl Composer {
         Self {
             state: state::State::new(account),
             palette: None,
+            keybindings: KeybindManager::new(HashMap::from([
+                ("j", Action::ScrollDown.into()),
+                ("k", Action::ScrollUp.into()),
+                ("q", super::Action::Quit),
+                ("h", super::Action::OpenMailList(None)),
+                ("e", Action::OpenMailInEditor.into()),
+                (":", Action::OpenCommandPalette.into()),
+            ])),
         }
     }
 
@@ -65,15 +77,9 @@ impl Composer {
             return actions;
         }
 
-        match event.code {
-            KeyCode::Char('j') => actions.push(Action::ScrollDown.into()),
-            KeyCode::Char('k') => actions.push(Action::ScrollUp.into()),
-            KeyCode::Char('q') => actions.push(super::Action::Quit),
-            KeyCode::Char('h') => actions.push(super::Action::OpenMailList(None)),
-            KeyCode::Char('e') => actions.push(Action::OpenMailInEditor.into()),
-            KeyCode::Char(':') => actions.push(Action::OpenCommandPalette.into()),
-            _ => {}
-        };
+        if let Some(action) = self.keybindings.handle_event(event) {
+            actions.push(action);
+        }
 
         actions
     }
