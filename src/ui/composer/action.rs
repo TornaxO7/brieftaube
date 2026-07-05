@@ -33,6 +33,9 @@ pub enum Action {
 
     #[strum(message = "Open the mail in your editor :)")]
     OpenMailInEditor,
+
+    #[strum(message = "Send the mail")]
+    SendMail,
 }
 impl Action {
     pub fn palette_options() -> Vec<Entry> {

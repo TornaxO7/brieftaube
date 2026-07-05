@@ -1,29 +1,80 @@
-use crate::{backend::Account, ui::composer::mail_template::MailTemplate};
+use crate::{backend::Account, ui::MailboxId};
+use chrono::Local;
 use mail_parser::MessageParser;
 use std::{path::PathBuf, sync::Arc};
+use tokio::sync::mpsc;
 
 #[derive(Debug)]
 pub struct State {
     account: Arc<Account>,
 
-    mail: MailTemplate,
+    raw_mail: String,
+
+    rx: mpsc::Receiver<MailboxId>,
+    _tx: Arc<mpsc::Sender<MailboxId>>,
+    draft_mailbox_id: Option<MailboxId>,
+
     scroll_offset: (u16, u16),
 }
 
 impl State {
     pub fn new(account: Arc<Account>) -> Self {
-        Self {
+        let (tx, rx) = mpsc::channel(1);
+
+        let acc = account.clone();
+        let tx = Arc::new(tx);
+        let tx2 = tx.clone();
+
+        tokio::spawn(async move {
+            let mut request = acc.client.build();
+            request.get_mailbox().ids(None::<[String; 0]>);
+            let response = request.send_get_mailbox().await.unwrap();
+
+            let sent_mailbox = response
+                .list()
+                .iter()
+                .find(|mailbox| mailbox.role() == jmap_client::mailbox::Role::Drafts)
+                .unwrap();
+
+            tx2.send(sent_mailbox.id().unwrap().to_string())
+                .await
+                .unwrap();
+        });
+
+        let mut state = Self {
             account: account.clone(),
-            mail: MailTemplate::new(account.clone()),
+            raw_mail: String::new(),
             scroll_offset: (0, 0),
-        }
+            draft_mailbox_id: None,
+
+            rx,
+            _tx: tx,
+        };
+
+        state.reset();
+        state
     }
 
     pub fn reset(&mut self) {
-        self.mail = MailTemplate::new(self.account.clone());
+        let address = self.account.address.clone();
+
+        self.raw_mail = format!(
+            "\
+From: {address}
+To:
+Subject:
+
+"
+        );
     }
 
-    pub fn update(&mut self) {}
+    pub fn update(&mut self) {
+        match self.rx.try_recv() {
+            Ok(sent_mailbox_id) => self.draft_mailbox_id = Some(sent_mailbox_id),
+            Err(mpsc::error::TryRecvError::Empty) => {}
+            Err(mpsc::error::TryRecvError::Disconnected) => todo!(),
+        }
+    }
 
     pub fn scroll_down(&mut self) {
         self.scroll_offset.0 += 1;
@@ -33,29 +84,49 @@ impl State {
         self.scroll_offset.0 = self.scroll_offset.0.saturating_sub(1);
     }
 
-    pub fn get_mail(&self) -> &MailTemplate {
-        &self.mail
+    pub fn get_mail(&self) -> &str {
+        self.raw_mail.as_str()
     }
 
     pub fn open_mail_in_editor(&mut self) {
-        let content = self.mail.renderable();
-
         let tmp_file = get_tmp_file();
 
-        std::fs::write(&tmp_file, content).unwrap();
+        std::fs::write(&tmp_file, &self.raw_mail).unwrap();
         std::process::Command::new("hx")
             .arg(&tmp_file)
             .output()
             .unwrap();
 
-        let content = std::fs::read_to_string(&tmp_file).unwrap();
-        let message = MessageParser::default().parse(content.as_bytes()).unwrap();
-        tracing::debug!("{:#?}", message);
+        // TODO: Check if the changed mail is correct
+        self.raw_mail = std::fs::read_to_string(&tmp_file).unwrap();
+    }
 
-        self.mail.to = message.header_raw("to").unwrap().trim().to_string();
-        self.mail.subject = message.header_raw("subject").unwrap().trim().to_string();
-        self.mail.from = message.header_raw("from").unwrap().trim().to_string();
-        self.mail.body = message.body_text(0).unwrap().to_string();
+    pub fn send_mail(&mut self) {
+        if let Some(draft_id) = self.draft_mailbox_id.clone() {
+            let account = self.account.clone();
+            let raw_mail = self.raw_mail.clone();
+
+            tokio::spawn(async move {
+                let parsed = MessageParser::new().parse(raw_mail.as_bytes()).unwrap();
+
+                let mut request = account.client.build();
+
+                request
+                    .set_email()
+                    .create()
+                    .sent_at(Local::now().timestamp())
+                    .from(mail_parser_address_to_jmap_client_address(
+                        parsed.from().unwrap(),
+                    ))
+                    .to(mail_parser_address_to_jmap_client_address(
+                        parsed.to().unwrap(),
+                    ))
+                    .subject(parsed.subject().unwrap())
+                    .mailbox_id(&draft_id, true);
+
+                request.send_set_email().await.unwrap();
+            });
+        }
     }
 }
 
@@ -64,4 +135,21 @@ fn get_tmp_file() -> PathBuf {
     let xdg = crate::get_xdg();
 
     xdg.place_cache_file("temp.mail").unwrap()
+}
+
+fn mail_parser_address_to_jmap_client_address(
+    addr: &mail_parser::Address,
+) -> Vec<jmap_client::email::EmailAddress> {
+    match addr {
+        mail_parser::Address::List(list) => list
+            .iter()
+            .map(|addr| match addr.name() {
+                Some(name) => {
+                    jmap_client::email::EmailAddress::from((name, addr.address().unwrap()))
+                }
+                None => jmap_client::email::EmailAddress::from(addr.address().unwrap()),
+            })
+            .collect(),
+        mail_parser::Address::Group(_group) => todo!(),
+    }
 }

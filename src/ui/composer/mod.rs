@@ -1,13 +1,10 @@
 mod action;
-mod mail_template;
+// mod mail_template;
 mod state;
 
 use crate::{
     backend::Account,
-    ui::{
-        command_palette::{CommandPalette, HandleEventResult},
-        composer::mail_template::MailTemplate,
-    },
+    ui::command_palette::{CommandPalette, HandleEventResult},
 };
 pub use action::Action;
 use crossterm::event::{KeyCode, KeyEvent};
@@ -29,6 +26,7 @@ struct PaletteCtx {
     palette: CommandPalette,
     ty: PaletteType,
 }
+
 #[derive(Debug)]
 pub struct Composer {
     state: state::State,
@@ -73,6 +71,7 @@ impl Composer {
             KeyCode::Char('q') => actions.push(super::Action::Quit),
             KeyCode::Char('h') => actions.push(super::Action::OpenMailList(None)),
             KeyCode::Char('e') => actions.push(Action::OpenMailInEditor.into()),
+            KeyCode::Char(':') => actions.push(Action::OpenCommandPalette.into()),
             _ => {}
         };
 
@@ -94,6 +93,11 @@ impl Composer {
 
             Action::OpenMailList => return Some(super::Action::OpenMailList(None)),
             Action::OpenMailInEditor => self.state.open_mail_in_editor(),
+            Action::SendMail => {
+                self.state.send_mail();
+                self.reset();
+                return Some(super::Action::OpenMailboxList);
+            }
         }
 
         None
@@ -109,11 +113,11 @@ impl Widget for &mut Composer {
 
         let mail = self.state.get_mail();
 
-        let [top, bottom] =
+        let [top, _bottom] =
             Layout::vertical([Constraint::Percentage(80), Constraint::Fill(0)]).areas(area);
 
         render_mail_content(mail, top, buf);
-        render_attachment_list(mail, bottom, buf);
+        // render_attachment_list(mail, bottom, buf);
 
         if let Some(cmd) = &mut self.palette {
             let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
@@ -124,31 +128,7 @@ impl Widget for &mut Composer {
 }
 
 /// Rendering implementations
-fn render_mail_content(mail: &MailTemplate, area: Rect, buf: &mut Buffer) {
+fn render_mail_content(mail: &str, area: Rect, buf: &mut Buffer) {
     tracing::debug!("{:#?}", mail);
-    let content = mail.renderable();
-    Widget::render(Paragraph::new(content).block(Block::bordered()), area, buf)
+    Widget::render(Paragraph::new(mail).block(Block::bordered()), area, buf)
 }
-
-fn render_attachment_list(_mail: &MailTemplate, _area: Rect, _buf: &mut Buffer) {
-    // TODO
-}
-
-// #[derive(Debug)]
-// struct AttachmentWidget<'a> {
-//     name: &'a str,
-//     ty: &'a str,
-// }
-
-// impl<'a> Widget for AttachmentWidget<'a> {
-//     fn render(self, area: Rect, buf: &mut Buffer)
-//     where
-//         Self: Sized,
-//     {
-//         let [left, right] =
-//             Layout::horizontal([Constraint::Fill(0), Constraint::Fill(0)]).areas(area);
-
-//         Widget::render(Paragraph::new(self.name).left_aligned(), left, buf);
-//         Widget::render(Paragraph::new(self.ty).right_aligned(), right, buf);
-//     }
-// }

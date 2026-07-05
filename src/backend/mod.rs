@@ -1,4 +1,4 @@
-use jmap_client::{Set, client::Client, email::EmailAddress};
+use jmap_client::client::Client;
 
 pub struct Account {
     /// Email address
