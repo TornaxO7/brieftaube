@@ -6,18 +6,19 @@ use crate::{
     backend,
     ui::{
         command_palette::{self, CommandPalette},
+        keybindmanager::KeybindManager,
         mails::mail_list::MailListWidget,
     },
 };
 pub use action::Action;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::KeyEvent;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, HorizontalAlignment, Layout, Rect},
     widgets::{Block, Clear, Paragraph, StatefulWidget, Widget},
 };
 use state::State;
-use std::{str::FromStr, sync::Arc};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 const MAIL_LIST_PANEL_TITLE: &str = "Mails";
 const PREVIEW_PANEL_TITLE: &str = "Mail content";
@@ -38,6 +39,7 @@ struct PaletteCtx {
 pub struct Mails {
     palette: Option<PaletteCtx>,
     state: State,
+    keybindings: KeybindManager<super::Action>,
 }
 
 impl Mails {
@@ -47,6 +49,14 @@ impl Mails {
         Self {
             palette: None,
             state,
+            keybindings: KeybindManager::new(HashMap::from([
+                ("q", Action::Quit.into()),
+                (":", Action::OpenCommandPalette.into()),
+                ("j", Action::SelectNextMail.into()),
+                ("k", Action::SelectPreviousMail.into()),
+                ("h", Action::OpenMailboxList.into()),
+                ("l", Action::ViewSelectedMail.into()),
+            ])),
         }
     }
 
@@ -78,21 +88,9 @@ impl Mails {
             return actions;
         }
 
-        match event.code {
-            KeyCode::Char('q') => actions.push(Action::Quit.into()),
-            KeyCode::Char(':') => actions.push(Action::OpenCommandPalette.into()),
-            KeyCode::Char('j') => actions.push(Action::SelectNextMail.into()),
-            KeyCode::Char('k') => actions.push(Action::SelectPreviousMail.into()),
-            KeyCode::Char('h') => actions.push(Action::OpenMailboxList.into()),
-            KeyCode::Char('l') => {
-                if let Some(selected_mail) = self.state.get_selected_mail() {
-                    actions.push(super::Action::OpenMailViewer(Some(
-                        selected_mail.id().unwrap().to_owned(),
-                    )));
-                }
-            }
-            _ => {}
-        };
+        if let Some(action) = self.keybindings.handle_event(event) {
+            actions.push(action);
+        }
 
         actions
     }
@@ -115,8 +113,14 @@ impl Mails {
                 })
             }
             Action::CloseCommandPalette => self.palette = None,
-            // Action::OpenMailInPager => return Some(super::Action::OpenPager),
-            // Action::CreateNewMail => return Some(super::Action::OpenComposer),
+            Action::ViewSelectedMail => {
+                if let Some(selected_mail) = self.state.get_selected_mail() {
+                    return Some(super::Action::OpenMailViewer(Some(
+                        selected_mail.id().unwrap().to_owned(),
+                    )));
+                }
+            } // Action::OpenMailInPager => return Some(super::Action::OpenPager),
+              // Action::CreateNewMail => return Some(super::Action::OpenComposer),
         }
 
         None

@@ -31,10 +31,8 @@ pub enum Action {
     SelectNextMail,
     #[strum(message = "Select the previous mail.")]
     SelectPreviousMail,
-    // #[strum(message = "Create a new mail")]
-    // CreateNewMail,
-    // #[strum(message = "Open mail in the pager.")]
-    // OpenMailInPager,
+    #[strum(message = "View the selected mail.")]
+    ViewSelectedMail,
 }
 
 impl Action {
