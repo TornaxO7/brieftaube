@@ -1,3 +1,4 @@
+mod action;
 mod command_palette;
 mod composer;
 mod keybindmanager;
@@ -7,59 +8,13 @@ mod mailboxes;
 mod mails;
 
 use crate::backend::Account;
+use action::Action;
 use crossterm::event::KeyEvent;
 use ratatui::{buffer::Buffer, layout::Rect, widgets::Widget};
 use std::sync::Arc;
 
 type MailboxId = String;
 type MailId = String;
-
-#[derive(Debug, Clone)]
-pub enum Action {
-    Quit,
-
-    MailboxList(mailboxes::Action),
-    MailList(mails::Action),
-    MailViewer(mail_viewer::Action),
-    Composer(composer::Action),
-    LogViewer(log_viewer::Action),
-
-    OpenMailList(Option<MailboxId>),
-    OpenMailViewer(Option<MailId>),
-    OpenMailboxList,
-    OpenComposer,
-    OpenLogs(Box<Self>),
-}
-
-impl From<mails::Action> for Action {
-    fn from(action: mails::Action) -> Self {
-        Self::MailList(action)
-    }
-}
-
-impl From<mailboxes::Action> for Action {
-    fn from(action: mailboxes::Action) -> Self {
-        Self::MailboxList(action)
-    }
-}
-
-impl From<mail_viewer::Action> for Action {
-    fn from(action: mail_viewer::Action) -> Self {
-        Self::MailViewer(action)
-    }
-}
-
-impl From<composer::Action> for Action {
-    fn from(action: composer::Action) -> Self {
-        Self::Composer(action)
-    }
-}
-
-impl From<log_viewer::Action> for Action {
-    fn from(action: log_viewer::Action) -> Self {
-        Self::LogViewer(action)
-    }
-}
 
 #[derive(Debug, Clone, Copy)]
 enum Mode {
