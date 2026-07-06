@@ -7,18 +7,19 @@ use crate::{
         MailId,
         command_palette::{CommandPalette, HandleEventResult},
         keybindmanager::KeybindManager,
+        mail_viewer::state::RenderData,
     },
 };
 pub use action::Action;
-use chrono::DateTime;
 use crossterm::event::KeyEvent;
-use jmap_client::email::{Email, EmailAddress};
+use jmap_client::email::Email;
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Layout, Rect},
-    widgets::{Block, Clear, Paragraph, StatefulWidget, Widget},
+    layout::{Constraint, Layout, Margin, Rect},
+    widgets::{Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, StatefulWidget, Widget},
 };
 use std::{collections::HashMap, str::FromStr, sync::Arc};
+use tracing::debug;
 use tui_widget_list::{ListBuilder, ListView};
 
 #[derive(Debug)]
@@ -87,6 +88,7 @@ impl MailViewer {
     }
 
     pub fn apply_action(&mut self, a: Action) -> Option<super::Action> {
+        debug!("Action: {}", a);
         match a {
             Action::Quit => return Some(super::Action::Quit),
             Action::OpenCommandPalette => {
@@ -113,15 +115,15 @@ impl Widget for &mut MailViewer {
     {
         self.state.update();
 
-        if let Some(mail) = &self.state.get_mail() {
-            let [top, bottom] = if mail.has_attachment() {
+        if let Some(mut data) = self.state.get_render_data() {
+            let [top, bottom] = if data.mail.has_attachment() {
                 Layout::vertical([Constraint::Percentage(80), Constraint::Fill(0)]).areas(area)
             } else {
                 [area, Rect::default()]
             };
 
-            render_mail_content(mail, top, buf);
-            render_attachment_list(mail, bottom, buf);
+            render_mail_content(&mut data, top, buf);
+            render_attachment_list(&data.mail, bottom, buf);
         } else {
             Widget::render(
                 Paragraph::new("Loading mail...").block(Block::bordered()),
@@ -139,41 +141,36 @@ impl Widget for &mut MailViewer {
 }
 
 /// Rendering implementations
-fn render_mail_content(mail: &Email, area: Rect, buf: &mut Buffer) {
-    tracing::debug!("{:#?}", mail);
-
-    let date = DateTime::from_timestamp_millis(mail.received_at().unwrap())
-        .unwrap()
-        .format("%A, %d %B %Y %T");
-
-    let from = addresses_to_string(mail.from().unwrap());
-    let to = addresses_to_string(mail.to().unwrap());
-    let subject = mail.subject().unwrap();
-
-    let body = {
-        let mut s = String::new();
-
-        for body in mail.text_body().unwrap() {
-            let id = body.part_id().unwrap();
-
-            s.push_str(mail.body_value(id).unwrap().value());
-        }
-
-        s
-    };
-
-    let content = format!(
-        "\
-Date: {date}
-From: {from}
-To: {to}
-Subject: {subject}
-
-
-{body}"
+// TODO: Respect the area size before scrolling.
+//    If the whole mail can be fitted within the area rect, there's no need to add the scrollbars.
+fn render_mail_content(data: &mut RenderData, area: Rect, buf: &mut Buffer) {
+    Widget::render(
+        Paragraph::new(data.mail_str)
+            .block(Block::bordered())
+            .scroll((
+                data.vertical.get_position() as u16,
+                data.horizontal.get_position() as u16,
+            )),
+        area.inner(Margin {
+            horizontal: 1,
+            vertical: 1,
+        }),
+        buf,
     );
 
-    Widget::render(Paragraph::new(content).block(Block::bordered()), area, buf)
+    StatefulWidget::render(
+        Scrollbar::new(ScrollbarOrientation::VerticalRight),
+        area,
+        buf,
+        data.vertical,
+    );
+
+    StatefulWidget::render(
+        Scrollbar::new(ScrollbarOrientation::HorizontalBottom),
+        area,
+        buf,
+        data.horizontal,
+    );
 }
 
 fn render_attachment_list(mail: &Email, area: Rect, buf: &mut Buffer) {
@@ -196,18 +193,6 @@ fn render_attachment_list(mail: &Email, area: Rect, buf: &mut Buffer) {
 
         StatefulWidget::render(list, area, buf, &mut tui_widget_list::ListState::default());
     }
-}
-
-fn addresses_to_string(addresses: &[EmailAddress]) -> String {
-    let mut iter = addresses.iter();
-
-    let mut s = format!("{}", iter.next().unwrap().email());
-
-    for addr in iter {
-        s.push_str(&format!(", {}", addr.email()))
-    }
-
-    s
 }
 
 #[derive(Debug)]
