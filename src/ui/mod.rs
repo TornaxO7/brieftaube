@@ -26,7 +26,7 @@ enum Mode {
 }
 
 #[derive(Debug)]
-pub struct State {
+pub struct Ui {
     mode: Mode,
 
     mails: mails::Mails,
@@ -36,7 +36,7 @@ pub struct State {
     log_viewer: log_viewer::LogViewer,
 }
 
-impl State {
+impl Ui {
     pub async fn new(account: Arc<Account>) -> Self {
         Self {
             mode: Mode::Mailboxes,
@@ -123,7 +123,7 @@ impl State {
     }
 }
 
-impl Widget for &mut State {
+impl Widget for &mut Ui {
     fn render(self, area: Rect, buf: &mut Buffer)
     where
         Self: Sized,

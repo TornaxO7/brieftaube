@@ -41,13 +41,13 @@ pub struct App {
     is_running: bool,
 
     _account: Arc<backend::Account>,
-    ui: ui::State,
+    ui: ui::Ui,
 }
 
 impl App {
     pub async fn new() -> Self {
         let account = Arc::new(backend::Account::new().await);
-        let ui = ui::State::new(account.clone()).await;
+        let ui = ui::Ui::new(account.clone()).await;
 
         Self {
             is_running: true,
