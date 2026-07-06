@@ -2,15 +2,17 @@ mod backend;
 mod config;
 mod ui;
 
-use color_eyre::eyre::Result;
+use color_eyre::eyre;
 use ratatui::{DefaultTerminal, Frame};
 use std::{
     fs::OpenOptions,
+    io,
+    path::PathBuf,
     sync::{Arc, OnceLock},
     time::Duration,
 };
 use tracing::level_filters::LevelFilter;
-use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use xdg::BaseDirectories;
 
 const INPUT_TIMEOUT: Duration = Duration::from_millis(250);
@@ -18,7 +20,7 @@ const APP_NAME: &str = env!("CARGO_PKG_NAME");
 static XDG: OnceLock<BaseDirectories> = OnceLock::new();
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> eyre::Result<()> {
     color_eyre::install()?;
     init_logging()?;
 
@@ -54,7 +56,7 @@ impl App {
         }
     }
 
-    pub fn run(mut self, terminal: &mut DefaultTerminal) -> Result<()> {
+    pub fn run(mut self, terminal: &mut DefaultTerminal) -> eyre::Result<()> {
         while self.is_running {
             terminal.draw(|frame| self.draw(frame))?;
             self.handle_events()?;
@@ -94,34 +96,40 @@ impl std::fmt::Debug for App {
     }
 }
 
-fn init_logging() -> Result<()> {
-    let log_file = {
-        let log_file_path = get_xdg().place_state_file(&format!("{}.log", APP_NAME))?;
-
-        OpenOptions::new()
-            .write(true)
-            .truncate(true)
-            .create(true)
-            .open(log_file_path)?
-    };
+fn init_logging() -> eyre::Result<()> {
+    let log_file = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .create(true)
+        .open(get_log_file_path()?)?;
 
     let env_filter = EnvFilter::builder()
         .with_default_directive(LevelFilter::INFO.into())
         .from_env_lossy();
 
-    tracing_subscriber::fmt()
-        .with_env_filter(env_filter)
+    let fmt_layer = tracing_subscriber::fmt::layer()
         .with_writer(log_file)
         .without_time()
-        .pretty()
-        .finish()
+        .pretty();
+
+    tui_logger::init_logger(tui_logger::LevelFilter::Info)?;
+
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(fmt_layer)
+        .with(tui_logger::TuiTracingSubscriberLayer)
         .init();
 
     tracing::debug!("Debug logging enabled");
+    tracing::info!("Greetings!");
 
     Ok(())
 }
 
 fn get_xdg() -> &'static BaseDirectories {
     XDG.get_or_init(|| BaseDirectories::with_prefix(APP_NAME))
+}
+
+fn get_log_file_path() -> io::Result<PathBuf> {
+    get_xdg().place_state_file(&format!("{}.log", APP_NAME))
 }

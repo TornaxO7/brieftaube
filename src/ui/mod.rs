@@ -1,14 +1,15 @@
+mod command_palette;
+mod composer;
+mod keybindmanager;
+mod log_viewer;
+mod mail_viewer;
+mod mailboxes;
+mod mails;
+
 use crate::backend::Account;
 use crossterm::event::KeyEvent;
 use ratatui::{buffer::Buffer, layout::Rect, widgets::Widget};
 use std::sync::Arc;
-
-mod command_palette;
-mod composer;
-mod keybindmanager;
-mod mail_viewer;
-mod mailboxes;
-mod mails;
 
 type MailboxId = String;
 type MailId = String;
@@ -21,11 +22,13 @@ pub enum Action {
     MailList(mails::Action),
     MailViewer(mail_viewer::Action),
     Composer(composer::Action),
+    LogViewer(log_viewer::Action),
 
     OpenMailList(Option<MailboxId>),
     OpenMailViewer(Option<MailId>),
     OpenMailboxList,
     OpenComposer,
+    OpenLogs(Box<Self>),
 }
 
 impl From<mails::Action> for Action {
@@ -52,12 +55,19 @@ impl From<composer::Action> for Action {
     }
 }
 
+impl From<log_viewer::Action> for Action {
+    fn from(action: log_viewer::Action) -> Self {
+        Self::LogViewer(action)
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 enum Mode {
     Mails,
     Mailboxes,
     Composer,
     MailViewer,
+    LogViewer,
 }
 
 #[derive(Debug)]
@@ -68,6 +78,7 @@ pub struct State {
     mailboxes: mailboxes::Mailboxes,
     mail_viewer: mail_viewer::MailViewer,
     composer: composer::Composer,
+    log_viewer: log_viewer::LogViewer,
 }
 
 impl State {
@@ -79,6 +90,7 @@ impl State {
             mailboxes: mailboxes::Mailboxes::new(account.clone()).await,
             mail_viewer: mail_viewer::MailViewer::new(account.clone()),
             composer: composer::Composer::new(account.clone()),
+            log_viewer: log_viewer::LogViewer::new(),
         }
     }
 
@@ -88,6 +100,7 @@ impl State {
             Mode::Mailboxes => self.mailboxes.handle_event(event),
             Mode::MailViewer => self.mail_viewer.handle_event(event),
             Mode::Composer => self.composer.handle_event(event),
+            Mode::LogViewer => self.log_viewer.handle_event(event),
         };
 
         for action in sub_actions {
@@ -114,6 +127,10 @@ impl State {
             Action::OpenComposer => {
                 self.mode = Mode::Composer;
             }
+            Action::OpenLogs(callback) => {
+                self.mode = Mode::LogViewer;
+                self.log_viewer.set_callback(callback);
+            }
 
             Action::MailList(action) => {
                 return self
@@ -139,6 +156,12 @@ impl State {
                     .apply_action(action)
                     .and_then(|action| self.apply_action(action));
             }
+            Action::LogViewer(action) => {
+                return self
+                    .log_viewer
+                    .apply_action(action)
+                    .and_then(|action| self.apply_action(action));
+            }
         }
 
         None
@@ -155,6 +178,7 @@ impl Widget for &mut State {
             Mode::Mailboxes => self.mailboxes.render(area, buf),
             Mode::MailViewer => self.mail_viewer.render(area, buf),
             Mode::Composer => self.composer.render(area, buf),
+            Mode::LogViewer => self.log_viewer.render(area, buf),
         }
     }
 }

@@ -23,18 +23,8 @@ pub enum Action {
 
     #[strum(message = "Quit the application")]
     Quit,
-
-    #[strum(message = "Select mailbox by using the palette.")]
-    OpenMailboxList,
-    #[strum(message = "Open logs")]
-    OpenLogs,
-
-    #[strum(message = "Select the next mail.")]
-    SelectNextMail,
-    #[strum(message = "Select the previous mail.")]
-    SelectPreviousMail,
-    #[strum(message = "View the selected mail.")]
-    ViewSelectedMail,
+    #[strum(message = "Close log viewer and go back to previous panel.")]
+    Back,
 }
 
 impl Action {

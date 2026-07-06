@@ -112,6 +112,11 @@ impl Mails {
                     ty: PaletteType::Command,
                 })
             }
+            Action::OpenLogs => {
+                return Some(super::Action::OpenLogs(Box::new(
+                    super::Action::OpenMailList(None),
+                )));
+            }
             Action::CloseCommandPalette => self.palette = None,
             Action::ViewSelectedMail => {
                 if let Some(selected_mail) = self.state.get_selected_mail() {
