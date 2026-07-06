@@ -104,8 +104,8 @@ impl State {
         };
 
         for action in sub_actions {
-            if let Some(app_action) = self.apply_action(action) {
-                return Some(app_action);
+            if let Some(mode_action) = self.apply_action(action) {
+                return Some(mode_action);
             }
         }
 

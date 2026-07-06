@@ -63,9 +63,8 @@ impl MailViewer {
     }
 
     pub fn handle_event(&mut self, event: KeyEvent) -> Vec<super::Action> {
-        let mut actions = Vec::new();
-
         if let Some(command_palette) = &mut self.palette {
+            let mut actions = Vec::new();
             if let Some(result) = command_palette.palette.handle_event(event) {
                 actions.push(Action::CloseCommandPalette.into());
 
@@ -82,11 +81,10 @@ impl MailViewer {
             return actions;
         }
 
-        if let Some(action) = self.keybindings.handle_event(event) {
-            actions.push(action);
+        match self.keybindings.handle_event(event) {
+            Some(action) => vec![action],
+            None => vec![],
         }
-
-        actions
     }
 
     pub fn apply_action(&mut self, a: Action) -> Option<super::Action> {
