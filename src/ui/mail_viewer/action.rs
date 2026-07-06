@@ -30,6 +30,10 @@ pub enum Action {
     ScrollDown,
     #[strum(message = "Scroll up")]
     ScrollUp,
+    #[strum(message = "Scroll left")]
+    ScrollLeft,
+    #[strum(message = "Scroll right")]
+    ScrollRight,
 }
 impl Action {
     pub fn palette_options() -> Vec<Entry> {

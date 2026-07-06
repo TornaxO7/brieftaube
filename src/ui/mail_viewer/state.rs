@@ -66,6 +66,14 @@ impl State {
         self.ctx.as_mut().map(|ctx| ctx.scroll_up());
     }
 
+    pub fn scroll_left(&mut self) {
+        self.ctx.as_mut().map(|ctx| ctx.scroll_left());
+    }
+
+    pub fn scroll_right(&mut self) {
+        self.ctx.as_mut().map(|ctx| ctx.scroll_right());
+    }
+
     pub fn get_render_data(&mut self) -> Option<RenderData<'_>> {
         self.ctx.as_mut().map(|ctx| ctx.render_data())
     }
@@ -113,6 +121,14 @@ impl Ctx {
 
     pub fn scroll_up(&mut self) {
         self.vertical.prev();
+    }
+
+    pub fn scroll_right(&mut self) {
+        self.horizontal.next();
+    }
+
+    pub fn scroll_left(&mut self) {
+        self.horizontal.prev();
     }
 
     fn get_string_representation(mail: &Email) -> String {

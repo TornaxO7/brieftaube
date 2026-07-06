@@ -46,10 +46,12 @@ impl MailViewer {
             state: state::State::new(account),
             palette: None,
             keybindings: KeybindManager::new(HashMap::from([
+                ("h", Action::ScrollLeft.into()),
                 ("j", Action::ScrollDown.into()),
                 ("k", Action::ScrollUp.into()),
+                ("l", Action::ScrollRight.into()),
                 ("q", Action::Quit.into()),
-                ("h", super::Action::OpenMailList(None)),
+                ("<BS>", super::Action::OpenMailList(None)),
             ])),
         }
     }
@@ -98,8 +100,11 @@ impl MailViewer {
                 })
             }
             Action::CloseCommandPalette => self.palette = None,
+
             Action::ScrollUp => self.state.scroll_up(),
             Action::ScrollDown => self.state.scroll_down(),
+            Action::ScrollLeft => self.state.scroll_left(),
+            Action::ScrollRight => self.state.scroll_right(),
 
             Action::OpenMailList => return Some(super::Action::OpenMailList(None)),
         }
