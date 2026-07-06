@@ -99,7 +99,8 @@ fn init_logging() -> Result<()> {
         let log_file_path = get_xdg().place_state_file(&format!("{}.log", APP_NAME))?;
 
         OpenOptions::new()
-            .append(true)
+            .write(true)
+            .truncate(true)
             .create(true)
             .open(log_file_path)?
     };
