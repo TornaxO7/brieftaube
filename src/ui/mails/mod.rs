@@ -5,7 +5,7 @@ mod state;
 use crate::{
     backend,
     ui::{
-        command_palette::{self, CommandPalette},
+        palette::{self, CommandPalette},
         keybindmanager::KeybindManager,
         mails::mail_list::MailListWidget,
     },
@@ -74,8 +74,8 @@ impl Mails {
                 actions.push(Action::CloseCommandPalette.into());
 
                 match result {
-                    command_palette::HandleEventResult::Cancel => {}
-                    command_palette::HandleEventResult::Selected(value) => {
+                    palette::HandleEventResult::Cancel => {}
+                    palette::HandleEventResult::Selected(value) => {
                         match command_palette.ty {
                             PaletteType::Command => {
                                 actions.push(Action::from_str(&value).unwrap().into())

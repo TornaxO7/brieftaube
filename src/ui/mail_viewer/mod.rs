@@ -5,7 +5,7 @@ use crate::{
     backend::Account,
     ui::{
         MailId,
-        command_palette::{CommandPalette, HandleEventResult},
+        palette::{CommandPalette, HandleEventResult},
         keybindmanager::KeybindManager,
         mail_viewer::state::RenderData,
     },

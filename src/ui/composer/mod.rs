@@ -5,8 +5,8 @@ mod state;
 use crate::{
     backend::Account,
     ui::{
-        command_palette::{CommandPalette, HandleEventResult},
         keybindmanager::KeybindManager,
+        palette::{CommandPalette, HandleEventResult},
     },
 };
 pub use action::Action;

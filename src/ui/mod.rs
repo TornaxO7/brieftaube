@@ -1,11 +1,11 @@
 mod action;
-mod command_palette;
 mod composer;
 mod keybindmanager;
 mod log_viewer;
 mod mail_viewer;
 mod mailboxes;
 mod mails;
+mod palette;
 
 use crate::backend::Account;
 use action::Action;
