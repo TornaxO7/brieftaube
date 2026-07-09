@@ -22,7 +22,7 @@ const PREVIEW_PANEL_TITLE: &str = "Mail content";
 #[derive(Debug, Clone)]
 enum PaletteType {
     /// Palette is displaying commands
-    Command(Action),
+    Action(Action),
 }
 
 pub struct Mails {
@@ -65,7 +65,7 @@ impl Mails {
                 match result {
                     palette::HandleEventResult::Cancel => {}
                     palette::HandleEventResult::Selected(value) => match value {
-                        PaletteType::Command(action) => {
+                        PaletteType::Action(action) => {
                             actions.push(action.into());
                         }
                     },

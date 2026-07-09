@@ -20,7 +20,7 @@ use tui_widget_list::{ListBuilder, ListView};
 #[derive(Debug, Clone)]
 enum PaletteType {
     /// Palette is displaying commands
-    Command(Action),
+    Action(Action),
 }
 
 pub struct MailViewer {
@@ -60,7 +60,7 @@ impl MailViewer {
                 match result {
                     palette::HandleEventResult::Cancel => {}
                     palette::HandleEventResult::Selected(value) => match value {
-                        PaletteType::Command(action) => {
+                        PaletteType::Action(action) => {
                             actions.push(action.into());
                         }
                     },

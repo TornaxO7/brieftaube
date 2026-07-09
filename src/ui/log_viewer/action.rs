@@ -40,7 +40,7 @@ pub fn palette_options() -> Vec<Entry<super::PaletteType>> {
             let description = action.get_message().unwrap_or_default().to_string();
 
             Some(Entry {
-                value: super::PaletteType::Command(action),
+                value: super::PaletteType::Action(action),
                 name,
                 description,
             })
