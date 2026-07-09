@@ -1,34 +1,25 @@
 mod action;
 
-use crate::ui::{
-    palette::{self, CommandPalette},
-    keybindmanager::KeybindManager,
-};
+use crate::ui::{keybindmanager::KeybindManager, palette};
 pub use action::Action;
 use crossterm::event::KeyEvent;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Rect},
     style::Style,
-    widgets::{Block, Clear, Widget},
+    widgets::{Block, Clear, StatefulWidget, Widget},
 };
-use std::{collections::HashMap, str::FromStr};
+use std::collections::HashMap;
 use tui_logger::{TuiLoggerWidget, TuiWidgetState};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum PaletteType {
     /// Palette is displaying commands
-    Command,
-}
-
-#[derive(Debug)]
-struct PaletteCtx {
-    palette: CommandPalette,
-    ty: PaletteType,
+    Command(Action),
 }
 
 pub struct LogViewer {
-    palette: Option<PaletteCtx>,
+    palette: Option<palette::State<PaletteType>>,
     keybindings: KeybindManager<super::Action>,
 
     state: TuiWidgetState,
@@ -58,20 +49,18 @@ impl LogViewer {
     }
 
     pub fn handle_event(&mut self, event: KeyEvent) -> Vec<super::Action> {
-        if let Some(command_palette) = &mut self.palette {
+        if let Some(palette) = &mut self.palette {
             let mut actions = Vec::new();
-            if let Some(result) = command_palette.palette.handle_event(event) {
+            if let Some(result) = palette.handle_event(event) {
                 actions.push(Action::CloseCommandPalette.into());
 
                 match result {
                     palette::HandleEventResult::Cancel => {}
-                    palette::HandleEventResult::Selected(value) => {
-                        match command_palette.ty {
-                            PaletteType::Command => {
-                                actions.push(Action::from_str(&value).unwrap().into())
-                            }
+                    palette::HandleEventResult::Selected(value) => match value {
+                        PaletteType::Command(action) => {
+                            actions.push(action.into());
                         }
-                    }
+                    },
                 }
             }
 
@@ -92,10 +81,7 @@ impl LogViewer {
 
             Action::CloseCommandPalette => self.palette = None,
             Action::OpenCommandPalette => {
-                self.palette = Some(PaletteCtx {
-                    palette: CommandPalette::new(Action::palette_options()),
-                    ty: PaletteType::Command,
-                })
+                self.palette = Some(palette::State::new(action::palette_options()));
             }
         }
 
@@ -106,7 +92,6 @@ impl LogViewer {
 impl std::fmt::Debug for LogViewer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LogViewer")
-            .field("palette", &self.palette)
             .field("keybindings", &self.keybindings)
             .finish()
     }
@@ -129,10 +114,10 @@ impl Widget for &mut LogViewer {
             .state(&self.state)
             .render(area, buf);
 
-        if let Some(command_palette) = &mut self.palette {
+        if let Some(state) = &mut self.palette {
             let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
             Clear.render(a, buf);
-            command_palette.palette.render(a, buf);
+            StatefulWidget::render(palette::Palette::new(), a, buf, state);
         }
     }
 }

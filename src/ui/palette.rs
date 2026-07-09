@@ -9,48 +9,49 @@ use ratatui::{
     },
 };
 use ratatui_textarea::TextArea;
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
 type EntryName = String;
 type EntryDescription = String;
+type EntryIdx = usize;
 
 #[derive(Debug, Clone)]
-pub struct Entry {
+pub struct Entry<E> {
+    pub value: E,
     pub name: String,
     pub description: String,
 }
 
 #[derive(Debug, Clone)]
-pub enum HandleEventResult {
-    Selected(EntryName),
+pub enum HandleEventResult<E> {
+    Selected(E),
     Cancel,
 }
 
-pub struct CommandPalette {
+pub struct State<E> {
     input: TextArea<'static>,
-    nucleo: Nucleo<(EntryName, EntryDescription)>,
+    nucleo: Nucleo<(EntryName, EntryDescription, EntryIdx)>,
 
     list_state: ListState,
+    entries: Vec<E>,
 }
 
-impl std::fmt::Debug for CommandPalette {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("State").field("input", &self.input).finish()
-    }
-}
+impl<E: Clone> State<E> {
+    pub fn new(entries: Vec<Entry<E>>) -> Self {
+        let nucleo: Nucleo<(EntryName, EntryDescription, EntryIdx)> =
+            Nucleo::new(nucleo::Config::DEFAULT, Arc::new(|| {}), None, 3);
 
-impl CommandPalette {
-    pub fn new(entries: Vec<Entry>) -> Self {
-        let nucleo: Nucleo<(String, String)> =
-            Nucleo::new(nucleo::Config::DEFAULT, Arc::new(|| {}), None, 2);
-
+        let mut new_entries = Vec::with_capacity(entries.len());
         let inj = nucleo.injector();
-        for e in entries {
+        for (idx, e) in entries.into_iter().enumerate() {
+            new_entries.push(e.value);
+
             inj.push(
-                (e.name, e.description),
-                |&(ref name, ref description), row| {
+                (e.name, e.description, idx),
+                |&(ref name, ref description, idx), row| {
                     row[0] = (*name).clone().into();
                     row[1] = (*description).clone().into();
+                    row[2] = format!("{}", idx).into();
                 },
             );
         }
@@ -59,10 +60,11 @@ impl CommandPalette {
             input: TextArea::default(),
             nucleo,
             list_state: ListState::default().with_selected(Some(0)),
+            entries: new_entries,
         }
     }
 
-    pub fn handle_event(&mut self, event: KeyEvent) -> Option<HandleEventResult> {
+    pub fn handle_event(&mut self, event: KeyEvent) -> Option<HandleEventResult<E>> {
         match event.code {
             KeyCode::Esc => {
                 self.reset();
@@ -73,7 +75,10 @@ impl CommandPalette {
                     let mut matches = self.nucleo.snapshot().matched_items(..);
 
                     if let Some(idx) = self.list_state.selected() {
-                        HandleEventResult::Selected(matches.nth(idx).unwrap().data.0.clone())
+                        let item = matches.nth(idx).unwrap();
+                        let idx = item.data.2;
+
+                        HandleEventResult::Selected(self.entries[idx].clone())
                     } else {
                         HandleEventResult::Cancel
                     }
@@ -121,11 +126,22 @@ impl CommandPalette {
     }
 }
 
-impl Widget for &mut CommandPalette {
-    fn render(self, area: Rect, buf: &mut Buffer)
-    where
-        Self: Sized,
-    {
+pub struct Palette<E> {
+    _phantom: PhantomData<E>,
+}
+
+impl<E> Palette<E> {
+    pub fn new() -> Self {
+        Self {
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<E> StatefulWidget for Palette<E> {
+    type State = State<E>;
+
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let command_palette_block = Block::default().padding(Padding::symmetric(1, 1));
         let area = command_palette_block.inner(area);
 
@@ -140,15 +156,15 @@ impl Widget for &mut CommandPalette {
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Length(3), Constraint::Fill(0)]),
         );
-        self.nucleo.tick(10);
-        let snapshot = self.nucleo.snapshot();
+        state.nucleo.tick(10);
+        let snapshot = state.nucleo.snapshot();
         let matches: Vec<_> = snapshot.matched_items(..).collect();
-        if !matches.is_empty() && self.list_state.selected().is_none() {
-            self.list_state.select(Some(0));
+        if !matches.is_empty() && state.list_state.selected().is_none() {
+            state.list_state.select(Some(0));
         }
 
         // description
-        if let Some(selected) = self.list_state.selected() {
+        if let Some(selected) = state.list_state.selected() {
             if let Some(description_content) = matches.get(selected) {
                 Widget::render(
                     Paragraph::new(description_content.data.1.as_str())
@@ -162,8 +178,8 @@ impl Widget for &mut CommandPalette {
 
         // search field
         {
-            self.input.set_block(Block::bordered().title("Search"));
-            self.input.render(search, buf);
+            state.input.set_block(Block::bordered().title("Search"));
+            state.input.render(search, buf);
         }
 
         {
@@ -179,7 +195,7 @@ impl Widget for &mut CommandPalette {
                     .direction(ListDirection::TopToBottom),
                 options,
                 buf,
-                &mut self.list_state,
+                &mut state.list_state,
             );
         }
     }

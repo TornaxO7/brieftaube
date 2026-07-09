@@ -37,21 +37,23 @@ pub enum Action {
     #[strum(message = "Send the mail")]
     SendMail,
 }
-impl Action {
-    pub fn palette_options() -> Vec<Entry> {
-        Self::iter()
-            .filter_map(|action| {
-                if let Some(is_intern) = action.get_bool("intern") {
-                    if is_intern {
-                        return None;
-                    }
+pub fn palette_options() -> Vec<Entry<super::PaletteType>> {
+    Action::iter()
+        .filter_map(|action| {
+            if let Some(is_intern) = action.get_bool("intern") {
+                if is_intern {
+                    return None;
                 }
+            }
 
-                let name = action.to_string();
-                let description = action.get_message().unwrap_or_default().to_string();
+            let name = action.to_string();
+            let description = action.get_message().unwrap_or_default().to_string();
 
-                Some(Entry { name, description })
+            Some(Entry {
+                value: super::PaletteType::Command(action),
+                name,
+                description,
             })
-            .collect()
-    }
+        })
+        .collect()
 }

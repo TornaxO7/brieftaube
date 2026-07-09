@@ -91,7 +91,6 @@ impl std::fmt::Debug for App {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("App")
             .field("is_running", &self.is_running)
-            .field("ui", &self.ui)
             .finish()
     }
 }

@@ -4,11 +4,7 @@ mod state;
 
 use crate::{
     backend,
-    ui::{
-        palette::{self, CommandPalette},
-        keybindmanager::KeybindManager,
-        mails::mail_list::MailListWidget,
-    },
+    ui::{keybindmanager::KeybindManager, mails::mail_list::MailListWidget, palette},
 };
 pub use action::Action;
 use crossterm::event::KeyEvent;
@@ -18,26 +14,19 @@ use ratatui::{
     widgets::{Block, Clear, Paragraph, StatefulWidget, Widget},
 };
 use state::State;
-use std::{collections::HashMap, str::FromStr, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 const MAIL_LIST_PANEL_TITLE: &str = "Mails";
 const PREVIEW_PANEL_TITLE: &str = "Mail content";
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum PaletteType {
     /// Palette is displaying commands
-    Command,
+    Command(Action),
 }
 
-#[derive(Debug)]
-struct PaletteCtx {
-    palette: CommandPalette,
-    ty: PaletteType,
-}
-
-#[derive(Debug)]
 pub struct Mails {
-    palette: Option<PaletteCtx>,
+    palette: Option<palette::State<PaletteType>>,
     state: State,
     keybindings: KeybindManager<super::Action>,
 }
@@ -67,21 +56,19 @@ impl Mails {
     }
 
     pub fn handle_event(&mut self, event: KeyEvent) -> Vec<super::Action> {
-        if let Some(command_palette) = &mut self.palette {
+        if let Some(palette) = &mut self.palette {
             let mut actions = Vec::new();
 
-            if let Some(result) = command_palette.palette.handle_event(event) {
+            if let Some(result) = palette.handle_event(event) {
                 actions.push(Action::CloseCommandPalette.into());
 
                 match result {
                     palette::HandleEventResult::Cancel => {}
-                    palette::HandleEventResult::Selected(value) => {
-                        match command_palette.ty {
-                            PaletteType::Command => {
-                                actions.push(Action::from_str(&value).unwrap().into())
-                            }
+                    palette::HandleEventResult::Selected(value) => match value {
+                        PaletteType::Command(action) => {
+                            actions.push(action.into());
                         }
-                    }
+                    },
                 }
             }
 
@@ -106,10 +93,7 @@ impl Mails {
                 return Some(super::Action::OpenMailboxList);
             }
             Action::OpenCommandPalette => {
-                self.palette = Some(PaletteCtx {
-                    palette: CommandPalette::new(Action::palette_options()),
-                    ty: PaletteType::Command,
-                })
+                self.palette = Some(palette::State::new(action::palette_options()));
             }
             Action::OpenLogs => {
                 return Some(super::Action::OpenLogs(Box::new(
@@ -123,8 +107,7 @@ impl Mails {
                         selected_mail.id().unwrap().to_owned(),
                     )));
                 }
-            } // Action::OpenMailInPager => return Some(super::Action::OpenPager),
-              // Action::CreateNewMail => return Some(super::Action::OpenComposer),
+            }
         }
 
         None
@@ -152,10 +135,10 @@ impl Widget for &mut Mails {
         self.render_preview(preview, buf);
         self.render_headerbar(headerbar, buf);
 
-        if let Some(command_palette) = &mut self.palette {
+        if let Some(state) = &mut self.palette {
             let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
             Clear.render(a, buf);
-            command_palette.palette.render(a, buf);
+            StatefulWidget::render(palette::Palette::new(), a, buf, state);
         }
     }
 }

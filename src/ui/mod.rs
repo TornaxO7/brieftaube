@@ -25,7 +25,6 @@ enum Mode {
     LogViewer,
 }
 
-#[derive(Debug)]
 pub struct Ui {
     mode: Mode,
 

@@ -3,12 +3,7 @@ mod state;
 
 use crate::{
     backend::Account,
-    ui::{
-        MailId,
-        palette::{CommandPalette, HandleEventResult},
-        keybindmanager::KeybindManager,
-        mail_viewer::state::RenderData,
-    },
+    ui::{MailId, keybindmanager::KeybindManager, mail_viewer::state::RenderData, palette},
 };
 pub use action::Action;
 use crossterm::event::KeyEvent;
@@ -18,25 +13,19 @@ use ratatui::{
     layout::{Constraint, Layout, Margin, Rect},
     widgets::{Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, StatefulWidget, Widget},
 };
-use std::{collections::HashMap, str::FromStr, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 use tracing::debug;
 use tui_widget_list::{ListBuilder, ListView};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum PaletteType {
     /// Palette is displaying commands
-    Command,
+    Command(Action),
 }
 
-#[derive(Debug)]
-struct PaletteCtx {
-    palette: CommandPalette,
-    ty: PaletteType,
-}
-#[derive(Debug)]
 pub struct MailViewer {
     state: state::State,
-    palette: Option<PaletteCtx>,
+    palette: Option<palette::State<PaletteType>>,
     keybindings: KeybindManager<super::Action>,
 }
 
@@ -63,16 +52,16 @@ impl MailViewer {
     }
 
     pub fn handle_event(&mut self, event: KeyEvent) -> Vec<super::Action> {
-        if let Some(command_palette) = &mut self.palette {
+        if let Some(palette) = &mut self.palette {
             let mut actions = Vec::new();
-            if let Some(result) = command_palette.palette.handle_event(event) {
+            if let Some(result) = palette.handle_event(event) {
                 actions.push(Action::CloseCommandPalette.into());
 
                 match result {
-                    HandleEventResult::Cancel => {}
-                    HandleEventResult::Selected(value) => match command_palette.ty {
-                        PaletteType::Command => {
-                            actions.push(Action::from_str(&value).unwrap().into())
+                    palette::HandleEventResult::Cancel => {}
+                    palette::HandleEventResult::Selected(value) => match value {
+                        PaletteType::Command(action) => {
+                            actions.push(action.into());
                         }
                     },
                 };
@@ -92,10 +81,7 @@ impl MailViewer {
         match a {
             Action::Quit => return Some(super::Action::Quit),
             Action::OpenCommandPalette => {
-                self.palette = Some(PaletteCtx {
-                    palette: CommandPalette::new(Action::palette_options()),
-                    ty: PaletteType::Command,
-                })
+                self.palette = Some(palette::State::new(action::palette_options()));
             }
             Action::CloseCommandPalette => self.palette = None,
 
@@ -135,10 +121,10 @@ impl Widget for &mut MailViewer {
             );
         }
 
-        if let Some(cmd) = &mut self.palette {
+        if let Some(state) = &mut self.palette {
             let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
             Clear.render(a, buf);
-            cmd.palette.render(a, buf);
+            StatefulWidget::render(palette::Palette::new(), a, buf, state);
         }
     }
 }
