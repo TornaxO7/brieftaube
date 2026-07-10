@@ -1,204 +1,250 @@
 mod action;
-mod state;
+mod widget;
 
 use crate::{
     backend::Account,
-    ui::{MailId, keybindmanager::KeybindManager, mail_viewer::state::RenderData, palette},
+    ui::{MailId, ScreenPalette, ScreenState, keybindmanager::KeybindManager, palette},
 };
 pub use action::Action;
-use crossterm::event::KeyEvent;
-use jmap_client::email::Email;
-use ratatui::{
-    buffer::Buffer,
-    layout::{Constraint, Layout, Margin, Rect},
-    widgets::{Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, StatefulWidget, Widget},
-};
+use chrono::DateTime;
+use jmap_client::email::{Email, EmailAddress};
+use ratatui::widgets::ScrollbarState;
 use std::{collections::HashMap, sync::Arc};
+use tokio::sync::mpsc;
 use tracing::debug;
-use tui_widget_list::{ListBuilder, ListView};
+pub use widget::MailViewer;
 
 #[derive(Debug, Clone)]
-enum PaletteType {
+pub enum PaletteType {
     /// Palette is displaying commands
     Action(Action),
 }
 
-pub struct MailViewer {
-    state: state::State,
+pub struct State {
+    app_actions: Vec<crate::Action>,
+    account: Arc<Account>,
+
+    rx: mpsc::Receiver<Email>,
+    tx: Arc<mpsc::Sender<Email>>,
+
+    ctx: Option<Ctx>,
     palette: Option<palette::State<PaletteType>>,
-    keybindings: KeybindManager<super::Action>,
+    keybindings: KeybindManager<Action>,
 }
 
-impl MailViewer {
+impl State {
     pub fn new(account: Arc<Account>) -> Self {
+        let (tx, rx) = mpsc::channel(1);
+
         Self {
-            state: state::State::new(account),
+            app_actions: vec![],
+            rx,
+            tx: Arc::new(tx),
+            account,
+
+            ctx: None,
             palette: None,
             keybindings: KeybindManager::new(HashMap::from([
-                ("h", Action::ScrollLeft.into()),
-                ("j", Action::ScrollDown.into()),
-                ("k", Action::ScrollUp.into()),
-                ("l", Action::ScrollRight.into()),
-                ("q", Action::Quit.into()),
-                ("<BS>", super::Action::OpenMailList(None)),
+                ("h", Action::ScrollLeft),
+                ("j", Action::ScrollDown),
+                ("k", Action::ScrollUp),
+                ("l", Action::ScrollRight),
+                ("q", Action::Quit),
+                // ("<BS>", super::Action::OpenMailList(None)),
             ])),
         }
     }
 
     pub fn open_mail(&mut self, mail: Option<MailId>) {
-        if let Some(mail) = mail {
-            self.state.open_mail(mail);
-        }
-    }
+        if let Some(id) = mail {
+            self.ctx = None;
+            let account = self.account.clone();
+            let tx = self.tx.clone();
 
-    pub fn handle_event(&mut self, event: KeyEvent) -> Vec<super::Action> {
-        if let Some(palette) = &mut self.palette {
-            let mut actions = Vec::new();
-            if let Some(result) = palette.handle_event(event) {
-                actions.push(Action::CloseCommandPalette.into());
+            tokio::spawn(async move {
+                let client = &account.client;
 
-                match result {
-                    palette::HandleEventResult::Cancel => {}
-                    palette::HandleEventResult::Selected(value) => match value {
-                        PaletteType::Action(action) => {
-                            actions.push(action.into());
-                        }
-                    },
+                let mut response = {
+                    let mut request = client.build();
+                    request
+                        .get_email()
+                        .ids(Some([id]))
+                        .arguments()
+                        .fetch_text_body_values(true);
+                    request.send_get_email().await.unwrap()
                 };
-            }
 
-            return actions;
-        }
-
-        match self.keybindings.handle_event(event) {
-            Some(action) => vec![action],
-            None => vec![],
+                tx.send(response.take_list()[0].clone()).await.unwrap();
+            });
         }
     }
 
-    pub fn apply_action(&mut self, a: Action) -> Option<super::Action> {
-        debug!("Action: {}", a);
-        match a {
-            Action::Quit => return Some(super::Action::Quit),
+    fn scroll_down(&mut self) {
+        self.ctx.as_mut().map(|ctx| ctx.scroll_down());
+    }
+
+    fn scroll_up(&mut self) {
+        self.ctx.as_mut().map(|ctx| ctx.scroll_up());
+    }
+
+    fn scroll_left(&mut self) {
+        self.ctx.as_mut().map(|ctx| ctx.scroll_left());
+    }
+
+    fn scroll_right(&mut self) {
+        self.ctx.as_mut().map(|ctx| ctx.scroll_right());
+    }
+
+    fn get_render_data(&mut self) -> Option<widget::RenderData<'_>> {
+        self.ctx.as_mut().map(|ctx| ctx.render_data())
+    }
+    // pub fn apply_action(&mut self, a: Action) -> Option<super::Action> {
+
+    //     None
+    // }
+}
+
+impl ScreenState<Action, PaletteType> for State {
+    fn update(&mut self) {}
+
+    fn apply_action(&mut self, action: Action) {
+        debug!("Action: {}", action);
+        match action {
+            Action::Quit => self.app_actions.push(crate::Action::Quit),
             Action::OpenCommandPalette => {
                 self.palette = Some(palette::State::new(action::palette_options()));
             }
             Action::CloseCommandPalette => self.palette = None,
 
-            Action::ScrollUp => self.state.scroll_up(),
-            Action::ScrollDown => self.state.scroll_down(),
-            Action::ScrollLeft => self.state.scroll_left(),
-            Action::ScrollRight => self.state.scroll_right(),
+            Action::ScrollUp => self.scroll_up(),
+            Action::ScrollDown => self.scroll_down(),
+            Action::ScrollLeft => self.scroll_left(),
+            Action::ScrollRight => self.scroll_right(),
 
-            Action::OpenMailList => return Some(super::Action::OpenMailList(None)),
+            Action::OpenMailList => {
+                todo!()
+            }
         }
+    }
 
-        None
+    fn get_app_actions(&mut self) -> std::vec::Drain<'_, crate::Action> {
+        self.app_actions.drain(..)
+    }
+
+    fn keybinding_manager(&mut self) -> &mut KeybindManager<Action> {
+        &mut self.keybindings
     }
 }
 
-impl Widget for &mut MailViewer {
-    fn render(self, area: Rect, buf: &mut Buffer)
-    where
-        Self: Sized,
-    {
-        self.state.update();
-
-        if let Some(mut data) = self.state.get_render_data() {
-            let [top, bottom] = if data.mail.has_attachment() {
-                Layout::vertical([Constraint::Percentage(80), Constraint::Fill(0)]).areas(area)
-            } else {
-                [area, Rect::default()]
-            };
-
-            render_mail_content(&mut data, top, buf);
-            render_attachment_list(&data.mail, bottom, buf);
-        } else {
-            Widget::render(
-                Paragraph::new("Loading mail...").block(Block::bordered()),
-                area,
-                buf,
-            );
-        }
-
-        if let Some(state) = &mut self.palette {
-            let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
-            Clear.render(a, buf);
-            StatefulWidget::render(palette::Palette::new(), a, buf, state);
-        }
+impl ScreenPalette<PaletteType> for State {
+    fn palette(&mut self) -> Option<&mut palette::State<PaletteType>> {
+        self.palette.as_mut()
     }
-}
 
-/// Rendering implementations
-// TODO: Respect the area size before scrolling.
-//    If the whole mail can be fitted within the area rect, there's no need to add the scrollbars.
-fn render_mail_content(data: &mut RenderData, area: Rect, buf: &mut Buffer) {
-    Widget::render(
-        Paragraph::new(data.mail_str)
-            .block(Block::bordered())
-            .scroll((
-                data.vertical.get_position() as u16,
-                data.horizontal.get_position() as u16,
-            )),
-        area.inner(Margin {
-            horizontal: 1,
-            vertical: 1,
-        }),
-        buf,
-    );
-
-    StatefulWidget::render(
-        Scrollbar::new(ScrollbarOrientation::VerticalRight),
-        area,
-        buf,
-        data.vertical,
-    );
-
-    StatefulWidget::render(
-        Scrollbar::new(ScrollbarOrientation::HorizontalBottom),
-        area,
-        buf,
-        data.horizontal,
-    );
-}
-
-fn render_attachment_list(mail: &Email, area: Rect, buf: &mut Buffer) {
-    if let Some(attachments) = mail.attachments() {
-        let builder = ListBuilder::new(|context| {
-            const HEIGHT: u16 = 1;
-
-            let attachment = &attachments[context.index];
-
-            let widget = AttachmentWidget {
-                name: attachment.name().unwrap(),
-                ty: attachment.content_type().unwrap(),
-            };
-
-            (widget, HEIGHT)
-        });
-
-        let list =
-            ListView::new(builder, attachments.len()).block(Block::bordered().title("Attachments"));
-
-        StatefulWidget::render(list, area, buf, &mut tui_widget_list::ListState::default());
+    fn handle_palette_result(&mut self, result: palette::HandleEventResult<PaletteType>) {
+        match result {
+            palette::HandleEventResult::Cancel => {}
+            palette::HandleEventResult::Selected(value) => match value {
+                PaletteType::Action(action) => self.apply_action(action),
+            },
+        }
     }
 }
 
 #[derive(Debug)]
-struct AttachmentWidget<'a> {
-    name: &'a str,
-    ty: &'a str,
+struct Ctx {
+    pub mail: Email,
+    /// String representation of mail
+    pub mail_str: String,
+
+    pub vertical: ScrollbarState,
+    pub horizontal: ScrollbarState,
 }
 
-impl<'a> Widget for AttachmentWidget<'a> {
-    fn render(self, area: Rect, buf: &mut Buffer)
-    where
-        Self: Sized,
-    {
-        let [left, right] =
-            Layout::horizontal([Constraint::Fill(0), Constraint::Fill(0)]).areas(area);
+impl Ctx {
+    pub fn new(mail: Email) -> Self {
+        let mail_str = Self::get_string_representation(&mail);
 
-        Widget::render(Paragraph::new(self.name).left_aligned(), left, buf);
-        Widget::render(Paragraph::new(self.ty).right_aligned(), right, buf);
+        let vertical = ScrollbarState::new(mail_str.lines().count());
+        let horizontal =
+            ScrollbarState::new(mail_str.lines().map(|line| line.len()).max().unwrap());
+
+        Self {
+            mail,
+            mail_str,
+            vertical,
+            horizontal,
+        }
+    }
+
+    pub fn render_data(&mut self) -> widget::RenderData<'_> {
+        widget::RenderData {
+            mail: &self.mail,
+            mail_str: self.mail_str.as_str(),
+
+            vertical: &mut self.vertical,
+            horizontal: &mut self.horizontal,
+        }
+    }
+
+    pub fn scroll_down(&mut self) {
+        self.vertical.next();
+    }
+
+    pub fn scroll_up(&mut self) {
+        self.vertical.prev();
+    }
+
+    pub fn scroll_right(&mut self) {
+        self.horizontal.next();
+    }
+
+    pub fn scroll_left(&mut self) {
+        self.horizontal.prev();
+    }
+
+    fn get_string_representation(mail: &Email) -> String {
+        let date = DateTime::from_timestamp_millis(mail.received_at().unwrap())
+            .unwrap()
+            .format("%A, %d %B %Y %T");
+
+        let from = Self::addresses_to_string(mail.from().unwrap());
+        let to = Self::addresses_to_string(mail.to().unwrap());
+        let subject = mail.subject().unwrap();
+
+        let body = {
+            let mut s = String::new();
+
+            for body in mail.text_body().unwrap() {
+                let id = body.part_id().unwrap();
+
+                s.push_str(mail.body_value(id).unwrap().value());
+            }
+
+            s
+        };
+
+        format!(
+            "\
+Date: {date}
+From: {from}
+To: {to}
+Subject: {subject}
+
+
+{body}"
+        )
+    }
+
+    fn addresses_to_string(addresses: &[EmailAddress]) -> String {
+        let mut iter = addresses.iter();
+
+        let mut s = format!("{}", iter.next().unwrap().email());
+
+        for addr in iter {
+            s.push_str(&format!(", {}", addr.email()))
+        }
+
+        s
     }
 }

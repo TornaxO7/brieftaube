@@ -15,6 +15,8 @@ use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use xdg::BaseDirectories;
 
+use crate::ui::ScreenState;
+
 const INPUT_TIMEOUT: Duration = Duration::from_millis(250);
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
 static XDG: OnceLock<BaseDirectories> = OnceLock::new();
@@ -31,6 +33,14 @@ async fn main() -> eyre::Result<()> {
     Ok(())
 }
 
+enum Screen {
+    Mailboxes(ui::mailboxes::State),
+    MailList(ui::mails::State),
+    Composer(ui::composer::State),
+    MailViewer(ui::mail_viewer::State),
+    LogViewer(ui::log_viewer::State),
+}
+
 #[derive(Debug)]
 pub enum Action {
     Quit,
@@ -39,20 +49,18 @@ pub enum Action {
 /// Stores the app state
 pub struct App {
     is_running: bool,
-
     _account: Arc<backend::Account>,
-    ui: ui::Ui,
+    screens: Vec<Screen>,
 }
 
 impl App {
     pub async fn new() -> Self {
         let account = Arc::new(backend::Account::new().await);
-        let ui = ui::Ui::new(account.clone()).await;
 
         Self {
             is_running: true,
-            _account: account,
-            ui,
+            _account: account.clone(),
+            screens: vec![Screen::Mailboxes(ui::mailboxes::State::new(account))],
         }
     }
 
@@ -60,30 +68,92 @@ impl App {
         while self.is_running {
             terminal.draw(|frame| self.draw(frame))?;
             self.handle_events()?;
+            self.apply_action();
+            self.update_screen();
         }
 
         Ok(())
     }
 
+    fn update_screen(&mut self) {
+        match self.screens.last_mut().unwrap() {
+            Screen::Mailboxes(state) => state.update(),
+            Screen::MailList(state) => state.update(),
+            Screen::Composer(state) => state.update(),
+            Screen::MailViewer(state) => state.update(),
+            Screen::LogViewer(state) => state.update(),
+        }
+    }
+
     fn draw(&mut self, frame: &mut Frame) {
-        frame.render_widget(&mut self.ui, frame.area());
+        match self.screens.last_mut().unwrap() {
+            Screen::Mailboxes(state) => {
+                frame.render_stateful_widget(
+                    ui::mailboxes::Mailboxes::default(),
+                    frame.area(),
+                    state,
+                );
+            }
+            Screen::MailList(state) => {
+                frame.render_stateful_widget(ui::mails::MailList::default(), frame.area(), state);
+            }
+            Screen::Composer(state) => {
+                frame.render_stateful_widget(
+                    ui::composer::Composer::default(),
+                    frame.area(),
+                    state,
+                );
+            }
+            Screen::MailViewer(state) => {
+                frame.render_stateful_widget(
+                    ui::mail_viewer::MailViewer::default(),
+                    frame.area(),
+                    state,
+                );
+            }
+            Screen::LogViewer(state) => {
+                frame.render_stateful_widget(
+                    ui::log_viewer::LogViewer::default(),
+                    frame.area(),
+                    state,
+                );
+            }
+        };
     }
 
     fn handle_events(&mut self) -> std::io::Result<()> {
         if crossterm::event::poll(INPUT_TIMEOUT).expect("Poll for event") {
-            if let Some(key) = crossterm::event::read()
+            if let Some(event) = crossterm::event::read()
                 .expect("Read event")
                 .as_key_press_event()
             {
-                if let Some(action) = self.ui.handle_event(key) {
-                    match action {
-                        Action::Quit => self.is_running = false,
-                    }
-                }
+                match self.screens.last_mut().unwrap() {
+                    Screen::Mailboxes(state) => state.handle_event(event),
+                    Screen::MailList(state) => state.handle_event(event),
+                    Screen::Composer(state) => state.handle_event(event),
+                    Screen::MailViewer(state) => state.handle_event(event),
+                    Screen::LogViewer(state) => state.handle_event(event),
+                };
             }
         }
 
         Ok(())
+    }
+
+    fn apply_action(&mut self) {
+        let actions = match self.screens.last_mut().unwrap() {
+            Screen::Mailboxes(state) => state.get_app_actions(),
+            Screen::MailList(state) => state.get_app_actions(),
+            Screen::Composer(state) => state.get_app_actions(),
+            Screen::MailViewer(state) => state.get_app_actions(),
+            Screen::LogViewer(state) => state.get_app_actions(),
+        };
+
+        for action in actions {
+            match action {
+                Action::Quit => self.is_running = false,
+            }
+        }
     }
 }
 

@@ -1,94 +1,161 @@
 mod action;
-mod list;
-mod state;
+mod widget;
 
-use crate::{backend, ui::keybindmanager::KeybindManager};
-pub use action::Action;
-use crossterm::event::KeyEvent;
-use ratatui::{
-    layout::HorizontalAlignment,
-    widgets::{Block, Paragraph, StatefulWidget, Widget},
+use crate::{
+    backend,
+    ui::{ScreenPalette, ScreenState, keybindmanager::KeybindManager, palette},
 };
+pub use action::Action;
+use jmap_client::mailbox::Mailbox;
 use std::{collections::HashMap, sync::Arc};
+use tokio::sync::mpsc;
+pub use widget::Mailboxes;
+
+#[derive(Debug, Clone)]
+pub enum PaletteValues {}
 
 #[derive(Debug)]
-pub struct Mailboxes {
-    state: state::State,
+pub struct State {
+    app_actions: Vec<crate::Action>,
 
-    keybindings: KeybindManager<super::Action>,
+    _account: Arc<backend::Account>,
+
+    _tx: Arc<mpsc::Sender<Vec<Mailbox>>>,
+    rx: mpsc::Receiver<Vec<Mailbox>>,
+    mailboxes: Option<Vec<Mailbox>>,
+
+    mailbox_list_state: tui_widget_list::ListState,
+
+    keybindings: KeybindManager<Action>,
 }
 
-impl Mailboxes {
-    pub async fn new(account: Arc<backend::Account>) -> Self {
+impl State {
+    pub fn new(account: Arc<backend::Account>) -> Self {
+        let (tx, rx) = mpsc::channel(1);
+
+        let tx = Arc::new(tx);
+
+        let tx2 = tx.clone();
+        let account2 = account.clone();
+        tokio::spawn(async move {
+            let mut response = {
+                let mut request = account2.client.build();
+                request
+                    .get_mailbox()
+                    .ids::<[_; 0], String>(None)
+                    .properties([
+                        jmap_client::mailbox::Property::Id,
+                        jmap_client::mailbox::Property::Name,
+                        jmap_client::mailbox::Property::Role,
+                        jmap_client::mailbox::Property::TotalEmails,
+                        jmap_client::mailbox::Property::UnreadEmails,
+                    ]);
+                request.send_get_mailbox().await.unwrap()
+            };
+
+            tx2.send(response.take_list()).await.unwrap();
+        });
+
         Self {
-            state: state::State::new(account),
+            app_actions: vec![],
+            _account: account,
+            mailboxes: None,
+            rx,
+            _tx: tx,
+            mailbox_list_state: tui_widget_list::ListState::default(),
+
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", Action::Quit.into()),
                 ("j", Action::SelectNextMailbox.into()),
                 ("k", Action::SelectPreviousMailbox.into()),
-                ("n", super::Action::OpenComposer),
+                // ("n", super::Action::OpenComposer),
                 ("<CR>", Action::OpenSelectedMailbox.into()),
                 ("l", Action::OpenSelectedMailbox.into()),
             ])),
         }
     }
 
-    pub fn handle_event(&mut self, event: KeyEvent) -> Vec<super::Action> {
-        match self.keybindings.handle_event(event) {
-            Some(action) => vec![action],
-            None => vec![],
-        }
+    pub fn get_mailboxes(&mut self) -> Option<Vec<Mailbox>> {
+        self.mailboxes.clone()
     }
 
-    pub fn apply_action(&mut self, a: Action) -> Option<super::Action> {
-        tracing::debug!("Action: {:?}", a);
-        match a {
-            Action::Quit => return Some(super::Action::Quit),
-            Action::OpenCommandPalette => todo!(),
-            Action::CloseCommandPalette => todo!(),
+    pub fn get_mut_selected_mailbox(&mut self) -> Option<&mut Mailbox> {
+        let Some(mailboxes) = &mut self.mailboxes else {
+            return None;
+        };
 
-            Action::SelectNextMailbox => self.state.select_next_mailbox(),
-            Action::SelectPreviousMailbox => self.state.select_previous_mailbox(),
-            Action::OpenSelectedMailbox => {
-                if let Some(selected_mailbox) = self.state.get_mut_selected_mailbox() {
-                    assert!(selected_mailbox.id().is_some());
-                    return Some(super::Action::OpenMailList(Some(
-                        selected_mailbox.id().unwrap().to_string(),
-                    )));
-                }
-            }
-        }
+        let Some(idx) = self.mailbox_list_state.selected else {
+            return None;
+        };
 
-        None
+        mailboxes.get_mut(idx)
+    }
+
+    pub fn get_list_state(&mut self) -> &mut tui_widget_list::ListState {
+        &mut self.mailbox_list_state
+    }
+
+    pub fn select_next_mailbox(&mut self) {
+        self.mailbox_list_state.next();
+    }
+
+    pub fn select_previous_mailbox(&mut self) {
+        self.mailbox_list_state.previous();
     }
 }
 
-impl Widget for &mut Mailboxes {
-    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
-    where
-        Self: Sized,
-    {
-        self.state.update();
-
-        if let Some(mailboxes) = self.state.get_mailboxes() {
-            StatefulWidget::render(
-                list::List::new(&mailboxes).block(
-                    Block::new()
-                        .title("Mailboxes")
-                        .title_alignment(HorizontalAlignment::Center),
-                ),
-                area,
-                buf,
-                self.state.get_list_state(),
-            )
-        } else {
-            Widget::render(
-                Paragraph::new("Loading mailboxes...")
-                    .block(Block::bordered())
-                    .centered(),
-                area,
-                buf,
-            );
+impl ScreenState<Action, PaletteValues> for State {
+    fn update(&mut self) {
+        match self.rx.try_recv() {
+            Ok(mailboxes) => self.mailboxes = Some(mailboxes),
+            Err(mpsc::error::TryRecvError::Empty) => {}
+            Err(mpsc::error::TryRecvError::Disconnected) => todo!(),
         }
+
+        let select_first_entry =
+            self.mailboxes.is_some() && self.mailbox_list_state.selected.is_none();
+
+        if select_first_entry {
+            self.mailbox_list_state.next();
+        }
+    }
+
+    fn apply_action(&mut self, action: Action) {
+        tracing::debug!("Action: {:?}", action);
+        match action {
+            Action::Quit => self.app_actions.push(crate::Action::Quit),
+            Action::OpenCommandPalette => todo!(),
+            Action::CloseCommandPalette => todo!(),
+
+            Action::SelectNextMailbox => self.select_next_mailbox(),
+            Action::SelectPreviousMailbox => self.select_previous_mailbox(),
+            Action::OpenSelectedMailbox => {
+                if let Some(selected_mailbox) = self.get_mut_selected_mailbox() {
+                    assert!(selected_mailbox.id().is_some());
+                    // return Some(super::Action::OpenMailList(Some(
+                    //     selected_mailbox.id().unwrap().to_string(),
+                    // )));
+                    todo!("Open mail list command")
+                }
+            }
+        }
+    }
+
+    fn get_app_actions(&mut self) -> std::vec::Drain<'_, crate::Action> {
+        self.app_actions.drain(..)
+    }
+
+    fn keybinding_manager(&mut self) -> &mut KeybindManager<Action> {
+        &mut self.keybindings
+    }
+}
+
+impl ScreenPalette<PaletteValues> for State {
+    fn palette(&mut self) -> Option<&mut palette::State<PaletteValues>> {
+        None
+    }
+
+    fn handle_palette_result(&mut self, _result: palette::HandleEventResult<PaletteValues>) {
+        unreachable!("Huh")
     }
 }

@@ -1,125 +1,235 @@
 mod action;
-// mod mail_template;
-mod state;
+mod widget;
 
 use crate::{
     backend::Account,
-    ui::{keybindmanager::KeybindManager, palette},
+    ui::{MailboxId, ScreenPalette, ScreenState, keybindmanager::KeybindManager, palette},
 };
 pub use action::Action;
-use crossterm::event::KeyEvent;
-use ratatui::{
-    buffer::Buffer,
-    layout::{Constraint, Layout, Rect},
-    widgets::{Block, Clear, Paragraph, StatefulWidget, Widget},
-};
-use std::{collections::HashMap, sync::Arc};
+use chrono::Local;
+use jmap_client::email::{EmailBodyPart, EmailBodyValue};
+use mail_parser::MessageParser;
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use tokio::sync::mpsc;
+pub use widget::Composer;
 
 #[derive(Debug, Clone)]
-enum PaletteType {
+pub enum PaletteType {
     /// Palette is displaying commands
     Action(Action),
 }
 
-pub struct Composer {
-    state: state::State,
+pub struct State {
+    app_actions: Vec<crate::Action>,
+    account: Arc<Account>,
+
+    raw_mail: String,
+
+    rx: mpsc::Receiver<MailboxId>,
+    _tx: Arc<mpsc::Sender<MailboxId>>,
+    draft_mailbox_id: Option<MailboxId>,
+
+    scroll_offset: (u16, u16),
+
     palette: Option<palette::State<PaletteType>>,
-    keybindings: KeybindManager<super::Action>,
+    keybindings: KeybindManager<Action>,
 }
 
-impl Composer {
+impl State {
     pub fn new(account: Arc<Account>) -> Self {
-        Self {
-            state: state::State::new(account),
+        let (tx, rx) = mpsc::channel(1);
+
+        let acc = account.clone();
+        let tx = Arc::new(tx);
+        let tx2 = tx.clone();
+
+        tokio::spawn(async move {
+            let mut request = acc.client.build();
+            request.get_mailbox().ids(None::<[String; 0]>);
+            let response = request.send_get_mailbox().await.unwrap();
+
+            let sent_mailbox = response
+                .list()
+                .iter()
+                .find(|mailbox| mailbox.role() == jmap_client::mailbox::Role::Drafts)
+                .unwrap();
+
+            tx2.send(sent_mailbox.id().unwrap().to_string())
+                .await
+                .unwrap();
+        });
+
+        let mut state = Self {
+            app_actions: vec![],
+            account: account.clone(),
+            raw_mail: String::new(),
+            scroll_offset: (0, 0),
+            draft_mailbox_id: None,
+            rx,
+            _tx: tx,
+
             palette: None,
             keybindings: KeybindManager::new(HashMap::from([
-                ("j", Action::ScrollDown.into()),
-                ("k", Action::ScrollUp.into()),
-                ("q", super::Action::Quit),
-                ("h", super::Action::OpenMailList(None)),
-                ("e", Action::OpenMailInEditor.into()),
-                (":", Action::OpenCommandPalette.into()),
+                ("j", Action::ScrollDown),
+                ("k", Action::ScrollUp),
+                // ("q", super::Action::Quit),
+                // ("h", super::Action::OpenMailList(None)),
+                ("e", Action::OpenMailInEditor),
+                (":", Action::OpenCommandPalette),
             ])),
-        }
+        };
+
+        state.reset();
+        state
     }
 
     pub fn reset(&mut self) {
-        self.state.reset();
+        let address = self.account.address.clone();
+
+        self.raw_mail = format!(
+            "\
+From: {address}
+To:
+Subject:
+
+"
+        );
     }
 
-    pub fn handle_event(&mut self, event: KeyEvent) -> Vec<super::Action> {
-        if let Some(palette) = &mut self.palette {
-            let mut actions = Vec::new();
-            if let Some(result) = palette.handle_event(event) {
-                actions.push(Action::CloseCommandPalette.into());
+    fn scroll_down(&mut self) {
+        self.scroll_offset.0 += 1;
+    }
 
-                match result {
-                    palette::HandleEventResult::Cancel => {}
-                    palette::HandleEventResult::Selected(value) => match value {
-                        PaletteType::Action(action) => {
-                            actions.push(action.into());
-                        }
-                    },
-                };
-            }
+    fn scroll_up(&mut self) {
+        self.scroll_offset.0 = self.scroll_offset.0.saturating_sub(1);
+    }
 
-            return actions;
+    fn get_mail(&self) -> &str {
+        self.raw_mail.as_str()
+    }
+
+    fn open_mail_in_editor(&mut self) {
+        let tmp_file = get_tmp_file();
+
+        std::fs::write(&tmp_file, &self.raw_mail).unwrap();
+        std::process::Command::new("hx")
+            .arg(&tmp_file)
+            .output()
+            .unwrap();
+
+        // TODO: Check if the changed mail is correct
+        self.raw_mail = std::fs::read_to_string(&tmp_file).unwrap();
+    }
+
+    pub fn send_mail(&mut self) {
+        if let Some(draft_id) = self.draft_mailbox_id.clone() {
+            let account = self.account.clone();
+            let raw_mail = self.raw_mail.clone();
+
+            tokio::spawn(async move {
+                let parsed = MessageParser::new().parse(raw_mail.as_bytes()).unwrap();
+
+                let mut request = account.client.build();
+
+                request
+                    .set_email()
+                    .create()
+                    .sent_at(Local::now().timestamp())
+                    .from(mail_parser_address_to_jmap_client_address(
+                        parsed.from().unwrap(),
+                    ))
+                    .to(mail_parser_address_to_jmap_client_address(
+                        parsed.to().unwrap(),
+                    ))
+                    .subject(parsed.subject().unwrap())
+                    .mailbox_id(&draft_id, true)
+                    .body_value(
+                        "1".to_string(),
+                        EmailBodyValue::from(parsed.body_text(0).unwrap().to_string()),
+                    )
+                    .text_body(EmailBodyPart::new().part_id("1").content_type("text/plain"));
+
+                request.send_set_email().await.unwrap();
+            });
         }
+    }
+}
 
-        match self.keybindings.handle_event(event) {
-            Some(action) => vec![action],
-            None => vec![],
+impl ScreenState<Action, PaletteType> for State {
+    fn update(&mut self) {
+        match self.rx.try_recv() {
+            Ok(sent_mailbox_id) => self.draft_mailbox_id = Some(sent_mailbox_id),
+            Err(mpsc::error::TryRecvError::Empty) => {}
+            Err(mpsc::error::TryRecvError::Disconnected) => todo!(),
         }
     }
 
-    pub fn apply_action(&mut self, a: Action) -> Option<super::Action> {
-        match a {
-            Action::Quit => return Some(super::Action::Quit),
+    fn apply_action(&mut self, action: Action) {
+        match action {
+            Action::Quit => self.app_actions.push(crate::Action::Quit),
             Action::OpenCommandPalette => {
                 self.palette = Some(palette::State::new(action::palette_options()));
             }
             Action::CloseCommandPalette => self.palette = None,
-            Action::ScrollUp => self.state.scroll_up(),
-            Action::ScrollDown => self.state.scroll_down(),
+            Action::ScrollUp => self.scroll_up(),
+            Action::ScrollDown => self.scroll_down(),
 
-            Action::OpenMailList => return Some(super::Action::OpenMailList(None)),
-            Action::OpenMailInEditor => self.state.open_mail_in_editor(),
+            Action::OpenMailList => {
+                todo!()
+            }
+            Action::OpenMailInEditor => self.open_mail_in_editor(),
             Action::SendMail => {
-                self.state.send_mail();
+                self.send_mail();
                 self.reset();
-                return Some(super::Action::OpenMailboxList);
+                todo!()
+                // return Some(super::Action::OpenMailboxList);
             }
         }
+    }
 
-        None
+    fn get_app_actions(&mut self) -> std::vec::Drain<'_, crate::Action> {
+        self.app_actions.drain(..)
+    }
+
+    fn keybinding_manager(&mut self) -> &mut KeybindManager<Action> {
+        &mut self.keybindings
     }
 }
 
-impl Widget for &mut Composer {
-    fn render(self, area: Rect, buf: &mut Buffer)
-    where
-        Self: Sized,
-    {
-        self.state.update();
+impl ScreenPalette<PaletteType> for State {
+    fn palette(&mut self) -> Option<&mut palette::State<PaletteType>> {
+        self.palette.as_mut()
+    }
 
-        let mail = self.state.get_mail();
-
-        let [top, _bottom] =
-            Layout::vertical([Constraint::Percentage(80), Constraint::Fill(0)]).areas(area);
-
-        render_mail_content(mail, top, buf);
-        // render_attachment_list(mail, bottom, buf);
-
-        if let Some(state) = &mut self.palette {
-            let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
-            Clear.render(a, buf);
-            StatefulWidget::render(palette::Palette::new(), a, buf, state);
+    fn handle_palette_result(&mut self, result: palette::HandleEventResult<PaletteType>) {
+        match result {
+            palette::HandleEventResult::Cancel => {}
+            palette::HandleEventResult::Selected(value) => match value {
+                PaletteType::Action(action) => self.apply_action(action),
+            },
         }
     }
 }
 
-/// Rendering implementations
-fn render_mail_content(mail: &str, area: Rect, buf: &mut Buffer) {
-    tracing::debug!("{:#?}", mail);
-    Widget::render(Paragraph::new(mail).block(Block::bordered()), area, buf)
+fn get_tmp_file() -> PathBuf {
+    let xdg = crate::get_xdg();
+
+    xdg.place_cache_file("temp.mail").unwrap()
+}
+
+fn mail_parser_address_to_jmap_client_address(
+    addr: &mail_parser::Address,
+) -> Vec<jmap_client::email::EmailAddress> {
+    match addr {
+        mail_parser::Address::List(list) => list
+            .iter()
+            .map(|addr| match addr.name() {
+                Some(name) => {
+                    jmap_client::email::EmailAddress::from((name, addr.address().unwrap()))
+                }
+                None => jmap_client::email::EmailAddress::from(addr.address().unwrap()),
+            })
+            .collect(),
+        mail_parser::Address::Group(_group) => todo!(),
+    }
 }

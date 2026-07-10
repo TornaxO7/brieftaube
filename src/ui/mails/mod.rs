@@ -1,43 +1,55 @@
 mod action;
-mod mail_list;
-mod state;
+mod widget;
 
 use crate::{
     backend,
-    ui::{keybindmanager::KeybindManager, mails::mail_list::MailListWidget, palette},
+    ui::{MailboxId, ScreenPalette, ScreenState, keybindmanager::KeybindManager, palette},
 };
 pub use action::Action;
-use crossterm::event::KeyEvent;
-use ratatui::{
-    buffer::Buffer,
-    layout::{Constraint, HorizontalAlignment, Layout, Rect},
-    widgets::{Block, Clear, Paragraph, StatefulWidget, Widget},
-};
-use state::State;
+use jmap_client::email::Email;
 use std::{collections::HashMap, sync::Arc};
-
-const MAIL_LIST_PANEL_TITLE: &str = "Mails";
-const PREVIEW_PANEL_TITLE: &str = "Mail content";
+use tokio::sync::mpsc;
+pub use widget::MailList;
 
 #[derive(Debug, Clone)]
-enum PaletteType {
+pub enum PaletteType {
     /// Palette is displaying commands
     Action(Action),
 }
 
-pub struct Mails {
+pub struct State {
+    app_actions: Vec<crate::Action>,
     palette: Option<palette::State<PaletteType>>,
-    state: State,
-    keybindings: KeybindManager<super::Action>,
+
+    account: Arc<backend::Account>,
+
+    rx: mpsc::Receiver<Vec<Email>>,
+    tx: Arc<mpsc::Sender<Vec<Email>>>,
+
+    /// `None`: Means that it's currently requested but the response didn't arrive yet.
+    mails: HashMap<MailboxId, Vec<Email>>,
+
+    selected_mailbox_id: Option<MailboxId>,
+    list_state: tui_widget_list::ListState,
+    keybindings: KeybindManager<Action>,
 }
 
-impl Mails {
+impl State {
     pub async fn new(account: Arc<backend::Account>) -> Self {
-        let state = State::new(account);
+        let (tx, rx) = mpsc::channel(1);
 
         Self {
+            app_actions: vec![],
+            account,
             palette: None,
-            state,
+            selected_mailbox_id: None,
+
+            rx,
+            tx: Arc::new(tx),
+
+            mails: HashMap::new(),
+
+            list_state: tui_widget_list::ListState::default(),
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", Action::Quit.into()),
                 (":", Action::OpenCommandPalette.into()),
@@ -51,164 +63,171 @@ impl Mails {
 
     pub fn open_mailbox(&mut self, mailbox_id: Option<super::MailboxId>) {
         if let Some(id) = mailbox_id {
-            self.state.open_mailbox(id);
+            self.selected_mailbox_id = Some(id.clone());
+            self.list_state.selected = None;
+
+            let account = self.account.clone();
+            let tx = self.tx.clone();
+            tokio::spawn(async move {
+                let client = &account.client;
+
+                let initial_mails_ids = {
+                    let mut request = client.build();
+                    let query = request.query_email();
+                    query
+                        .filter(jmap_client::email::query::Filter::in_mailbox(id))
+                        .limit(100)
+                        .calculate_total(true)
+                        .position(0)
+                        .sort([jmap_client::email::query::Comparator::received_at().descending()]);
+
+                    request.send_query_email().await.unwrap()
+                };
+
+                let mut mails = {
+                    let mut request = client.build();
+                    request
+                        .get_email()
+                        .ids(Some(initial_mails_ids.ids()))
+                        .properties([
+                            jmap_client::email::Property::Subject,
+                            jmap_client::email::Property::From,
+                            jmap_client::email::Property::ReceivedAt,
+                            jmap_client::email::Property::Preview,
+                            jmap_client::email::Property::ThreadId,
+                        ]);
+
+                    request.send_get_email().await.unwrap()
+                };
+
+                tx.send(mails.take_list()).await.unwrap();
+            });
         }
     }
 
-    pub fn handle_event(&mut self, event: KeyEvent) -> Vec<super::Action> {
-        if let Some(palette) = &mut self.palette {
-            let mut actions = Vec::new();
-
-            if let Some(result) = palette.handle_event(event) {
-                actions.push(Action::CloseCommandPalette.into());
-
-                match result {
-                    palette::HandleEventResult::Cancel => {}
-                    palette::HandleEventResult::Selected(value) => match value {
-                        PaletteType::Action(action) => {
-                            actions.push(action.into());
-                        }
-                    },
-                }
+    pub fn get_render_mail_list_data(
+        &mut self,
+    ) -> Option<(&Vec<Email>, &mut tui_widget_list::ListState)> {
+        if let Some(id) = self.selected_mailbox_id.as_ref() {
+            if let Some(mails) = self.mails.get(id) {
+                return Some((mails, &mut self.list_state));
             }
-
-            return actions;
         }
 
-        match self.keybindings.handle_event(event) {
-            Some(action) => vec![action],
-            None => vec![],
-        }
+        None
     }
 
-    pub fn apply_action(&mut self, a: Action) -> Option<super::Action> {
-        tracing::debug!("Action: {:?}", a);
-        match a {
-            Action::Quit => return Some(super::Action::Quit),
-
-            Action::SelectNextMail => self.state.select_next_mail(),
-            Action::SelectPreviousMail => self.state.select_previous_mail(),
-
-            Action::OpenMailboxList => {
-                return Some(super::Action::OpenMailboxList);
-            }
-            Action::OpenCommandPalette => {
-                self.palette = Some(palette::State::new(action::palette_options()));
-            }
-            Action::OpenLogs => {
-                return Some(super::Action::OpenLogs(Box::new(
-                    super::Action::OpenMailList(None),
-                )));
-            }
-            Action::CloseCommandPalette => self.palette = None,
-            Action::ViewSelectedMail => {
-                if let Some(selected_mail) = self.state.get_selected_mail() {
-                    return Some(super::Action::OpenMailViewer(Some(
-                        selected_mail.id().unwrap().to_owned(),
-                    )));
+    pub fn get_render_preview_data(&self) -> Option<&str> {
+        if let Some(id) = self.selected_mailbox_id.as_ref() {
+            if let Some(mails) = self.mails.get(id) {
+                if let Some(idx) = self.list_state.selected {
+                    return mails.get(idx).map(|mail| mail.preview().unwrap());
                 }
             }
         }
 
         None
     }
-}
 
-impl Widget for &mut Mails {
-    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
-    where
-        Self: Sized,
-    {
-        self.state.update();
-
-        let [headerbar, content] = area.layout(&Layout::vertical([
-            Constraint::Length(3),
-            Constraint::Fill(0),
-        ]));
-
-        let [mail_list, preview] = content.layout(&Layout::horizontal([
-            Constraint::Percentage(60),
-            Constraint::Percentage(40),
-        ]));
-
-        self.render_mail_list(mail_list, buf);
-        self.render_preview(preview, buf);
-        self.render_headerbar(headerbar, buf);
-
-        if let Some(state) = &mut self.palette {
-            let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
-            Clear.render(a, buf);
-            StatefulWidget::render(palette::Palette::new(), a, buf, state);
-        }
-    }
-}
-
-/// Render functions
-impl Mails {
-    fn render_mail_list(&mut self, area: Rect, buf: &mut Buffer) {
-        match self.state.get_render_mail_list_data() {
-            Some((mails, state)) => {
-                StatefulWidget::render(
-                    MailListWidget::new(mails).block(
-                        Block::bordered()
-                            .title(MAIL_LIST_PANEL_TITLE)
-                            .title_alignment(HorizontalAlignment::Center),
-                    ),
-                    area,
-                    buf,
-                    state,
-                );
+    pub fn get_selected_mail(&self) -> Option<&Email> {
+        if let Some(id) = self.selected_mailbox_id.as_ref() {
+            if let Some(mails) = self.mails.get(id) {
+                if let Some(idx) = self.list_state.selected {
+                    return mails.get(idx);
+                }
             }
-            None => Widget::render(
-                Paragraph::new("Loading...").block(Block::bordered().title(MAIL_LIST_PANEL_TITLE)),
-                area,
-                buf,
-            ),
+        }
+
+        None
+    }
+
+    pub fn select_next_mail(&mut self) {
+        self.list_state.next();
+    }
+
+    pub fn select_previous_mail(&mut self) {
+        self.list_state.previous();
+    }
+}
+
+impl ScreenState<Action, PaletteType> for State {
+    fn update(&mut self) {
+        if let Some(selected_mailbox_id) = self.selected_mailbox_id.clone() {
+            match self.rx.try_recv() {
+                Ok(mails) => {
+                    self.mails.insert(selected_mailbox_id.to_string(), mails);
+                }
+                Err(mpsc::error::TryRecvError::Empty) => {}
+                Err(mpsc::error::TryRecvError::Disconnected) => todo!(),
+            }
+        }
+
+        if let Some(selected_mailbox_id) = self.selected_mailbox_id.as_ref() {
+            let select_first_entry =
+                self.mails.get(selected_mailbox_id).is_some() && self.list_state.selected.is_none();
+
+            if select_first_entry {
+                self.list_state.next();
+            }
         }
     }
 
-    fn render_preview(&mut self, area: Rect, buf: &mut Buffer) {
-        match self.state.get_render_preview_data() {
-            Some(data) => Widget::render(
-                Paragraph::new(data).block(Block::bordered().title(PREVIEW_PANEL_TITLE)),
-                area,
-                buf,
-            ),
-            None => Widget::render(
-                Paragraph::new("No mail selected")
-                    .block(Block::bordered().title(PREVIEW_PANEL_TITLE)),
-                area,
-                buf,
-            ),
+    fn apply_action(&mut self, action: Action) {
+        tracing::debug!("Action: {:?}", action);
+        match action {
+            Action::Quit => self.app_actions.push(crate::Action::Quit),
+
+            Action::SelectNextMail => self.select_next_mail(),
+            Action::SelectPreviousMail => self.select_previous_mail(),
+
+            Action::OpenMailboxList => {
+                todo!();
+            }
+            Action::OpenCommandPalette => {
+                self.palette = Some(palette::State::new(action::palette_options()));
+            }
+            Action::OpenLogs => {
+                // return Some(super::Action::OpenLogs(Box::new(
+                //     super::Action::OpenMailList(None),
+                // )));
+                todo!()
+            }
+            Action::CloseCommandPalette => self.palette = None,
+            Action::ViewSelectedMail => {
+                if let Some(_selected_mail) = self.get_selected_mail() {
+                    todo!()
+                    // return Some(super::Action::OpenMailViewer(Some(
+                    //     selected_mail.id().unwrap().to_owned(),
+                    // )));
+                }
+            }
         }
     }
 
-    fn render_headerbar(&mut self, area: Rect, buf: &mut Buffer) {
-        let block = Block::bordered();
-        let header_area = block.inner(area);
+    fn get_app_actions(&mut self) -> std::vec::Drain<'_, crate::Action> {
+        self.app_actions.drain(..)
+    }
 
-        let [left, center, right] = Layout::horizontal([
-            Constraint::Fill(0),
-            Constraint::Fill(0),
-            Constraint::Fill(0),
-        ])
-        .areas(header_area);
+    fn keybinding_manager(&mut self) -> &mut KeybindManager<Action> {
+        &mut self.keybindings
+    }
+}
 
-        Widget::render(block, area, buf);
-        Widget::render(
-            Paragraph::new("Left").alignment(HorizontalAlignment::Left),
-            left,
-            buf,
-        );
-        Widget::render(
-            Paragraph::new("Center").alignment(HorizontalAlignment::Center),
-            center,
-            buf,
-        );
-        Widget::render(
-            Paragraph::new("Right").alignment(HorizontalAlignment::Right),
-            right,
-            buf,
-        );
+impl ScreenPalette<PaletteType> for State {
+    fn palette(&mut self) -> Option<&mut palette::State<PaletteType>> {
+        self.palette.as_mut()
+    }
+
+    fn handle_palette_result(&mut self, result: palette::HandleEventResult<PaletteType>) {
+        self.palette = None;
+
+        match result {
+            palette::HandleEventResult::Cancel => {}
+            palette::HandleEventResult::Selected(value) => match value {
+                PaletteType::Action(action) => {
+                    self.apply_action(action);
+                }
+            },
+        }
     }
 }
