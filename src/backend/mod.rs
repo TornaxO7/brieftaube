@@ -3,7 +3,7 @@ use jmap_client::client::Client;
 pub struct Account {
     /// Email address
     pub client: jmap_client::client::Client,
-    pub address: String,
+    address: String,
 }
 
 impl Account {
@@ -19,5 +19,9 @@ impl Account {
             .unwrap();
 
         Self { client, address }
+    }
+
+    pub fn address(&self) -> &str {
+        self.address.as_str()
     }
 }

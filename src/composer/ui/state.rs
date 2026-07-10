@@ -80,7 +80,7 @@ impl State {
     }
 
     pub fn reset(&mut self) {
-        let address = self.account.address.clone();
+        let address = self.account.address();
 
         self.raw_mail = format!(
             "\
