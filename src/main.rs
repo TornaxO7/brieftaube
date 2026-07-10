@@ -9,20 +9,20 @@ mod mails;
 mod utils;
 
 use color_eyre::eyre;
+use crossterm::event::{Event, EventStream};
+use futures::{FutureExt, StreamExt};
 use ratatui::{DefaultTerminal, Frame};
 use std::{
     fs::OpenOptions,
     io,
     path::PathBuf,
     sync::{Arc, OnceLock},
-    time::Duration,
 };
-use tracing::level_filters::LevelFilter;
+use tracing::{error, level_filters::LevelFilter};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use utils::ui::ScreenState;
 use xdg::BaseDirectories;
 
-const INPUT_TIMEOUT: Duration = Duration::from_millis(250);
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
 static XDG: OnceLock<BaseDirectories> = OnceLock::new();
 
@@ -32,7 +32,7 @@ async fn main() -> eyre::Result<()> {
     init_logging()?;
 
     let mut terminal = ratatui::init();
-    App::new().await.run(&mut terminal)?;
+    App::new().await.run(&mut terminal).await?;
     ratatui::restore();
 
     Ok(())
@@ -53,6 +53,7 @@ pub enum Action {
     OpenLogViewer,
     OpenComposer,
 
+    Refresh,
     Back,
     Quit,
 }
@@ -60,39 +61,53 @@ pub enum Action {
 /// Stores the app state
 pub struct App {
     is_running: bool,
-    account: Arc<backend::Account>,
+    fetcher: Arc<backend::Fetcher>,
     screens: Vec<Screen>,
 }
 
 impl App {
     pub async fn new() -> Self {
-        let account = Arc::new(backend::Account::new().await);
+        let fetcher = Arc::new(backend::Fetcher::new().await);
 
         Self {
             is_running: true,
-            account: account.clone(),
-            screens: vec![Screen::Mailboxes(mailboxes::ui::State::new(account))],
+            fetcher: fetcher.clone(),
+            screens: vec![Screen::Mailboxes(mailboxes::ui::State::new(fetcher))],
         }
     }
 
-    pub fn run(mut self, terminal: &mut DefaultTerminal) -> eyre::Result<()> {
+    pub async fn run(mut self, terminal: &mut DefaultTerminal) -> eyre::Result<()> {
+        let mut reader = EventStream::new();
+
         while self.is_running {
+            tokio::select! {
+                // changed = self.update() => {
+                //     if !changed {
+                //         continue;
+                //     }
+                // }
+                maybe_event = reader.next().fuse() => match maybe_event {
+                    Some(Ok(event)) => self.handle_event(event),
+                    Some(Err(e)) => error!("{}", e),
+                    None => {},
+                }
+            }
+
             terminal.draw(|frame| self.draw(frame))?;
-            self.handle_events()?;
             self.apply_action();
-            self.update_screen();
+            self.update_screen().await;
         }
 
         Ok(())
     }
 
-    fn update_screen(&mut self) {
+    async fn update_screen(&mut self) -> bool {
         match self.screens.last_mut().unwrap() {
-            Screen::Mailboxes(state) => state.update(),
-            Screen::MailList(state) => state.update(),
-            Screen::Composer(state) => state.update(),
-            Screen::MailViewer(state) => state.update(),
-            Screen::LogViewer(state) => state.update(),
+            Screen::Mailboxes(state) => state.update().await,
+            Screen::MailList(state) => state.update().await,
+            Screen::Composer(state) => state.update().await,
+            Screen::MailViewer(state) => state.update().await,
+            Screen::LogViewer(state) => state.update().await,
         }
     }
 
@@ -132,23 +147,14 @@ impl App {
         };
     }
 
-    fn handle_events(&mut self) -> std::io::Result<()> {
-        if crossterm::event::poll(INPUT_TIMEOUT).expect("Poll for event") {
-            if let Some(event) = crossterm::event::read()
-                .expect("Read event")
-                .as_key_press_event()
-            {
-                match self.screens.last_mut().unwrap() {
-                    Screen::Mailboxes(state) => state.handle_event(event),
-                    Screen::MailList(state) => state.handle_event(event),
-                    Screen::Composer(state) => state.handle_event(event),
-                    Screen::MailViewer(state) => state.handle_event(event),
-                    Screen::LogViewer(state) => state.handle_event(event),
-                };
-            }
-        }
-
-        Ok(())
+    fn handle_event(&mut self, event: Event) {
+        match self.screens.last_mut().unwrap() {
+            Screen::Mailboxes(state) => state.handle_event(event),
+            Screen::MailList(state) => state.handle_event(event),
+            Screen::Composer(state) => state.handle_event(event),
+            Screen::MailViewer(state) => state.handle_event(event),
+            Screen::LogViewer(state) => state.handle_event(event),
+        };
     }
 
     fn apply_action(&mut self) {
@@ -168,13 +174,13 @@ impl App {
             match action {
                 Action::OpenMailList => {
                     self.screens.push(Screen::MailList(mails::ui::State::new(
-                        self.account.clone(),
+                        self.fetcher.clone(),
                     )));
                 }
                 Action::OpenMailViewer => {
                     self.screens
                         .push(Screen::MailViewer(mail_viewer::ui::State::new(
-                            self.account.clone(),
+                            self.fetcher.clone(),
                         )));
                 }
                 Action::OpenLogViewer => {
@@ -183,9 +189,10 @@ impl App {
                 }
                 Action::OpenComposer => {
                     self.screens.push(Screen::Composer(composer::ui::State::new(
-                        self.account.clone(),
+                        self.fetcher.clone(),
                     )));
                 }
+                Action::Refresh => self.fetcher.refresh(),
                 Action::Back => {
                     self.screens.pop();
                 }

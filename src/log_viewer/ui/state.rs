@@ -51,7 +51,9 @@ impl State {
 }
 
 impl ScreenState<Action, PaletteType> for State {
-    fn update(&mut self) {}
+    async fn update(&mut self) -> bool {
+        false
+    }
 
     fn apply_action(&mut self, action: Action) {
         tracing::debug!("Action: {:?}", action);

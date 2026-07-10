@@ -1,14 +1,14 @@
 pub mod keybindmanager;
 pub mod palette;
 
-use crossterm::event::KeyEvent;
+use crossterm::event::Event;
 use keybindmanager::KeybindManager;
 
 pub type MailboxId = String;
 pub type MailId = String;
 
 pub trait ScreenState<A: Clone, PE: Clone>: ScreenPalette<PE> {
-    fn update(&mut self);
+    async fn update(&mut self) -> bool;
 
     fn apply_action(&mut self, action: A);
 
@@ -16,16 +16,22 @@ pub trait ScreenState<A: Clone, PE: Clone>: ScreenPalette<PE> {
 
     fn keybinding_manager(&mut self) -> &mut KeybindManager<A>;
 
-    fn handle_event(&mut self, event: KeyEvent) {
-        if let Some(p) = self.palette() {
-            if let Some(result) = p.handle_event(event) {
-                self.handle_palette_result(result);
-                return;
-            }
-        }
+    fn handle_event(&mut self, event: Event) {
+        match event {
+            Event::Key(event) => {
+                if let Some(p) = self.palette() {
+                    if let Some(result) = p.handle_event(event) {
+                        self.handle_palette_result(result);
+                        return;
+                    }
+                }
 
-        if let Some(action) = self.keybinding_manager().handle_event(event) {
-            self.apply_action(action);
+                if let Some(action) = self.keybinding_manager().handle_event(event) {
+                    self.apply_action(action);
+                }
+            }
+            Event::Mouse(_event) => {}
+            _ => {}
         }
     }
 }

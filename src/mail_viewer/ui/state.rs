@@ -1,6 +1,6 @@
 use super::Action;
 use crate::{
-    backend::Account,
+    backend::Fetcher,
     mail_viewer::ui::widget::RenderData,
     utils::ui::{MailId, ScreenPalette, ScreenState, keybindmanager::KeybindManager, palette},
 };
@@ -8,7 +8,6 @@ use chrono::DateTime;
 use jmap_client::email::{Email, EmailAddress};
 use ratatui::widgets::ScrollbarState;
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::mpsc;
 use tracing::debug;
 
 #[derive(Debug, Clone)]
@@ -19,10 +18,7 @@ pub enum PaletteType {
 
 pub struct State {
     app_actions: Vec<crate::Action>,
-    account: Arc<Account>,
-
-    rx: mpsc::Receiver<Email>,
-    tx: Arc<mpsc::Sender<Email>>,
+    account: Arc<Fetcher>,
 
     ctx: Option<Ctx>,
     palette: Option<palette::State<PaletteType>>,
@@ -30,13 +26,9 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(account: Arc<Account>) -> Self {
-        let (tx, rx) = mpsc::channel(1);
-
+    pub fn new(account: Arc<Fetcher>) -> Self {
         Self {
             app_actions: vec![],
-            rx,
-            tx: Arc::new(tx),
             account,
 
             ctx: None,
@@ -52,28 +44,29 @@ impl State {
         }
     }
 
-    pub fn open_mail(&mut self, mail: Option<MailId>) {
-        if let Some(id) = mail {
-            self.ctx = None;
-            let account = self.account.clone();
-            let tx = self.tx.clone();
+    pub fn open_mail(&mut self, _mail: Option<MailId>) {
+        // if let Some(id) = mail {
+        //     self.ctx = None;
+        //     let account = self.account.clone();
+        //     let tx = self.tx.clone();
 
-            tokio::spawn(async move {
-                let client = &account.client;
+        //     tokio::spawn(async move {
+        //         let client = &account.client;
 
-                let mut response = {
-                    let mut request = client.build();
-                    request
-                        .get_email()
-                        .ids(Some([id]))
-                        .arguments()
-                        .fetch_text_body_values(true);
-                    request.send_get_email().await.unwrap()
-                };
+        //         let mut response = {
+        //             let mut request = client.build();
+        //             request
+        //                 .get_email()
+        //                 .ids(Some([id]))
+        //                 .arguments()
+        //                 .fetch_text_body_values(true);
+        //             request.send_get_email().await.unwrap()
+        //         };
 
-                tx.send(response.take_list()[0].clone()).await.unwrap();
-            });
-        }
+        //         tx.send(response.take_list()[0].clone()).await.unwrap();
+        //     });
+        // }
+        todo!()
     }
 
     fn scroll_down(&mut self) {
@@ -98,7 +91,9 @@ impl State {
 }
 
 impl ScreenState<Action, PaletteType> for State {
-    fn update(&mut self) {}
+    async fn update(&mut self) -> bool {
+        false
+    }
 
     fn apply_action(&mut self, action: Action) {
         debug!("Action: {}", action);

@@ -1,13 +1,9 @@
 use super::action::Action;
 use crate::{
-    backend::Account,
+    backend::Fetcher,
     utils::ui::{MailboxId, ScreenPalette, ScreenState, keybindmanager::KeybindManager, palette},
 };
-use chrono::Local;
-use jmap_client::email::{EmailBodyPart, EmailBodyValue};
-use mail_parser::MessageParser;
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
-use tokio::sync::mpsc;
 
 #[derive(Debug, Clone)]
 pub enum PaletteType {
@@ -17,12 +13,10 @@ pub enum PaletteType {
 
 pub struct State {
     app_actions: Vec<crate::Action>,
-    account: Arc<Account>,
+    fetcher: Arc<Fetcher>,
 
     raw_mail: String,
 
-    rx: mpsc::Receiver<MailboxId>,
-    _tx: Arc<mpsc::Sender<MailboxId>>,
     draft_mailbox_id: Option<MailboxId>,
 
     scroll_offset: (u16, u16),
@@ -32,37 +26,35 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(account: Arc<Account>) -> Self {
-        let (tx, rx) = mpsc::channel(1);
+    pub fn new(fetcher: Arc<Fetcher>) -> Self {
+        // let (tx, rx) = mpsc::channel(1);
 
-        let acc = account.clone();
-        let tx = Arc::new(tx);
-        let tx2 = tx.clone();
+        // let acc = account.clone();
+        // let tx = Arc::new(tx);
+        // let tx2 = tx.clone();
 
-        tokio::spawn(async move {
-            let mut request = acc.client.build();
-            request.get_mailbox().ids(None::<[String; 0]>);
-            let response = request.send_get_mailbox().await.unwrap();
+        // tokio::spawn(async move {
+        //     let mut request = acc.client.build();
+        //     request.get_mailbox().ids(None::<[String; 0]>);
+        //     let response = request.send_get_mailbox().await.unwrap();
 
-            let sent_mailbox = response
-                .list()
-                .iter()
-                .find(|mailbox| mailbox.role() == jmap_client::mailbox::Role::Drafts)
-                .unwrap();
+        //     let sent_mailbox = response
+        //         .list()
+        //         .iter()
+        //         .find(|mailbox| mailbox.role() == jmap_client::mailbox::Role::Drafts)
+        //         .unwrap();
 
-            tx2.send(sent_mailbox.id().unwrap().to_string())
-                .await
-                .unwrap();
-        });
+        //     tx2.send(sent_mailbox.id().unwrap().to_string())
+        //         .await
+        //         .unwrap();
+        // });
 
         let mut state = Self {
             app_actions: vec![],
-            account: account.clone(),
+            fetcher: fetcher.clone(),
             raw_mail: String::new(),
             scroll_offset: (0, 0),
             draft_mailbox_id: None,
-            rx,
-            _tx: tx,
 
             palette: None,
             keybindings: KeybindManager::new(HashMap::from([
@@ -80,7 +72,7 @@ impl State {
     }
 
     pub fn reset(&mut self) {
-        let address = self.account.address();
+        let address = self.fetcher.address();
 
         self.raw_mail = format!(
             "\
@@ -118,46 +110,48 @@ Subject:
     }
 
     pub fn send_mail(&mut self) {
-        if let Some(draft_id) = self.draft_mailbox_id.clone() {
-            let account = self.account.clone();
-            let raw_mail = self.raw_mail.clone();
+        // if let Some(draft_id) = self.draft_mailbox_id.clone() {
+        //     let account = self.fetcher.clone();
+        //     let raw_mail = self.raw_mail.clone();
 
-            tokio::spawn(async move {
-                let parsed = MessageParser::new().parse(raw_mail.as_bytes()).unwrap();
+        //     tokio::spawn(async move {
+        //         let parsed = MessageParser::new().parse(raw_mail.as_bytes()).unwrap();
 
-                let mut request = account.client.build();
+        //         let mut request = account.client.build();
 
-                request
-                    .set_email()
-                    .create()
-                    .sent_at(Local::now().timestamp())
-                    .from(mail_parser_address_to_jmap_client_address(
-                        parsed.from().unwrap(),
-                    ))
-                    .to(mail_parser_address_to_jmap_client_address(
-                        parsed.to().unwrap(),
-                    ))
-                    .subject(parsed.subject().unwrap())
-                    .mailbox_id(&draft_id, true)
-                    .body_value(
-                        "1".to_string(),
-                        EmailBodyValue::from(parsed.body_text(0).unwrap().to_string()),
-                    )
-                    .text_body(EmailBodyPart::new().part_id("1").content_type("text/plain"));
+        //         request
+        //             .set_email()
+        //             .create()
+        //             .sent_at(Local::now().timestamp())
+        //             .from(mail_parser_address_to_jmap_client_address(
+        //                 parsed.from().unwrap(),
+        //             ))
+        //             .to(mail_parser_address_to_jmap_client_address(
+        //                 parsed.to().unwrap(),
+        //             ))
+        //             .subject(parsed.subject().unwrap())
+        //             .mailbox_id(&draft_id, true)
+        //             .body_value(
+        //                 "1".to_string(),
+        //                 EmailBodyValue::from(parsed.body_text(0).unwrap().to_string()),
+        //             )
+        //             .text_body(EmailBodyPart::new().part_id("1").content_type("text/plain"));
 
-                request.send_set_email().await.unwrap();
-            });
-        }
+        //         request.send_set_email().await.unwrap();
+        //     });
+        // }
+        todo!()
     }
 }
 
 impl ScreenState<Action, PaletteType> for State {
-    fn update(&mut self) {
-        match self.rx.try_recv() {
-            Ok(sent_mailbox_id) => self.draft_mailbox_id = Some(sent_mailbox_id),
-            Err(mpsc::error::TryRecvError::Empty) => {}
-            Err(mpsc::error::TryRecvError::Disconnected) => todo!(),
-        }
+    async fn update(&mut self) -> bool {
+        // match self.rx.try_recv() {
+        //     Ok(sent_mailbox_id) => self.draft_mailbox_id = Some(sent_mailbox_id),
+        //     Err(mpsc::error::TryRecvError::Empty) => {}
+        //     Err(mpsc::error::TryRecvError::Disconnected) => todo!(),
+        // }
+        false
     }
 
     fn apply_action(&mut self, action: Action) {

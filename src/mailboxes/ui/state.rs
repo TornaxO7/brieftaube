@@ -5,58 +5,50 @@ use crate::{
 };
 use jmap_client::mailbox::Mailbox;
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::mpsc;
 
 #[derive(Debug, Clone)]
 pub enum PaletteValues {}
 
 pub struct State {
     app_actions: Vec<crate::Action>,
-
-    _account: Arc<backend::Account>,
-
-    _tx: Arc<mpsc::Sender<Vec<Mailbox>>>,
-    rx: mpsc::Receiver<Vec<Mailbox>>,
-    mailboxes: Option<Vec<Mailbox>>,
-
     mailbox_list_state: tui_widget_list::ListState,
-
     keybindings: KeybindManager<Action>,
+    _account: Arc<backend::Fetcher>,
+
+    mailboxes: Option<Vec<Mailbox>>,
 }
 
 impl State {
-    pub fn new(account: Arc<backend::Account>) -> Self {
-        let (tx, rx) = mpsc::channel(1);
+    pub fn new(account: Arc<backend::Fetcher>) -> Self {
+        // let (tx, rx) = mpsc::channel(1);
 
-        let tx = Arc::new(tx);
+        // let tx = Arc::new(tx);
 
-        let tx2 = tx.clone();
-        let account2 = account.clone();
-        tokio::spawn(async move {
-            let mut response = {
-                let mut request = account2.client.build();
-                request
-                    .get_mailbox()
-                    .ids::<[_; 0], String>(None)
-                    .properties([
-                        jmap_client::mailbox::Property::Id,
-                        jmap_client::mailbox::Property::Name,
-                        jmap_client::mailbox::Property::Role,
-                        jmap_client::mailbox::Property::TotalEmails,
-                        jmap_client::mailbox::Property::UnreadEmails,
-                    ]);
-                request.send_get_mailbox().await.unwrap()
-            };
+        // let tx2 = tx.clone();
+        // let account2 = account.clone();
+        // tokio::spawn(async move {
+        //     let mut response = {
+        //         let mut request = account2.client.build();
+        //         request
+        //             .get_mailbox()
+        //             .ids::<[_; 0], String>(None)
+        //             .properties([
+        //                 jmap_client::mailbox::Property::Id,
+        //                 jmap_client::mailbox::Property::Name,
+        //                 jmap_client::mailbox::Property::Role,
+        //                 jmap_client::mailbox::Property::TotalEmails,
+        //                 jmap_client::mailbox::Property::UnreadEmails,
+        //             ]);
+        //         request.send_get_mailbox().await.unwrap()
+        //     };
 
-            tx2.send(response.take_list()).await.unwrap();
-        });
+        //     tx2.send(response.take_list()).await.unwrap();
+        // });
 
         Self {
             app_actions: vec![],
             _account: account,
             mailboxes: None,
-            rx,
-            _tx: tx,
             mailbox_list_state: tui_widget_list::ListState::default(),
 
             keybindings: KeybindManager::new(HashMap::from([
@@ -100,19 +92,20 @@ impl State {
 }
 
 impl ScreenState<Action, PaletteValues> for State {
-    fn update(&mut self) {
-        match self.rx.try_recv() {
-            Ok(mailboxes) => self.mailboxes = Some(mailboxes),
-            Err(mpsc::error::TryRecvError::Empty) => {}
-            Err(mpsc::error::TryRecvError::Disconnected) => todo!(),
-        }
+    async fn update(&mut self) -> bool {
+        // match self.rx.try_recv() {
+        //     Ok(mailboxes) => self.mailboxes = Some(mailboxes),
+        //     Err(mpsc::error::TryRecvError::Empty) => {}
+        //     Err(mpsc::error::TryRecvError::Disconnected) => todo!(),
+        // }
 
-        let select_first_entry =
-            self.mailboxes.is_some() && self.mailbox_list_state.selected.is_none();
+        // let select_first_entry =
+        //     self.mailboxes.is_some() && self.mailbox_list_state.selected.is_none();
 
-        if select_first_entry {
-            self.mailbox_list_state.next();
-        }
+        // if select_first_entry {
+        //     self.mailbox_list_state.next();
+        // }
+        false
     }
 
     fn apply_action(&mut self, action: Action) {

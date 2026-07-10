@@ -5,7 +5,6 @@ use crate::{
 };
 use jmap_client::email::Email;
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::mpsc;
 
 #[derive(Debug, Clone)]
 pub enum PaletteType {
@@ -17,10 +16,7 @@ pub struct State {
     app_actions: Vec<crate::Action>,
     palette: Option<palette::State<PaletteType>>,
 
-    account: Arc<backend::Account>,
-
-    rx: mpsc::Receiver<Vec<Email>>,
-    tx: Arc<mpsc::Sender<Vec<Email>>>,
+    _fetcher: Arc<backend::Fetcher>,
 
     /// `None`: Means that it's currently requested but the response didn't arrive yet.
     mails: HashMap<MailboxId, Vec<Email>>,
@@ -31,17 +27,12 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(account: Arc<backend::Account>) -> Self {
-        let (tx, rx) = mpsc::channel(1);
-
+    pub fn new(account: Arc<backend::Fetcher>) -> Self {
         Self {
             app_actions: vec![],
-            account,
+            _fetcher: account,
             palette: None,
             selected_mailbox_id: None,
-
-            rx,
-            tx: Arc::new(tx),
 
             mails: HashMap::new(),
 
@@ -58,47 +49,48 @@ impl State {
     }
 
     pub fn open_mailbox(&mut self, mailbox_id: Option<MailboxId>) {
-        if let Some(id) = mailbox_id {
-            self.selected_mailbox_id = Some(id.clone());
-            self.list_state.selected = None;
+        // if let Some(id) = mailbox_id {
+        //     self.selected_mailbox_id = Some(id.clone());
+        //     self.list_state.selected = None;
 
-            let account = self.account.clone();
-            let tx = self.tx.clone();
-            tokio::spawn(async move {
-                let client = &account.client;
+        //     let account = self.account.clone();
+        //     let tx = self.tx.clone();
+        //     tokio::spawn(async move {
+        //         let client = &account.client;
 
-                let initial_mails_ids = {
-                    let mut request = client.build();
-                    let query = request.query_email();
-                    query
-                        .filter(jmap_client::email::query::Filter::in_mailbox(id))
-                        .limit(100)
-                        .calculate_total(true)
-                        .position(0)
-                        .sort([jmap_client::email::query::Comparator::received_at().descending()]);
+        //         let initial_mails_ids = {
+        //             let mut request = client.build();
+        //             let query = request.query_email();
+        //             query
+        //                 .filter(jmap_client::email::query::Filter::in_mailbox(id))
+        //                 .limit(100)
+        //                 .calculate_total(true)
+        //                 .position(0)
+        //                 .sort([jmap_client::email::query::Comparator::received_at().descending()]);
 
-                    request.send_query_email().await.unwrap()
-                };
+        //             request.send_query_email().await.unwrap()
+        //         };
 
-                let mut mails = {
-                    let mut request = client.build();
-                    request
-                        .get_email()
-                        .ids(Some(initial_mails_ids.ids()))
-                        .properties([
-                            jmap_client::email::Property::Subject,
-                            jmap_client::email::Property::From,
-                            jmap_client::email::Property::ReceivedAt,
-                            jmap_client::email::Property::Preview,
-                            jmap_client::email::Property::ThreadId,
-                        ]);
+        //         let mut mails = {
+        //             let mut request = client.build();
+        //             request
+        //                 .get_email()
+        //                 .ids(Some(initial_mails_ids.ids()))
+        //                 .properties([
+        //                     jmap_client::email::Property::Subject,
+        //                     jmap_client::email::Property::From,
+        //                     jmap_client::email::Property::ReceivedAt,
+        //                     jmap_client::email::Property::Preview,
+        //                     jmap_client::email::Property::ThreadId,
+        //                 ]);
 
-                    request.send_get_email().await.unwrap()
-                };
+        //             request.send_get_email().await.unwrap()
+        //         };
 
-                tx.send(mails.take_list()).await.unwrap();
-            });
-        }
+        //         tx.send(mails.take_list()).await.unwrap();
+        //     });
+        // }
+        todo!()
     }
 
     pub fn get_render_mail_list_data(
@@ -147,25 +139,27 @@ impl State {
 }
 
 impl ScreenState<Action, PaletteType> for State {
-    fn update(&mut self) {
-        if let Some(selected_mailbox_id) = self.selected_mailbox_id.clone() {
-            match self.rx.try_recv() {
-                Ok(mails) => {
-                    self.mails.insert(selected_mailbox_id.to_string(), mails);
-                }
-                Err(mpsc::error::TryRecvError::Empty) => {}
-                Err(mpsc::error::TryRecvError::Disconnected) => todo!(),
-            }
-        }
+    async fn update(&mut self) -> bool {
+        // if let Some(selected_mailbox_id) = self.selected_mailbox_id.clone() {
+        //     match self.rx.try_recv() {
+        //         Ok(mails) => {
+        //             self.mails.insert(selected_mailbox_id.to_string(), mails);
+        //         }
+        //         Err(mpsc::error::TryRecvError::Empty) => {}
+        //         Err(mpsc::error::TryRecvError::Disconnected) => todo!(),
+        //     }
+        // }
 
-        if let Some(selected_mailbox_id) = self.selected_mailbox_id.as_ref() {
-            let select_first_entry =
-                self.mails.get(selected_mailbox_id).is_some() && self.list_state.selected.is_none();
+        // if let Some(selected_mailbox_id) = self.selected_mailbox_id.as_ref() {
+        //     let select_first_entry =
+        //         self.mails.get(selected_mailbox_id).is_some() && self.list_state.selected.is_none();
 
-            if select_first_entry {
-                self.list_state.next();
-            }
-        }
+        //     if select_first_entry {
+        //         self.list_state.next();
+        //     }
+        // }
+
+        false
     }
 
     fn apply_action(&mut self, action: Action) {

@@ -11,7 +11,9 @@ crossterm = { version = "0.29", default-features = false, features = [
   "bracketed-paste",
   "derive-more",
   "events",
+  "event-stream",
 ] }
+futures = "0.3"
 jmap-client = { git = "https://github.com/TornaxO7/jmap-client", branch = "my" }
 mail-parser = "0.11"
 nucleo = "0.5"
