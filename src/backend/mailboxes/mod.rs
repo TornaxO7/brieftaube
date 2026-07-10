@@ -1,11 +1,15 @@
-use crate::utils::ui::MailboxId;
-use jmap_client::{client::Client, mailbox::Mailbox};
+mod mailbox;
+
+use crate::{backend::mailboxes::mailbox::MailboxCtx, utils::ui::MailboxId};
+use jmap_client::client::Client;
 use std::collections::HashMap;
 
 pub struct Mailboxes {
-    mailboxes: Vec<Mailbox>,
-    mapping: HashMap<MailboxId, usize>,
+    mailboxes: Vec<MailboxCtx>,
     state: String,
+
+    // helper data structures
+    mapping: HashMap<MailboxId, usize>,
 }
 
 impl Mailboxes {
@@ -15,14 +19,20 @@ impl Mailboxes {
         let mut response = request.send_get_mailbox().await.unwrap();
 
         let state = response.take_state();
-        let mailboxes = response.take_list();
-        let mapping = mailboxes
+        let mapping = response
+            .list()
             .iter()
             .enumerate()
             .map(|(idx, mailbox)| {
                 let id = mailbox.id().unwrap().to_string();
                 (id, idx)
             })
+            .collect();
+
+        let mailboxes = response
+            .take_list()
+            .into_iter()
+            .map(|mailbox| MailboxCtx::new(mailbox))
             .collect();
 
         Self {
@@ -46,7 +56,7 @@ impl Mailboxes {
             for mailbox in response.take_list() {
                 let id = mailbox.id().unwrap();
                 if let Some(idx) = self.mapping.get(id).cloned() {
-                    self.mailboxes[idx] = mailbox;
+                    self.mailboxes[idx] = MailboxCtx::new(mailbox);
                 }
             }
         }
@@ -57,7 +67,13 @@ impl Mailboxes {
             request.get_mailbox().ids(Some(response.created()));
             let mut response = request.send_get_mailbox().await.unwrap();
 
-            self.mailboxes.extend(response.take_list());
+            let mailboxes: Vec<MailboxCtx> = response
+                .take_list()
+                .into_iter()
+                .map(|mailbox| mailbox::MailboxCtx::new(mailbox))
+                .collect();
+
+            self.mailboxes.extend(mailboxes);
         }
 
         // destroy
@@ -65,12 +81,10 @@ impl Mailboxes {
             let to_destroy = response.take_destroyed();
 
             self.mailboxes.retain(|mailbox| {
-                let id = mailbox.id().unwrap();
-
                 to_destroy
                     .iter()
                     .map(|id| id.as_str())
-                    .find(|&destroy_id| destroy_id == id)
+                    .find(|&id| id == mailbox.id())
                     .is_some()
             });
         }
@@ -86,7 +100,7 @@ impl Mailboxes {
             .iter()
             .enumerate()
             .map(|(idx, mailbox)| {
-                let id = mailbox.id().unwrap().to_string();
+                let id = mailbox.id().to_string();
                 (id, idx)
             })
             .collect();
