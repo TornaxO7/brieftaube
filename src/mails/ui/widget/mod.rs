@@ -1,0 +1,110 @@
+mod list;
+
+use crate::utils::ui::{ScreenPalette, palette};
+use ratatui::{
+    buffer::Buffer,
+    layout::{Constraint, HorizontalAlignment, Layout, Rect},
+    widgets::{Block, Clear, Paragraph, StatefulWidget, Widget},
+};
+
+const MAIL_LIST_PANEL_TITLE: &str = "Mails";
+const PREVIEW_PANEL_TITLE: &str = "Mail content";
+
+#[derive(Default)]
+pub struct MailList {}
+
+impl StatefulWidget for MailList {
+    type State = super::State;
+
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+        let [headerbar, content] = area.layout(&Layout::vertical([
+            Constraint::Length(3),
+            Constraint::Fill(0),
+        ]));
+
+        let [mail_list, preview] = content.layout(&Layout::horizontal([
+            Constraint::Percentage(60),
+            Constraint::Percentage(40),
+        ]));
+
+        self.render_mail_list(mail_list, buf, state);
+        self.render_preview(preview, buf, state);
+        self.render_headerbar(headerbar, buf, state);
+
+        if let Some(state) = state.palette() {
+            let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
+            Widget::render(Clear, a, buf);
+            StatefulWidget::render(palette::Palette::new(), a, buf, state);
+        }
+    }
+}
+
+/// Render functions
+impl MailList {
+    fn render_mail_list(&self, area: Rect, buf: &mut Buffer, state: &mut super::State) {
+        match state.get_render_mail_list_data() {
+            Some((mails, state)) => {
+                StatefulWidget::render(
+                    list::MailListWidget::new(mails).block(
+                        Block::bordered()
+                            .title(MAIL_LIST_PANEL_TITLE)
+                            .title_alignment(HorizontalAlignment::Center),
+                    ),
+                    area,
+                    buf,
+                    state,
+                );
+            }
+            None => Widget::render(
+                Paragraph::new("Loading...").block(Block::bordered().title(MAIL_LIST_PANEL_TITLE)),
+                area,
+                buf,
+            ),
+        }
+    }
+
+    fn render_preview(&self, area: Rect, buf: &mut Buffer, state: &mut super::State) {
+        match state.get_render_preview_data() {
+            Some(data) => Widget::render(
+                Paragraph::new(data).block(Block::bordered().title(PREVIEW_PANEL_TITLE)),
+                area,
+                buf,
+            ),
+            None => Widget::render(
+                Paragraph::new("No mail selected")
+                    .block(Block::bordered().title(PREVIEW_PANEL_TITLE)),
+                area,
+                buf,
+            ),
+        }
+    }
+
+    fn render_headerbar(&self, area: Rect, buf: &mut Buffer, _state: &mut super::State) {
+        let block = Block::bordered();
+        let header_area = block.inner(area);
+
+        let [left, center, right] = Layout::horizontal([
+            Constraint::Fill(0),
+            Constraint::Fill(0),
+            Constraint::Fill(0),
+        ])
+        .areas(header_area);
+
+        Widget::render(block, area, buf);
+        Widget::render(
+            Paragraph::new("Left").alignment(HorizontalAlignment::Left),
+            left,
+            buf,
+        );
+        Widget::render(
+            Paragraph::new("Center").alignment(HorizontalAlignment::Center),
+            center,
+            buf,
+        );
+        Widget::render(
+            Paragraph::new("Right").alignment(HorizontalAlignment::Right),
+            right,
+            buf,
+        );
+    }
+}

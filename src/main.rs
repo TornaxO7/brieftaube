@@ -1,6 +1,12 @@
 mod backend;
 mod config;
-mod ui;
+
+mod composer;
+mod log_viewer;
+mod mail_viewer;
+mod mailboxes;
+mod mails;
+mod utils;
 
 use color_eyre::eyre;
 use ratatui::{DefaultTerminal, Frame};
@@ -13,9 +19,8 @@ use std::{
 };
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
+use utils::ui::ScreenState;
 use xdg::BaseDirectories;
-
-use crate::ui::ScreenState;
 
 const INPUT_TIMEOUT: Duration = Duration::from_millis(250);
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
@@ -34,22 +39,28 @@ async fn main() -> eyre::Result<()> {
 }
 
 enum Screen {
-    Mailboxes(ui::mailboxes::State),
-    MailList(ui::mails::State),
-    Composer(ui::composer::State),
-    MailViewer(ui::mail_viewer::State),
-    LogViewer(ui::log_viewer::State),
+    Mailboxes(mailboxes::ui::State),
+    MailList(mails::ui::State),
+    Composer(composer::ui::State),
+    MailViewer(mail_viewer::ui::State),
+    LogViewer(log_viewer::ui::State),
 }
 
 #[derive(Debug)]
 pub enum Action {
+    OpenMailList,
+    OpenMailViewer,
+    OpenLogViewer,
+    OpenComposer,
+
+    Back,
     Quit,
 }
 
 /// Stores the app state
 pub struct App {
     is_running: bool,
-    _account: Arc<backend::Account>,
+    account: Arc<backend::Account>,
     screens: Vec<Screen>,
 }
 
@@ -59,8 +70,8 @@ impl App {
 
         Self {
             is_running: true,
-            _account: account.clone(),
-            screens: vec![Screen::Mailboxes(ui::mailboxes::State::new(account))],
+            account: account.clone(),
+            screens: vec![Screen::Mailboxes(mailboxes::ui::State::new(account))],
         }
     }
 
@@ -89,31 +100,31 @@ impl App {
         match self.screens.last_mut().unwrap() {
             Screen::Mailboxes(state) => {
                 frame.render_stateful_widget(
-                    ui::mailboxes::Mailboxes::default(),
+                    mailboxes::ui::Mailboxes::default(),
                     frame.area(),
                     state,
                 );
             }
             Screen::MailList(state) => {
-                frame.render_stateful_widget(ui::mails::MailList::default(), frame.area(), state);
+                frame.render_stateful_widget(mails::ui::MailList::default(), frame.area(), state);
             }
             Screen::Composer(state) => {
                 frame.render_stateful_widget(
-                    ui::composer::Composer::default(),
+                    composer::ui::Composer::default(),
                     frame.area(),
                     state,
                 );
             }
             Screen::MailViewer(state) => {
                 frame.render_stateful_widget(
-                    ui::mail_viewer::MailViewer::default(),
+                    mail_viewer::ui::MailViewer::default(),
                     frame.area(),
                     state,
                 );
             }
             Screen::LogViewer(state) => {
                 frame.render_stateful_widget(
-                    ui::log_viewer::LogViewer::default(),
+                    log_viewer::ui::LogViewer::default(),
                     frame.area(),
                     state,
                 );
@@ -141,17 +152,46 @@ impl App {
     }
 
     fn apply_action(&mut self) {
-        let actions = match self.screens.last_mut().unwrap() {
-            Screen::Mailboxes(state) => state.get_app_actions(),
-            Screen::MailList(state) => state.get_app_actions(),
-            Screen::Composer(state) => state.get_app_actions(),
-            Screen::MailViewer(state) => state.get_app_actions(),
-            Screen::LogViewer(state) => state.get_app_actions(),
+        let actions = {
+            let actions = match self.screens.last_mut().unwrap() {
+                Screen::Mailboxes(state) => state.get_app_actions(),
+                Screen::MailList(state) => state.get_app_actions(),
+                Screen::Composer(state) => state.get_app_actions(),
+                Screen::MailViewer(state) => state.get_app_actions(),
+                Screen::LogViewer(state) => state.get_app_actions(),
+            };
+
+            actions.collect::<Vec<Action>>()
         };
 
         for action in actions {
             match action {
-                Action::Quit => self.is_running = false,
+                Action::OpenMailList => {
+                    self.screens.push(Screen::MailList(mails::ui::State::new(
+                        self.account.clone(),
+                    )));
+                }
+                Action::OpenMailViewer => {
+                    self.screens
+                        .push(Screen::MailViewer(mail_viewer::ui::State::new(
+                            self.account.clone(),
+                        )));
+                }
+                Action::OpenLogViewer => {
+                    self.screens
+                        .push(Screen::LogViewer(log_viewer::ui::State::new()));
+                }
+                Action::OpenComposer => {
+                    self.screens.push(Screen::Composer(composer::ui::State::new(
+                        self.account.clone(),
+                    )));
+                }
+                Action::Back => {
+                    self.screens.pop();
+                }
+                Action::Quit => {
+                    self.is_running = false;
+                }
             }
         }
     }
