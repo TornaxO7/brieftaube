@@ -17,8 +17,11 @@ type EntryIdx = usize;
 
 #[derive(Debug, Clone)]
 pub struct Entry<E> {
+    /// The value of the entry.
     pub value: E,
+    /// The name which can be selected in the palette.
     pub name: String,
+    /// The description of the entry.
     pub description: String,
 }
 
