@@ -2,7 +2,6 @@ use crate::utils::ui::MailboxId;
 use jmap_client::{client::Client, mailbox::Mailbox};
 use std::collections::HashMap;
 
-#[derive(Default)]
 pub struct Mailboxes {
     mailboxes: Vec<Mailbox>,
     mapping: HashMap<MailboxId, usize>,

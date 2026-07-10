@@ -1,4 +1,6 @@
 mod mailboxes;
+mod mails;
+mod threads;
 
 use jmap_client::client::Client;
 use std::sync::Arc;
@@ -54,4 +56,6 @@ impl Fetcher {
 #[derive(Default)]
 struct Data {
     mailboxes: Option<mailboxes::Mailboxes>,
+    threads: Option<threads::Threads>,
+    mails: Option<mails::Mails>,
 }
