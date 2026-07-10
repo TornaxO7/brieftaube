@@ -10,7 +10,6 @@ use tokio::sync::mpsc;
 #[derive(Debug, Clone)]
 pub enum PaletteValues {}
 
-#[derive(Debug)]
 pub struct State {
     app_actions: Vec<crate::Action>,
 

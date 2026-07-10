@@ -3,7 +3,6 @@ use jmap_client::client::Client;
 pub struct Account {
     /// Email address
     pub client: jmap_client::client::Client,
-
     pub address: String,
 }
 
@@ -20,11 +19,5 @@ impl Account {
             .unwrap();
 
         Self { client, address }
-    }
-}
-
-impl std::fmt::Debug for Account {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Client").finish()
     }
 }
