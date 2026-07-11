@@ -1,12 +1,18 @@
 mod mailboxes;
+mod root_mails;
 
+use crate::ui::MailboxId;
 use jmap_client::client::Client;
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 use tokio::task::JoinSet;
 
 #[derive(Default)]
 struct Data {
     mailboxes: Option<mailboxes::Mailboxes>,
+    root_mails: HashMap<MailboxId, root_mails::RootMails>,
 }
 
 pub struct Account {

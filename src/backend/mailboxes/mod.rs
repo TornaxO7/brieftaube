@@ -20,8 +20,8 @@ impl Mailboxes {
         let mut request = client.build();
         request.get_mailbox().ids::<[_; 1], String>(None::<[_; 1]>);
         let mut response = request.send_get_mailbox().await.unwrap();
-
         let state = response.take_state();
+
         let mapping = response
             .list()
             .iter()

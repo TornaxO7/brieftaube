@@ -3,25 +3,25 @@ use jmap_client::{client::Client, email::Email};
 
 const INIT_ROOT_MAILS: usize = 10;
 
+#[derive(Default)]
 pub struct RootMails {
-    root_mails: Vec<Email>,
+    mails: Vec<Email>,
     state: String,
 }
 
 impl RootMails {
-    pub async fn new(client: &Client, id: MailboxId) -> Self {
+    async fn new(client: &Client, id: MailboxId) -> Self {
         let mut request = client.build();
         request
             .query_email()
-            .filter(jmap_client::email::query::Filter::InMailbox { value: id })
+            .filter(jmap_client::email::query::Filter::InMailbox { value: id.clone() })
             .sort([jmap_client::email::query::Comparator::received_at().descending()])
             .arguments()
             .collapse_threads(true);
         let mut response = request.send_query_email().await.unwrap();
-
         let state = response.take_query_state();
 
-        let root_mails = {
+        let mails = {
             let mut request = client.build();
             request.get_email().ids(Some(response.ids()));
             let mut response = request.send_get_email().await.unwrap();
@@ -29,26 +29,40 @@ impl RootMails {
             response.take_list()
         };
 
-        Self { root_mails, state }
+        Self { mails, state }
     }
 }
 
 impl Account {
+    pub fn init_root_mails(&self, id: MailboxId) {
+        let data = self.data.clone();
+        let client = self.client.clone();
+
+        self.tasks.lock().unwrap().spawn(async move {
+            let is_not_initialised = {
+                let data = data.lock().unwrap();
+                data.root_mails.contains_key(&id)
+            };
+
+            if is_not_initialised {
+                let root_mails = RootMails::new(&client, id.clone()).await;
+
+                let mut data = data.lock().unwrap();
+                data.root_mails.insert(id, root_mails);
+            }
+        });
+    }
+
     pub fn get_root_mails(&self, id: &MailboxId, state: &str) -> Option<(Vec<Email>, String)> {
         match self.data.try_lock() {
             Ok(data) => {
-                let Some(mailboxes) = data.mailboxes.as_ref() else {
-                    return None;
-                };
-
-                let mailbox = mailboxes.get_mailbox(id);
-                let Some(root_mails) = mailbox.root_mails.as_ref() else {
+                let Some(root_mails) = data.root_mails.get(id) else {
                     return None;
                 };
 
                 let has_changed = state != root_mails.state;
                 if has_changed {
-                    Some((root_mails.root_mails.clone(), root_mails.state.clone()))
+                    Some((root_mails.mails.clone(), root_mails.state.clone()))
                 } else {
                     None
                 }
