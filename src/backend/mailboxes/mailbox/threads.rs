@@ -5,8 +5,8 @@ use crate::ui::ThreadId;
 const INIT_AMOUNT_THREADS: usize = 10;
 
 pub struct ThreadCtx {
-    state: String,
     root_mails: Vec<Email>,
+    state: String,
 }
 
 impl ThreadCtx {

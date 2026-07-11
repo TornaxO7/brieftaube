@@ -6,10 +6,10 @@ use crate::{
         Account,
         mailboxes::mailbox::{root_mails::RootMails, threads::ThreadCtx},
     },
-    ui::MailboxId,
+    ui::{MailboxId, ThreadId},
 };
 use jmap_client::mailbox::Mailbox;
-use std::{collections::HashMap, thread::ThreadId};
+use std::collections::HashMap;
 
 pub struct MailboxCtx {
     inner: Mailbox,

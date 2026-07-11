@@ -3,6 +3,7 @@ pub mod log_viewer;
 pub mod mail_viewer;
 pub mod mailboxes;
 pub mod root_mails;
+pub mod thread_mails;
 pub mod utils;
 
 use crossterm::event::Event;
