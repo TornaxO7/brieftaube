@@ -5,6 +5,7 @@ use crate::{
 };
 use jmap_client::mailbox::Mailbox;
 use std::{collections::HashMap, sync::Arc};
+use tracing::error;
 
 #[derive(Debug, Clone)]
 pub enum PaletteValues {}
@@ -60,13 +61,20 @@ impl ScreenState<Action, PaletteValues> for State {
             Action::SelectNextMailbox => self.list_state.next(),
             Action::SelectPreviousMailbox => self.list_state.previous(),
             Action::OpenSelectedMailbox => {
-                todo!("Open mail list command")
-                // if let Some(selected_mailbox) = self.get_selected_mailbox() {
-                //     assert!(selected_mailbox.id().is_some());
-                //     // return Some(super::Action::OpenMailList(Some(
-                //     //     selected_mailbox.id().unwrap().to_string(),
-                //     // )));
-                // }
+                let Some(mailboxes) = self.mailboxes.as_ref() else {
+                    error!("Can't open mailbox: There are no mailboxes available yet.");
+                    return;
+                };
+
+                let Some(idx) = self.list_state.selected else {
+                    error!("Can't open mailbox: No mailbox selected.");
+                    return;
+                };
+
+                let mailbox_id = mailboxes[idx].id().unwrap().to_string();
+                self.account.init_root_mails(mailbox_id.clone());
+                self.app_actions
+                    .push(crate::Action::OpenMailList(mailbox_id));
             }
         }
     }

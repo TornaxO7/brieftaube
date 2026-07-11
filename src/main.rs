@@ -84,9 +84,7 @@ impl App {
 
         while self.is_running {
             tokio::select! {
-                _ = self.account.has_changed() => {
-                     self.update_state_of_active_screen();
-                }
+                _ = self.account.has_changed() => { }
                 maybe_event = reader.next().fuse() => match maybe_event {
                     Some(Ok(event)) => self.handle_event(event),
                     Some(Err(e)) => error!("{}", e),
@@ -96,6 +94,7 @@ impl App {
 
             terminal.draw(|frame| self.draw(frame))?;
             self.apply_action();
+            self.update_state_of_active_screen();
         }
 
         Ok(())

@@ -109,6 +109,11 @@ impl Mailboxes {
             .collect();
     }
 
+    fn get_mut_mailbox(&mut self, id: &MailboxId) -> &mut MailboxCtx {
+        let idx = self.mapping.get(id).unwrap();
+        self.mailboxes.get_mut(*idx).unwrap()
+    }
+
     fn get_mailbox(&self, id: &MailboxId) -> &MailboxCtx {
         let idx = self.mapping.get(id).unwrap();
         self.mailboxes.get(*idx).unwrap()
@@ -132,25 +137,27 @@ impl Account {
     }
 
     pub fn get_mailboxes(&self, state: &str) -> Option<(Vec<Mailbox>, String)> {
-        let data = self.data.lock().unwrap();
+        match self.data.try_lock() {
+            Ok(data) => match data.mailboxes.as_ref() {
+                Some(mailboxes_data) => {
+                    let state_changed = mailboxes_data.state != state;
 
-        match data.mailboxes.as_ref() {
-            Some(mailboxes_data) => {
-                let state_changed = mailboxes_data.state != state;
+                    if state_changed {
+                        let mailboxes = mailboxes_data
+                            .mailboxes
+                            .iter()
+                            .map(|ctx| ctx.mailbox().clone())
+                            .collect::<Vec<Mailbox>>();
 
-                if state_changed {
-                    let mailboxes = mailboxes_data
-                        .mailboxes
-                        .iter()
-                        .map(|ctx| ctx.mailbox().clone())
-                        .collect::<Vec<Mailbox>>();
-
-                    Some((mailboxes, mailboxes_data.state.to_owned()))
-                } else {
-                    None
+                        Some((mailboxes, mailboxes_data.state.to_owned()))
+                    } else {
+                        None
+                    }
                 }
-            }
-            None => None,
+                None => None,
+            },
+            Err(std::sync::TryLockError::WouldBlock) => None,
+            Err(std::sync::TryLockError::Poisoned(err)) => unreachable!("{:?}", err),
         }
     }
 }
