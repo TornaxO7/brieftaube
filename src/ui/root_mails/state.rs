@@ -8,6 +8,7 @@ use crate::{
 };
 use jmap_client::email::Email;
 use std::{collections::HashMap, sync::Arc};
+use tracing::error;
 
 #[derive(Debug, Clone)]
 pub enum PaletteType {
@@ -39,7 +40,7 @@ impl State {
                 ("j", Action::SelectNextMail),
                 ("k", Action::SelectPreviousMail),
                 ("h", Action::Back),
-                ("l", Action::ViewSelectedMail),
+                ("l", Action::OpenThread),
             ])),
 
             root_mails: None,
@@ -85,7 +86,26 @@ impl ScreenState<Action, PaletteType> for State {
                 self.app_actions.push(crate::Action::OpenLogViewer);
             }
             Action::OpenThread => {
-                todo!()
+                let Some(mails) = self.root_mails.as_ref() else {
+                    error!(
+                        "Can't open thread: Root mails aren't available yet to determine which thread should be opened."
+                    );
+                    return;
+                };
+
+                let Some(idx) = self.list_state.selected else {
+                    error!(
+                        "Can't open thread: No root mail selected to determine which thread should be opened."
+                    );
+                    return;
+                };
+
+                let selected_mail = &mails[idx];
+                let thread_id = selected_mail.thread_id().unwrap().to_string();
+                self.app_actions.push(crate::Action::OpenThread {
+                    mailbox_id: self.mailbox_id.clone(),
+                    thread_id,
+                });
             }
             Action::CloseCommandPalette => self.palette = None,
             Action::ViewSelectedMail => {

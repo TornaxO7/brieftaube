@@ -16,7 +16,7 @@ use tracing::{error, level_filters::LevelFilter};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use xdg::BaseDirectories;
 
-use crate::ui::{MailboxId, ScreenState};
+use crate::ui::{MailboxId, ScreenState, ThreadId};
 
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
 static XDG: OnceLock<BaseDirectories> = OnceLock::new();
@@ -39,14 +39,19 @@ enum Screen {
     Composer(ui::composer::State),
     MailViewer(ui::mail_viewer::State),
     LogViewer(ui::log_viewer::State),
+    ThreadMails(ui::thread_mails::State),
 }
 
 #[derive(Debug)]
 pub enum Action {
-    OpenMailList(MailboxId),
+    OpenRootMails(MailboxId),
     OpenMailViewer,
     OpenLogViewer,
     OpenComposer,
+    OpenThread {
+        mailbox_id: MailboxId,
+        thread_id: ThreadId,
+    },
 
     Refresh,
     Back,
@@ -100,45 +105,31 @@ impl App {
             Screen::Composer(state) => state.update(),
             Screen::MailViewer(state) => state.update(),
             Screen::LogViewer(state) => state.update(),
+            Screen::ThreadMails(state) => state.update(),
         }
     }
 
     fn draw(&mut self, frame: &mut Frame) {
+        let area = frame.area();
+
         match self.screens.last_mut().unwrap() {
             Screen::Mailboxes(state) => {
-                frame.render_stateful_widget(
-                    ui::mailboxes::Mailboxes::default(),
-                    frame.area(),
-                    state,
-                );
+                frame.render_stateful_widget(ui::mailboxes::Mailboxes::default(), area, state);
             }
             Screen::MailList(state) => {
-                frame.render_stateful_widget(
-                    ui::root_mails::RootMails::default(),
-                    frame.area(),
-                    state,
-                );
+                frame.render_stateful_widget(ui::root_mails::RootMails::default(), area, state);
             }
             Screen::Composer(state) => {
-                frame.render_stateful_widget(
-                    ui::composer::Composer::default(),
-                    frame.area(),
-                    state,
-                );
+                frame.render_stateful_widget(ui::composer::Composer::default(), area, state);
             }
             Screen::MailViewer(state) => {
-                frame.render_stateful_widget(
-                    ui::mail_viewer::MailViewer::default(),
-                    frame.area(),
-                    state,
-                );
+                frame.render_stateful_widget(ui::mail_viewer::MailViewer::default(), area, state);
             }
             Screen::LogViewer(state) => {
-                frame.render_stateful_widget(
-                    ui::log_viewer::LogViewer::default(),
-                    frame.area(),
-                    state,
-                );
+                frame.render_stateful_widget(ui::log_viewer::LogViewer::default(), area, state);
+            }
+            Screen::ThreadMails(state) => {
+                frame.render_stateful_widget(ui::thread_mails::ThreadMails::default(), area, state);
             }
         };
     }
@@ -150,6 +141,7 @@ impl App {
             Screen::Composer(state) => state.handle_event(event),
             Screen::MailViewer(state) => state.handle_event(event),
             Screen::LogViewer(state) => state.handle_event(event),
+            Screen::ThreadMails(state) => state.handle_event(event),
         };
     }
 
@@ -161,6 +153,7 @@ impl App {
                 Screen::Composer(state) => state.get_app_actions(),
                 Screen::MailViewer(state) => state.get_app_actions(),
                 Screen::LogViewer(state) => state.get_app_actions(),
+                Screen::ThreadMails(state) => state.get_app_actions(),
             };
 
             actions.collect::<Vec<Action>>()
@@ -168,7 +161,8 @@ impl App {
 
         for action in actions {
             match action {
-                Action::OpenMailList(mailbox_id) => {
+                Action::OpenRootMails(mailbox_id) => {
+                    self.account.init_root_mails(mailbox_id.clone());
                     self.screens
                         .push(Screen::MailList(ui::root_mails::State::new(
                             self.account.clone(),
@@ -189,6 +183,20 @@ impl App {
                     self.screens.push(Screen::Composer(ui::composer::State::new(
                         self.account.clone(),
                     )));
+                }
+                Action::OpenThread {
+                    mailbox_id,
+                    thread_id,
+                } => {
+                    self.account
+                        .init_thread(mailbox_id.clone(), thread_id.clone());
+
+                    self.screens
+                        .push(Screen::ThreadMails(ui::thread_mails::State::new(
+                            self.account.clone(),
+                            mailbox_id,
+                            thread_id,
+                        )));
                 }
                 Action::Refresh => todo!(),
                 Action::Back => {

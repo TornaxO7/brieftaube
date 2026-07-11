@@ -75,9 +75,8 @@ impl ScreenState<Action, PaletteValues> for State {
                 };
 
                 let mailbox_id = mailboxes[idx].id().unwrap().to_string();
-                self.account.init_root_mails(mailbox_id.clone());
                 self.app_actions
-                    .push(crate::Action::OpenMailList(mailbox_id));
+                    .push(crate::Action::OpenRootMails(mailbox_id));
             }
         }
     }
