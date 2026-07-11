@@ -15,7 +15,10 @@ pub struct MailListWidget<'a> {
 
 impl<'a> MailListWidget<'a> {
     pub fn new(root_mails: &'a [Email]) -> Self {
-        Self { root_mails, block: None }
+        Self {
+            root_mails,
+            block: None,
+        }
     }
 
     pub fn block(mut self, block: Block<'a>) -> Self {
@@ -32,11 +35,6 @@ impl<'a> StatefulWidget for MailListWidget<'a> {
             const ENTRY_SIZE: u16 = 4;
 
             let mail = &self.root_mails[context.index];
-            let starts_new_thread = context.index == 0 || {
-                let prev_mail = &self.root_mails[context.index - 1];
-
-                prev_mail.thread_id().unwrap() != mail.thread_id().unwrap()
-            };
 
             let entry = {
                 let subject = mail.subject().unwrap();
@@ -69,7 +67,6 @@ impl<'a> StatefulWidget for MailListWidget<'a> {
                     from,
                     date,
 
-                    starts_new_thread,
                     style,
                 }
             };
@@ -77,7 +74,8 @@ impl<'a> StatefulWidget for MailListWidget<'a> {
             (entry, ENTRY_SIZE)
         });
 
-        let mut list = ListView::new(entry_builder, self.root_mails.len()).infinite_scrolling(false);
+        let mut list =
+            ListView::new(entry_builder, self.root_mails.len()).infinite_scrolling(false);
         if let Some(block) = self.block {
             list = list.block(block);
         }
@@ -91,24 +89,14 @@ struct MailListEntry<'a> {
     subject: &'a str,
     date: String,
 
-    starts_new_thread: bool,
     style: Style,
 }
 
 impl<'a> Widget for MailListEntry<'a> {
-    fn render(self, a: Rect, buf: &mut Buffer)
+    fn render(self, area: Rect, buf: &mut Buffer)
     where
         Self: Sized,
     {
-        let area = if self.starts_new_thread {
-            a
-        } else {
-            let [_left_padding, right] =
-                Layout::horizontal([Constraint::Percentage(2), Constraint::Fill(0)]).areas(a);
-
-            right
-        };
-
         let entry_block = Block::bordered().style(self.style);
         let entry_area = entry_block.inner(area);
 
