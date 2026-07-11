@@ -42,6 +42,7 @@ impl State {
                 ("k", Action::ScrollUp),
                 ("l", Action::ScrollRight),
                 ("q", Action::Quit),
+                (":", Action::OpenCommandPalette),
                 ("<BS>", Action::Back),
             ])),
 
