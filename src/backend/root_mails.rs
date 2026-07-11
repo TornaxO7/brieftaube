@@ -24,7 +24,11 @@ impl RootMails {
 
         let mails = {
             let mut request = client.build();
-            request.get_email().ids(Some(response.ids()));
+            request
+                .get_email()
+                .ids(Some(response.ids()))
+                .arguments()
+                .fetch_all_body_values(true);
             let mut response = request.send_get_email().await.unwrap();
 
             response.take_list()

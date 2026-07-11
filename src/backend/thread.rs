@@ -20,7 +20,9 @@ impl Thread {
             let mut request = client.build();
             request
                 .get_email()
-                .ids(Some(response.list()[0].email_ids()));
+                .ids(Some(response.list()[0].email_ids()))
+                .arguments()
+                .fetch_all_body_values(true);
             let mut response = request.send_get_email().await.unwrap();
 
             (response.take_list(), response.take_state())
