@@ -50,12 +50,26 @@ impl State {
         }
     }
 
-    pub fn select_next_mail(&mut self) {
+    fn select_next_mail(&mut self) {
         self.list_state.next();
     }
 
-    pub fn select_previous_mail(&mut self) {
+    fn select_previous_mail(&mut self) {
         self.list_state.previous();
+    }
+
+    fn get_selected_mail(&self) -> Option<&Email> {
+        let Some(mails) = self.root_mails.as_ref() else {
+            error!("Can't get selected mail: Mails aren't available yet.");
+            return None;
+        };
+
+        let Some(idx) = self.list_state.selected else {
+            error!("Can't get selected mail: No mail is selected.");
+            return None;
+        };
+
+        Some(&mails[idx])
     }
 }
 
@@ -90,27 +104,17 @@ impl ScreenState<Action, PaletteType> for State {
                 self.app_actions.push(crate::Action::OpenLogViewer);
             }
             Action::OpenThread => {
-                let Some(mails) = self.root_mails.as_ref() else {
-                    error!(
-                        "Can't open thread: Root mails aren't available yet to determine which thread should be opened."
-                    );
-                    return;
-                };
-
-                let Some(idx) = self.list_state.selected else {
-                    error!(
-                        "Can't open thread: No root mail selected to determine which thread should be opened."
-                    );
-                    return;
-                };
-
-                let selected_mail = &mails[idx];
-                let thread_id = selected_mail.thread_id().unwrap().to_string();
-                self.app_actions.push(crate::Action::OpenThread(thread_id));
+                if let Some(selected_mail) = self.get_selected_mail() {
+                    let thread_id = selected_mail.thread_id().unwrap().to_string();
+                    self.app_actions.push(crate::Action::OpenThread(thread_id));
+                }
             }
             Action::CloseCommandPalette => self.palette = None,
             Action::ViewSelectedMail => {
-                todo!()
+                if let Some(selected_mail) = self.get_selected_mail() {
+                    self.app_actions
+                        .push(crate::Action::OpenMailViewer(selected_mail.clone()));
+                }
             }
         }
     }

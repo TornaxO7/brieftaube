@@ -1,13 +1,9 @@
 use super::Action;
-use super::widget::RenderData;
-use crate::{
-    backend::Account,
-    ui::{MailId, ScreenPalette, ScreenState, palette, utils::keybindmanager::KeybindManager},
-};
+use crate::ui::{ScreenPalette, ScreenState, palette, utils::keybindmanager::KeybindManager};
 use chrono::DateTime;
 use jmap_client::email::{Email, EmailAddress};
 use ratatui::widgets::ScrollbarState;
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 use tracing::debug;
 
 #[derive(Debug, Clone)]
@@ -18,20 +14,27 @@ pub enum PaletteType {
 
 pub struct State {
     app_actions: Vec<crate::Action>,
-    account: Arc<Account>,
-
-    ctx: Option<Ctx>,
     palette: Option<palette::State<PaletteType>>,
     keybindings: KeybindManager<Action>,
+
+    pub mail: Email,
+    /// String representation of mail
+    pub mail_str: String,
+
+    pub vertical: ScrollbarState,
+    pub horizontal: ScrollbarState,
 }
 
 impl State {
-    pub fn new(account: Arc<Account>) -> Self {
+    pub fn new(mail: Email) -> Self {
+        let mail_str = get_string_representation(&mail);
+
+        let vertical = ScrollbarState::new(mail_str.lines().count());
+        let horizontal =
+            ScrollbarState::new(mail_str.lines().map(|line| line.len()).max().unwrap());
+
         Self {
             app_actions: vec![],
-            account,
-
-            ctx: None,
             palette: None,
             keybindings: KeybindManager::new(HashMap::from([
                 ("h", Action::ScrollLeft),
@@ -39,54 +42,30 @@ impl State {
                 ("k", Action::ScrollUp),
                 ("l", Action::ScrollRight),
                 ("q", Action::Quit),
-                // ("<BS>", super::Action::OpenMailList(None)),
+                ("<BS>", Action::Back),
             ])),
+
+            mail,
+            mail_str,
+            vertical,
+            horizontal,
         }
     }
 
-    pub fn open_mail(&mut self, _mail: Option<MailId>) {
-        // if let Some(id) = mail {
-        //     self.ctx = None;
-        //     let account = self.account.clone();
-        //     let tx = self.tx.clone();
-
-        //     tokio::spawn(async move {
-        //         let client = &account.client;
-
-        //         let mut response = {
-        //             let mut request = client.build();
-        //             request
-        //                 .get_email()
-        //                 .ids(Some([id]))
-        //                 .arguments()
-        //                 .fetch_text_body_values(true);
-        //             request.send_get_email().await.unwrap()
-        //         };
-
-        //         tx.send(response.take_list()[0].clone()).await.unwrap();
-        //     });
-        // }
-        todo!()
-    }
-
     fn scroll_down(&mut self) {
-        self.ctx.as_mut().map(|ctx| ctx.scroll_down());
+        self.vertical.next();
     }
 
     fn scroll_up(&mut self) {
-        self.ctx.as_mut().map(|ctx| ctx.scroll_up());
+        self.vertical.prev();
     }
 
     fn scroll_left(&mut self) {
-        self.ctx.as_mut().map(|ctx| ctx.scroll_left());
+        self.horizontal.prev();
     }
 
     fn scroll_right(&mut self) {
-        self.ctx.as_mut().map(|ctx| ctx.scroll_right());
-    }
-
-    pub fn get_render_data(&mut self) -> Option<RenderData<'_>> {
-        self.ctx.as_mut().map(|ctx| ctx.render_data())
+        self.horizontal.next();
     }
 }
 
@@ -107,8 +86,8 @@ impl ScreenState<Action, PaletteType> for State {
             Action::ScrollLeft => self.scroll_left(),
             Action::ScrollRight => self.scroll_right(),
 
-            Action::OpenMailList => {
-                todo!()
+            Action::Back => {
+                self.app_actions.push(crate::Action::Back);
             }
         }
     }
@@ -137,81 +116,30 @@ impl ScreenPalette<PaletteType> for State {
     }
 }
 
-#[derive(Debug)]
-struct Ctx {
-    pub mail: Email,
-    /// String representation of mail
-    pub mail_str: String,
+fn get_string_representation(mail: &Email) -> String {
+    tracing::debug!("{:#?}", mail);
+    let date = DateTime::from_timestamp_millis(mail.received_at().unwrap())
+        .unwrap()
+        .format("%A, %d %B %Y %T");
 
-    pub vertical: ScrollbarState,
-    pub horizontal: ScrollbarState,
-}
+    let from = addresses_to_string(mail.from().unwrap());
+    let to = addresses_to_string(mail.to().unwrap());
+    let subject = mail.subject().unwrap();
 
-impl Ctx {
-    pub fn new(mail: Email) -> Self {
-        let mail_str = Self::get_string_representation(&mail);
+    let body = {
+        let mut s = String::new();
 
-        let vertical = ScrollbarState::new(mail_str.lines().count());
-        let horizontal =
-            ScrollbarState::new(mail_str.lines().map(|line| line.len()).max().unwrap());
+        for body in mail.text_body().unwrap() {
+            let id = body.part_id().unwrap();
 
-        Self {
-            mail,
-            mail_str,
-            vertical,
-            horizontal,
+            s.push_str(mail.body_value(id).expect("Body value exists").value());
         }
-    }
 
-    pub fn render_data(&mut self) -> RenderData<'_> {
-        RenderData {
-            mail: &self.mail,
-            mail_str: self.mail_str.as_str(),
+        s
+    };
 
-            vertical: &mut self.vertical,
-            horizontal: &mut self.horizontal,
-        }
-    }
-
-    pub fn scroll_down(&mut self) {
-        self.vertical.next();
-    }
-
-    pub fn scroll_up(&mut self) {
-        self.vertical.prev();
-    }
-
-    pub fn scroll_right(&mut self) {
-        self.horizontal.next();
-    }
-
-    pub fn scroll_left(&mut self) {
-        self.horizontal.prev();
-    }
-
-    fn get_string_representation(mail: &Email) -> String {
-        let date = DateTime::from_timestamp_millis(mail.received_at().unwrap())
-            .unwrap()
-            .format("%A, %d %B %Y %T");
-
-        let from = Self::addresses_to_string(mail.from().unwrap());
-        let to = Self::addresses_to_string(mail.to().unwrap());
-        let subject = mail.subject().unwrap();
-
-        let body = {
-            let mut s = String::new();
-
-            for body in mail.text_body().unwrap() {
-                let id = body.part_id().unwrap();
-
-                s.push_str(mail.body_value(id).unwrap().value());
-            }
-
-            s
-        };
-
-        format!(
-            "\
+    format!(
+        "\
 Date: {date}
 From: {from}
 To: {to}
@@ -219,18 +147,17 @@ Subject: {subject}
 
 
 {body}"
-        )
+    )
+}
+
+fn addresses_to_string(addresses: &[EmailAddress]) -> String {
+    let mut iter = addresses.iter();
+
+    let mut s = format!("{}", iter.next().unwrap().email());
+
+    for addr in iter {
+        s.push_str(&format!(", {}", addr.email()))
     }
 
-    fn addresses_to_string(addresses: &[EmailAddress]) -> String {
-        let mut iter = addresses.iter();
-
-        let mut s = format!("{}", iter.next().unwrap().email());
-
-        for addr in iter {
-            s.push_str(&format!(", {}", addr.email()))
-        }
-
-        s
-    }
+    s
 }

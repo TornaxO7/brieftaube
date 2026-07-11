@@ -1,12 +1,8 @@
 use crate::ui::{ScreenPalette, palette};
-use jmap_client::email::Email;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Margin, Rect},
-    widgets::{
-        Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget,
-        Widget,
-    },
+    widgets::{Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, StatefulWidget, Widget},
 };
 use tui_widget_list::{ListBuilder, ListView};
 
@@ -17,22 +13,14 @@ impl StatefulWidget for MailViewer {
     type State = super::State;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        if let Some(mut data) = state.get_render_data() {
-            let [top, bottom] = if data.mail.has_attachment() {
-                Layout::vertical([Constraint::Percentage(80), Constraint::Fill(0)]).areas(area)
-            } else {
-                [area, Rect::default()]
-            };
-
-            render_mail_content(&mut data, top, buf);
-            render_attachment_list(&data.mail, bottom, buf);
+        let [top, bottom] = if state.mail.has_attachment() {
+            Layout::vertical([Constraint::Percentage(80), Constraint::Fill(0)]).areas(area)
         } else {
-            Widget::render(
-                Paragraph::new("Loading mail...").block(Block::bordered()),
-                area,
-                buf,
-            );
-        }
+            [area, Rect::default()]
+        };
+
+        render_mail_content(top, buf, state);
+        render_attachment_list(bottom, buf, state);
 
         if let Some(state) = &mut state.palette() {
             let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
@@ -45,13 +33,13 @@ impl StatefulWidget for MailViewer {
 /// Rendering implementations
 // TODO: Respect the area size before scrolling.
 //    If the whole mail can be fitted within the area rect, there's no need to add the scrollbars.
-fn render_mail_content(data: &mut RenderData, area: Rect, buf: &mut Buffer) {
+fn render_mail_content(area: Rect, buf: &mut Buffer, state: &mut super::State) {
     Widget::render(
-        Paragraph::new(data.mail_str)
+        Paragraph::new(state.mail_str.as_str())
             .block(Block::bordered())
             .scroll((
-                data.vertical.get_position() as u16,
-                data.horizontal.get_position() as u16,
+                state.vertical.get_position() as u16,
+                state.horizontal.get_position() as u16,
             )),
         area.inner(Margin {
             horizontal: 1,
@@ -64,19 +52,19 @@ fn render_mail_content(data: &mut RenderData, area: Rect, buf: &mut Buffer) {
         Scrollbar::new(ScrollbarOrientation::VerticalRight),
         area,
         buf,
-        data.vertical,
+        &mut state.vertical,
     );
 
     StatefulWidget::render(
         Scrollbar::new(ScrollbarOrientation::HorizontalBottom),
         area,
         buf,
-        data.horizontal,
+        &mut state.horizontal,
     );
 }
 
-fn render_attachment_list(mail: &Email, area: Rect, buf: &mut Buffer) {
-    if let Some(attachments) = mail.attachments() {
+fn render_attachment_list(area: Rect, buf: &mut Buffer, state: &super::State) {
+    if let Some(attachments) = state.mail.attachments() {
         let builder = ListBuilder::new(|context| {
             const HEIGHT: u16 = 1;
 
@@ -114,12 +102,4 @@ impl<'a> Widget for AttachmentWidget<'a> {
         Widget::render(Paragraph::new(self.name).left_aligned(), left, buf);
         Widget::render(Paragraph::new(self.ty).right_aligned(), right, buf);
     }
-}
-
-#[derive(Debug)]
-pub struct RenderData<'a> {
-    pub mail: &'a Email,
-    pub mail_str: &'a str,
-    pub vertical: &'a mut ScrollbarState,
-    pub horizontal: &'a mut ScrollbarState,
 }

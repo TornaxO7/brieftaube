@@ -8,6 +8,7 @@ use crate::{
 };
 use jmap_client::email::Email;
 use std::{collections::HashMap, sync::Arc};
+use tracing::error;
 
 #[derive(Debug, Clone)]
 pub enum PaletteType {
@@ -49,12 +50,26 @@ impl State {
         }
     }
 
-    pub fn select_next_mail(&mut self) {
+    fn select_next_mail(&mut self) {
         self.list_state.next();
     }
 
-    pub fn select_previous_mail(&mut self) {
+    fn select_previous_mail(&mut self) {
         self.list_state.previous();
+    }
+
+    fn get_selected_mail(&self) -> Option<&Email> {
+        let Some(mails) = self.mails.as_ref() else {
+            error!("Can't get seleced mail: Mails aren't available yet to select.");
+            return None;
+        };
+
+        let Some(idx) = self.list_state.selected else {
+            error!("Can't get selected mail: No mail is selected.");
+            return None;
+        };
+
+        Some(&mails[idx])
     }
 }
 
@@ -90,7 +105,10 @@ impl ScreenState<Action, PaletteType> for State {
             }
             Action::CloseCommandPalette => self.palette = None,
             Action::ViewSelectedMail => {
-                todo!()
+                if let Some(mail) = self.get_selected_mail() {
+                    self.app_actions
+                        .push(crate::Action::OpenMailViewer(mail.clone()));
+                }
             }
         }
     }

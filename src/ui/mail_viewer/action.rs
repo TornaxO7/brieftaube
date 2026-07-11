@@ -21,11 +21,11 @@ pub enum Action {
     OpenCommandPalette,
     #[strum(props(intern = true))]
     CloseCommandPalette,
+
     #[strum(message = "Quit the application")]
     Quit,
-
-    #[strum(message = "Go back to mail list.")]
-    OpenMailList,
+    #[strum(message = "Go back.")]
+    Back,
 
     #[strum(message = "Scroll down")]
     ScrollDown,

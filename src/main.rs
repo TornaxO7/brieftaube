@@ -2,9 +2,11 @@ mod backend;
 mod config;
 mod ui;
 
+use crate::ui::{MailboxId, ScreenState, ThreadId};
 use color_eyre::eyre;
 use crossterm::event::Event;
 use futures::{FutureExt, StreamExt};
+use jmap_client::email::Email;
 use ratatui::{DefaultTerminal, Frame};
 use std::{
     fs::OpenOptions,
@@ -15,8 +17,6 @@ use std::{
 use tracing::{error, level_filters::LevelFilter};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use xdg::BaseDirectories;
-
-use crate::ui::{MailboxId, ScreenState, ThreadId};
 
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
 static XDG: OnceLock<BaseDirectories> = OnceLock::new();
@@ -45,7 +45,7 @@ enum Screen {
 #[derive(Debug)]
 pub enum Action {
     OpenRootMails(MailboxId),
-    OpenMailViewer,
+    OpenMailViewer(Email),
     OpenLogViewer,
     OpenComposer,
     OpenThread(ThreadId),
@@ -167,11 +167,9 @@ impl App {
                             mailbox_id,
                         )));
                 }
-                Action::OpenMailViewer => {
+                Action::OpenMailViewer(mail) => {
                     self.screens
-                        .push(Screen::MailViewer(ui::mail_viewer::State::new(
-                            self.account.clone(),
-                        )));
+                        .push(Screen::MailViewer(ui::mail_viewer::State::new(mail)));
                 }
                 Action::OpenLogViewer => {
                     self.screens
