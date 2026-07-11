@@ -3,7 +3,13 @@ mod threads;
 
 use std::{collections::HashMap, thread::ThreadId};
 
-use crate::backend::mailboxes::mailbox::{root_mails::RootMails, threads::ThreadCtx};
+use crate::{
+    backend::{
+        Account,
+        mailboxes::mailbox::{root_mails::RootMails, threads::ThreadCtx},
+    },
+    utils::ui::MailboxId,
+};
 use jmap_client::{client::Client, email::Email, mailbox::Mailbox};
 
 pub struct MailboxCtx {

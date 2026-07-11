@@ -1,4 +1,4 @@
-use crate::utils::ui::MailboxId;
+use crate::{backend::Account, utils::ui::MailboxId};
 use jmap_client::{client::Client, email::Email};
 
 const INIT_ROOT_MAILS: usize = 10;
@@ -31,8 +31,26 @@ impl RootMails {
 
         Self { mails, state }
     }
+}
 
-    pub fn mails(&self) -> &[Email] {
-        self.mails.as_slice()
+impl Account {
+    pub fn get_root_mails(&self, id: &MailboxId, state: &str) -> Option<(Vec<Email>, String)> {
+        let data = self.data.lock().unwrap();
+
+        let Some(mailboxes) = data.mailboxes.as_ref() else {
+            return None;
+        };
+
+        let mailbox = mailboxes.get_mailbox(id);
+        let Some(root_mails) = mailbox.root_mails.as_ref() else {
+            return None;
+        };
+
+        let has_changed = state != root_mails.state;
+        if has_changed {
+            Some((root_mails.mails.clone(), root_mails.state.clone()))
+        } else {
+            None
+        }
     }
 }

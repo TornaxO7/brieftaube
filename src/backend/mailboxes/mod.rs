@@ -108,6 +108,11 @@ impl Mailboxes {
             })
             .collect();
     }
+
+    fn get_mailbox(&self, id: &MailboxId) -> &MailboxCtx {
+        let idx = self.mapping.get(id).unwrap();
+        self.mailboxes.get(*idx).unwrap()
+    }
 }
 
 impl Account {

@@ -42,8 +42,8 @@ impl StatefulWidget for MailList {
 /// Render functions
 impl MailList {
     fn render_mail_list(&self, area: Rect, buf: &mut Buffer, state: &mut super::State) {
-        match state.get_render_mail_list_data() {
-            Some((mails, state)) => {
+        match state.mails.as_ref() {
+            Some(mails) => {
                 StatefulWidget::render(
                     list::MailListWidget::new(mails).block(
                         Block::bordered()
@@ -52,7 +52,7 @@ impl MailList {
                     ),
                     area,
                     buf,
-                    state,
+                    &mut state.list_state,
                 );
             }
             None => Widget::render(
@@ -64,18 +64,22 @@ impl MailList {
     }
 
     fn render_preview(&self, area: Rect, buf: &mut Buffer, state: &mut super::State) {
-        match state.get_render_preview_data() {
-            Some(data) => Widget::render(
-                Paragraph::new(data).block(Block::bordered().title(PREVIEW_PANEL_TITLE)),
+        if let (Some(mails), Some(idx)) = (&state.mails, state.list_state.selected) {
+            let mail = &mails[idx];
+            let preview = mail.preview().unwrap();
+
+            Widget::render(
+                Paragraph::new(preview).block(Block::bordered().title(PREVIEW_PANEL_TITLE)),
                 area,
                 buf,
-            ),
-            None => Widget::render(
+            )
+        } else {
+            Widget::render(
                 Paragraph::new("No mail selected")
                     .block(Block::bordered().title(PREVIEW_PANEL_TITLE)),
                 area,
                 buf,
-            ),
+            )
         }
     }
 
