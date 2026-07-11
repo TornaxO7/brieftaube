@@ -145,7 +145,7 @@ Subject:
 }
 
 impl ScreenState<Action, PaletteType> for State {
-    async fn update(&mut self) -> bool {
+    async fn update(&mut self) {
         // match self.rx.try_recv() {
         //     Ok(sent_mailbox_id) => self.draft_mailbox_id = Some(sent_mailbox_id),
         //     Err(mpsc::error::TryRecvError::Empty) => {}

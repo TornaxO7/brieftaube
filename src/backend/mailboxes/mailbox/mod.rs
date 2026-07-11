@@ -36,7 +36,7 @@ impl MailboxCtx {
             .mails()
     }
 
-    pub async fn get_or_fetch_thread_mails(&mut self, client: &Client, id: ThreadId) -> &[Email] {
-        todo!()
+    pub fn mailbox(&self) -> &Mailbox {
+        &self.inner
     }
 }

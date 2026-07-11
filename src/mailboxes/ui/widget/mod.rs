@@ -17,7 +17,7 @@ impl StatefulWidget for Mailboxes {
         buf: &mut ratatui::prelude::Buffer,
         state: &mut Self::State,
     ) {
-        if let Some(mailboxes) = state.get_mailboxes() {
+        if let Some(mailboxes) = &state.mailboxes {
             StatefulWidget::render(
                 list::List::new(&mailboxes).block(
                     Block::new()
@@ -26,7 +26,7 @@ impl StatefulWidget for Mailboxes {
                 ),
                 area,
                 buf,
-                state.get_list_state(),
+                &mut state.list_state,
             )
         } else {
             Widget::render(

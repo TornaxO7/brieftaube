@@ -11,9 +11,13 @@ pub enum PaletteValues {}
 
 pub struct State {
     app_actions: Vec<crate::Action>,
-    mailbox_list_state: tui_widget_list::ListState,
     keybindings: KeybindManager<Action>,
     account: Arc<backend::Account>,
+
+    pub mailboxes: Option<Vec<Mailbox>>,
+    pub list_state: tui_widget_list::ListState,
+
+    data_state: String,
 }
 
 impl State {
@@ -21,7 +25,10 @@ impl State {
         Self {
             app_actions: vec![],
             account,
-            mailbox_list_state: tui_widget_list::ListState::default(),
+            list_state: tui_widget_list::ListState::default(),
+
+            mailboxes: None,
+            data_state: String::new(),
 
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", Action::Quit.into()),
@@ -33,51 +40,14 @@ impl State {
             ])),
         }
     }
-
-    pub fn get_mailboxes(&mut self) -> Option<&[Mailbox]> {
-        todo!()
-    }
-
-    pub fn get_selected_mailbox(&self) -> Option<&Mailbox> {
-        let Some(mailboxes) = self.get_mailboxes() else {
-            return None;
-        };
-
-        let Some(idx) = self.mailbox_list_state.selected else {
-            return None;
-        };
-
-        mailboxes.get(idx)
-    }
-
-    pub fn get_list_state(&mut self) -> &mut tui_widget_list::ListState {
-        &mut self.mailbox_list_state
-    }
-
-    pub fn select_next_mailbox(&mut self) {
-        self.mailbox_list_state.next();
-    }
-
-    pub fn select_previous_mailbox(&mut self) {
-        self.mailbox_list_state.previous();
-    }
 }
 
 impl ScreenState<Action, PaletteValues> for State {
-    async fn update(&mut self) -> bool {
-        // match self.rx.try_recv() {
-        //     Ok(mailboxes) => self.mailboxes = Some(mailboxes),
-        //     Err(mpsc::error::TryRecvError::Empty) => {}
-        //     Err(mpsc::error::TryRecvError::Disconnected) => todo!(),
-        // }
-
-        // let select_first_entry =
-        //     self.mailboxes.is_some() && self.mailbox_list_state.selected.is_none();
-
-        // if select_first_entry {
-        //     self.mailbox_list_state.next();
-        // }
-        false
+    fn update(&mut self) {
+        if let Some((mailboxes, new_state)) = self.account.get_mailboxes(&self.data_state) {
+            self.mailboxes = Some(mailboxes);
+            self.data_state = new_state;
+        }
     }
 
     fn apply_action(&mut self, action: Action) {
@@ -87,16 +57,16 @@ impl ScreenState<Action, PaletteValues> for State {
             Action::OpenCommandPalette => todo!(),
             Action::CloseCommandPalette => todo!(),
 
-            Action::SelectNextMailbox => self.select_next_mailbox(),
-            Action::SelectPreviousMailbox => self.select_previous_mailbox(),
+            Action::SelectNextMailbox => self.list_state.next(),
+            Action::SelectPreviousMailbox => self.list_state.previous(),
             Action::OpenSelectedMailbox => {
-                if let Some(selected_mailbox) = self.get_selected_mailbox() {
-                    assert!(selected_mailbox.id().is_some());
-                    // return Some(super::Action::OpenMailList(Some(
-                    //     selected_mailbox.id().unwrap().to_string(),
-                    // )));
-                    todo!("Open mail list command")
-                }
+                todo!("Open mail list command")
+                // if let Some(selected_mailbox) = self.get_selected_mailbox() {
+                //     assert!(selected_mailbox.id().is_some());
+                //     // return Some(super::Action::OpenMailList(Some(
+                //     //     selected_mailbox.id().unwrap().to_string(),
+                //     // )));
+                // }
             }
         }
     }

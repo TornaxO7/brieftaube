@@ -9,7 +9,7 @@ pub type MailId = String;
 pub type ThreadId = String;
 
 pub trait ScreenState<A: Clone, PE: Clone>: ScreenPalette<PE> {
-    async fn update(&mut self) -> bool;
+    fn update(&mut self);
 
     fn apply_action(&mut self, action: A);
 

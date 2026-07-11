@@ -1,17 +1,16 @@
 mod mailboxes;
 
 use jmap_client::client::Client;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
-struct FetcherData {
+struct Data {
     mailboxes: Option<mailboxes::Mailboxes>,
 }
 
 pub struct Account {
-    pub client: Arc<jmap_client::client::Client>,
-    data: Arc<Mutex<FetcherData>>,
+    client: Arc<jmap_client::client::Client>,
+    data: Arc<Mutex<Data>>,
 }
 
 impl Account {
@@ -27,23 +26,23 @@ impl Account {
 
         Self {
             client: Arc::new(client),
-            data: Arc::new(Mutex::new(FetcherData::default())),
+            data: Arc::new(Mutex::new(Data::default())),
         }
     }
 
-    pub fn fetch_changes(&self) {
-        let data = self.data.clone();
-        let client = self.client.clone();
+    // pub fn fetch_changes(&self) {
+    //     let data = self.data.clone();
+    //     let client = self.client.clone();
 
-        tokio::spawn(async move {
-            let mut data = data.lock().await;
+    //     tokio::spawn(async move {
+    //         let mut data = data.lock().await;
 
-            match data.mailboxes.as_mut() {
-                Some(data) => data.fetch_changes(&client).await,
-                None => data.mailboxes = Some(mailboxes::Mailboxes::new(&client).await),
-            };
-        });
-    }
+    //         match data.mailboxes.as_mut() {
+    //             Some(data) => data.fetch_changes(&client).await,
+    //             None => data.mailboxes = Some(mailboxes::Mailboxes::new(&client).await),
+    //         };
+    //     });
+    // }
 
     pub fn address(&self) -> String {
         self.client.session().username().to_string()

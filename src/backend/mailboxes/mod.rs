@@ -1,7 +1,10 @@
 mod mailbox;
 
-use crate::{backend::mailboxes::mailbox::MailboxCtx, utils::ui::MailboxId};
-use jmap_client::client::Client;
+use crate::{
+    backend::{Account, mailboxes::mailbox::MailboxCtx},
+    utils::ui::MailboxId,
+};
+use jmap_client::{client::Client, mailbox::Mailbox};
 use std::collections::HashMap;
 
 pub struct Mailboxes {
@@ -104,5 +107,30 @@ impl Mailboxes {
                 (id, idx)
             })
             .collect();
+    }
+}
+
+impl Account {
+    pub fn get_mailboxes(&self, state: &str) -> Option<(Vec<Mailbox>, String)> {
+        let data = self.data.lock().unwrap();
+
+        match data.mailboxes.as_ref() {
+            Some(mailboxes_data) => {
+                let state_changed = mailboxes_data.state != state;
+
+                if state_changed {
+                    let mailboxes = mailboxes_data
+                        .mailboxes
+                        .iter()
+                        .map(|ctx| ctx.mailbox().clone())
+                        .collect::<Vec<Mailbox>>();
+
+                    Some((mailboxes, mailboxes_data.state.to_owned()))
+                } else {
+                    None
+                }
+            }
+            None => None,
+        }
     }
 }

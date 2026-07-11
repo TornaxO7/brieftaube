@@ -24,10 +24,12 @@ pub struct State {
     selected_mailbox_id: Option<MailboxId>,
     list_state: tui_widget_list::ListState,
     keybindings: KeybindManager<Action>,
+
+    mailbox_id: String,
 }
 
 impl State {
-    pub fn new(fetcher: Arc<backend::Account>) -> Self {
+    pub fn new(fetcher: Arc<backend::Account>, id: MailboxId) -> Self {
         Self {
             app_actions: vec![],
             _fetcher: fetcher,
@@ -35,6 +37,7 @@ impl State {
             selected_mailbox_id: None,
 
             mails: HashMap::new(),
+            mailbox_id: id,
 
             list_state: tui_widget_list::ListState::default(),
             keybindings: KeybindManager::new(HashMap::from([
@@ -139,7 +142,7 @@ impl State {
 }
 
 impl ScreenState<Action, PaletteType> for State {
-    async fn update(&mut self) -> bool {
+    async fn update(&mut self) {
         // if let Some(selected_mailbox_id) = self.selected_mailbox_id.clone() {
         //     match self.rx.try_recv() {
         //         Ok(mails) => {

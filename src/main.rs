@@ -23,6 +23,8 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 use utils::ui::ScreenState;
 use xdg::BaseDirectories;
 
+use crate::utils::ui::MailboxId;
+
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
 static XDG: OnceLock<BaseDirectories> = OnceLock::new();
 
@@ -48,7 +50,7 @@ enum Screen {
 
 #[derive(Debug)]
 pub enum Action {
-    OpenMailList,
+    OpenMailList(MailboxId),
     OpenMailViewer,
     OpenLogViewer,
     OpenComposer,
@@ -82,6 +84,9 @@ impl App {
         while self.is_running {
             tokio::select! {
                 // TODO: Check if the backend received any changes from the event source
+                // _ => self.account_changed() => {
+                //      self.update_screen();
+                // }
                 maybe_event = reader.next().fuse() => match maybe_event {
                     Some(Ok(event)) => self.handle_event(event),
                     Some(Err(e)) => error!("{}", e),
@@ -91,19 +96,19 @@ impl App {
 
             terminal.draw(|frame| self.draw(frame))?;
             self.apply_action();
-            self.update_screen().await;
+            self.update_screen();
         }
 
         Ok(())
     }
 
-    async fn update_screen(&mut self) -> bool {
+    fn update_screen(&mut self) {
         match self.screens.last_mut().unwrap() {
-            Screen::Mailboxes(state) => state.update().await,
-            Screen::MailList(state) => state.update().await,
-            Screen::Composer(state) => state.update().await,
-            Screen::MailViewer(state) => state.update().await,
-            Screen::LogViewer(state) => state.update().await,
+            Screen::Mailboxes(state) => state.update(),
+            Screen::MailList(state) => state.update(),
+            Screen::Composer(state) => state.update(),
+            Screen::MailViewer(state) => state.update(),
+            Screen::LogViewer(state) => state.update(),
         }
     }
 
@@ -168,9 +173,10 @@ impl App {
 
         for action in actions {
             match action {
-                Action::OpenMailList => {
+                Action::OpenMailList(mailbox_id) => {
                     self.screens.push(Screen::MailList(mails::ui::State::new(
                         self.fetcher.clone(),
+                        mailbox_id,
                     )));
                 }
                 Action::OpenMailViewer => {
@@ -188,7 +194,7 @@ impl App {
                         self.fetcher.clone(),
                     )));
                 }
-                Action::Refresh => self.fetcher.fetch_changes(),
+                Action::Refresh => todo!(),
                 Action::Back => {
                     self.screens.pop();
                 }

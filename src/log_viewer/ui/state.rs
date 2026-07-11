@@ -51,7 +51,7 @@ impl State {
 }
 
 impl ScreenState<Action, PaletteType> for State {
-    async fn update(&mut self) -> bool {
+    async fn update(&mut self) {
         false
     }
 
