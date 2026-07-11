@@ -30,19 +30,15 @@ impl Account {
         }
     }
 
-    // pub fn fetch_changes(&self) {
-    //     let data = self.data.clone();
-    //     let client = self.client.clone();
+    pub async fn fetch_changes(&self) {
+        let mut data = self.data.lock().unwrap();
+        let client = self.client.clone();
 
-    //     tokio::spawn(async move {
-    //         let mut data = data.lock().await;
-
-    //         match data.mailboxes.as_mut() {
-    //             Some(data) => data.fetch_changes(&client).await,
-    //             None => data.mailboxes = Some(mailboxes::Mailboxes::new(&client).await),
-    //         };
-    //     });
-    // }
+        match data.mailboxes.as_mut() {
+            Some(data) => data.fetch_changes(&client).await,
+            None => data.mailboxes = Some(mailboxes::Mailboxes::new(&client).await),
+        };
+    }
 
     pub fn address(&self) -> String {
         self.client.session().username().to_string()

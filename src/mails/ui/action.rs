@@ -23,9 +23,9 @@ pub enum Action {
 
     #[strum(message = "Quit the application")]
     Quit,
+    #[strum(message = "Go back")]
+    Back,
 
-    #[strum(message = "Select mailbox by using the palette.")]
-    OpenMailboxList,
     #[strum(message = "Open logs")]
     OpenLogs,
     #[strum(message = "Open the thread of the selected mail.")]

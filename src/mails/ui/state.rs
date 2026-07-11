@@ -70,13 +70,11 @@ impl ScreenState<Action, PaletteType> for State {
         tracing::debug!("Action: {:?}", action);
         match action {
             Action::Quit => self.app_actions.push(crate::Action::Quit),
+            Action::Back => self.app_actions.push(crate::Action::Back),
 
             Action::SelectNextMail => self.select_next_mail(),
             Action::SelectPreviousMail => self.select_previous_mail(),
 
-            Action::OpenMailboxList => {
-                todo!();
-            }
             Action::OpenCommandPalette => {
                 self.palette = Some(palette::State::new(super::action::palette_options()));
             }
