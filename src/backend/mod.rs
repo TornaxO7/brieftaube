@@ -4,15 +4,17 @@ use jmap_client::client::Client;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-pub struct Fetcher {
-    /// Email address
-    client: Arc<jmap_client::client::Client>,
-    address: String,
-
-    data: Arc<Mutex<Data>>,
+#[derive(Default)]
+struct FetcherData {
+    mailboxes: Option<mailboxes::Mailboxes>,
 }
 
-impl Fetcher {
+pub struct Account {
+    pub client: Arc<jmap_client::client::Client>,
+    data: Arc<Mutex<FetcherData>>,
+}
+
+impl Account {
     pub async fn new() -> Self {
         let config = crate::config::Config::load().unwrap();
 
@@ -23,16 +25,13 @@ impl Fetcher {
             .await
             .unwrap();
 
-        let address = config.address.clone();
-
         Self {
             client: Arc::new(client),
-            address,
-            data: Arc::new(Mutex::new(Data::default())),
+            data: Arc::new(Mutex::new(FetcherData::default())),
         }
     }
 
-    pub fn refresh(&self) {
+    pub fn fetch_changes(&self) {
         let data = self.data.clone();
         let client = self.client.clone();
 
@@ -46,12 +45,7 @@ impl Fetcher {
         });
     }
 
-    pub fn address(&self) -> &str {
-        self.address.as_str()
+    pub fn address(&self) -> String {
+        self.client.session().username().to_string()
     }
-}
-
-#[derive(Default)]
-struct Data {
-    mailboxes: Option<mailboxes::Mailboxes>,
 }

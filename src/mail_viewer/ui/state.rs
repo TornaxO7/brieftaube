@@ -1,6 +1,6 @@
 use super::Action;
 use crate::{
-    backend::Fetcher,
+    backend::Account,
     mail_viewer::ui::widget::RenderData,
     utils::ui::{MailId, ScreenPalette, ScreenState, keybindmanager::KeybindManager, palette},
 };
@@ -18,7 +18,7 @@ pub enum PaletteType {
 
 pub struct State {
     app_actions: Vec<crate::Action>,
-    account: Arc<Fetcher>,
+    account: Arc<Account>,
 
     ctx: Option<Ctx>,
     palette: Option<palette::State<PaletteType>>,
@@ -26,7 +26,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(account: Arc<Fetcher>) -> Self {
+    pub fn new(account: Arc<Account>) -> Self {
         Self {
             app_actions: vec![],
             account,

@@ -61,13 +61,13 @@ pub enum Action {
 /// Stores the app state
 pub struct App {
     is_running: bool,
-    fetcher: Arc<backend::Fetcher>,
+    fetcher: Arc<backend::Account>,
     screens: Vec<Screen>,
 }
 
 impl App {
     pub async fn new() -> Self {
-        let fetcher = Arc::new(backend::Fetcher::new().await);
+        let fetcher = Arc::new(backend::Account::new().await);
 
         Self {
             is_running: true,
@@ -81,11 +81,7 @@ impl App {
 
         while self.is_running {
             tokio::select! {
-                // changed = self.update() => {
-                //     if !changed {
-                //         continue;
-                //     }
-                // }
+                // TODO: Check if the backend received any changes from the event source
                 maybe_event = reader.next().fuse() => match maybe_event {
                     Some(Ok(event)) => self.handle_event(event),
                     Some(Err(e)) => error!("{}", e),
@@ -192,7 +188,7 @@ impl App {
                         self.fetcher.clone(),
                     )));
                 }
-                Action::Refresh => self.fetcher.refresh(),
+                Action::Refresh => self.fetcher.fetch_changes(),
                 Action::Back => {
                     self.screens.pop();
                 }

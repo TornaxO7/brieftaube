@@ -1,2 +1,2 @@
-pub mod backend;
+mod backend;
 pub mod ui;

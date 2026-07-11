@@ -13,42 +13,14 @@ pub struct State {
     app_actions: Vec<crate::Action>,
     mailbox_list_state: tui_widget_list::ListState,
     keybindings: KeybindManager<Action>,
-    _account: Arc<backend::Fetcher>,
-
-    mailboxes: Option<Vec<Mailbox>>,
+    account: Arc<backend::Account>,
 }
 
 impl State {
-    pub fn new(account: Arc<backend::Fetcher>) -> Self {
-        // let (tx, rx) = mpsc::channel(1);
-
-        // let tx = Arc::new(tx);
-
-        // let tx2 = tx.clone();
-        // let account2 = account.clone();
-        // tokio::spawn(async move {
-        //     let mut response = {
-        //         let mut request = account2.client.build();
-        //         request
-        //             .get_mailbox()
-        //             .ids::<[_; 0], String>(None)
-        //             .properties([
-        //                 jmap_client::mailbox::Property::Id,
-        //                 jmap_client::mailbox::Property::Name,
-        //                 jmap_client::mailbox::Property::Role,
-        //                 jmap_client::mailbox::Property::TotalEmails,
-        //                 jmap_client::mailbox::Property::UnreadEmails,
-        //             ]);
-        //         request.send_get_mailbox().await.unwrap()
-        //     };
-
-        //     tx2.send(response.take_list()).await.unwrap();
-        // });
-
+    pub fn new(account: Arc<backend::Account>) -> Self {
         Self {
             app_actions: vec![],
-            _account: account,
-            mailboxes: None,
+            account,
             mailbox_list_state: tui_widget_list::ListState::default(),
 
             keybindings: KeybindManager::new(HashMap::from([
@@ -62,12 +34,12 @@ impl State {
         }
     }
 
-    pub fn get_mailboxes(&mut self) -> Option<Vec<Mailbox>> {
-        self.mailboxes.clone()
+    pub fn get_mailboxes(&mut self) -> Option<&[Mailbox]> {
+        todo!()
     }
 
-    pub fn get_mut_selected_mailbox(&mut self) -> Option<&mut Mailbox> {
-        let Some(mailboxes) = &mut self.mailboxes else {
+    pub fn get_selected_mailbox(&self) -> Option<&Mailbox> {
+        let Some(mailboxes) = self.get_mailboxes() else {
             return None;
         };
 
@@ -75,7 +47,7 @@ impl State {
             return None;
         };
 
-        mailboxes.get_mut(idx)
+        mailboxes.get(idx)
     }
 
     pub fn get_list_state(&mut self) -> &mut tui_widget_list::ListState {
@@ -118,7 +90,7 @@ impl ScreenState<Action, PaletteValues> for State {
             Action::SelectNextMailbox => self.select_next_mailbox(),
             Action::SelectPreviousMailbox => self.select_previous_mailbox(),
             Action::OpenSelectedMailbox => {
-                if let Some(selected_mailbox) = self.get_mut_selected_mailbox() {
+                if let Some(selected_mailbox) = self.get_selected_mailbox() {
                     assert!(selected_mailbox.id().is_some());
                     // return Some(super::Action::OpenMailList(Some(
                     //     selected_mailbox.id().unwrap().to_string(),

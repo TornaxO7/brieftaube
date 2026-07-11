@@ -1,6 +1,6 @@
 use super::action::Action;
 use crate::{
-    backend::Fetcher,
+    backend::Account,
     utils::ui::{MailboxId, ScreenPalette, ScreenState, keybindmanager::KeybindManager, palette},
 };
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
@@ -13,7 +13,7 @@ pub enum PaletteType {
 
 pub struct State {
     app_actions: Vec<crate::Action>,
-    fetcher: Arc<Fetcher>,
+    fetcher: Arc<Account>,
 
     raw_mail: String,
 
@@ -26,7 +26,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(fetcher: Arc<Fetcher>) -> Self {
+    pub fn new(fetcher: Arc<Account>) -> Self {
         // let (tx, rx) = mpsc::channel(1);
 
         // let acc = account.clone();

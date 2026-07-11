@@ -16,7 +16,7 @@ pub struct State {
     app_actions: Vec<crate::Action>,
     palette: Option<palette::State<PaletteType>>,
 
-    _fetcher: Arc<backend::Fetcher>,
+    _fetcher: Arc<backend::Account>,
 
     /// `None`: Means that it's currently requested but the response didn't arrive yet.
     mails: HashMap<MailboxId, Vec<Email>>,
@@ -27,10 +27,10 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(account: Arc<backend::Fetcher>) -> Self {
+    pub fn new(fetcher: Arc<backend::Account>) -> Self {
         Self {
             app_actions: vec![],
-            _fetcher: account,
+            _fetcher: fetcher,
             palette: None,
             selected_mailbox_id: None,
 
