@@ -37,7 +37,7 @@ async fn main() -> eyre::Result<()> {
 
 enum Screen {
     Mailboxes(ui::mailboxes::State),
-    MailList(ui::mails::State),
+    MailList(ui::root_mails::State),
     Composer(ui::composer::State),
     MailViewer(ui::mail_viewer::State),
     LogViewer(ui::log_viewer::State),
@@ -115,7 +115,7 @@ impl App {
                 );
             }
             Screen::MailList(state) => {
-                frame.render_stateful_widget(ui::mails::MailList::default(), frame.area(), state);
+                frame.render_stateful_widget(ui::root_mails::MailList::default(), frame.area(), state);
             }
             Screen::Composer(state) => {
                 frame.render_stateful_widget(
@@ -167,7 +167,7 @@ impl App {
         for action in actions {
             match action {
                 Action::OpenMailList(mailbox_id) => {
-                    self.screens.push(Screen::MailList(ui::mails::State::new(
+                    self.screens.push(Screen::MailList(ui::root_mails::State::new(
                         self.account.clone(),
                         mailbox_id,
                     )));

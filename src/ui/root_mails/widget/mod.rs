@@ -42,10 +42,10 @@ impl StatefulWidget for MailList {
 /// Render functions
 impl MailList {
     fn render_mail_list(&self, area: Rect, buf: &mut Buffer, state: &mut super::State) {
-        match state.mails.as_ref() {
-            Some(mails) => {
+        match state.root_mails.as_ref() {
+            Some(root_mails) => {
                 StatefulWidget::render(
-                    list::MailListWidget::new(mails).block(
+                    list::MailListWidget::new(root_mails).block(
                         Block::bordered()
                             .title(MAIL_LIST_PANEL_TITLE)
                             .title_alignment(HorizontalAlignment::Center),
@@ -64,8 +64,8 @@ impl MailList {
     }
 
     fn render_preview(&self, area: Rect, buf: &mut Buffer, state: &mut super::State) {
-        if let (Some(mails), Some(idx)) = (&state.mails, state.list_state.selected) {
-            let mail = &mails[idx];
+        if let (Some(root_mails), Some(idx)) = (&state.root_mails, state.list_state.selected) {
+            let mail = &root_mails[idx];
             let preview = mail.preview().unwrap();
 
             Widget::render(

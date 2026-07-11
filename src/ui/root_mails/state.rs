@@ -19,7 +19,7 @@ pub struct State {
     account: Arc<backend::Account>,
     mailbox_id: String,
 
-    pub mails: Option<Vec<Email>>,
+    pub root_mails: Option<Vec<Email>>,
     pub list_state: tui_widget_list::ListState,
     mails_state: String,
 }
@@ -39,7 +39,7 @@ impl State {
                 ("l", Action::ViewSelectedMail),
             ])),
 
-            mails: None,
+            root_mails: None,
             mails_state: String::new(),
             mailbox_id: id,
             list_state: tui_widget_list::ListState::default(),
@@ -57,11 +57,11 @@ impl State {
 
 impl ScreenState<Action, PaletteType> for State {
     fn update(&mut self) {
-        if let Some((mails, new_state)) = self
+        if let Some((root_mails, new_state)) = self
             .account
             .get_root_mails(&self.mailbox_id, &self.mails_state)
         {
-            self.mails = Some(mails);
+            self.root_mails = Some(root_mails);
             self.mails_state = new_state;
         }
     }

@@ -4,7 +4,7 @@ use jmap_client::{client::Client, email::Email};
 const INIT_ROOT_MAILS: usize = 10;
 
 pub struct RootMails {
-    mails: Vec<Email>,
+    root_mails: Vec<Email>,
     state: String,
 }
 
@@ -21,7 +21,7 @@ impl RootMails {
 
         let state = response.take_query_state();
 
-        let mails = {
+        let root_mails = {
             let mut request = client.build();
             request.get_email().ids(Some(response.ids()));
             let mut response = request.send_get_email().await.unwrap();
@@ -29,7 +29,7 @@ impl RootMails {
             response.take_list()
         };
 
-        Self { mails, state }
+        Self { root_mails, state }
     }
 }
 
@@ -48,7 +48,7 @@ impl Account {
 
                 let has_changed = state != root_mails.state;
                 if has_changed {
-                    Some((root_mails.mails.clone(), root_mails.state.clone()))
+                    Some((root_mails.root_mails.clone(), root_mails.state.clone()))
                 } else {
                     None
                 }

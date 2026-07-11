@@ -6,7 +6,7 @@ const INIT_AMOUNT_THREADS: usize = 10;
 
 pub struct ThreadCtx {
     state: String,
-    mails: Vec<Email>,
+    root_mails: Vec<Email>,
 }
 
 impl ThreadCtx {
@@ -17,7 +17,7 @@ impl ThreadCtx {
         let mut response = request.send_get_thread().await.unwrap();
 
         let state = response.take_state();
-        let mails = {
+        let root_mails = {
             let mut request = client.build();
             request
                 .get_email()
@@ -27,6 +27,6 @@ impl ThreadCtx {
             response.take_list()
         };
 
-        Self { state, mails }
+        Self { state, root_mails }
     }
 }

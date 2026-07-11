@@ -9,13 +9,13 @@ use ratatui::{
 use tui_widget_list::{ListBuilder, ListState, ListView};
 
 pub struct MailListWidget<'a> {
-    mails: &'a [Email],
+    root_mails: &'a [Email],
     block: Option<Block<'a>>,
 }
 
 impl<'a> MailListWidget<'a> {
-    pub fn new(mails: &'a [Email]) -> Self {
-        Self { mails, block: None }
+    pub fn new(root_mails: &'a [Email]) -> Self {
+        Self { root_mails, block: None }
     }
 
     pub fn block(mut self, block: Block<'a>) -> Self {
@@ -31,9 +31,9 @@ impl<'a> StatefulWidget for MailListWidget<'a> {
         let entry_builder = ListBuilder::new(|context| {
             const ENTRY_SIZE: u16 = 4;
 
-            let mail = &self.mails[context.index];
+            let mail = &self.root_mails[context.index];
             let starts_new_thread = context.index == 0 || {
-                let prev_mail = &self.mails[context.index - 1];
+                let prev_mail = &self.root_mails[context.index - 1];
 
                 prev_mail.thread_id().unwrap() != mail.thread_id().unwrap()
             };
@@ -77,7 +77,7 @@ impl<'a> StatefulWidget for MailListWidget<'a> {
             (entry, ENTRY_SIZE)
         });
 
-        let mut list = ListView::new(entry_builder, self.mails.len()).infinite_scrolling(false);
+        let mut list = ListView::new(entry_builder, self.root_mails.len()).infinite_scrolling(false);
         if let Some(block) = self.block {
             list = list.block(block);
         }
