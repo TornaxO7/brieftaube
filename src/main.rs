@@ -197,6 +197,7 @@ impl App {
                 Action::Refresh => todo!(),
                 Action::Back => {
                     self.screens.pop();
+                    self.update_screen();
                 }
                 Action::Quit => {
                     self.is_running = false;

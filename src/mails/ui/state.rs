@@ -35,7 +35,6 @@ impl State {
                 (":", Action::OpenCommandPalette.into()),
                 ("j", Action::SelectNextMail.into()),
                 ("k", Action::SelectPreviousMail.into()),
-                ("h", Action::OpenMailboxList.into()),
                 ("l", Action::ViewSelectedMail.into()),
             ])),
 

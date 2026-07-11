@@ -35,26 +35,21 @@ impl RootMails {
 
 impl Account {
     pub fn get_root_mails(&self, id: &MailboxId, state: &str) -> Option<(Vec<Email>, String)> {
-        match self.data.try_lock() {
-            Ok(data) => {
-                let Some(mailboxes) = data.mailboxes.as_ref() else {
-                    return None;
-                };
+        let data = self.data.lock().unwrap();
+        let Some(mailboxes) = data.mailboxes.as_ref() else {
+            return None;
+        };
 
-                let mailbox = mailboxes.get_mailbox(id);
-                let Some(root_mails) = mailbox.root_mails.as_ref() else {
-                    return None;
-                };
+        let mailbox = mailboxes.get_mailbox(id);
+        let Some(root_mails) = mailbox.root_mails.as_ref() else {
+            return None;
+        };
 
-                let has_changed = state != root_mails.state;
-                if has_changed {
-                    Some((root_mails.mails.clone(), root_mails.state.clone()))
-                } else {
-                    None
-                }
-            }
-            Err(std::sync::TryLockError::WouldBlock) => None,
-            Err(std::sync::TryLockError::Poisoned(err)) => unreachable!("{:?}", err),
+        let has_changed = state != root_mails.state;
+        if has_changed {
+            Some((root_mails.mails.clone(), root_mails.state.clone()))
+        } else {
+            None
         }
     }
 }
