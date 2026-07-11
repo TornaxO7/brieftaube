@@ -9,7 +9,7 @@ mod mails;
 mod utils;
 
 use color_eyre::eyre;
-use crossterm::event::{Event, EventStream};
+use crossterm::event::Event;
 use futures::{FutureExt, StreamExt};
 use ratatui::{DefaultTerminal, Frame};
 use std::{
@@ -63,30 +63,30 @@ pub enum Action {
 /// Stores the app state
 pub struct App {
     is_running: bool,
-    fetcher: Arc<backend::Account>,
+    account: Arc<backend::Account>,
     screens: Vec<Screen>,
 }
 
 impl App {
     pub async fn new() -> Self {
-        let fetcher = Arc::new(backend::Account::new().await);
+        let account = Arc::new(backend::Account::new().await);
+        account.init_mailboxes();
 
         Self {
             is_running: true,
-            fetcher: fetcher.clone(),
-            screens: vec![Screen::Mailboxes(mailboxes::ui::State::new(fetcher))],
+            account: account.clone(),
+            screens: vec![Screen::Mailboxes(mailboxes::ui::State::new(account))],
         }
     }
 
     pub async fn run(mut self, terminal: &mut DefaultTerminal) -> eyre::Result<()> {
-        let mut reader = EventStream::new();
+        let mut reader = crossterm::event::EventStream::new();
 
         while self.is_running {
             tokio::select! {
-                // TODO: Check if the backend received any changes from the event source
-                // _ => self.account_changed() => {
-                //      self.update_screen();
-                // }
+                _ = self.account.has_changed() => {
+                     self.update_state_of_active_screen();
+                }
                 maybe_event = reader.next().fuse() => match maybe_event {
                     Some(Ok(event)) => self.handle_event(event),
                     Some(Err(e)) => error!("{}", e),
@@ -96,13 +96,12 @@ impl App {
 
             terminal.draw(|frame| self.draw(frame))?;
             self.apply_action();
-            self.update_screen();
         }
 
         Ok(())
     }
 
-    fn update_screen(&mut self) {
+    fn update_state_of_active_screen(&mut self) {
         match self.screens.last_mut().unwrap() {
             Screen::Mailboxes(state) => state.update(),
             Screen::MailList(state) => state.update(),
@@ -175,14 +174,14 @@ impl App {
             match action {
                 Action::OpenMailList(mailbox_id) => {
                     self.screens.push(Screen::MailList(mails::ui::State::new(
-                        self.fetcher.clone(),
+                        self.account.clone(),
                         mailbox_id,
                     )));
                 }
                 Action::OpenMailViewer => {
                     self.screens
                         .push(Screen::MailViewer(mail_viewer::ui::State::new(
-                            self.fetcher.clone(),
+                            self.account.clone(),
                         )));
                 }
                 Action::OpenLogViewer => {
@@ -191,19 +190,20 @@ impl App {
                 }
                 Action::OpenComposer => {
                     self.screens.push(Screen::Composer(composer::ui::State::new(
-                        self.fetcher.clone(),
+                        self.account.clone(),
                     )));
                 }
                 Action::Refresh => todo!(),
                 Action::Back => {
                     self.screens.pop();
-                    self.update_screen();
                 }
                 Action::Quit => {
                     self.is_running = false;
                 }
             }
         }
+
+        self.update_state_of_active_screen();
     }
 }
 

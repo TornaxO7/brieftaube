@@ -116,8 +116,24 @@ impl Mailboxes {
 }
 
 impl Account {
+    pub fn init_mailboxes(&self) {
+        let data = self.data.clone();
+        let client = self.client.clone();
+
+        self.tasks.lock().unwrap().spawn(async move {
+            let mailboxes_arent_initalised = { data.lock().unwrap().mailboxes.is_none() };
+
+            if mailboxes_arent_initalised {
+                let mailboxes = Mailboxes::new(&client).await;
+
+                data.lock().unwrap().mailboxes = Some(mailboxes);
+            }
+        });
+    }
+
     pub fn get_mailboxes(&self, state: &str) -> Option<(Vec<Mailbox>, String)> {
         let data = self.data.lock().unwrap();
+
         match data.mailboxes.as_ref() {
             Some(mailboxes_data) => {
                 let state_changed = mailboxes_data.state != state;

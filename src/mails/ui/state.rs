@@ -31,11 +31,12 @@ impl State {
             palette: None,
             account: fetcher,
             keybindings: KeybindManager::new(HashMap::from([
-                ("q", Action::Quit.into()),
-                (":", Action::OpenCommandPalette.into()),
-                ("j", Action::SelectNextMail.into()),
-                ("k", Action::SelectPreviousMail.into()),
-                ("l", Action::ViewSelectedMail.into()),
+                ("q", Action::Quit),
+                (":", Action::OpenCommandPalette),
+                ("j", Action::SelectNextMail),
+                ("k", Action::SelectPreviousMail),
+                ("h", Action::Back),
+                ("l", Action::ViewSelectedMail),
             ])),
 
             mails: None,
