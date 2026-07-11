@@ -51,6 +51,10 @@ impl ScreenState<Action, PaletteValues> for State {
         if let Some((mailboxes, new_state)) = self.account.get_mailboxes(&self.data_state) {
             self.mailboxes = Some(mailboxes);
             self.data_state = new_state;
+
+            if self.list_state.selected.is_none() {
+                self.list_state.selected = Some(0);
+            }
         }
     }
 

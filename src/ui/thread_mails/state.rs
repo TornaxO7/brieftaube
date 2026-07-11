@@ -68,6 +68,10 @@ impl ScreenState<Action, PaletteType> for State {
         {
             self.mails = Some(mails);
             self.mails_state = new_state;
+
+            if self.list_state.selected.is_none() {
+                self.list_state.selected = Some(0);
+            }
         }
     }
 
