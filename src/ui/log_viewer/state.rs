@@ -16,7 +16,6 @@ pub struct State {
 
     state: TuiWidgetState,
     log_file_path: String,
-    callback: Box<super::Action>,
 }
 
 impl State {
@@ -29,16 +28,12 @@ impl State {
                 .to_string(),
             state: TuiWidgetState::new(),
             palette: None,
-            callback: Box::new(super::Action::Quit),
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", Action::Quit),
+                ("h", Action::Back),
                 (":", Action::OpenCommandPalette),
             ])),
         }
-    }
-
-    pub fn set_callback(&mut self, callback: Box<super::Action>) {
-        self.callback = callback;
     }
 
     pub fn scroll_state(&mut self) -> &mut TuiWidgetState {

@@ -23,8 +23,8 @@ pub trait ScreenState<A: Clone, PE: Clone>: ScreenPalette<PE> {
                 if let Some(p) = self.palette() {
                     if let Some(result) = p.handle_event(event) {
                         self.handle_palette_result(result);
-                        return;
                     }
+                    return;
                 }
 
                 if let Some(action) = self.keybinding_manager().handle_event(event) {
