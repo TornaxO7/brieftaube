@@ -1,16 +1,11 @@
-use crate::{
-    backend::Account,
-    ui::{MailboxId, ThreadId},
-};
+use crate::{backend::Account, ui::ThreadId};
 use jmap_client::{client::Client, email::Email};
-
-const INIT_AMOUNT_THREADS: usize = 10;
 
 pub struct Thread {
     mails: Vec<Email>,
 
     thread_state: String,
-    mails_state: String,
+    _mails_state: String,
 }
 
 impl Thread {
@@ -35,26 +30,35 @@ impl Thread {
             mails,
 
             thread_state,
-            mails_state,
+            _mails_state: mails_state,
         }
     }
 }
 
 impl Account {
-    pub fn get_thread_mails(
-        &self,
-        mailbox_id: &MailboxId,
-        thread_id: &ThreadId,
-        state: &str,
-    ) -> Option<(Vec<Email>, String)> {
+    pub fn init_thread(&self, id: ThreadId) {
+        let data = self.data.clone();
+        let client = self.client.clone();
+
+        self.tasks.lock().unwrap().spawn(async move {
+            let is_not_initialised = {
+                let data = data.lock().unwrap();
+                !data.threads.contains_key(&id)
+            };
+
+            if is_not_initialised {
+                let thread = Thread::new(&client, id.clone()).await;
+
+                let mut data = data.lock().unwrap();
+                data.threads.insert(id, thread);
+            }
+        });
+    }
+
+    pub fn get_thread_mails(&self, id: &ThreadId, state: &str) -> Option<(Vec<Email>, String)> {
         match self.data.try_lock() {
             Ok(data) => {
-                let Some(mailboxes) = data.mailboxes.as_ref() else {
-                    return None;
-                };
-
-                let mailbox = mailboxes.get_mailbox(mailbox_id);
-                let Some(thread) = mailbox.threads.get(thread_id) else {
+                let Some(thread) = data.threads.get(id) else {
                     return None;
                 };
 

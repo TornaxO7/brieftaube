@@ -16,6 +16,7 @@ impl RootMails {
             .query_email()
             .filter(jmap_client::email::query::Filter::InMailbox { value: id.clone() })
             .sort([jmap_client::email::query::Comparator::received_at().descending()])
+            .limit(INIT_ROOT_MAILS)
             .arguments()
             .collapse_threads(true);
         let mut response = request.send_query_email().await.unwrap();
@@ -41,7 +42,7 @@ impl Account {
         self.tasks.lock().unwrap().spawn(async move {
             let is_not_initialised = {
                 let data = data.lock().unwrap();
-                data.root_mails.contains_key(&id)
+                !data.root_mails.contains_key(&id)
             };
 
             if is_not_initialised {

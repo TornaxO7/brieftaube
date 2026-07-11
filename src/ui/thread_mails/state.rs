@@ -2,7 +2,7 @@ use super::Action;
 use crate::{
     backend,
     ui::{
-        MailboxId, ScreenPalette, ScreenState, ThreadId,
+        ScreenPalette, ScreenState, ThreadId,
         utils::{keybindmanager::KeybindManager, palette},
     },
 };
@@ -20,7 +20,6 @@ pub struct State {
     palette: Option<palette::State<PaletteType>>,
     keybindings: KeybindManager<Action>,
     account: Arc<backend::Account>,
-    mailbox_id: String,
     thread_id: String,
 
     pub mails: Option<Vec<Email>>,
@@ -29,7 +28,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(account: Arc<backend::Account>, mailbox_id: MailboxId, thread_id: ThreadId) -> Self {
+    pub fn new(account: Arc<backend::Account>, thread_id: ThreadId) -> Self {
         Self {
             app_actions: vec![],
             palette: None,
@@ -45,7 +44,6 @@ impl State {
 
             mails: None,
             mails_state: String::new(),
-            mailbox_id,
             thread_id,
             list_state: tui_widget_list::ListState::default(),
         }
@@ -62,9 +60,9 @@ impl State {
 
 impl ScreenState<Action, PaletteType> for State {
     fn update(&mut self) {
-        if let Some((mails, new_state)) =
-            self.account
-                .get_thread_mails(&self.mailbox_id, &self.thread_id, &self.mails_state)
+        if let Some((mails, new_state)) = self
+            .account
+            .get_thread_mails(&self.thread_id, &self.mails_state)
         {
             self.mails = Some(mails);
             self.mails_state = new_state;

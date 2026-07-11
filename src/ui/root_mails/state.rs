@@ -106,10 +106,7 @@ impl ScreenState<Action, PaletteType> for State {
 
                 let selected_mail = &mails[idx];
                 let thread_id = selected_mail.thread_id().unwrap().to_string();
-                self.app_actions.push(crate::Action::OpenThread {
-                    mailbox_id: self.mailbox_id.clone(),
-                    thread_id,
-                });
+                self.app_actions.push(crate::Action::OpenThread(thread_id));
             }
             Action::CloseCommandPalette => self.palette = None,
             Action::ViewSelectedMail => {

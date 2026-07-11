@@ -1,7 +1,8 @@
 mod mailboxes;
 mod root_mails;
+mod thread;
 
-use crate::ui::MailboxId;
+use crate::ui::{MailboxId, ThreadId};
 use jmap_client::client::Client;
 use std::{
     collections::HashMap,
@@ -13,6 +14,7 @@ use tokio::task::JoinSet;
 struct Data {
     mailboxes: Option<mailboxes::Mailboxes>,
     root_mails: HashMap<MailboxId, root_mails::RootMails>,
+    threads: HashMap<ThreadId, thread::Thread>,
 }
 
 pub struct Account {

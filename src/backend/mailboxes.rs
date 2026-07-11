@@ -1,14 +1,11 @@
-mod mailbox;
+// mod mailbox;
 
-use crate::{
-    backend::{Account, mailboxes::mailbox::MailboxCtx},
-    ui::MailboxId,
-};
+use crate::{backend::Account, ui::MailboxId};
 use jmap_client::{client::Client, mailbox::Mailbox};
 use std::collections::HashMap;
 
 pub struct Mailboxes {
-    mailboxes: Vec<MailboxCtx>,
+    inner: Vec<Mailbox>,
     state: String,
 
     // helper data structures
@@ -32,14 +29,10 @@ impl Mailboxes {
             })
             .collect();
 
-        let mailboxes = response
-            .take_list()
-            .into_iter()
-            .map(|mailbox| MailboxCtx::new(mailbox))
-            .collect();
+        let mailboxes = response.take_list();
 
         Self {
-            mailboxes,
+            inner: mailboxes,
             state,
             mapping,
         }
@@ -59,7 +52,7 @@ impl Mailboxes {
             for mailbox in response.take_list() {
                 let id = mailbox.id().unwrap();
                 if let Some(idx) = self.mapping.get(id).cloned() {
-                    self.mailboxes[idx] = MailboxCtx::new(mailbox);
+                    self.inner[idx] = mailbox;
                 }
             }
         }
@@ -70,24 +63,19 @@ impl Mailboxes {
             request.get_mailbox().ids(Some(response.created()));
             let mut response = request.send_get_mailbox().await.unwrap();
 
-            let mailboxes: Vec<MailboxCtx> = response
-                .take_list()
-                .into_iter()
-                .map(|mailbox| mailbox::MailboxCtx::new(mailbox))
-                .collect();
-
-            self.mailboxes.extend(mailboxes);
+            let mailboxes = response.take_list();
+            self.inner.extend(mailboxes);
         }
 
         // destroy
         {
             let to_destroy = response.take_destroyed();
 
-            self.mailboxes.retain(|mailbox| {
+            self.inner.retain(|mailbox| {
                 to_destroy
                     .iter()
                     .map(|id| id.as_str())
-                    .find(|&id| id == mailbox.id())
+                    .find(|&id| id == mailbox.id().unwrap())
                     .is_some()
             });
         }
@@ -99,24 +87,24 @@ impl Mailboxes {
 
     fn refresh_mapping(&mut self) {
         self.mapping = self
-            .mailboxes
+            .inner
             .iter()
             .enumerate()
             .map(|(idx, mailbox)| {
-                let id = mailbox.id().to_string();
+                let id = mailbox.id().unwrap().to_string();
                 (id, idx)
             })
             .collect();
     }
 
-    fn get_mut_mailbox(&mut self, id: &MailboxId) -> &mut MailboxCtx {
+    fn get_mut_mailbox(&mut self, id: &MailboxId) -> &mut Mailbox {
         let idx = self.mapping.get(id).unwrap();
-        self.mailboxes.get_mut(*idx).unwrap()
+        self.inner.get_mut(*idx).unwrap()
     }
 
-    fn get_mailbox(&self, id: &MailboxId) -> &MailboxCtx {
+    fn get_mailbox(&self, id: &MailboxId) -> &Mailbox {
         let idx = self.mapping.get(id).unwrap();
-        self.mailboxes.get(*idx).unwrap()
+        self.inner.get(*idx).unwrap()
     }
 }
 
@@ -139,17 +127,13 @@ impl Account {
     pub fn get_mailboxes(&self, state: &str) -> Option<(Vec<Mailbox>, String)> {
         match self.data.try_lock() {
             Ok(data) => match data.mailboxes.as_ref() {
-                Some(mailboxes_data) => {
-                    let state_changed = mailboxes_data.state != state;
+                Some(mailboxes) => {
+                    let state_changed = mailboxes.state != state;
 
                     if state_changed {
-                        let mailboxes = mailboxes_data
-                            .mailboxes
-                            .iter()
-                            .map(|ctx| ctx.mailbox().clone())
-                            .collect::<Vec<Mailbox>>();
+                        let boxes = mailboxes.inner.clone();
 
-                        Some((mailboxes, mailboxes_data.state.to_owned()))
+                        Some((boxes, mailboxes.state.to_owned()))
                     } else {
                         None
                     }

@@ -48,10 +48,7 @@ pub enum Action {
     OpenMailViewer,
     OpenLogViewer,
     OpenComposer,
-    OpenThread {
-        mailbox_id: MailboxId,
-        thread_id: ThreadId,
-    },
+    OpenThread(ThreadId),
 
     Refresh,
     Back,
@@ -163,6 +160,7 @@ impl App {
             match action {
                 Action::OpenRootMails(mailbox_id) => {
                     self.account.init_root_mails(mailbox_id.clone());
+
                     self.screens
                         .push(Screen::MailList(ui::root_mails::State::new(
                             self.account.clone(),
@@ -184,17 +182,12 @@ impl App {
                         self.account.clone(),
                     )));
                 }
-                Action::OpenThread {
-                    mailbox_id,
-                    thread_id,
-                } => {
-                    self.account
-                        .init_thread(mailbox_id.clone(), thread_id.clone());
+                Action::OpenThread(thread_id) => {
+                    self.account.init_thread(thread_id.clone());
 
                     self.screens
                         .push(Screen::ThreadMails(ui::thread_mails::State::new(
                             self.account.clone(),
-                            mailbox_id,
                             thread_id,
                         )));
                 }
