@@ -1,4 +1,5 @@
-use crate::{mail_viewer::ui::state::PaletteType, utils::ui::palette::Entry};
+use super::state::PaletteType;
+use crate::utils::ui::palette::Entry;
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator};
 
@@ -20,20 +21,23 @@ pub enum Action {
     OpenCommandPalette,
     #[strum(props(intern = true))]
     CloseCommandPalette,
+
     #[strum(message = "Quit the application")]
     Quit,
+    #[strum(message = "Go back")]
+    Back,
 
-    #[strum(message = "Go back to mail list.")]
-    OpenMailList,
+    #[strum(message = "Open logs")]
+    OpenLogs,
+    #[strum(message = "Open the thread of the selected mail.")]
+    OpenThread,
 
-    #[strum(message = "Scroll down")]
-    ScrollDown,
-    #[strum(message = "Scroll up")]
-    ScrollUp,
-    #[strum(message = "Scroll left")]
-    ScrollLeft,
-    #[strum(message = "Scroll right")]
-    ScrollRight,
+    #[strum(message = "Select the next mail.")]
+    SelectNextMail,
+    #[strum(message = "Select the previous mail.")]
+    SelectPreviousMail,
+    #[strum(message = "View the selected mail.")]
+    ViewSelectedMail,
 }
 
 pub fn palette_options() -> Vec<Entry<PaletteType>> {

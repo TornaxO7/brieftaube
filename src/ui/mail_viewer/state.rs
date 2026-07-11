@@ -1,7 +1,7 @@
 use super::Action;
+use super::widget::RenderData;
 use crate::{
     backend::Account,
-    mail_viewer::ui::widget::RenderData,
     utils::ui::{MailId, ScreenPalette, ScreenState, keybindmanager::KeybindManager, palette},
 };
 use chrono::DateTime;

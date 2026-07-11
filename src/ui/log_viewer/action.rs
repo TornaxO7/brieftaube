@@ -1,4 +1,5 @@
-use crate::{mails::ui::state::PaletteType, utils::ui::palette::Entry};
+use super::state::PaletteType;
+use crate::utils::ui::palette::Entry;
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator};
 
@@ -23,20 +24,8 @@ pub enum Action {
 
     #[strum(message = "Quit the application")]
     Quit,
-    #[strum(message = "Go back")]
+    #[strum(message = "Close log viewer and go back to previous panel.")]
     Back,
-
-    #[strum(message = "Open logs")]
-    OpenLogs,
-    #[strum(message = "Open the thread of the selected mail.")]
-    OpenThread,
-
-    #[strum(message = "Select the next mail.")]
-    SelectNextMail,
-    #[strum(message = "Select the previous mail.")]
-    SelectPreviousMail,
-    #[strum(message = "View the selected mail.")]
-    ViewSelectedMail,
 }
 
 pub fn palette_options() -> Vec<Entry<PaletteType>> {

@@ -1,4 +1,5 @@
-use crate::{composer::ui::state::PaletteType, utils::ui::palette::Entry};
+use super::state::PaletteType;
+use crate::utils::ui::palette::Entry;
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator};
 
@@ -30,12 +31,10 @@ pub enum Action {
     ScrollDown,
     #[strum(message = "Scroll up")]
     ScrollUp,
-
-    #[strum(message = "Open the mail in your editor :)")]
-    OpenMailInEditor,
-
-    #[strum(message = "Send the mail")]
-    SendMail,
+    #[strum(message = "Scroll left")]
+    ScrollLeft,
+    #[strum(message = "Scroll right")]
+    ScrollRight,
 }
 
 pub fn palette_options() -> Vec<Entry<PaletteType>> {

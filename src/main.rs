@@ -1,11 +1,6 @@
 mod backend;
 mod config;
-
-mod composer;
-mod log_viewer;
-mod mail_viewer;
-mod mailboxes;
-mod mails;
+mod ui;
 mod utils;
 
 use color_eyre::eyre;
@@ -41,11 +36,11 @@ async fn main() -> eyre::Result<()> {
 }
 
 enum Screen {
-    Mailboxes(mailboxes::ui::State),
-    MailList(mails::ui::State),
-    Composer(composer::ui::State),
-    MailViewer(mail_viewer::ui::State),
-    LogViewer(log_viewer::ui::State),
+    Mailboxes(ui::mailboxes::State),
+    MailList(ui::mails::State),
+    Composer(ui::composer::State),
+    MailViewer(ui::mail_viewer::State),
+    LogViewer(ui::log_viewer::State),
 }
 
 #[derive(Debug)]
@@ -75,7 +70,7 @@ impl App {
         Self {
             is_running: true,
             account: account.clone(),
-            screens: vec![Screen::Mailboxes(mailboxes::ui::State::new(account))],
+            screens: vec![Screen::Mailboxes(ui::mailboxes::State::new(account))],
         }
     }
 
@@ -114,31 +109,31 @@ impl App {
         match self.screens.last_mut().unwrap() {
             Screen::Mailboxes(state) => {
                 frame.render_stateful_widget(
-                    mailboxes::ui::Mailboxes::default(),
+                    ui::mailboxes::Mailboxes::default(),
                     frame.area(),
                     state,
                 );
             }
             Screen::MailList(state) => {
-                frame.render_stateful_widget(mails::ui::MailList::default(), frame.area(), state);
+                frame.render_stateful_widget(ui::mails::MailList::default(), frame.area(), state);
             }
             Screen::Composer(state) => {
                 frame.render_stateful_widget(
-                    composer::ui::Composer::default(),
+                    ui::composer::Composer::default(),
                     frame.area(),
                     state,
                 );
             }
             Screen::MailViewer(state) => {
                 frame.render_stateful_widget(
-                    mail_viewer::ui::MailViewer::default(),
+                    ui::mail_viewer::MailViewer::default(),
                     frame.area(),
                     state,
                 );
             }
             Screen::LogViewer(state) => {
                 frame.render_stateful_widget(
-                    log_viewer::ui::LogViewer::default(),
+                    ui::log_viewer::LogViewer::default(),
                     frame.area(),
                     state,
                 );
@@ -172,23 +167,23 @@ impl App {
         for action in actions {
             match action {
                 Action::OpenMailList(mailbox_id) => {
-                    self.screens.push(Screen::MailList(mails::ui::State::new(
+                    self.screens.push(Screen::MailList(ui::mails::State::new(
                         self.account.clone(),
                         mailbox_id,
                     )));
                 }
                 Action::OpenMailViewer => {
                     self.screens
-                        .push(Screen::MailViewer(mail_viewer::ui::State::new(
+                        .push(Screen::MailViewer(ui::mail_viewer::State::new(
                             self.account.clone(),
                         )));
                 }
                 Action::OpenLogViewer => {
                     self.screens
-                        .push(Screen::LogViewer(log_viewer::ui::State::new()));
+                        .push(Screen::LogViewer(ui::log_viewer::State::new()));
                 }
                 Action::OpenComposer => {
-                    self.screens.push(Screen::Composer(composer::ui::State::new(
+                    self.screens.push(Screen::Composer(ui::composer::State::new(
                         self.account.clone(),
                     )));
                 }

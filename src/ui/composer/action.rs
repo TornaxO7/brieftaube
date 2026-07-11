@@ -1,4 +1,5 @@
-use crate::{log_viewer::ui::state::PaletteType, utils::ui::palette::Entry};
+use super::state::PaletteType;
+use crate::utils::ui::palette::Entry;
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator};
 
@@ -20,11 +21,22 @@ pub enum Action {
     OpenCommandPalette,
     #[strum(props(intern = true))]
     CloseCommandPalette,
-
     #[strum(message = "Quit the application")]
     Quit,
-    #[strum(message = "Close log viewer and go back to previous panel.")]
-    Back,
+
+    #[strum(message = "Go back to mail list.")]
+    OpenMailList,
+
+    #[strum(message = "Scroll down")]
+    ScrollDown,
+    #[strum(message = "Scroll up")]
+    ScrollUp,
+
+    #[strum(message = "Open the mail in your editor :)")]
+    OpenMailInEditor,
+
+    #[strum(message = "Send the mail")]
+    SendMail,
 }
 
 pub fn palette_options() -> Vec<Entry<PaletteType>> {
