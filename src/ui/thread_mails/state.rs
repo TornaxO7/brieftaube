@@ -64,12 +64,12 @@ impl ScreenState<Action, PaletteType> for State {
             .account
             .get_thread_mails(&self.thread_id, &self.mails_state)
         {
-            self.mails = Some(mails);
-            self.mails_state = new_state;
-
-            if self.list_state.selected.is_none() {
+            if self.list_state.selected.is_none() && !mails.is_empty() {
                 self.list_state.selected = Some(0);
             }
+
+            self.mails = Some(mails);
+            self.mails_state = new_state;
         }
     }
 

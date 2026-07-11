@@ -65,12 +65,12 @@ impl ScreenState<Action, PaletteType> for State {
             .account
             .get_root_mails(&self.mailbox_id, &self.mails_state)
         {
-            self.root_mails = Some(root_mails);
-            self.mails_state = new_state;
-
-            if self.list_state.selected.is_none() {
+            if self.list_state.selected.is_none() && !root_mails.is_empty() {
                 self.list_state.selected = Some(0);
             }
+
+            self.root_mails = Some(root_mails);
+            self.mails_state = new_state;
         }
     }
 

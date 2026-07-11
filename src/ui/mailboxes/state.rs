@@ -49,12 +49,12 @@ impl State {
 impl ScreenState<Action, PaletteValues> for State {
     fn update(&mut self) {
         if let Some((mailboxes, new_state)) = self.account.get_mailboxes(&self.data_state) {
-            self.mailboxes = Some(mailboxes);
-            self.data_state = new_state;
-
-            if self.list_state.selected.is_none() {
+            if self.list_state.selected.is_none() && !mailboxes.is_empty() {
                 self.list_state.selected = Some(0);
             }
+
+            self.mailboxes = Some(mailboxes);
+            self.data_state = new_state;
         }
     }
 
