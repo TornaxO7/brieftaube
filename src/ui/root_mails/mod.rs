@@ -4,4 +4,4 @@ mod widget;
 
 pub use action::Action;
 pub use state::State;
-pub use widget::MailList;
+pub use widget::RootMails;

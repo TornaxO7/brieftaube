@@ -114,7 +114,7 @@ impl App {
             }
             Screen::MailList(state) => {
                 frame.render_stateful_widget(
-                    ui::root_mails::MailList::default(),
+                    ui::root_mails::RootMails::default(),
                     frame.area(),
                     state,
                 );

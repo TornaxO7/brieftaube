@@ -11,9 +11,9 @@ const MAIL_LIST_PANEL_TITLE: &str = "Mails";
 const PREVIEW_PANEL_TITLE: &str = "Mail content";
 
 #[derive(Default)]
-pub struct MailList {}
+pub struct RootMails {}
 
-impl StatefulWidget for MailList {
+impl StatefulWidget for RootMails {
     type State = super::State;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
@@ -40,7 +40,7 @@ impl StatefulWidget for MailList {
 }
 
 /// Render functions
-impl MailList {
+impl RootMails {
     fn render_mail_list(&self, area: Rect, buf: &mut Buffer, state: &mut super::State) {
         match state.root_mails.as_ref() {
             Some(root_mails) => {
