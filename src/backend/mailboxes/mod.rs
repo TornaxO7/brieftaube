@@ -2,7 +2,7 @@ mod mailbox;
 
 use crate::{
     backend::{Account, mailboxes::mailbox::MailboxCtx},
-    utils::ui::MailboxId,
+    ui::MailboxId,
 };
 use jmap_client::{client::Client, mailbox::Mailbox};
 use std::collections::HashMap;

@@ -6,7 +6,7 @@ use crate::{
         Account,
         mailboxes::mailbox::{root_mails::RootMails, threads::ThreadCtx},
     },
-    utils::ui::MailboxId,
+    ui::MailboxId,
 };
 use jmap_client::mailbox::Mailbox;
 use std::{collections::HashMap, thread::ThreadId};

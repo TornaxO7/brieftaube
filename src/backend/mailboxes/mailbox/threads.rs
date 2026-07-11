@@ -1,6 +1,6 @@
 use jmap_client::{client::Client, email::Email};
 
-use crate::utils::ui::ThreadId;
+use crate::ui::ThreadId;
 
 const INIT_AMOUNT_THREADS: usize = 10;
 

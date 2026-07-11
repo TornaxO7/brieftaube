@@ -1,5 +1,5 @@
 use super::Action;
-use crate::utils::ui::{ScreenPalette, ScreenState, keybindmanager::KeybindManager, palette};
+use crate::ui::{ScreenPalette, ScreenState, palette, utils::keybindmanager::KeybindManager};
 use std::collections::HashMap;
 use tui_logger::TuiWidgetState;
 

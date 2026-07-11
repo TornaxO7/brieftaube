@@ -1,7 +1,10 @@
 use super::Action;
 use crate::{
     backend,
-    utils::ui::{ScreenPalette, ScreenState, keybindmanager::KeybindManager, palette},
+    ui::{
+        ScreenPalette, ScreenState,
+        utils::{keybindmanager::KeybindManager, palette},
+    },
 };
 use jmap_client::mailbox::Mailbox;
 use std::{collections::HashMap, sync::Arc};

@@ -2,7 +2,7 @@ use super::Action;
 use super::widget::RenderData;
 use crate::{
     backend::Account,
-    utils::ui::{MailId, ScreenPalette, ScreenState, keybindmanager::KeybindManager, palette},
+    ui::{MailId, ScreenPalette, ScreenState, palette, utils::keybindmanager::KeybindManager},
 };
 use chrono::DateTime;
 use jmap_client::email::{Email, EmailAddress};

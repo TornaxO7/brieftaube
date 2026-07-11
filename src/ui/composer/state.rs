@@ -1,7 +1,7 @@
 use super::action::Action;
 use crate::{
     backend::Account,
-    utils::ui::{MailboxId, ScreenPalette, ScreenState, keybindmanager::KeybindManager, palette},
+    ui::{MailboxId, ScreenPalette, ScreenState, palette, utils::keybindmanager::KeybindManager},
 };
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 

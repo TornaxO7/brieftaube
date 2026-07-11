@@ -1,4 +1,4 @@
-use crate::{backend::Account, utils::ui::MailboxId};
+use crate::{backend::Account, ui::MailboxId};
 use jmap_client::{client::Client, email::Email};
 
 const INIT_ROOT_MAILS: usize = 10;

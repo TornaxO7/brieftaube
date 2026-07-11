@@ -1,4 +1,4 @@
-use crate::utils::ui::{ScreenPalette, palette};
+use crate::ui::{ScreenPalette, palette};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Rect},

@@ -1,5 +1,5 @@
 use super::state::PaletteType;
-use crate::utils::ui::palette::Entry;
+use crate::ui::palette::Entry;
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator};
 

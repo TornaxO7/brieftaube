@@ -1,7 +1,6 @@
 mod backend;
 mod config;
 mod ui;
-mod utils;
 
 use color_eyre::eyre;
 use crossterm::event::Event;
@@ -15,10 +14,9 @@ use std::{
 };
 use tracing::{error, level_filters::LevelFilter};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
-use utils::ui::ScreenState;
 use xdg::BaseDirectories;
 
-use crate::utils::ui::MailboxId;
+use crate::ui::{MailboxId, ScreenState};
 
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
 static XDG: OnceLock<BaseDirectories> = OnceLock::new();
@@ -115,7 +113,11 @@ impl App {
                 );
             }
             Screen::MailList(state) => {
-                frame.render_stateful_widget(ui::root_mails::MailList::default(), frame.area(), state);
+                frame.render_stateful_widget(
+                    ui::root_mails::MailList::default(),
+                    frame.area(),
+                    state,
+                );
             }
             Screen::Composer(state) => {
                 frame.render_stateful_widget(
@@ -167,10 +169,11 @@ impl App {
         for action in actions {
             match action {
                 Action::OpenMailList(mailbox_id) => {
-                    self.screens.push(Screen::MailList(ui::root_mails::State::new(
-                        self.account.clone(),
-                        mailbox_id,
-                    )));
+                    self.screens
+                        .push(Screen::MailList(ui::root_mails::State::new(
+                            self.account.clone(),
+                            mailbox_id,
+                        )));
                 }
                 Action::OpenMailViewer => {
                     self.screens
