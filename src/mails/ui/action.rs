@@ -28,6 +28,8 @@ pub enum Action {
     OpenMailboxList,
     #[strum(message = "Open logs")]
     OpenLogs,
+    #[strum(message = "Open the thread of the selected mail.")]
+    OpenThread,
 
     #[strum(message = "Select the next mail.")]
     SelectNextMail,

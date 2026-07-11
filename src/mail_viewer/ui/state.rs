@@ -91,7 +91,7 @@ impl State {
 }
 
 impl ScreenState<Action, PaletteType> for State {
-    async fn update(&mut self) {}
+    fn update(&mut self) {}
 
     fn apply_action(&mut self, action: Action) {
         debug!("Action: {}", action);

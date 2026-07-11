@@ -81,9 +81,9 @@ impl ScreenState<Action, PaletteType> for State {
                 self.palette = Some(palette::State::new(super::action::palette_options()));
             }
             Action::OpenLogs => {
-                // return Some(super::Action::OpenLogs(Box::new(
-                //     super::Action::OpenMailList(None),
-                // )));
+                self.app_actions.push(crate::Action::OpenLogViewer);
+            }
+            Action::OpenThread => {
                 todo!()
             }
             Action::CloseCommandPalette => self.palette = None,
