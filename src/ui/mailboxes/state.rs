@@ -48,10 +48,24 @@ impl State {
 
 impl ScreenState<Action, PaletteValues> for State {
     fn update(&mut self) {
-        if let Some((mailboxes, new_state)) = self.account.get_mailboxes(&self.data_state) {
+        if let Some((mut mailboxes, new_state)) = self.account.get_mailboxes(&self.data_state) {
             if self.list_state.selected.is_none() && !mailboxes.is_empty() {
                 self.list_state.selected = Some(0);
             }
+
+            let order: HashMap<jmap_client::mailbox::Role, usize> = self
+                .account
+                .config()
+                .mailbox_order
+                .iter()
+                .cloned()
+                .enumerate()
+                .map(|(idx, role)| (role, idx))
+                .collect();
+
+            mailboxes.sort_unstable_by_key(|mailbox| {
+                order.get(&mailbox.role()).cloned().unwrap_or(usize::MAX)
+            });
 
             self.mailboxes = Some(mailboxes);
             self.data_state = new_state;

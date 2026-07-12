@@ -5,11 +5,8 @@ use jmap_client::{client::Client, mailbox::Mailbox};
 use std::collections::HashMap;
 
 pub struct Mailboxes {
-    inner: Vec<Mailbox>,
+    inner: HashMap<MailboxId, Mailbox>,
     state: String,
-
-    // helper data structures
-    mapping: HashMap<MailboxId, usize>,
 }
 
 impl Mailboxes {
@@ -19,23 +16,16 @@ impl Mailboxes {
         let mut response = request.send_get_mailbox().await.unwrap();
         let state = response.take_state();
 
-        let mapping = response
-            .list()
-            .iter()
-            .enumerate()
-            .map(|(idx, mailbox)| {
+        let inner = response
+            .take_list()
+            .into_iter()
+            .map(|mailbox| {
                 let id = mailbox.id().unwrap().to_string();
-                (id, idx)
+                (id, mailbox)
             })
             .collect();
 
-        let mailboxes = response.take_list();
-
-        Self {
-            inner: mailboxes,
-            state,
-            mapping,
-        }
+        Self { inner, state }
     }
 
     pub async fn fetch_changes(&mut self, client: &Client) {
@@ -51,9 +41,7 @@ impl Mailboxes {
             let mut response = request.send_get_mailbox().await.unwrap();
             for mailbox in response.take_list() {
                 let id = mailbox.id().unwrap();
-                if let Some(idx) = self.mapping.get(id).cloned() {
-                    self.inner[idx] = mailbox;
-                }
+                self.inner.insert(id.to_string(), mailbox);
             }
         }
 
@@ -63,7 +51,15 @@ impl Mailboxes {
             request.get_mailbox().ids(Some(response.created()));
             let mut response = request.send_get_mailbox().await.unwrap();
 
-            let mailboxes = response.take_list();
+            let mailboxes: Vec<(MailboxId, Mailbox)> = response
+                .take_list()
+                .into_iter()
+                .map(|mailbox| {
+                    let id = mailbox.id().unwrap().to_string();
+                    (id, mailbox)
+                })
+                .collect();
+
             self.inner.extend(mailboxes);
         }
 
@@ -71,40 +67,16 @@ impl Mailboxes {
         {
             let to_destroy = response.take_destroyed();
 
-            self.inner.retain(|mailbox| {
+            self.inner.retain(|id, _mailbox| {
                 to_destroy
                     .iter()
                     .map(|id| id.as_str())
-                    .find(|&id| id == mailbox.id().unwrap())
+                    .find(|&id_to_destroy| id == id_to_destroy)
                     .is_some()
             });
         }
 
-        self.refresh_mapping();
-
         self.state = response.take_new_state();
-    }
-
-    fn refresh_mapping(&mut self) {
-        self.mapping = self
-            .inner
-            .iter()
-            .enumerate()
-            .map(|(idx, mailbox)| {
-                let id = mailbox.id().unwrap().to_string();
-                (id, idx)
-            })
-            .collect();
-    }
-
-    fn get_mut_mailbox(&mut self, id: &MailboxId) -> &mut Mailbox {
-        let idx = self.mapping.get(id).unwrap();
-        self.inner.get_mut(*idx).unwrap()
-    }
-
-    fn get_mailbox(&self, id: &MailboxId) -> &Mailbox {
-        let idx = self.mapping.get(id).unwrap();
-        self.inner.get(*idx).unwrap()
     }
 }
 
@@ -131,8 +103,7 @@ impl Account {
                     let state_changed = mailboxes.state != state;
 
                     if state_changed {
-                        let boxes = mailboxes.inner.clone();
-
+                        let boxes = mailboxes.inner.values().cloned().collect::<Vec<Mailbox>>();
                         Some((boxes, mailboxes.state.to_owned()))
                     } else {
                         None

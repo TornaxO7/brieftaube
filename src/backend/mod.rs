@@ -2,7 +2,10 @@ mod mailboxes;
 mod root_mails;
 mod thread;
 
-use crate::ui::{MailboxId, ThreadId};
+use crate::{
+    config::Config,
+    ui::{MailboxId, ThreadId},
+};
 use jmap_client::client::Client;
 use std::{
     collections::HashMap,
@@ -19,13 +22,14 @@ struct Data {
 
 pub struct Account {
     client: Arc<jmap_client::client::Client>,
+    config: Config,
     data: Arc<Mutex<Data>>,
     tasks: Arc<Mutex<JoinSet<()>>>,
 }
 
 impl Account {
     pub async fn new() -> Self {
-        let config = crate::config::Config::load().unwrap();
+        let config = Config::load().unwrap();
 
         let client = Client::new()
             .credentials((config.address.trim(), config.password.trim()))
@@ -35,21 +39,12 @@ impl Account {
             .unwrap();
 
         Self {
+            config,
             client: Arc::new(client),
             data: Arc::new(Mutex::new(Data::default())),
             tasks: Arc::new(Mutex::new(JoinSet::new())),
         }
     }
-
-    // pub async fn fetch_changes(&self) {
-    //     let mut data = self.data.lock().unwrap();
-    //     let client = self.client.clone();
-
-    //     match data.mailboxes.as_mut() {
-    //         Some(data) => data.fetch_changes(&client).await,
-    //         None => data.mailboxes = Some(mailboxes::Mailboxes::new(&client).await),
-    //     };
-    // }
 
     pub async fn has_changed(&self) {
         self.tasks.lock().unwrap().join_next().await;
@@ -57,5 +52,9 @@ impl Account {
 
     pub fn address(&self) -> String {
         self.client.session().username().to_string()
+    }
+
+    pub fn config(&self) -> &Config {
+        &self.config
     }
 }
