@@ -130,17 +130,12 @@ impl Account {
         }
     }
 
-    pub fn update_mailbox_sort_order(&self, mailboxes: Vec<(MailboxId, u32)>) {
+    pub fn update_mailbox_sort_order(&self, id: MailboxId, new_order: u32) {
         let client = self.client.clone();
 
         self.tasks.lock().unwrap().spawn(async move {
             let mut request = client.build();
-            let set_mailbox = request.set_mailbox();
-
-            for (id, new_sort_order) in mailboxes {
-                set_mailbox.update(id).sort_order(new_sort_order);
-            }
-
+            request.set_mailbox().update(id).sort_order(new_order);
             request.send_set_mailbox().await.unwrap();
         });
     }

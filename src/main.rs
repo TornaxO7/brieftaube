@@ -14,7 +14,7 @@ use std::{
     path::PathBuf,
     sync::{Arc, OnceLock},
 };
-use tracing::{error, level_filters::LevelFilter, trace};
+use tracing::{error, level_filters::LevelFilter};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use xdg::BaseDirectories;
 
@@ -191,7 +191,7 @@ impl App {
                             thread_id,
                         )));
                 }
-                Action::Refresh => todo!(),
+                Action::Refresh => self.update_state_of_active_screen(),
                 Action::Back => {
                     self.screens.pop();
                 }

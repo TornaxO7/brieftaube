@@ -54,6 +54,19 @@ impl State {
         }
     }
 
+    fn get_mut_selected_mailbox(&mut self) -> Result<&mut MailboxData, &'static str> {
+        let mailboxes = self
+            .mailboxes
+            .as_mut()
+            .ok_or("Can't get selected mailbox: There are no mailboxes available yet.")?;
+        let idx = self
+            .list_state
+            .selected
+            .ok_or("Can't get selected mailbox: No mailbox selected.")?;
+
+        Ok(&mut mailboxes[idx])
+    }
+
     fn get_selected_mailbox(&self) -> Result<&MailboxData, &'static str> {
         let mailboxes = self
             .mailboxes
@@ -65,6 +78,12 @@ impl State {
             .ok_or("Can't get selected mailbox: No mailbox selected.")?;
 
         Ok(&mailboxes[idx])
+    }
+
+    fn sort_mailboxes(&mut self) {
+        if let Some(mailboxes) = self.mailboxes.as_mut() {
+            mailboxes.sort_by(|a, b| a.sort_order.cmp(&b.sort_order));
+        }
     }
 }
 
@@ -131,9 +150,26 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
             ScreenOverlayResult::Palette(value) => match value {
                 PaletteValue::Action(action) => self.apply_action(action),
             },
-            ScreenOverlayResult::Input { value, typ } => {
-                todo!()
-            }
+            ScreenOverlayResult::Input { value, typ } => match typ {
+                InputType::SortOrder => match value.parse::<u32>() {
+                    Ok(new_order) => {
+                        let id = match self.get_mut_selected_mailbox() {
+                            Ok(mailbox) => {
+                                mailbox.sort_order = new_order;
+                                mailbox.id.clone()
+                            }
+                            Err(err) => {
+                                error!(err);
+                                return;
+                            }
+                        };
+
+                        self.account.update_mailbox_sort_order(id, new_order);
+                        self.sort_mailboxes();
+                    }
+                    Err(err) => error!("'{}' isn't a 32-bit unsigned integer: {}", value, err),
+                },
+            },
             ScreenOverlayResult::Cancel => {}
         }
     }
