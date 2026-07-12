@@ -13,10 +13,10 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(desc: String) -> Self {
+    pub fn new<S: ToString>(desc: S) -> Self {
         Self {
             input: TextArea::default(),
-            desc,
+            desc: desc.to_string(),
         }
     }
 

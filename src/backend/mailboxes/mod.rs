@@ -4,6 +4,7 @@ use crate::{backend::Account, ui::MailboxId};
 use jmap_client::client::Client;
 pub use mailbox_data::MailboxData;
 use std::collections::HashMap;
+use tracing::trace;
 
 pub struct Mailboxes {
     inner: HashMap<MailboxId, MailboxData>,
@@ -82,21 +83,25 @@ impl Mailboxes {
 }
 
 impl Account {
+    #[tracing::instrument(level = "debug", skip_all)]
     pub fn init_mailboxes(&self) {
         let data = self.data.clone();
         let client = self.client.clone();
 
+        trace!("Init mailboxes");
         self.tasks.lock().unwrap().spawn(async move {
             let mailboxes_arent_initalised = { data.lock().unwrap().mailboxes.is_none() };
 
             if mailboxes_arent_initalised {
                 let mailboxes = Mailboxes::new(&client).await;
+                trace!("Fetched mailboxes successfully.");
 
                 data.lock().unwrap().mailboxes = Some(mailboxes);
             }
         });
     }
 
+    #[tracing::instrument(level = "debug", skip_all)]
     pub fn get_mailboxes(&self, state: &str) -> Option<(Vec<MailboxData>, String)> {
         match self.data.try_lock() {
             Ok(data) => match data.mailboxes.as_ref() {
@@ -104,6 +109,7 @@ impl Account {
                     let state_changed = mailboxes.state != state;
 
                     if state_changed {
+                        trace!("State changed!");
                         let boxes = mailboxes
                             .inner
                             .values()
@@ -116,7 +122,10 @@ impl Account {
                 }
                 None => None,
             },
-            Err(std::sync::TryLockError::WouldBlock) => None,
+            Err(std::sync::TryLockError::WouldBlock) => {
+                trace!("Can't lock data.");
+                None
+            }
             Err(std::sync::TryLockError::Poisoned(err)) => unreachable!("{:?}", err),
         }
     }

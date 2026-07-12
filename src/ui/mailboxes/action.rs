@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
-use strum::{EnumIter, EnumMessage, EnumProperty, EnumString};
+use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator};
+
+use crate::ui::{mailboxes::state::PaletteValue, utils::palette::Entry};
 
 #[derive(
     Serialize,
@@ -31,4 +33,25 @@ pub enum Action {
 
     #[strum(message = "Quit the application")]
     Quit,
+}
+
+pub fn palette_options() -> Vec<Entry<PaletteValue>> {
+    Action::iter()
+        .filter_map(|action| {
+            if let Some(is_intern) = action.get_bool("intern") {
+                if is_intern {
+                    return None;
+                }
+            }
+
+            let name = action.to_string();
+            let description = action.get_message().unwrap_or_default().to_string();
+
+            Some(Entry {
+                value: PaletteValue::Action(action),
+                name,
+                description,
+            })
+        })
+        .collect()
 }

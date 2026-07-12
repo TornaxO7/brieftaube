@@ -1,5 +1,6 @@
 use crate::{backend::Account, ui::ThreadId};
 use jmap_client::{client::Client, email::Email};
+use tracing::trace;
 
 pub struct Thread {
     mails: Vec<Email>,
@@ -38,10 +39,12 @@ impl Thread {
 }
 
 impl Account {
+    #[tracing::instrument(level = "debug", skip_all)]
     pub fn init_thread(&self, id: ThreadId) {
         let data = self.data.clone();
         let client = self.client.clone();
 
+        trace!("Init thread: {}", id);
         self.tasks.lock().unwrap().spawn(async move {
             let is_not_initialised = {
                 let data = data.lock().unwrap();
@@ -50,6 +53,7 @@ impl Account {
 
             if is_not_initialised {
                 let thread = Thread::new(&client, id.clone()).await;
+                trace!("Fetched thread '{}' successfully.", id);
 
                 let mut data = data.lock().unwrap();
                 data.threads.insert(id, thread);

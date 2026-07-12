@@ -11,7 +11,7 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
-use tokio::task::JoinSet;
+use tokio::task::{JoinError, JoinSet};
 
 #[derive(Default)]
 struct Data {
@@ -46,8 +46,12 @@ impl Account {
         }
     }
 
-    pub async fn has_changed(&self) {
-        self.tasks.lock().unwrap().join_next().await;
+    pub fn has_tasks_running(&self) -> bool {
+        !self.tasks.lock().unwrap().is_empty()
+    }
+
+    pub async fn has_changed(&self) -> Option<Result<(), JoinError>> {
+        self.tasks.lock().unwrap().join_next().await
     }
 
     pub fn address(&self) -> String {

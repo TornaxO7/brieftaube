@@ -1,19 +1,24 @@
 use super::Action;
 use crate::{
-    backend::{self, mailboxes::MailboxData},
-    ui::{ScreenOverlay, ScreenOverlayResult, ScreenState, utils::keybindmanager::KeybindManager},
+    backend::{Account, mailboxes::MailboxData},
+    ui::{
+        ScreenOverlay, ScreenOverlayResult, ScreenState,
+        utils::{self, keybindmanager::KeybindManager},
+    },
 };
 use std::{collections::HashMap, sync::Arc};
-use tracing::error;
+use tracing::{error, trace};
 
 #[derive(Debug, Clone)]
-pub enum PaletteValues {}
+pub enum PaletteValue {
+    Action(Action),
+}
 
 pub struct State {
     app_actions: Vec<crate::Action>,
     keybindings: KeybindManager<Action>,
-    account: Arc<backend::Account>,
-    overlay: Option<ScreenOverlay<PaletteValues>>,
+    account: Arc<Account>,
+    overlay: Option<ScreenOverlay<PaletteValue>>,
 
     pub mailboxes: Option<Vec<MailboxData>>,
     pub list_state: tui_widget_list::ListState,
@@ -22,7 +27,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(account: Arc<backend::Account>) -> Self {
+    pub fn new(account: Arc<Account>) -> Self {
         Self {
             app_actions: vec![],
             account,
@@ -33,12 +38,13 @@ impl State {
             overlay: None,
 
             keybindings: KeybindManager::new(HashMap::from([
-                ("q", Action::Quit.into()),
-                ("j", Action::SelectNextMailbox.into()),
-                ("k", Action::SelectPreviousMailbox.into()),
+                ("q", Action::Quit),
+                ("j", Action::SelectNextMailbox),
+                ("k", Action::SelectPreviousMailbox),
                 // ("n", super::Action::OpenComposer),
-                ("<CR>", Action::OpenSelectedMailbox.into()),
-                ("l", Action::OpenSelectedMailbox.into()),
+                (":", Action::OpenCommandPalette),
+                ("<CR>", Action::OpenSelectedMailbox),
+                ("l", Action::OpenSelectedMailbox),
             ])),
         }
     }
@@ -55,38 +61,18 @@ impl State {
 
         Ok(&mailboxes[idx])
     }
-
-    fn sort_mailboxes(&self, mailboxes: &[MailboxData]) {
-        if !mailboxes.is_empty() {
-            todo!()
-        }
-    }
 }
 
-impl ScreenState<Action, PaletteValues> for State {
+impl ScreenState<Action, PaletteValue> for State {
+    #[tracing::instrument(level = "debug", skip_all)]
     fn update(&mut self) {
-        if let Some((mailboxes, new_state)) = self.account.get_mailboxes(&self.data_state) {
+        if let Some((mut mailboxes, new_state)) = self.account.get_mailboxes(&self.data_state) {
+            trace!("Updating");
             if self.list_state.selected.is_none() && !mailboxes.is_empty() {
                 self.list_state.selected = Some(0);
             }
 
-            // let are_unsorted = {
-            //     let mut used_order_numbers = HashSet::with_capacity(mailboxes.len());
-            //     for mailbox in mailboxes.iter() {
-            //         used_order_numbers.insert(mailbox.sort_order);
-            //     }
-            //     used_order_numbers.len() < mailboxes.len()
-            // };
-
-            // if are_unsorted {
-            //     self.sort_mailboxes(&mut mailboxes);
-            // }
-
-            // for mailbox in mailboxes.iter() {
-            //     tracing::debug!("{}", mailbox.sort_order);
-            // }
-
-            // mailboxes.sort_by(|a, b| a.sort_order().cmp(&b.sort_order()));
+            mailboxes.sort_unstable_by_key(|mailbox| mailbox.sort_order);
 
             self.mailboxes = Some(mailboxes);
             self.data_state = new_state;
@@ -94,10 +80,14 @@ impl ScreenState<Action, PaletteValues> for State {
     }
 
     fn apply_action(&mut self, action: Action) {
-        tracing::debug!("Action: {:?}", action);
+        trace!("Action: {:?}", action);
         match action {
             Action::Quit => self.app_actions.push(crate::Action::Quit),
-            Action::OpenCommandPalette => todo!(),
+            Action::OpenCommandPalette => {
+                self.overlay = Some(ScreenOverlay::Palette(utils::palette::State::new(
+                    super::action::palette_options(),
+                )))
+            }
 
             Action::SelectNextMailbox => self.list_state.next(),
             Action::SelectPreviousMailbox => self.list_state.previous(),
@@ -109,7 +99,9 @@ impl ScreenState<Action, PaletteValues> for State {
                 Err(err) => error!(err),
             },
             Action::SetSortOrder => {
-                todo!()
+                self.overlay = Some(ScreenOverlay::Input(utils::input::State::new(
+                    "Set sort order (> 0):",
+                )));
             }
         }
     }
@@ -122,17 +114,17 @@ impl ScreenState<Action, PaletteValues> for State {
         &mut self.keybindings
     }
 
-    fn overlay(&mut self) -> Option<&mut crate::ui::ScreenOverlay<PaletteValues>> {
+    fn overlay(&mut self) -> Option<&mut ScreenOverlay<PaletteValue>> {
         self.overlay.as_mut()
     }
 
-    fn handle_overlay_result(&mut self, result: ScreenOverlayResult<PaletteValues>) {
+    fn handle_overlay_result(&mut self, result: ScreenOverlayResult<PaletteValue>) {
         self.overlay = None;
 
         match result {
-            ScreenOverlayResult::Palette(_) => {
-                unreachable!("How did we get here (yet)? o.O");
-            }
+            ScreenOverlayResult::Palette(value) => match value {
+                PaletteValue::Action(action) => self.apply_action(action),
+            },
             ScreenOverlayResult::Input(_) => {
                 unreachable!("Huh")
             }

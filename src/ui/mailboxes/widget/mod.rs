@@ -1,9 +1,11 @@
 mod list;
 
 use ratatui::{
-    layout::HorizontalAlignment,
-    widgets::{Block, Paragraph, StatefulWidget, Widget},
+    layout::{Constraint, HorizontalAlignment},
+    widgets::{Block, Clear, Paragraph, StatefulWidget, Widget},
 };
+
+use crate::ui::{ScreenOverlay, ScreenState, utils};
 
 #[derive(Default)]
 pub struct Mailboxes {}
@@ -36,6 +38,19 @@ impl StatefulWidget for Mailboxes {
                 area,
                 buf,
             );
+        }
+
+        if let Some(state) = state.overlay() {
+            let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
+            Widget::render(Clear, a, buf);
+            match state {
+                ScreenOverlay::Palette(state) => {
+                    StatefulWidget::render(utils::palette::Palette::new(), a, buf, state);
+                }
+                ScreenOverlay::Input(state) => {
+                    StatefulWidget::render(utils::input::Input::default(), a, buf, state)
+                }
+            }
         }
     }
 }

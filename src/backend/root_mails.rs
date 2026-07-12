@@ -1,5 +1,6 @@
 use crate::{backend::Account, ui::MailboxId};
 use jmap_client::{client::Client, email::Email};
+use tracing::trace;
 
 const INIT_ROOT_MAILS: usize = 10;
 
@@ -39,10 +40,12 @@ impl RootMails {
 }
 
 impl Account {
+    #[tracing::instrument(level = "debug", skip_all)]
     pub fn init_root_mails(&self, id: MailboxId) {
         let data = self.data.clone();
         let client = self.client.clone();
 
+        trace!("Init root mails");
         self.tasks.lock().unwrap().spawn(async move {
             let is_not_initialised = {
                 let data = data.lock().unwrap();
@@ -51,6 +54,7 @@ impl Account {
 
             if is_not_initialised {
                 let root_mails = RootMails::new(&client, id.clone()).await;
+                trace!("Fetched root mails successfully.");
 
                 let mut data = data.lock().unwrap();
                 data.root_mails.insert(id, root_mails);

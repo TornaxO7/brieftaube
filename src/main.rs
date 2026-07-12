@@ -14,7 +14,7 @@ use std::{
     path::PathBuf,
     sync::{Arc, OnceLock},
 };
-use tracing::{error, level_filters::LevelFilter};
+use tracing::{error, level_filters::LevelFilter, trace};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use xdg::BaseDirectories;
 
@@ -79,7 +79,9 @@ impl App {
 
         while self.is_running {
             tokio::select! {
-                _ = self.account.has_changed() => { }
+                res = self.account.has_changed(), if self.account.has_tasks_running() => {
+                    debug_assert!(res.is_some(), "Eeeeh, this should only return if a task finished and not if there are no tasks o.O");
+                }
                 maybe_event = reader.next().fuse() => match maybe_event {
                     Some(Ok(event)) => self.handle_event(event),
                     Some(Err(e)) => error!("{}", e),
@@ -87,9 +89,9 @@ impl App {
                 }
             }
 
-            terminal.draw(|frame| self.draw(frame))?;
             self.apply_action();
             self.update_state_of_active_screen();
+            terminal.draw(|frame| self.draw(frame))?;
         }
 
         Ok(())
