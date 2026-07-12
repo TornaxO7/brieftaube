@@ -17,8 +17,6 @@ use strum::{EnumIter, EnumMessage, EnumProperty, EnumString};
 pub enum Action {
     #[strum(props(intern = true))]
     OpenCommandPalette,
-    #[strum(props(intern = true))]
-    CloseCommandPalette,
 
     #[strum(message = "Select next mailbox")]
     SelectNextMailbox,

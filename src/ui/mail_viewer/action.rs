@@ -19,8 +19,6 @@ use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator};
 pub enum Action {
     #[strum(props(intern = true))]
     OpenCommandPalette,
-    #[strum(props(intern = true))]
-    CloseCommandPalette,
 
     #[strum(message = "Quit the application")]
     Quit,

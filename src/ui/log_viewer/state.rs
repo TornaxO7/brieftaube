@@ -58,7 +58,6 @@ impl ScreenState<Action, PaletteType> for State {
             }
             Action::Quit => self.app_actions.push(crate::Action::Quit),
 
-            Action::CloseCommandPalette => self.overlay = None,
             Action::OpenCommandPalette => {
                 self.overlay = Some(ScreenOverlay::Palette(palette::State::new(
                     super::action::palette_options(),

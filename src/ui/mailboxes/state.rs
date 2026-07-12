@@ -98,7 +98,6 @@ impl ScreenState<Action, PaletteValues> for State {
         match action {
             Action::Quit => self.app_actions.push(crate::Action::Quit),
             Action::OpenCommandPalette => todo!(),
-            Action::CloseCommandPalette => todo!(),
 
             Action::SelectNextMailbox => self.list_state.next(),
             Action::SelectPreviousMailbox => self.list_state.previous(),

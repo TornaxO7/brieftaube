@@ -105,7 +105,6 @@ impl ScreenState<Action, PaletteType> for State {
             Action::OpenLogs => {
                 self.app_actions.push(crate::Action::OpenLogViewer);
             }
-            Action::CloseCommandPalette => self.overlay = None,
             Action::ViewSelectedMail => {
                 if let Some(mail) = self.get_selected_mail() {
                     self.app_actions

@@ -84,7 +84,6 @@ impl ScreenState<Action, PaletteType> for State {
                     super::action::palette_options(),
                 )));
             }
-            Action::CloseCommandPalette => self.overlay = None,
 
             Action::ScrollUp => self.scroll_up(),
             Action::ScrollDown => self.scroll_down(),
