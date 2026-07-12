@@ -116,6 +116,9 @@ impl ScreenState<Action, PaletteType> for State {
                         .push(crate::Action::OpenMailViewer(selected_mail.clone()));
                 }
             }
+            Action::ComposeMail => {
+                self.app_actions.push(crate::Action::OpenComposer);
+            }
         }
     }
 
