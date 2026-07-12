@@ -100,7 +100,7 @@ impl ScreenState<Action, PaletteValue> for State {
             },
             Action::SetSortOrder => {
                 self.overlay = Some(ScreenOverlay::Input(utils::input::State::new(
-                    "Set sort order (> 0):",
+                    "Set sort order (>= 0):",
                 )));
             }
         }

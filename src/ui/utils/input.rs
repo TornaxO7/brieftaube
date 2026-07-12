@@ -2,8 +2,8 @@ use crate::ui::ScreenOverlayResult;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
-    layout::Rect,
-    widgets::{Paragraph, StatefulWidget, Widget},
+    layout::{Constraint, Layout, Rect},
+    widgets::{Block, Paragraph, StatefulWidget, Widget},
 };
 use ratatui_textarea::TextArea;
 
@@ -40,7 +40,19 @@ pub struct Input;
 impl StatefulWidget for Input {
     type State = State;
 
-    fn render(self, area: Rect, buf: &mut Buffer, _state: &mut Self::State) {
-        Widget::render(Paragraph::new("Input"), area, buf);
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+        let block = Block::bordered();
+        let [top, bottom] = Layout::vertical([Constraint::Length(2), Constraint::Length(3)])
+            .areas(block.inner(area));
+
+        Widget::render(block, area, buf);
+        Widget::render(
+            Paragraph::new(state.desc.as_str()),
+            Block::default().inner(top),
+            buf,
+        );
+
+        state.input.set_block(Block::bordered());
+        state.input.render(bottom, buf);
     }
 }

@@ -41,14 +41,18 @@ impl StatefulWidget for Mailboxes {
         }
 
         if let Some(state) = state.overlay() {
-            let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
-            Widget::render(Clear, a, buf);
             match state {
                 ScreenOverlay::Palette(state) => {
-                    StatefulWidget::render(utils::palette::Palette::new(), a, buf, state);
+                    let area =
+                        area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
+                    Widget::render(Clear, area, buf);
+                    StatefulWidget::render(utils::palette::Palette::new(), area, buf, state);
                 }
                 ScreenOverlay::Input(state) => {
-                    StatefulWidget::render(utils::input::Input::default(), a, buf, state)
+                    let area =
+                        area.centered(Constraint::Percentage(20), Constraint::Percentage(15));
+                    Widget::render(Clear, area, buf);
+                    StatefulWidget::render(utils::input::Input::default(), area, buf, state)
                 }
             }
         }
