@@ -1,15 +1,9 @@
 use super::Action;
 use crate::{
     backend::{self, mailboxes::MailboxData},
-    ui::{
-        ScreenPalette, ScreenState,
-        utils::{keybindmanager::KeybindManager, palette},
-    },
+    ui::{ScreenOverlay, ScreenOverlayResult, ScreenState, utils::keybindmanager::KeybindManager},
 };
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 use tracing::error;
 
 #[derive(Debug, Clone)]
@@ -19,6 +13,7 @@ pub struct State {
     app_actions: Vec<crate::Action>,
     keybindings: KeybindManager<Action>,
     account: Arc<backend::Account>,
+    overlay: Option<ScreenOverlay<PaletteValues>>,
 
     pub mailboxes: Option<Vec<MailboxData>>,
     pub list_state: tui_widget_list::ListState,
@@ -35,6 +30,7 @@ impl State {
 
             mailboxes: None,
             data_state: String::new(),
+            overlay: None,
 
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", Action::Quit.into()),
@@ -126,14 +122,22 @@ impl ScreenState<Action, PaletteValues> for State {
     fn keybinding_manager(&mut self) -> &mut KeybindManager<Action> {
         &mut self.keybindings
     }
-}
 
-impl ScreenPalette<PaletteValues> for State {
-    fn palette(&mut self) -> Option<&mut palette::State<PaletteValues>> {
-        None
+    fn overlay(&mut self) -> Option<&mut crate::ui::ScreenOverlay<PaletteValues>> {
+        self.overlay.as_mut()
     }
 
-    fn handle_palette_result(&mut self, _result: palette::HandleEventResult<PaletteValues>) {
-        unreachable!("Huh")
+    fn handle_overlay_result(&mut self, result: ScreenOverlayResult<PaletteValues>) {
+        self.overlay = None;
+
+        match result {
+            ScreenOverlayResult::Palette(_) => {
+                unreachable!("How did we get here (yet)? o.O");
+            }
+            ScreenOverlayResult::Input(_) => {
+                unreachable!("Huh")
+            }
+            ScreenOverlayResult::Cancel => {}
+        }
     }
 }

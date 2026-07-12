@@ -2,7 +2,7 @@ use super::Action;
 use crate::{
     backend,
     ui::{
-        MailboxId, ScreenPalette, ScreenState,
+        MailboxId, ScreenOverlay, ScreenOverlayResult, ScreenState,
         utils::{keybindmanager::KeybindManager, palette},
     },
 };
@@ -18,10 +18,10 @@ pub enum PaletteType {
 
 pub struct State {
     app_actions: Vec<crate::Action>,
-    palette: Option<palette::State<PaletteType>>,
     keybindings: KeybindManager<Action>,
     account: Arc<backend::Account>,
     mailbox_id: String,
+    overlay: Option<ScreenOverlay<PaletteType>>,
 
     pub root_mails: Option<Vec<Email>>,
     pub list_state: tui_widget_list::ListState,
@@ -32,7 +32,7 @@ impl State {
     pub fn new(fetcher: Arc<backend::Account>, id: MailboxId) -> Self {
         Self {
             app_actions: vec![],
-            palette: None,
+            overlay: None,
             account: fetcher,
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", Action::Quit),
@@ -98,7 +98,9 @@ impl ScreenState<Action, PaletteType> for State {
             Action::SelectPreviousMail => self.select_previous_mail(),
 
             Action::OpenCommandPalette => {
-                self.palette = Some(palette::State::new(super::action::palette_options()));
+                self.overlay = Some(ScreenOverlay::Palette(palette::State::new(
+                    super::action::palette_options(),
+                )));
             }
             Action::OpenLogs => {
                 self.app_actions.push(crate::Action::OpenLogViewer);
@@ -109,7 +111,6 @@ impl ScreenState<Action, PaletteType> for State {
                     self.app_actions.push(crate::Action::OpenThread(thread_id));
                 }
             }
-            Action::CloseCommandPalette => self.palette = None,
             Action::ViewSelectedMail => {
                 if let Some(selected_mail) = self.get_selected_mail() {
                     self.app_actions
@@ -129,23 +130,24 @@ impl ScreenState<Action, PaletteType> for State {
     fn keybinding_manager(&mut self) -> &mut KeybindManager<Action> {
         &mut self.keybindings
     }
-}
 
-impl ScreenPalette<PaletteType> for State {
-    fn palette(&mut self) -> Option<&mut palette::State<PaletteType>> {
-        self.palette.as_mut()
+    fn overlay(&mut self) -> Option<&mut crate::ui::ScreenOverlay<PaletteType>> {
+        self.overlay.as_mut()
     }
 
-    fn handle_palette_result(&mut self, result: palette::HandleEventResult<PaletteType>) {
-        self.palette = None;
+    fn handle_overlay_result(&mut self, result: crate::ui::ScreenOverlayResult<PaletteType>) {
+        self.overlay = None;
 
         match result {
-            palette::HandleEventResult::Cancel => {}
-            palette::HandleEventResult::Selected(value) => match value {
+            ScreenOverlayResult::Cancel => {}
+            ScreenOverlayResult::Palette(value) => match value {
                 PaletteType::Action(action) => {
                     self.apply_action(action);
                 }
             },
+            ScreenOverlayResult::Input(_) => {
+                unreachable!("Sus")
+            }
         }
     }
 }

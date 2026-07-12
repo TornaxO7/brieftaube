@@ -1,3 +1,3 @@
+pub mod input;
 pub mod keybindmanager;
-pub mod overlay;
 pub mod palette;

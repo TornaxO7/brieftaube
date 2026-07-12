@@ -2,7 +2,7 @@ use super::Action;
 use crate::{
     backend,
     ui::{
-        ScreenPalette, ScreenState, ThreadId,
+        ScreenOverlay, ScreenOverlayResult, ScreenState, ThreadId,
         utils::{keybindmanager::KeybindManager, palette},
     },
 };
@@ -18,7 +18,7 @@ pub enum PaletteType {
 
 pub struct State {
     app_actions: Vec<crate::Action>,
-    palette: Option<palette::State<PaletteType>>,
+    overlay: Option<ScreenOverlay<PaletteType>>,
     keybindings: KeybindManager<Action>,
     account: Arc<backend::Account>,
     thread_id: String,
@@ -32,7 +32,7 @@ impl State {
     pub fn new(account: Arc<backend::Account>, thread_id: ThreadId) -> Self {
         Self {
             app_actions: vec![],
-            palette: None,
+            overlay: None,
             account,
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", Action::Quit),
@@ -98,12 +98,14 @@ impl ScreenState<Action, PaletteType> for State {
             Action::SelectPreviousMail => self.select_previous_mail(),
 
             Action::OpenCommandPalette => {
-                self.palette = Some(palette::State::new(super::action::palette_options()));
+                self.overlay = Some(ScreenOverlay::Palette(palette::State::new(
+                    super::action::palette_options(),
+                )));
             }
             Action::OpenLogs => {
                 self.app_actions.push(crate::Action::OpenLogViewer);
             }
-            Action::CloseCommandPalette => self.palette = None,
+            Action::CloseCommandPalette => self.overlay = None,
             Action::ViewSelectedMail => {
                 if let Some(mail) = self.get_selected_mail() {
                     self.app_actions
@@ -120,23 +122,22 @@ impl ScreenState<Action, PaletteType> for State {
     fn keybinding_manager(&mut self) -> &mut KeybindManager<Action> {
         &mut self.keybindings
     }
-}
 
-impl ScreenPalette<PaletteType> for State {
-    fn palette(&mut self) -> Option<&mut palette::State<PaletteType>> {
-        self.palette.as_mut()
+    fn overlay(&mut self) -> Option<&mut ScreenOverlay<PaletteType>> {
+        self.overlay.as_mut()
     }
 
-    fn handle_palette_result(&mut self, result: palette::HandleEventResult<PaletteType>) {
-        self.palette = None;
+    fn handle_overlay_result(&mut self, result: ScreenOverlayResult<PaletteType>) {
+        self.overlay = None;
 
         match result {
-            palette::HandleEventResult::Cancel => {}
-            palette::HandleEventResult::Selected(value) => match value {
+            ScreenOverlayResult::Cancel => {}
+            ScreenOverlayResult::Palette(value) => match value {
                 PaletteType::Action(action) => {
                     self.apply_action(action);
                 }
             },
+            ScreenOverlayResult::Input(_) => unreachable!(),
         }
     }
 }

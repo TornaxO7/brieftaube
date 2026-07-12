@@ -6,14 +6,14 @@ pub mod root_mails;
 pub mod thread_mails;
 pub mod utils;
 
-use crossterm::event::Event;
-use utils::{keybindmanager::KeybindManager, palette};
+use crossterm::event::{Event, KeyEvent};
+use utils::{input, keybindmanager::KeybindManager, palette};
 
 pub type MailboxId = String;
 pub type MailId = String;
 pub type ThreadId = String;
 
-pub trait ScreenState<A: Clone, PE: Clone>: ScreenPalette<PE> {
+pub trait ScreenState<A: Clone, P: Clone> {
     fn update(&mut self);
 
     fn apply_action(&mut self, action: A);
@@ -25,9 +25,9 @@ pub trait ScreenState<A: Clone, PE: Clone>: ScreenPalette<PE> {
     fn handle_event(&mut self, event: Event) {
         match event {
             Event::Key(event) => {
-                if let Some(p) = self.palette() {
-                    if let Some(result) = p.handle_event(event) {
-                        self.handle_palette_result(result);
+                if let Some(overlay) = self.overlay() {
+                    if let Some(result) = overlay.handle_event(event) {
+                        self.handle_overlay_result(result);
                     }
                     return;
                 }
@@ -40,10 +40,28 @@ pub trait ScreenState<A: Clone, PE: Clone>: ScreenPalette<PE> {
             _ => {}
         }
     }
+
+    fn overlay(&mut self) -> Option<&mut ScreenOverlay<P>>;
+
+    fn handle_overlay_result(&mut self, result: ScreenOverlayResult<P>);
 }
 
-pub trait ScreenPalette<E: Clone> {
-    fn palette(&mut self) -> Option<&mut palette::State<E>>;
+pub enum ScreenOverlay<P: Clone> {
+    Palette(palette::State<P>),
+    Input(input::State),
+}
 
-    fn handle_palette_result(&mut self, result: palette::HandleEventResult<E>);
+pub enum ScreenOverlayResult<P> {
+    Palette(P),
+    Input(String),
+    Cancel,
+}
+
+impl<P: Clone> ScreenOverlay<P> {
+    pub fn handle_event(&mut self, event: KeyEvent) -> Option<ScreenOverlayResult<P>> {
+        match self {
+            Self::Palette(state) => state.handle_event(event),
+            Self::Input(state) => state.handle_event(event),
+        }
+    }
 }

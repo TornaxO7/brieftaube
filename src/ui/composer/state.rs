@@ -1,12 +1,15 @@
 use super::action::Action;
 use crate::{
     backend::Account,
-    ui::{MailboxId, ScreenPalette, ScreenState, palette, utils::keybindmanager::KeybindManager},
+    ui::{
+        MailboxId, ScreenOverlay, ScreenOverlayResult, ScreenState, palette,
+        utils::keybindmanager::KeybindManager,
+    },
 };
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 #[derive(Debug, Clone)]
-pub enum PaletteType {
+pub enum PaletteValue {
     /// Palette is displaying commands
     Action(Action),
 }
@@ -21,7 +24,7 @@ pub struct State {
 
     scroll_offset: (u16, u16),
 
-    palette: Option<palette::State<PaletteType>>,
+    overlay: Option<ScreenOverlay<PaletteValue>>,
     keybindings: KeybindManager<Action>,
 }
 
@@ -56,7 +59,7 @@ impl State {
             scroll_offset: (0, 0),
             draft_mailbox_id: None,
 
-            palette: None,
+            overlay: None,
             keybindings: KeybindManager::new(HashMap::from([
                 ("j", Action::ScrollDown),
                 ("k", Action::ScrollUp),
@@ -144,16 +147,17 @@ Subject:
     }
 }
 
-impl ScreenState<Action, PaletteType> for State {
+impl ScreenState<Action, PaletteValue> for State {
     fn update(&mut self) {}
 
     fn apply_action(&mut self, action: Action) {
         match action {
             Action::Quit => self.app_actions.push(crate::Action::Quit),
             Action::OpenCommandPalette => {
-                self.palette = Some(palette::State::new(super::action::palette_options()));
+                self.overlay = Some(ScreenOverlay::Palette(palette::State::new(
+                    super::action::palette_options(),
+                )));
             }
-            Action::CloseCommandPalette => self.palette = None,
             Action::ScrollUp => self.scroll_up(),
             Action::ScrollDown => self.scroll_down(),
 
@@ -177,19 +181,20 @@ impl ScreenState<Action, PaletteType> for State {
     fn keybinding_manager(&mut self) -> &mut KeybindManager<Action> {
         &mut self.keybindings
     }
-}
 
-impl ScreenPalette<PaletteType> for State {
-    fn palette(&mut self) -> Option<&mut palette::State<PaletteType>> {
-        self.palette.as_mut()
+    fn overlay(&mut self) -> Option<&mut crate::ui::ScreenOverlay<PaletteValue>> {
+        self.overlay.as_mut()
     }
 
-    fn handle_palette_result(&mut self, result: palette::HandleEventResult<PaletteType>) {
+    fn handle_overlay_result(&mut self, result: ScreenOverlayResult<PaletteValue>) {
+        self.overlay = None;
+
         match result {
-            palette::HandleEventResult::Cancel => {}
-            palette::HandleEventResult::Selected(value) => match value {
-                PaletteType::Action(action) => self.apply_action(action),
+            ScreenOverlayResult::Cancel => {}
+            ScreenOverlayResult::Palette(value) => match value {
+                PaletteValue::Action(action) => self.apply_action(action),
             },
+            ScreenOverlayResult::Input(_) => unreachable!(),
         }
     }
 }

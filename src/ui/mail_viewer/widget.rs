@@ -1,4 +1,4 @@
-use crate::ui::{ScreenPalette, palette};
+use crate::ui::{ScreenOverlay, ScreenState, utils};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Margin, Rect},
@@ -22,10 +22,17 @@ impl StatefulWidget for MailViewer {
         render_mail_content(top, buf, state);
         render_attachment_list(bottom, buf, state);
 
-        if let Some(state) = &mut state.palette() {
+        if let Some(state) = &mut state.overlay() {
             let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
             Widget::render(Clear, a, buf);
-            StatefulWidget::render(palette::Palette::new(), a, buf, state);
+            match state {
+                ScreenOverlay::Palette(state) => {
+                    StatefulWidget::render(utils::palette::Palette::new(), a, buf, state);
+                }
+                ScreenOverlay::Input(state) => {
+                    StatefulWidget::render(utils::input::Input::default(), a, buf, state)
+                }
+            }
         }
     }
 }

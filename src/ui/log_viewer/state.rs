@@ -1,5 +1,7 @@
 use super::Action;
-use crate::ui::{ScreenPalette, ScreenState, palette, utils::keybindmanager::KeybindManager};
+use crate::ui::{
+    ScreenOverlay, ScreenOverlayResult, ScreenState, palette, utils::keybindmanager::KeybindManager,
+};
 use std::collections::HashMap;
 use tui_logger::TuiWidgetState;
 
@@ -11,7 +13,7 @@ pub enum PaletteType {
 
 pub struct State {
     app_actions: Vec<crate::Action>,
-    palette: Option<palette::State<PaletteType>>,
+    overlay: Option<ScreenOverlay<PaletteType>>,
     keybindings: KeybindManager<Action>,
 
     state: TuiWidgetState,
@@ -27,7 +29,7 @@ impl State {
                 .to_string_lossy()
                 .to_string(),
             state: TuiWidgetState::new(),
-            palette: None,
+            overlay: None,
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", Action::Quit),
                 ("h", Action::Back),
@@ -56,9 +58,11 @@ impl ScreenState<Action, PaletteType> for State {
             }
             Action::Quit => self.app_actions.push(crate::Action::Quit),
 
-            Action::CloseCommandPalette => self.palette = None,
+            Action::CloseCommandPalette => self.overlay = None,
             Action::OpenCommandPalette => {
-                self.palette = Some(palette::State::new(super::action::palette_options()));
+                self.overlay = Some(ScreenOverlay::Palette(palette::State::new(
+                    super::action::palette_options(),
+                )));
             }
         }
     }
@@ -70,19 +74,20 @@ impl ScreenState<Action, PaletteType> for State {
     fn keybinding_manager(&mut self) -> &mut KeybindManager<Action> {
         &mut self.keybindings
     }
-}
 
-impl ScreenPalette<PaletteType> for State {
-    fn palette(&mut self) -> Option<&mut palette::State<PaletteType>> {
-        self.palette.as_mut()
+    fn overlay(&mut self) -> Option<&mut ScreenOverlay<PaletteType>> {
+        self.overlay.as_mut()
     }
 
-    fn handle_palette_result(&mut self, result: palette::HandleEventResult<PaletteType>) {
+    fn handle_overlay_result(&mut self, result: ScreenOverlayResult<PaletteType>) {
+        self.overlay = None;
+
         match result {
-            palette::HandleEventResult::Cancel => {}
-            palette::HandleEventResult::Selected(value) => match value {
+            ScreenOverlayResult::Cancel => {}
+            ScreenOverlayResult::Palette(value) => match value {
                 PaletteType::Action(action) => self.apply_action(action),
             },
+            ScreenOverlayResult::Input(_) => unreachable!(""),
         }
     }
 }

@@ -1,3 +1,4 @@
+use crate::ui::ScreenOverlayResult;
 use crossterm::event::{KeyCode, KeyEvent};
 use nucleo::Nucleo;
 use ratatui::{
@@ -23,12 +24,6 @@ pub struct Entry<E> {
     pub name: String,
     /// The description of the entry.
     pub description: String,
-}
-
-#[derive(Debug, Clone)]
-pub enum HandleEventResult<E> {
-    Selected(E),
-    Cancel,
 }
 
 pub struct State<E> {
@@ -67,11 +62,11 @@ impl<E: Clone> State<E> {
         }
     }
 
-    pub fn handle_event(&mut self, event: KeyEvent) -> Option<HandleEventResult<E>> {
+    pub fn handle_event(&mut self, event: KeyEvent) -> Option<ScreenOverlayResult<E>> {
         match event.code {
             KeyCode::Esc => {
                 self.reset();
-                return Some(HandleEventResult::Cancel);
+                return Some(ScreenOverlayResult::Cancel);
             }
             KeyCode::Enter => {
                 let result = {
@@ -81,9 +76,9 @@ impl<E: Clone> State<E> {
                         let item = matches.nth(idx).unwrap();
                         let idx = item.data.2;
 
-                        HandleEventResult::Selected(self.entries[idx].clone())
+                        ScreenOverlayResult::Palette(self.entries[idx].clone())
                     } else {
-                        HandleEventResult::Cancel
+                        ScreenOverlayResult::Cancel
                     }
                 };
 

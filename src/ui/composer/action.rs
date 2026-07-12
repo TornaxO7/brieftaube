@@ -1,4 +1,4 @@
-use super::state::PaletteType;
+use super::state::PaletteValue;
 use crate::ui::palette::Entry;
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator};
@@ -19,8 +19,6 @@ use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator};
 pub enum Action {
     #[strum(props(intern = true))]
     OpenCommandPalette,
-    #[strum(props(intern = true))]
-    CloseCommandPalette,
     #[strum(message = "Quit the application")]
     Quit,
 
@@ -39,7 +37,7 @@ pub enum Action {
     SendMail,
 }
 
-pub fn palette_options() -> Vec<Entry<PaletteType>> {
+pub fn palette_options() -> Vec<Entry<PaletteValue>> {
     Action::iter()
         .filter_map(|action| {
             if let Some(is_intern) = action.get_bool("intern") {
@@ -52,7 +50,7 @@ pub fn palette_options() -> Vec<Entry<PaletteType>> {
             let description = action.get_message().unwrap_or_default().to_string();
 
             Some(Entry {
-                value: PaletteType::Action(action),
+                value: PaletteValue::Action(action),
                 name,
                 description,
             })
