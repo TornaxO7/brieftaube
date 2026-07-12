@@ -62,7 +62,7 @@ impl<E: Clone> State<E> {
         }
     }
 
-    pub fn handle_event(&mut self, event: KeyEvent) -> Option<ScreenOverlayResult<E>> {
+    pub fn handle_event<I>(&mut self, event: KeyEvent) -> Option<ScreenOverlayResult<E, I>> {
         match event.code {
             KeyCode::Esc => {
                 self.reset();

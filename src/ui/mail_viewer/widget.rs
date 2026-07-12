@@ -22,7 +22,7 @@ impl StatefulWidget for MailViewer {
         render_mail_content(top, buf, state);
         render_attachment_list(bottom, buf, state);
 
-        if let Some(state) = &mut state.overlay() {
+        if let Some(state) = state.overlay() {
             let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
             Widget::render(Clear, a, buf);
             match state {
@@ -30,7 +30,7 @@ impl StatefulWidget for MailViewer {
                     StatefulWidget::render(utils::palette::Palette::new(), a, buf, state);
                 }
                 ScreenOverlay::Input(state) => {
-                    StatefulWidget::render(utils::input::Input::default(), a, buf, state)
+                    StatefulWidget::render(utils::input::Input::new(), a, buf, state)
                 }
             }
         }

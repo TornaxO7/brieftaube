@@ -52,7 +52,7 @@ impl StatefulWidget for Mailboxes {
                     let area =
                         area.centered(Constraint::Percentage(20), Constraint::Percentage(15));
                     Widget::render(Clear, area, buf);
-                    StatefulWidget::render(utils::input::Input::default(), area, buf, state)
+                    StatefulWidget::render(utils::input::Input::new(), area, buf, state)
                 }
             }
         }

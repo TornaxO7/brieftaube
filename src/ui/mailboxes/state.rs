@@ -14,11 +14,16 @@ pub enum PaletteValue {
     Action(Action),
 }
 
+#[derive(Debug, Clone)]
+pub enum InputType {
+    SortOrder,
+}
+
 pub struct State {
     app_actions: Vec<crate::Action>,
     keybindings: KeybindManager<Action>,
     account: Arc<Account>,
-    overlay: Option<ScreenOverlay<PaletteValue>>,
+    overlay: Option<ScreenOverlay<PaletteValue, InputType>>,
 
     pub mailboxes: Option<Vec<MailboxData>>,
     pub list_state: tui_widget_list::ListState,
@@ -63,7 +68,7 @@ impl State {
     }
 }
 
-impl ScreenState<Action, PaletteValue> for State {
+impl ScreenState<Action, PaletteValue, InputType> for State {
     #[tracing::instrument(level = "debug", skip_all)]
     fn update(&mut self) {
         if let Some((mut mailboxes, new_state)) = self.account.get_mailboxes(&self.data_state) {
@@ -101,6 +106,7 @@ impl ScreenState<Action, PaletteValue> for State {
             Action::SetSortOrder => {
                 self.overlay = Some(ScreenOverlay::Input(utils::input::State::new(
                     "Set sort order (>= 0):",
+                    InputType::SortOrder,
                 )));
             }
         }
@@ -114,19 +120,19 @@ impl ScreenState<Action, PaletteValue> for State {
         &mut self.keybindings
     }
 
-    fn overlay(&mut self) -> Option<&mut ScreenOverlay<PaletteValue>> {
+    fn overlay(&mut self) -> Option<&mut ScreenOverlay<PaletteValue, InputType>> {
         self.overlay.as_mut()
     }
 
-    fn handle_overlay_result(&mut self, result: ScreenOverlayResult<PaletteValue>) {
+    fn handle_overlay_result(&mut self, result: ScreenOverlayResult<PaletteValue, InputType>) {
         self.overlay = None;
 
         match result {
             ScreenOverlayResult::Palette(value) => match value {
                 PaletteValue::Action(action) => self.apply_action(action),
             },
-            ScreenOverlayResult::Input(_) => {
-                unreachable!("Huh")
+            ScreenOverlayResult::Input { value, typ } => {
+                todo!()
             }
             ScreenOverlayResult::Cancel => {}
         }

@@ -16,12 +16,15 @@ pub enum PaletteType {
     Action(Action),
 }
 
+#[derive(Debug, Clone)]
+pub enum InputType {}
+
 pub struct State {
     app_actions: Vec<crate::Action>,
     keybindings: KeybindManager<Action>,
     account: Arc<backend::Account>,
     mailbox_id: String,
-    overlay: Option<ScreenOverlay<PaletteType>>,
+    overlay: Option<ScreenOverlay<PaletteType, InputType>>,
 
     pub root_mails: Option<Vec<Email>>,
     pub list_state: tui_widget_list::ListState,
@@ -73,7 +76,7 @@ impl State {
     }
 }
 
-impl ScreenState<Action, PaletteType> for State {
+impl ScreenState<Action, PaletteType, InputType> for State {
     fn update(&mut self) {
         if let Some((root_mails, new_state)) = self
             .account
@@ -131,11 +134,14 @@ impl ScreenState<Action, PaletteType> for State {
         &mut self.keybindings
     }
 
-    fn overlay(&mut self) -> Option<&mut crate::ui::ScreenOverlay<PaletteType>> {
+    fn overlay(&mut self) -> Option<&mut crate::ui::ScreenOverlay<PaletteType, InputType>> {
         self.overlay.as_mut()
     }
 
-    fn handle_overlay_result(&mut self, result: crate::ui::ScreenOverlayResult<PaletteType>) {
+    fn handle_overlay_result(
+        &mut self,
+        result: crate::ui::ScreenOverlayResult<PaletteType, InputType>,
+    ) {
         self.overlay = None;
 
         match result {
@@ -145,7 +151,7 @@ impl ScreenState<Action, PaletteType> for State {
                     self.apply_action(action);
                 }
             },
-            ScreenOverlayResult::Input(_) => {
+            ScreenOverlayResult::Input { value, typ } => {
                 unreachable!("Sus")
             }
         }

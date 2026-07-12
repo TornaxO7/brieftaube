@@ -39,7 +39,7 @@ impl StatefulWidget for ThreadMails {
                     StatefulWidget::render(utils::palette::Palette::new(), a, buf, state);
                 }
                 ScreenOverlay::Input(state) => {
-                    StatefulWidget::render(utils::input::Input::default(), a, buf, state)
+                    StatefulWidget::render(utils::input::Input::new(), a, buf, state)
                 }
             }
         }

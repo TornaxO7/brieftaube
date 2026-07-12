@@ -14,6 +14,9 @@ pub enum PaletteValue {
     Action(Action),
 }
 
+#[derive(Debug, Clone)]
+pub enum InputType {}
+
 pub struct State {
     app_actions: Vec<crate::Action>,
     fetcher: Arc<Account>,
@@ -24,7 +27,7 @@ pub struct State {
 
     scroll_offset: (u16, u16),
 
-    overlay: Option<ScreenOverlay<PaletteValue>>,
+    overlay: Option<ScreenOverlay<PaletteValue, InputType>>,
     keybindings: KeybindManager<Action>,
 }
 
@@ -147,7 +150,7 @@ Subject:
     }
 }
 
-impl ScreenState<Action, PaletteValue> for State {
+impl ScreenState<Action, PaletteValue, InputType> for State {
     fn update(&mut self) {}
 
     fn apply_action(&mut self, action: Action) {
@@ -182,11 +185,11 @@ impl ScreenState<Action, PaletteValue> for State {
         &mut self.keybindings
     }
 
-    fn overlay(&mut self) -> Option<&mut crate::ui::ScreenOverlay<PaletteValue>> {
+    fn overlay(&mut self) -> Option<&mut crate::ui::ScreenOverlay<PaletteValue, InputType>> {
         self.overlay.as_mut()
     }
 
-    fn handle_overlay_result(&mut self, result: ScreenOverlayResult<PaletteValue>) {
+    fn handle_overlay_result(&mut self, result: ScreenOverlayResult<PaletteValue, InputType>) {
         self.overlay = None;
 
         match result {
@@ -194,7 +197,7 @@ impl ScreenState<Action, PaletteValue> for State {
             ScreenOverlayResult::Palette(value) => match value {
                 PaletteValue::Action(action) => self.apply_action(action),
             },
-            ScreenOverlayResult::Input(_) => unreachable!(),
+            ScreenOverlayResult::Input { value: _, typ: _ } => unreachable!(),
         }
     }
 }

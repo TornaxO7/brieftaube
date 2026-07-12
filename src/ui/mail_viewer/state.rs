@@ -14,9 +14,12 @@ pub enum PaletteType {
     Action(Action),
 }
 
+#[derive(Debug, Clone)]
+pub enum InputType {}
+
 pub struct State {
     app_actions: Vec<crate::Action>,
-    overlay: Option<ScreenOverlay<PaletteType>>,
+    overlay: Option<ScreenOverlay<PaletteType, InputType>>,
     keybindings: KeybindManager<Action>,
 
     pub mail: Email,
@@ -72,7 +75,7 @@ impl State {
     }
 }
 
-impl ScreenState<Action, PaletteType> for State {
+impl ScreenState<Action, PaletteType, InputType> for State {
     fn update(&mut self) {}
 
     fn apply_action(&mut self, action: Action) {
@@ -104,11 +107,11 @@ impl ScreenState<Action, PaletteType> for State {
         &mut self.keybindings
     }
 
-    fn overlay(&mut self) -> Option<&mut ScreenOverlay<PaletteType>> {
+    fn overlay(&mut self) -> Option<&mut ScreenOverlay<PaletteType, InputType>> {
         self.overlay.as_mut()
     }
 
-    fn handle_overlay_result(&mut self, result: ScreenOverlayResult<PaletteType>) {
+    fn handle_overlay_result(&mut self, result: ScreenOverlayResult<PaletteType, InputType>) {
         self.overlay = None;
 
         match result {
@@ -116,7 +119,7 @@ impl ScreenState<Action, PaletteType> for State {
             ScreenOverlayResult::Palette(value) => match value {
                 PaletteType::Action(action) => self.apply_action(action),
             },
-            ScreenOverlayResult::Input(_) => unreachable!(),
+            ScreenOverlayResult::Input { value, typ } => unreachable!(),
         }
     }
 }

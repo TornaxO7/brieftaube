@@ -13,7 +13,7 @@ pub type MailboxId = String;
 pub type MailId = String;
 pub type ThreadId = String;
 
-pub trait ScreenState<A: Clone, P: Clone> {
+pub trait ScreenState<A: Clone, P: Clone, I: Clone> {
     fn update(&mut self);
 
     fn apply_action(&mut self, action: A);
@@ -41,24 +41,24 @@ pub trait ScreenState<A: Clone, P: Clone> {
         }
     }
 
-    fn overlay(&mut self) -> Option<&mut ScreenOverlay<P>>;
+    fn overlay(&mut self) -> Option<&mut ScreenOverlay<P, I>>;
 
-    fn handle_overlay_result(&mut self, result: ScreenOverlayResult<P>);
+    fn handle_overlay_result(&mut self, result: ScreenOverlayResult<P, I>);
 }
 
-pub enum ScreenOverlay<P: Clone> {
+pub enum ScreenOverlay<P: Clone, I: Clone> {
     Palette(palette::State<P>),
-    Input(input::State),
+    Input(input::State<I>),
 }
 
-pub enum ScreenOverlayResult<P> {
+pub enum ScreenOverlayResult<P, I> {
     Palette(P),
-    Input(String),
+    Input { value: String, typ: I },
     Cancel,
 }
 
-impl<P: Clone> ScreenOverlay<P> {
-    pub fn handle_event(&mut self, event: KeyEvent) -> Option<ScreenOverlayResult<P>> {
+impl<P: Clone, I: Clone> ScreenOverlay<P, I> {
+    pub fn handle_event(&mut self, event: KeyEvent) -> Option<ScreenOverlayResult<P, I>> {
         match self {
             Self::Palette(state) => state.handle_event(event),
             Self::Input(state) => state.handle_event(event),
