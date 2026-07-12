@@ -1,13 +1,15 @@
 use super::Action;
 use crate::{
-    backend,
+    backend::{self, mailboxes::MailboxData},
     ui::{
         ScreenPalette, ScreenState,
         utils::{keybindmanager::KeybindManager, palette},
     },
 };
-use jmap_client::mailbox::Mailbox;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use tracing::error;
 
 #[derive(Debug, Clone)]
@@ -18,7 +20,7 @@ pub struct State {
     keybindings: KeybindManager<Action>,
     account: Arc<backend::Account>,
 
-    pub mailboxes: Option<Vec<Mailbox>>,
+    pub mailboxes: Option<Vec<MailboxData>>,
     pub list_state: tui_widget_list::ListState,
 
     data_state: String,
@@ -44,28 +46,51 @@ impl State {
             ])),
         }
     }
+
+    fn get_selected_mailbox(&self) -> Result<&MailboxData, &'static str> {
+        let mailboxes = self
+            .mailboxes
+            .as_ref()
+            .ok_or("Can't get selected mailbox: There are no mailboxes available yet.")?;
+        let idx = self
+            .list_state
+            .selected
+            .ok_or("Can't get selected mailbox: No mailbox selected.")?;
+
+        Ok(&mailboxes[idx])
+    }
+
+    fn sort_mailboxes(&self, mailboxes: &[MailboxData]) {
+        if !mailboxes.is_empty() {
+            todo!()
+        }
+    }
 }
 
 impl ScreenState<Action, PaletteValues> for State {
     fn update(&mut self) {
-        if let Some((mut mailboxes, new_state)) = self.account.get_mailboxes(&self.data_state) {
+        if let Some((mailboxes, new_state)) = self.account.get_mailboxes(&self.data_state) {
             if self.list_state.selected.is_none() && !mailboxes.is_empty() {
                 self.list_state.selected = Some(0);
             }
 
-            let order: HashMap<jmap_client::mailbox::Role, usize> = self
-                .account
-                .config()
-                .mailbox_order
-                .iter()
-                .cloned()
-                .enumerate()
-                .map(|(idx, role)| (role, idx))
-                .collect();
+            // let are_unsorted = {
+            //     let mut used_order_numbers = HashSet::with_capacity(mailboxes.len());
+            //     for mailbox in mailboxes.iter() {
+            //         used_order_numbers.insert(mailbox.sort_order);
+            //     }
+            //     used_order_numbers.len() < mailboxes.len()
+            // };
 
-            mailboxes.sort_unstable_by_key(|mailbox| {
-                order.get(&mailbox.role()).cloned().unwrap_or(usize::MAX)
-            });
+            // if are_unsorted {
+            //     self.sort_mailboxes(&mut mailboxes);
+            // }
+
+            // for mailbox in mailboxes.iter() {
+            //     tracing::debug!("{}", mailbox.sort_order);
+            // }
+
+            // mailboxes.sort_by(|a, b| a.sort_order().cmp(&b.sort_order()));
 
             self.mailboxes = Some(mailboxes);
             self.data_state = new_state;
@@ -81,20 +106,15 @@ impl ScreenState<Action, PaletteValues> for State {
 
             Action::SelectNextMailbox => self.list_state.next(),
             Action::SelectPreviousMailbox => self.list_state.previous(),
-            Action::OpenSelectedMailbox => {
-                let Some(mailboxes) = self.mailboxes.as_ref() else {
-                    error!("Can't open mailbox: There are no mailboxes available yet.");
-                    return;
-                };
-
-                let Some(idx) = self.list_state.selected else {
-                    error!("Can't open mailbox: No mailbox selected.");
-                    return;
-                };
-
-                let mailbox_id = mailboxes[idx].id().unwrap().to_string();
-                self.app_actions
-                    .push(crate::Action::OpenRootMails(mailbox_id));
+            Action::OpenSelectedMailbox => match self.get_selected_mailbox() {
+                Ok(mailbox) => {
+                    self.app_actions
+                        .push(crate::Action::OpenRootMails(mailbox.id.clone()));
+                }
+                Err(err) => error!(err),
+            },
+            Action::SetSortOrder => {
+                todo!()
             }
         }
     }

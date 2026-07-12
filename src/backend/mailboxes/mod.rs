@@ -1,11 +1,12 @@
-// mod mailbox;
+mod mailbox_data;
 
 use crate::{backend::Account, ui::MailboxId};
-use jmap_client::{client::Client, mailbox::Mailbox};
+use jmap_client::client::Client;
+pub use mailbox_data::MailboxData;
 use std::collections::HashMap;
 
 pub struct Mailboxes {
-    inner: HashMap<MailboxId, Mailbox>,
+    inner: HashMap<MailboxId, MailboxData>,
     state: String,
 }
 
@@ -21,7 +22,7 @@ impl Mailboxes {
             .into_iter()
             .map(|mailbox| {
                 let id = mailbox.id().unwrap().to_string();
-                (id, mailbox)
+                (id, mailbox.into())
             })
             .collect();
 
@@ -41,7 +42,7 @@ impl Mailboxes {
             let mut response = request.send_get_mailbox().await.unwrap();
             for mailbox in response.take_list() {
                 let id = mailbox.id().unwrap();
-                self.inner.insert(id.to_string(), mailbox);
+                self.inner.insert(id.to_string(), mailbox.into());
             }
         }
 
@@ -51,12 +52,12 @@ impl Mailboxes {
             request.get_mailbox().ids(Some(response.created()));
             let mut response = request.send_get_mailbox().await.unwrap();
 
-            let mailboxes: Vec<(MailboxId, Mailbox)> = response
+            let mailboxes: Vec<(MailboxId, MailboxData)> = response
                 .take_list()
                 .into_iter()
                 .map(|mailbox| {
                     let id = mailbox.id().unwrap().to_string();
-                    (id, mailbox)
+                    (id, mailbox.into())
                 })
                 .collect();
 
@@ -96,14 +97,18 @@ impl Account {
         });
     }
 
-    pub fn get_mailboxes(&self, state: &str) -> Option<(Vec<Mailbox>, String)> {
+    pub fn get_mailboxes(&self, state: &str) -> Option<(Vec<MailboxData>, String)> {
         match self.data.try_lock() {
             Ok(data) => match data.mailboxes.as_ref() {
                 Some(mailboxes) => {
                     let state_changed = mailboxes.state != state;
 
                     if state_changed {
-                        let boxes = mailboxes.inner.values().cloned().collect::<Vec<Mailbox>>();
+                        let boxes = mailboxes
+                            .inner
+                            .values()
+                            .cloned()
+                            .collect::<Vec<MailboxData>>();
                         Some((boxes, mailboxes.state.to_owned()))
                     } else {
                         None
@@ -114,5 +119,20 @@ impl Account {
             Err(std::sync::TryLockError::WouldBlock) => None,
             Err(std::sync::TryLockError::Poisoned(err)) => unreachable!("{:?}", err),
         }
+    }
+
+    pub fn update_mailbox_sort_order(&self, mailboxes: Vec<(MailboxId, u32)>) {
+        let client = self.client.clone();
+
+        self.tasks.lock().unwrap().spawn(async move {
+            let mut request = client.build();
+            let set_mailbox = request.set_mailbox();
+
+            for (id, new_sort_order) in mailboxes {
+                set_mailbox.update(id).sort_order(new_sort_order);
+            }
+
+            request.send_set_mailbox().await.unwrap();
+        });
     }
 }

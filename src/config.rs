@@ -7,8 +7,6 @@ pub struct Config {
     pub address: String,
     pub password: String,
     pub host: String,
-    // https://www.rfc-editor.org/info/rfc8457/#section-6.3
-    pub mailbox_order: Vec<jmap_client::mailbox::Role>,
 }
 
 impl Config {

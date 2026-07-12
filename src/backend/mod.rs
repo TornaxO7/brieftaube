@@ -1,6 +1,6 @@
-mod mailboxes;
-mod root_mails;
-mod thread;
+pub mod mailboxes;
+pub mod root_mails;
+pub mod thread;
 
 use crate::{
     config::Config,

@@ -1,4 +1,3 @@
-use jmap_client::mailbox::Mailbox;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
@@ -7,13 +6,15 @@ use ratatui::{
 };
 use tui_widget_list::{ListBuilder, ListView};
 
+use crate::backend::mailboxes::MailboxData;
+
 pub struct List<'a> {
-    mailboxes: &'a [Mailbox],
+    mailboxes: &'a [MailboxData],
     block: Option<Block<'a>>,
 }
 
 impl<'a> List<'a> {
-    pub fn new(mailboxes: &'a [Mailbox]) -> Self {
+    pub fn new(mailboxes: &'a [MailboxData]) -> Self {
         Self {
             mailboxes,
             block: None,
@@ -42,9 +43,9 @@ impl<'a> StatefulWidget for List<'a> {
 
             let mailbox = &self.mailboxes[context.index];
 
-            let name = mailbox.name().unwrap();
-            let unread_mails = mailbox.unread_emails();
-            let total_mails = mailbox.total_emails();
+            let name = &mailbox.name;
+            let unread_mails = mailbox.unread_mails;
+            let sort_order = mailbox.sort_order;
 
             let style = if context.is_selected {
                 Style::default().green()
@@ -55,7 +56,7 @@ impl<'a> StatefulWidget for List<'a> {
             let entry = Entry {
                 name,
                 unread_mails,
-                total_mails,
+                sort_order,
                 style,
             };
 
@@ -73,8 +74,8 @@ impl<'a> StatefulWidget for List<'a> {
 
 struct Entry<'a> {
     name: &'a str,
-    total_mails: usize,
     unread_mails: usize,
+    sort_order: u32,
 
     style: Style,
 }
@@ -91,9 +92,13 @@ impl<'a> Widget for Entry<'a> {
             Layout::horizontal([Constraint::Fill(0), Constraint::Fill(0)]).areas(block_area);
 
         Widget::render(block, area, buf);
-        Widget::render(Paragraph::new(self.name), left, buf);
         Widget::render(
-            Paragraph::new(format!("{}/{}", self.unread_mails, self.total_mails)).right_aligned(),
+            Paragraph::new(format!("{} {}", self.sort_order, self.name)),
+            left,
+            buf,
+        );
+        Widget::render(
+            Paragraph::new(format!("{}", self.unread_mails)).right_aligned(),
             right,
             buf,
         );
