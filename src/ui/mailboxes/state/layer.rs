@@ -76,6 +76,74 @@ impl Layers {
             selected_layer: vec![0],
         }
     }
+
+    pub fn select_next_mailbox(&mut self) {
+        self.get_mut_current_layer().list_state.next();
+    }
+
+    pub fn select_previous_mailbox(&mut self) {
+        self.get_mut_current_layer().list_state.previous();
+    }
+
+    pub fn set_sort_order(&mut self, new_order: u32) -> MailboxId {
+        let layer = self.get_mut_current_layer();
+
+        let idx = layer.list_state.selected.unwrap();
+        let mailbox_id = {
+            let mailbox = layer.mailboxes.get_mut(idx).unwrap();
+            mailbox.sort_order = new_order;
+            mailbox.id.clone()
+        };
+        layer.sort_mailboxes();
+        mailbox_id
+    }
+
+    fn get_current_layer(&self) -> &Layer {
+        &self.layers[*self.selected_layer.last().unwrap()]
+    }
+
+    fn get_mut_current_layer(&mut self) -> &mut Layer {
+        &mut self.layers[*self.selected_layer.last().unwrap()]
+    }
+}
+
+// For rendering
+impl Layers {
+    pub fn parent_layer_render_data(
+        &mut self,
+    ) -> Option<(&[MailboxData], &mut tui_widget_list::ListState)> {
+        let selected_layer_len = self.selected_layer.len();
+        let has_parent = self.selected_layer.len() > 1;
+        if has_parent {
+            let idx = self.selected_layer[selected_layer_len - 2];
+            let layer = &mut self.layers[idx];
+            Some((&layer.mailboxes, &mut layer.list_state))
+        } else {
+            None
+        }
+    }
+
+    pub fn current_layer_render_data(
+        &mut self,
+    ) -> (&[MailboxData], &mut tui_widget_list::ListState) {
+        let layer = self.get_mut_current_layer();
+        (&layer.mailboxes, &mut layer.list_state)
+    }
+
+    pub fn current_selected_children_mailboxes(
+        &mut self,
+    ) -> Option<(&[MailboxData], &mut tui_widget_list::ListState)> {
+        let layer = self.get_current_layer();
+
+        let selected_idx = layer.list_state.selected.unwrap();
+        if let Some(child_layer) = layer.children[selected_idx] {
+            let child_layer = &mut self.layers[child_layer];
+
+            Some((&child_layer.mailboxes, &mut child_layer.list_state))
+        } else {
+            None
+        }
+    }
 }
 
 struct Layer {

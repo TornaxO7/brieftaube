@@ -2,7 +2,7 @@ mod layer;
 
 use super::Action;
 use crate::{
-    backend::{Account, mailboxes::MailboxData},
+    backend::Account,
     ui::{
         ScreenOverlay, ScreenOverlayResult, ScreenState,
         utils::{self, keybindmanager::KeybindManager},
@@ -28,8 +28,7 @@ pub struct State {
     account: Arc<Account>,
     overlay: Option<ScreenOverlay<PaletteValue, InputType>>,
 
-    pub mailboxes: Option<Vec<MailboxData>>,
-    pub list_state: tui_widget_list::ListState,
+    pub layers: Option<Layers>,
 
     data_state: String,
 }
@@ -39,9 +38,8 @@ impl State {
         Self {
             app_actions: vec![],
             account,
-            list_state: tui_widget_list::ListState::default(),
+            layers: None,
 
-            mailboxes: None,
             data_state: String::new(),
             overlay: None,
 
@@ -56,52 +54,15 @@ impl State {
             ])),
         }
     }
-
-    fn get_mut_selected_mailbox(&mut self) -> Result<&mut MailboxData, &'static str> {
-        let mailboxes = self
-            .mailboxes
-            .as_mut()
-            .ok_or("Can't get selected mailbox: There are no mailboxes available yet.")?;
-        let idx = self
-            .list_state
-            .selected
-            .ok_or("Can't get selected mailbox: No mailbox selected.")?;
-
-        Ok(&mut mailboxes[idx])
-    }
-
-    fn get_selected_mailbox(&self) -> Result<&MailboxData, &'static str> {
-        let mailboxes = self
-            .mailboxes
-            .as_ref()
-            .ok_or("Can't get selected mailbox: There are no mailboxes available yet.")?;
-        let idx = self
-            .list_state
-            .selected
-            .ok_or("Can't get selected mailbox: No mailbox selected.")?;
-
-        Ok(&mailboxes[idx])
-    }
-
-    fn sort_mailboxes(&mut self) {
-        if let Some(mailboxes) = self.mailboxes.as_mut() {
-            mailboxes.sort_by(|a, b| a.sort_order.cmp(&b.sort_order));
-        }
-    }
 }
 
 impl ScreenState<Action, PaletteValue, InputType> for State {
     #[tracing::instrument(level = "debug", skip_all)]
     fn update(&mut self) {
-        if let Some((mut mailboxes, new_state)) = self.account.get_mailboxes(&self.data_state) {
+        if let Some((mailboxes, new_state)) = self.account.get_mailboxes(&self.data_state) {
             trace!("Updating");
-            if self.list_state.selected.is_none() && !mailboxes.is_empty() {
-                self.list_state.selected = Some(0);
-            }
 
-            mailboxes.sort_unstable_by_key(|mailbox| mailbox.sort_order);
-
-            self.mailboxes = Some(mailboxes);
+            self.layers = Some(Layers::new(mailboxes));
             self.data_state = new_state;
         }
     }
@@ -116,15 +77,17 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
                 )))
             }
 
-            Action::SelectNextMailbox => self.list_state.next(),
-            Action::SelectPreviousMailbox => self.list_state.previous(),
-            Action::OpenSelectedMailbox => match self.get_selected_mailbox() {
-                Ok(mailbox) => {
-                    self.app_actions
-                        .push(crate::Action::OpenRootMails(mailbox.id.clone()));
+            Action::SelectNextMailbox => {
+                if let Some(layers) = self.layers.as_mut() {
+                    layers.select_next_mailbox();
                 }
-                Err(err) => error!(err),
-            },
+            }
+            Action::SelectPreviousMailbox => {
+                if let Some(layers) = self.layers.as_mut() {
+                    layers.select_previous_mailbox();
+                }
+            }
+            Action::OpenSelectedMailbox => todo!(),
             Action::SetSortOrder => {
                 self.overlay = Some(ScreenOverlay::Input(utils::input::State::new(
                     "Set sort order (>= 0):",
@@ -154,24 +117,19 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
                 PaletteValue::Action(action) => self.apply_action(action),
             },
             ScreenOverlayResult::Input { value, typ } => match typ {
-                InputType::SortOrder => match value.parse::<u32>() {
-                    Ok(new_order) => {
-                        let id = match self.get_mut_selected_mailbox() {
-                            Ok(mailbox) => {
-                                mailbox.sort_order = new_order;
-                                mailbox.id.clone()
+                InputType::SortOrder => {
+                    if let Some(layers) = self.layers.as_mut() {
+                        match value.parse::<u32>() {
+                            Ok(new_order) => {
+                                let id = layers.set_sort_order(new_order);
+                                self.account.update_mailbox_sort_order(id, new_order);
                             }
                             Err(err) => {
-                                error!(err);
-                                return;
+                                error!("'{}' isn't a 32-bit unsigned integer: {}", value, err)
                             }
-                        };
-
-                        self.account.update_mailbox_sort_order(id, new_order);
-                        self.sort_mailboxes();
+                        }
                     }
-                    Err(err) => error!("'{}' isn't a 32-bit unsigned integer: {}", value, err),
-                },
+                }
             },
             ScreenOverlayResult::Cancel => {}
         }
