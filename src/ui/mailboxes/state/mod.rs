@@ -1,3 +1,5 @@
+mod layer;
+
 use super::Action;
 use crate::{
     backend::{Account, mailboxes::MailboxData},
@@ -6,6 +8,7 @@ use crate::{
         utils::{self, keybindmanager::KeybindManager},
     },
 };
+pub use layer::Layers;
 use std::{collections::HashMap, sync::Arc};
 use tracing::{error, trace};
 
