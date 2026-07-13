@@ -87,7 +87,12 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
                     layers.select_previous_mailbox();
                 }
             }
-            Action::OpenSelectedMailbox => todo!(),
+            Action::OpenSelectedMailbox => {
+                if let Some(layers) = self.layers.as_ref() {
+                    let id = layers.get_current_selected_mailbox_id();
+                    self.app_actions.push(crate::Action::OpenRootMails(id));
+                }
+            }
             Action::SetSortOrder => {
                 self.overlay = Some(ScreenOverlay::Input(utils::input::State::new(
                     "Set sort order (>= 0):",

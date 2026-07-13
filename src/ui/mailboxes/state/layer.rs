@@ -1,5 +1,5 @@
 use crate::{backend::mailboxes::MailboxData, ui::MailboxId};
-use std::collections::HashMap;
+use std::{cmp::Ordering, collections::HashMap};
 
 type LayerIdx = usize;
 type EntryIdx = usize;
@@ -98,6 +98,13 @@ impl Layers {
         mailbox_id
     }
 
+    pub fn get_current_selected_mailbox_id(&self) -> MailboxId {
+        let layer = self.get_current_layer();
+
+        let idx = layer.list_state.selected.unwrap();
+        layer.mailboxes[idx].id.clone()
+    }
+
     fn get_current_layer(&self) -> &Layer {
         &self.layers[*self.selected_layer.last().unwrap()]
     }
@@ -175,7 +182,15 @@ impl Layer {
         let mut mailboxes: Vec<(usize, MailboxData)> =
             self.mailboxes.clone().into_iter().enumerate().collect();
 
-        mailboxes.sort_by(|a, b| a.1.sort_order.cmp(&b.1.sort_order));
+        mailboxes.sort_by(|a, b| {
+            let ordering = a.1.sort_order.cmp(&b.1.sort_order);
+
+            if ordering == Ordering::Equal {
+                a.1.name.cmp(&b.1.name)
+            } else {
+                ordering
+            }
+        });
 
         let new_children: Vec<Option<usize>> = mailboxes
             .iter()
