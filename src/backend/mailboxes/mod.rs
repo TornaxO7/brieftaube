@@ -1,9 +1,15 @@
 mod mailbox_data;
 
-use crate::{backend::Account, ui::MailboxId};
-use jmap_client::client::Client;
+use crate::{
+    backend::{Account, Data},
+    ui::MailboxId,
+};
+use jmap_client::{client::Client, core::set::SetObject};
 pub use mailbox_data::MailboxData;
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 use tracing::trace;
 
 pub struct Mailboxes {
@@ -28,57 +34,6 @@ impl Mailboxes {
             .collect();
 
         Self { inner, state }
-    }
-
-    pub async fn fetch_changes(&mut self, client: &Client) {
-        let mut request = client.build();
-        request.changes_mailbox(&self.state);
-
-        let mut response = request.send_changes_mailbox().await.unwrap();
-
-        // update
-        {
-            let mut request = client.build();
-            request.get_mailbox().ids(Some(response.updated()));
-            let mut response = request.send_get_mailbox().await.unwrap();
-            for mailbox in response.take_list() {
-                let id = mailbox.id().unwrap();
-                self.inner.insert(id.to_string(), mailbox.into());
-            }
-        }
-
-        // create
-        {
-            let mut request = client.build();
-            request.get_mailbox().ids(Some(response.created()));
-            let mut response = request.send_get_mailbox().await.unwrap();
-
-            let mailboxes: Vec<(MailboxId, MailboxData)> = response
-                .take_list()
-                .into_iter()
-                .map(|mailbox| {
-                    let id = mailbox.id().unwrap().to_string();
-                    (id, mailbox.into())
-                })
-                .collect();
-
-            self.inner.extend(mailboxes);
-        }
-
-        // destroy
-        {
-            let to_destroy = response.take_destroyed();
-
-            self.inner.retain(|id, _mailbox| {
-                to_destroy
-                    .iter()
-                    .map(|id| id.as_str())
-                    .find(|&id_to_destroy| id == id_to_destroy)
-                    .is_some()
-            });
-        }
-
-        self.state = response.take_new_state();
     }
 }
 
@@ -139,4 +94,133 @@ impl Account {
             request.send_set_mailbox().await.unwrap();
         });
     }
+
+    // pub fn fetch_changes(&self) {
+    //     let mailboxes_are_not_set = { self.data.lock().unwrap().mailboxes.is_none() };
+    //     if mailboxes_are_not_set {
+    //         self.init_mailboxes();
+    //         return;
+    //     }
+
+    //     let client = self.client.clone();
+    //     let data = self.data.clone();
+
+    //     self.tasks.lock().unwrap().spawn(async move {
+    //         fetch_changes(client, data).await;
+    //     });
+    // }
+
+    pub fn create_mailbox(&self, mut mailbox: MailboxData) {
+        let data = self.data.clone();
+        let client = self.client.clone();
+
+        self.tasks.lock().unwrap().spawn(async move {
+            let mut request = client.build();
+
+            let id = request
+                .set_mailbox()
+                .create()
+                .parent_id(mailbox.parent_id.clone())
+                .name(mailbox.name.clone())
+                .sort_order(mailbox.sort_order)
+                .is_subscribed(true)
+                .create_id()
+                .unwrap();
+
+            let mut response = request.send_set_mailbox().await.unwrap();
+            mailbox.id = id.clone();
+
+            let mut data = data.lock().unwrap();
+            let mailboxes = data.mailboxes.as_mut().unwrap();
+            mailboxes.inner.insert(id, mailbox);
+            mailboxes.state = response.take_new_state();
+        });
+    }
+
+    pub fn destroy_mailbox(&self, id: MailboxId) {
+        let data = self.data.clone();
+        let client = self.client.clone();
+
+        self.tasks.lock().unwrap().spawn(async move {
+            let mut request = client.build();
+            request
+                .set_mailbox()
+                .destroy([&id])
+                .arguments()
+                .on_destroy_remove_emails(false);
+            let mut response = request.send_set_mailbox().await.unwrap();
+
+            let mut data = data.lock().unwrap();
+            let mailboxes = data.mailboxes.as_mut().unwrap();
+            mailboxes.inner.remove(&id);
+            mailboxes.state = response.take_new_state();
+        });
+    }
 }
+
+// async fn fetch_changes(client: Arc<Client>, data: Arc<Mutex<Data>>) {
+//     let current_state = {
+//         let data = data.lock().unwrap();
+//         let mailboxes = data.mailboxes.as_ref().unwrap();
+//         mailboxes.state.clone()
+//     };
+//     let mut request = client.build();
+//     request.changes_mailbox(current_state);
+
+//     let mut response = request.send_changes_mailbox().await.unwrap();
+
+//     // update
+//     {
+//         let mut request = client.build();
+//         request.get_mailbox().ids(Some(response.updated()));
+//         let mut response = request.send_get_mailbox().await.unwrap();
+
+//         let mut data = data.lock().unwrap();
+//         let mailboxes = data.mailboxes.as_mut().unwrap();
+//         for mailbox in response.take_list() {
+//             let id = mailbox.id().unwrap();
+//             mailboxes.inner.insert(id.to_string(), mailbox.into());
+//         }
+//     }
+
+//     // create
+//     {
+//         let mut request = client.build();
+//         request.get_mailbox().ids(Some(response.created()));
+//         let mut response = request.send_get_mailbox().await.unwrap();
+
+//         let new_mailboxes: Vec<(MailboxId, MailboxData)> = response
+//             .take_list()
+//             .into_iter()
+//             .map(|mailbox| {
+//                 let id = mailbox.id().unwrap().to_string();
+//                 (id, mailbox.into())
+//             })
+//             .collect();
+
+//         let mut data = data.lock().unwrap();
+//         let mailboxes = data.mailboxes.as_mut().unwrap();
+//         mailboxes.inner.extend(new_mailboxes);
+//     }
+
+//     // destroy
+//     {
+//         let to_destroy = response.take_destroyed();
+
+//         let mut data = data.lock().unwrap();
+//         let mailboxes = data.mailboxes.as_mut().unwrap();
+//         mailboxes.inner.retain(|id, _mailbox| {
+//             to_destroy
+//                 .iter()
+//                 .map(|id| id.as_str())
+//                 .find(|&id_to_destroy| id == id_to_destroy)
+//                 .is_none()
+//         });
+//     }
+
+//     {
+//         let mut data = data.lock().unwrap();
+//         let mailboxes = data.mailboxes.as_mut().unwrap();
+//         mailboxes.state = response.take_new_state();
+//     }
+// }

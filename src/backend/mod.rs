@@ -6,7 +6,7 @@ use crate::{
     config::Config,
     ui::{MailboxId, ThreadId},
 };
-use jmap_client::client::Client;
+use jmap_client::{URI, client::Client, core::session::Capabilities};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -22,8 +22,9 @@ struct Data {
 
 pub struct Account {
     client: Arc<jmap_client::client::Client>,
-    config: Config,
+    _config: Config,
     data: Arc<Mutex<Data>>,
+    // TODO: take `()` and return a `Result` to print errors
     tasks: Arc<Mutex<JoinSet<()>>>,
 }
 
@@ -38,8 +39,18 @@ impl Account {
             .await
             .unwrap();
 
+        let session = client.session();
+        assert!(
+            session
+                .capabilities()
+                .find(|cap| cap.as_str() == jmap_client::URI::Mail.as_ref())
+                .is_some(),
+            "Hold up! Your server doesn't seem to support email capabilities?! Eh... That's funny... here are the information of the session: {:#?}",
+            session
+        );
+
         Self {
-            config,
+            _config: config,
             client: Arc::new(client),
             data: Arc::new(Mutex::new(Data::default())),
             tasks: Arc::new(Mutex::new(JoinSet::new())),
@@ -58,7 +69,26 @@ impl Account {
         self.client.session().username().to_string()
     }
 
-    pub fn config(&self) -> &Config {
-        &self.config
+    // pub fn config(&self) -> &Config {
+    //     &self.config
+    // }
+}
+
+impl Account {
+    pub fn mail_capability(&self) -> jmap_client::email::MailCapabilities {
+        let id = self.client.default_account_id();
+
+        match self
+            .client
+            .session()
+            .account(id)
+            .unwrap()
+            .capability(URI::Mail.as_ref())
+            .unwrap()
+            .clone()
+        {
+            Capabilities::Mail(cap) => cap,
+            _ => unreachable!(),
+        }
     }
 }

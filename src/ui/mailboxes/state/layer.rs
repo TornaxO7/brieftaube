@@ -51,6 +51,10 @@ impl Layers {
         self.get_current_layer_mut().state.select_previous();
     }
 
+    pub fn depth(&self) -> usize {
+        self.selected_layer.len() - 1
+    }
+
     pub fn set_sort_order(&mut self, new_order: u32) -> Option<MailboxId> {
         let layer = self.get_current_layer_mut();
         let idx = {
@@ -159,6 +163,20 @@ impl Layer {
 
     pub fn selected_parent(&self) -> bool {
         !self.is_root_layer() && self.state.selected().map(|idx| idx == 0).unwrap()
+    }
+
+    pub fn contains_mailbox_name(&self, name: &str) -> bool {
+        self.mailboxes.iter().any(|mailbox| mailbox.name == name)
+    }
+
+    pub fn get_selected_mailbox(&self) -> Option<&MailboxData> {
+        if self.is_root_layer() {
+            self.mailboxes.get(self.state.selected().unwrap())
+        } else if self.selected_parent() {
+            None
+        } else {
+            self.mailboxes.get(self.state.selected().unwrap() - 1)
+        }
     }
 
     fn sort_mailboxes(&mut self) {

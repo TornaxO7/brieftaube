@@ -237,8 +237,9 @@ fn init_logging() -> eyre::Result<()> {
         .with(tui_logger::TuiTracingSubscriberLayer)
         .init();
 
-    tracing::debug!("Debug logging enabled");
     tracing::info!("Greetings!");
+    tracing::debug!("Debug logging enabled");
+    tracing::trace!("Trace logging enabled");
 
     Ok(())
 }
