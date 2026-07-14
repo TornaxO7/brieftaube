@@ -39,6 +39,27 @@ impl Thread {
 }
 
 impl Account {
+    pub fn get_thread_mails(&self, id: &ThreadId, state: &str) -> Option<(Vec<Email>, String)> {
+        match self.data.try_lock() {
+            Ok(data) => {
+                let Some(thread) = data.threads.get(id) else {
+                    return None;
+                };
+
+                let has_changed = thread.thread_state != state;
+                if has_changed {
+                    let mails = thread.mails.clone();
+                    Some((mails, thread.thread_state.clone()))
+                } else {
+                    None
+                }
+            }
+            Err(_is_locked) => None,
+        }
+    }
+}
+
+impl Account {
     #[tracing::instrument(level = "debug", skip_all)]
     pub fn init_thread(&self, id: ThreadId) {
         let data = self.data.clone();
@@ -57,24 +78,5 @@ impl Account {
                 threads.insert(id, thread);
             }
         });
-    }
-
-    pub fn get_thread_mails(&self, id: &ThreadId, state: &str) -> Option<(Vec<Email>, String)> {
-        match self.data.try_lock() {
-            Ok(data) => {
-                let Some(thread) = data.threads.get(id) else {
-                    return None;
-                };
-
-                let has_changed = thread.thread_state != state;
-                if has_changed {
-                    let mails = thread.mails.clone();
-                    Some((mails, thread.thread_state.clone()))
-                } else {
-                    None
-                }
-            }
-            Err(_is_locked) => None,
-        }
     }
 }

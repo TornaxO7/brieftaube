@@ -40,6 +40,26 @@ impl RootMails {
 }
 
 impl Account {
+    pub fn get_root_mails(&self, id: &MailboxId, state: &str) -> Option<(Vec<Email>, String)> {
+        match self.data.try_lock() {
+            Ok(data) => {
+                let Some(root_mails) = data.root_mails.get(id) else {
+                    return None;
+                };
+
+                let has_changed = state != root_mails.state;
+                if has_changed {
+                    Some((root_mails.mails.clone(), root_mails.state.clone()))
+                } else {
+                    None
+                }
+            }
+            Err(_already_locked) => None,
+        }
+    }
+}
+
+impl Account {
     #[tracing::instrument(level = "debug", skip_all)]
     pub fn init_root_mails(&self, id: MailboxId) {
         let data = self.data.clone();
@@ -58,23 +78,5 @@ impl Account {
                 root_mails.insert(id, new_root_mails);
             }
         });
-    }
-
-    pub fn get_root_mails(&self, id: &MailboxId, state: &str) -> Option<(Vec<Email>, String)> {
-        match self.data.try_lock() {
-            Ok(data) => {
-                let Some(root_mails) = data.root_mails.get(id) else {
-                    return None;
-                };
-
-                let has_changed = state != root_mails.state;
-                if has_changed {
-                    Some((root_mails.mails.clone(), root_mails.state.clone()))
-                } else {
-                    None
-                }
-            }
-            Err(_already_locked) => None,
-        }
     }
 }

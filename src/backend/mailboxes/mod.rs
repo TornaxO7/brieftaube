@@ -33,25 +33,6 @@ impl Mailboxes {
 
 impl Account {
     #[tracing::instrument(level = "debug", skip_all)]
-    pub fn init_mailboxes(&self) {
-        let data = self.data.clone();
-        let client = self.client.clone();
-
-        trace!("Init mailboxes");
-        self.tasks.lock().unwrap().spawn(async move {
-            let mut data = data.lock().await;
-            let mailboxes = &mut data.mailboxes;
-
-            if mailboxes.is_none() {
-                let new_mailboxes = Mailboxes::new(&client).await;
-                trace!("Fetched mailboxes successfully.");
-
-                *mailboxes = Some(new_mailboxes);
-            }
-        });
-    }
-
-    #[tracing::instrument(level = "debug", skip_all)]
     pub fn get_mailboxes(&self, state: &str) -> Option<(Vec<MailboxData>, String)> {
         match self.data.try_lock() {
             Ok(data) => match data.mailboxes.as_ref() {
@@ -75,18 +56,39 @@ impl Account {
             Err(_already_locked) => None,
         }
     }
+}
+
+impl Account {
+    #[tracing::instrument(level = "debug", skip_all)]
+    pub fn init_mailboxes(&self) {
+        let data = self.data.clone();
+        let client = self.client.clone();
+
+        trace!("Init mailboxes");
+        self.tasks.lock().unwrap().spawn(async move {
+            let mut data = data.lock().await;
+            let mailboxes = &mut data.mailboxes;
+
+            if mailboxes.is_none() {
+                let new_mailboxes = Mailboxes::new(&client).await;
+                trace!("Fetched mailboxes successfully.");
+
+                *mailboxes = Some(new_mailboxes);
+            }
+        });
+    }
 
     pub fn update_mailbox_sort_order(&self, id: MailboxId, new_order: u32) {
         let data = self.data.clone();
         let client = self.client.clone();
 
         self.tasks.lock().unwrap().spawn(async move {
+            let mut data = data.lock().await;
+            let mailboxes = data.mailboxes.as_mut().unwrap();
+
             let mut request = client.build();
             request.set_mailbox().update(&id).sort_order(new_order);
             let mut response = request.send_set_mailbox().await.unwrap();
-
-            let mut data = data.lock().await;
-            let mailboxes = data.mailboxes.as_mut().unwrap();
 
             mailboxes.inner.get_mut(&id).unwrap().sort_order = new_order;
             mailboxes.state = response.take_new_state();
@@ -113,6 +115,9 @@ impl Account {
         let client = self.client.clone();
 
         self.tasks.lock().unwrap().spawn(async move {
+            let mut data = data.lock().await;
+            let mailboxes = data.mailboxes.as_mut().unwrap();
+
             let mut request = client.build();
 
             let id = request
@@ -124,9 +129,6 @@ impl Account {
                 .is_subscribed(true)
                 .create_id()
                 .unwrap();
-
-            let mut data = data.lock().await;
-            let mailboxes = data.mailboxes.as_mut().unwrap();
 
             let mut response = request.send_set_mailbox().await.unwrap();
             mailbox.id = id.clone();
@@ -141,6 +143,9 @@ impl Account {
         let client = self.client.clone();
 
         self.tasks.lock().unwrap().spawn(async move {
+            let mut data = data.lock().await;
+            let mailboxes = data.mailboxes.as_mut().unwrap();
+
             let mut request = client.build();
             request
                 .set_mailbox()
@@ -149,8 +154,6 @@ impl Account {
                 .on_destroy_remove_emails(false);
             let mut response = request.send_set_mailbox().await.unwrap();
 
-            let mut data = data.lock().await;
-            let mailboxes = data.mailboxes.as_mut().unwrap();
             mailboxes.inner.remove(&id);
             mailboxes.state = response.take_new_state();
         });
