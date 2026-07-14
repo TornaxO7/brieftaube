@@ -1,14 +1,10 @@
 mod list;
 
+use crate::ui::{ScreenOverlay, ScreenState, mailboxes::state::Layer, utils};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
-    widgets::{Block, Clear, Paragraph, StatefulWidget, Widget},
-};
-
-use crate::{
-    backend::mailboxes::MailboxData,
-    ui::{ScreenOverlay, ScreenState, mailboxes::state::Layer, utils},
+    widgets::{Block, Clear, Paragraph, StatefulWidget, Table, Widget},
 };
 
 #[derive(Default)]
@@ -42,11 +38,40 @@ impl StatefulWidget for Mailboxes {
 }
 
 fn render_layer(area: Rect, buf: &mut Buffer, layer: &mut Layer) {
+    let table = {
+        let rows = {
+            let mut rows = Vec::with_capacity(layer.mailboxes.capacity() + 1);
+
+            if !layer.is_root_layer() {
+                rows.push(vec!["<open>", "", ""]);
+            }
+
+            for mailbox in layer.mailboxes.iter() {
+                rows.push(vec![
+                    &format!("{}", mailbox.sort_order),
+                    &mailbox.name,
+                    &format!("{}", mailbox.unread_mails),
+                ]);
+            }
+
+            rows
+        };
+
+        Table::new(
+            rows,
+            [
+                Constraint::Length(2),
+                Constraint::Fill(0),
+                Constraint::Fill(0),
+            ],
+        )
+    };
+
     StatefulWidget::render(
-        list::List::new(&layer.mailboxes),
+        list::List::new(layer.mailbox_owner.as_ref(), &layer.mailboxes),
         area,
         buf,
-        &mut layer.list_state,
+        &mut layer.state,
     )
 }
 

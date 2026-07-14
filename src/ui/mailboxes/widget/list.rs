@@ -1,3 +1,4 @@
+use crate::{backend::mailboxes::MailboxData, ui::MailboxId};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
@@ -6,16 +7,16 @@ use ratatui::{
 };
 use tui_widget_list::{ListBuilder, ListView};
 
-use crate::{backend::mailboxes::MailboxData, ui::MailboxId};
-
 pub struct List<'a> {
+    layer_owner: Option<&'a MailboxId>,
     mailboxes: &'a [MailboxData],
     block: Option<Block<'a>>,
 }
 
 impl<'a> List<'a> {
-    pub fn new(mailboxes: &'a [MailboxData]) -> Self {
+    pub fn new(layer_owner: Option<&'a MailboxId>, mailboxes: &'a [MailboxData]) -> Self {
         Self {
+            layer_owner,
             mailboxes,
             block: None,
         }
@@ -56,7 +57,12 @@ impl<'a> StatefulWidget for List<'a> {
             (entry, ENTRY_SIZE)
         });
 
-        let mut list = ListView::new(builder, self.mailboxes.len()).infinite_scrolling(false);
+        let total_amount_entries = if self.layer_owner.is_some() {
+            1 + self.mailboxes.len()
+        } else {
+            self.mailboxes.len()
+        };
+        let mut list = ListView::new(builder, total_amount_entries).infinite_scrolling(false);
         if let Some(block) = self.block {
             list = list.block(block);
         }

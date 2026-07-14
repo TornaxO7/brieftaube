@@ -1,3 +1,5 @@
+use ratatui::widgets::TableState;
+
 use crate::{backend::mailboxes::MailboxData, ui::MailboxId};
 use std::{cmp::Ordering, collections::HashMap};
 
@@ -42,11 +44,11 @@ impl Layers {
     }
 
     pub fn select_next_mailbox(&mut self) {
-        self.get_current_layer_mut().list_state.next();
+        self.get_current_layer_mut().state.select_next();
     }
 
     pub fn select_previous_mailbox(&mut self) {
-        self.get_current_layer_mut().list_state.previous();
+        self.get_current_layer_mut().state.select_previous();
     }
 
     pub fn set_sort_order(&mut self, new_order: u32) -> Option<MailboxId> {
@@ -57,9 +59,9 @@ impl Layers {
             }
 
             if layer.is_root_layer() {
-                layer.list_state.selected.unwrap()
+                layer.state.selected().unwrap()
             } else {
-                layer.list_state.selected.unwrap() - 1
+                layer.state.selected().unwrap() - 1
             }
         };
 
@@ -75,7 +77,7 @@ impl Layers {
     pub fn get_current_selected_entry(&self) -> MailboxId {
         let layer = self.get_current_layer();
 
-        let idx = layer.list_state.selected.unwrap();
+        let idx = layer.state.selected().unwrap();
         if layer.is_root_layer() {
             layer.mailboxes[idx].id.clone()
         } else if layer.selected_parent() {
@@ -114,7 +116,7 @@ impl Layers {
     pub fn get_children_layer_mut(&mut self) -> &mut Layer {
         let layer = self.get_current_layer();
 
-        let selected_idx = layer.list_state.selected.unwrap();
+        let selected_idx = layer.state.selected().unwrap();
         let selected_mailbox = &layer.mailboxes[selected_idx];
         self.layers
             .get_mut(&Some(selected_mailbox.id.clone()))
@@ -126,7 +128,7 @@ impl Layers {
 pub struct Layer {
     pub mailbox_owner: Option<MailboxId>,
     pub mailboxes: Vec<MailboxData>,
-    pub list_state: tui_widget_list::ListState,
+    pub state: TableState,
 }
 
 impl Layer {
@@ -134,11 +136,7 @@ impl Layer {
         Self {
             mailbox_owner,
             mailboxes: vec![],
-            list_state: {
-                let mut state = tui_widget_list::ListState::default();
-                state.select(Some(0));
-                state
-            },
+            state: TableState::new().with_selected(Some(0)),
         }
     }
 
@@ -147,7 +145,7 @@ impl Layer {
     }
 
     pub fn selected_parent(&self) -> bool {
-        !self.is_root_layer() && self.list_state.selected.map(|idx| idx == 0).unwrap()
+        !self.is_root_layer() && self.state.selected().map(|idx| idx == 0).unwrap()
     }
 
     fn sort_mailboxes(&mut self) {
