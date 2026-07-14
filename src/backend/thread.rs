@@ -46,17 +46,15 @@ impl Account {
 
         trace!("Init thread: {}", id);
         self.tasks.lock().unwrap().spawn(async move {
-            let is_not_initialised = {
-                let data = data.lock().unwrap();
-                !data.threads.contains_key(&id)
-            };
+            let mut data = data.lock().await;
+            let threads = &mut data.threads;
 
+            let is_not_initialised = !threads.contains_key(&id);
             if is_not_initialised {
                 let thread = Thread::new(&client, id.clone()).await;
                 trace!("Fetched thread '{}' successfully.", id);
 
-                let mut data = data.lock().unwrap();
-                data.threads.insert(id, thread);
+                threads.insert(id, thread);
             }
         });
     }
@@ -76,8 +74,7 @@ impl Account {
                     None
                 }
             }
-            Err(std::sync::TryLockError::WouldBlock) => None,
-            Err(std::sync::TryLockError::Poisoned(err)) => unreachable!("{:?}", err),
+            Err(_is_locked) => None,
         }
     }
 }

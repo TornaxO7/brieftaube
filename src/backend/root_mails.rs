@@ -47,17 +47,15 @@ impl Account {
 
         trace!("Init root mails");
         self.tasks.lock().unwrap().spawn(async move {
-            let is_not_initialised = {
-                let data = data.lock().unwrap();
-                !data.root_mails.contains_key(&id)
-            };
+            let mut data = data.lock().await;
+            let root_mails = &mut data.root_mails;
 
+            let is_not_initialised = !root_mails.contains_key(&id);
             if is_not_initialised {
-                let root_mails = RootMails::new(&client, id.clone()).await;
+                let new_root_mails = RootMails::new(&client, id.clone()).await;
                 trace!("Fetched root mails successfully.");
 
-                let mut data = data.lock().unwrap();
-                data.root_mails.insert(id, root_mails);
+                root_mails.insert(id, new_root_mails);
             }
         });
     }
@@ -76,8 +74,7 @@ impl Account {
                     None
                 }
             }
-            Err(std::sync::TryLockError::WouldBlock) => None,
-            Err(std::sync::TryLockError::Poisoned(err)) => unreachable!("{:?}", err),
+            Err(_already_locked) => None,
         }
     }
 }

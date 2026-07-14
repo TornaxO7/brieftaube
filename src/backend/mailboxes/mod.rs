@@ -1,15 +1,9 @@
 mod mailbox_data;
 
-use crate::{
-    backend::{Account, Data},
-    ui::MailboxId,
-};
+use crate::{backend::Account, ui::MailboxId};
 use jmap_client::{client::Client, core::set::SetObject};
 pub use mailbox_data::MailboxData;
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::collections::HashMap;
 use tracing::trace;
 
 pub struct Mailboxes {
@@ -45,13 +39,14 @@ impl Account {
 
         trace!("Init mailboxes");
         self.tasks.lock().unwrap().spawn(async move {
-            let mailboxes_arent_initalised = { data.lock().unwrap().mailboxes.is_none() };
+            let mut data = data.lock().await;
+            let mailboxes = &mut data.mailboxes;
 
-            if mailboxes_arent_initalised {
-                let mailboxes = Mailboxes::new(&client).await;
+            if mailboxes.is_none() {
+                let new_mailboxes = Mailboxes::new(&client).await;
                 trace!("Fetched mailboxes successfully.");
 
-                data.lock().unwrap().mailboxes = Some(mailboxes);
+                *mailboxes = Some(new_mailboxes);
             }
         });
     }
@@ -77,21 +72,24 @@ impl Account {
                 }
                 None => None,
             },
-            Err(std::sync::TryLockError::WouldBlock) => {
-                trace!("Can't lock data.");
-                None
-            }
-            Err(std::sync::TryLockError::Poisoned(err)) => unreachable!("{:?}", err),
+            Err(_already_locked) => None,
         }
     }
 
     pub fn update_mailbox_sort_order(&self, id: MailboxId, new_order: u32) {
+        let data = self.data.clone();
         let client = self.client.clone();
 
         self.tasks.lock().unwrap().spawn(async move {
             let mut request = client.build();
-            request.set_mailbox().update(id).sort_order(new_order);
-            request.send_set_mailbox().await.unwrap();
+            request.set_mailbox().update(&id).sort_order(new_order);
+            let mut response = request.send_set_mailbox().await.unwrap();
+
+            let mut data = data.lock().await;
+            let mailboxes = data.mailboxes.as_mut().unwrap();
+
+            mailboxes.inner.get_mut(&id).unwrap().sort_order = new_order;
+            mailboxes.state = response.take_new_state();
         });
     }
 
@@ -127,11 +125,12 @@ impl Account {
                 .create_id()
                 .unwrap();
 
+            let mut data = data.lock().await;
+            let mailboxes = data.mailboxes.as_mut().unwrap();
+
             let mut response = request.send_set_mailbox().await.unwrap();
             mailbox.id = id.clone();
 
-            let mut data = data.lock().unwrap();
-            let mailboxes = data.mailboxes.as_mut().unwrap();
             mailboxes.inner.insert(id, mailbox);
             mailboxes.state = response.take_new_state();
         });
@@ -150,7 +149,7 @@ impl Account {
                 .on_destroy_remove_emails(false);
             let mut response = request.send_set_mailbox().await.unwrap();
 
-            let mut data = data.lock().unwrap();
+            let mut data = data.lock().await;
             let mailboxes = data.mailboxes.as_mut().unwrap();
             mailboxes.inner.remove(&id);
             mailboxes.state = response.take_new_state();

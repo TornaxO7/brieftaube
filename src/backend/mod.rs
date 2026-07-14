@@ -7,10 +7,7 @@ use crate::{
     ui::{MailboxId, ThreadId},
 };
 use jmap_client::{URI, client::Client, core::session::Capabilities};
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, sync::Arc};
 use tokio::task::{JoinError, JoinSet};
 
 #[derive(Default)]
@@ -23,9 +20,9 @@ struct Data {
 pub struct Account {
     client: Arc<jmap_client::client::Client>,
     _config: Config,
-    data: Arc<Mutex<Data>>,
+    data: Arc<tokio::sync::Mutex<Data>>,
     // TODO: take `()` and return a `Result` to print errors
-    tasks: Arc<Mutex<JoinSet<()>>>,
+    tasks: Arc<std::sync::Mutex<JoinSet<()>>>,
 }
 
 impl Account {
@@ -52,8 +49,8 @@ impl Account {
         Self {
             _config: config,
             client: Arc::new(client),
-            data: Arc::new(Mutex::new(Data::default())),
-            tasks: Arc::new(Mutex::new(JoinSet::new())),
+            data: Arc::new(tokio::sync::Mutex::new(Data::default())),
+            tasks: Arc::new(std::sync::Mutex::new(JoinSet::new())),
         }
     }
 
