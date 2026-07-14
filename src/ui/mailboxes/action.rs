@@ -38,6 +38,8 @@ pub enum Action {
     #[strum(message = "Set the sort order of the selected mailbox.")]
     SetSortOrder,
 
+    #[strum(message = "Open logs")]
+    OpenLogs,
     #[strum(message = "Quit the application")]
     Quit,
 }

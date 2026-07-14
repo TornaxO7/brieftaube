@@ -10,7 +10,7 @@ use crate::{
 };
 pub use layer::{Layer, Layers};
 use std::{collections::HashMap, sync::Arc};
-use tracing::{debug, error, trace};
+use tracing::{debug, error, info, trace};
 
 #[derive(Debug, Clone)]
 pub enum PaletteValue {
@@ -63,7 +63,6 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
     fn update(&mut self) {
         if let Some((mailboxes, new_state)) = self.account.get_mailboxes(&self.data_state) {
             trace!("Updating");
-            debug!("{:#?}", mailboxes);
 
             self.layers = Some(Layers::new(mailboxes));
             self.data_state = new_state;
@@ -78,6 +77,9 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
                 self.overlay = Some(ScreenOverlay::Palette(utils::palette::State::new(
                     super::action::palette_options(),
                 )))
+            }
+            Action::OpenLogs => {
+                self.app_actions.push(crate::Action::OpenLogViewer);
             }
 
             Action::SelectNextMailbox => {
@@ -129,8 +131,8 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
                     let layer = layers.get_current_layer();
 
                     match layer.get_selected_mailbox() {
-                        Some(selected_mailbox) => {
-                            self.account.destroy_mailbox(selected_mailbox.id.clone());
+                        Some(mailbox) => {
+                            self.account.destroy_mailbox(mailbox.id.clone());
                         }
                         None => {
                             error!(
@@ -223,7 +225,7 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
 
                         let layer = layers.get_current_layer();
                         let new_mailbox_data = MailboxData {
-                            name: value,
+                            name: value.clone(),
                             parent_id: layer.mailbox_owner.clone(),
                             sort_order: layer
                                 .mailboxes

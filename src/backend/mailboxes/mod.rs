@@ -1,10 +1,11 @@
 mod mailbox_data;
 
 use crate::{backend::Account, ui::MailboxId};
-use jmap_client::{client::Client, core::set::SetObject};
+use color_eyre::eyre::Context;
+use jmap_client::{client::Client, core::set::SetObject, mailbox::Role};
 pub use mailbox_data::MailboxData;
 use std::collections::HashMap;
-use tracing::trace;
+use tracing::{debug, info, trace};
 
 pub struct Mailboxes {
     inner: HashMap<MailboxId, MailboxData>,
@@ -129,14 +130,16 @@ impl Account {
                 .parent_id(mailbox.parent_id.clone())
                 .name(mailbox.name.clone())
                 .sort_order(mailbox.sort_order)
+                .role(Role::None)
                 .is_subscribed(true)
                 .create_id()
                 .unwrap();
 
             let mut response = request.send_set_mailbox().await?;
-            mailbox.id = id.clone();
+            let mut created_mailbox = response.created(&id)?;
+            mailbox.id = created_mailbox.take_id();
 
-            mailboxes.inner.insert(id, mailbox);
+            mailboxes.inner.insert(mailbox.id.clone(), mailbox);
             mailboxes.state = response.take_new_state();
 
             Ok(())
@@ -158,9 +161,12 @@ impl Account {
                 .arguments()
                 .on_destroy_remove_emails(false);
             let mut response = request.send_set_mailbox().await?;
+            response.destroyed(&id)?;
 
-            mailboxes.inner.remove(&id);
+            mailboxes.inner.remove(&id).unwrap();
             mailboxes.state = response.take_new_state();
+
+            info!("Successfully destroyed mailbox.");
 
             Ok(())
         });

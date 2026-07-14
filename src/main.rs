@@ -80,9 +80,7 @@ impl App {
         while self.is_running {
             tokio::select! {
                 res = self.account.has_changed(), if self.account.has_tasks_running() => {
-                    debug_assert!(res.is_some(), "Eeeeh, this should only return if a task finished and not if there are no tasks o.O");
-
-                    if let Err(err) = res.unwrap() {
+                    if let Ok(Err(err)) = res.expect("A task finished") {
                         error!("{}", err);
                     }
                 }
