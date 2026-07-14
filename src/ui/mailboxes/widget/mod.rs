@@ -1,11 +1,12 @@
-mod list;
-
 use crate::ui::{ScreenOverlay, ScreenState, mailboxes::state::Layer, utils};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
-    widgets::{Block, Clear, Paragraph, StatefulWidget, Table, Widget},
+    style::{Color, Style},
+    widgets::{Block, Clear, Paragraph, Row, StatefulWidget, Table, Widget},
 };
+
+const DARK_TURQUOISE: Color = Color::from_u32(0x005eff);
 
 #[derive(Default)]
 pub struct Mailboxes {}
@@ -28,7 +29,9 @@ impl StatefulWidget for Mailboxes {
 
             render_layer(center, buf, layers.get_current_layer_mut());
 
-            render_layer(right, buf, layers.get_children_layer_mut());
+            if let Some(children_layer) = layers.get_children_layer_mut() {
+                render_layer(right, buf, children_layer);
+            }
         } else {
             render_loading_screen(area, buf);
         }
@@ -43,15 +46,15 @@ fn render_layer(area: Rect, buf: &mut Buffer, layer: &mut Layer) {
             let mut rows = Vec::with_capacity(layer.mailboxes.capacity() + 1);
 
             if !layer.is_root_layer() {
-                rows.push(vec!["<open>", "", ""]);
+                rows.push(Row::new(["", "<open>"]).style(Style::default().yellow()));
             }
 
             for mailbox in layer.mailboxes.iter() {
-                rows.push(vec![
-                    &format!("{}", mailbox.sort_order),
-                    &mailbox.name,
-                    &format!("{}", mailbox.unread_mails),
-                ]);
+                rows.push(Row::new(vec![
+                    format!("{}", mailbox.sort_order),
+                    mailbox.name.clone(),
+                    format!("{}", mailbox.unread_mails),
+                ]));
             }
 
             rows
@@ -60,19 +63,16 @@ fn render_layer(area: Rect, buf: &mut Buffer, layer: &mut Layer) {
         Table::new(
             rows,
             [
-                Constraint::Length(2),
-                Constraint::Fill(0),
-                Constraint::Fill(0),
+                Constraint::Min(2),
+                Constraint::Percentage(50),
+                Constraint::Percentage(50),
             ],
         )
+        .header(Row::new(["Sort order", "Name", "Unread"]))
+        .row_highlight_style(Style::default().bg(DARK_TURQUOISE))
     };
 
-    StatefulWidget::render(
-        list::List::new(layer.mailbox_owner.as_ref(), &layer.mailboxes),
-        area,
-        buf,
-        &mut layer.state,
-    )
+    StatefulWidget::render(table, area, buf, &mut layer.state)
 }
 
 fn render_loading_screen(area: Rect, buf: &mut Buffer) {

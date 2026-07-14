@@ -74,16 +74,27 @@ impl Layers {
         Some(mailbox_id)
     }
 
-    pub fn get_current_selected_entry(&self) -> MailboxId {
+    pub fn open_selected_entry(&mut self) -> Option<MailboxId> {
         let layer = self.get_current_layer();
 
         let idx = layer.state.selected().unwrap();
-        if layer.is_root_layer() {
-            layer.mailboxes[idx].id.clone()
-        } else if layer.selected_parent() {
-            layer.mailbox_owner.clone().unwrap()
+        if layer.selected_parent() {
+            return layer.mailbox_owner.clone();
         } else {
-            layer.mailboxes[idx - 1].id.clone()
+            let selected_mailbox = if layer.is_root_layer() {
+                layer.mailboxes[idx].id.clone()
+            } else {
+                layer.mailboxes[idx - 1].id.clone()
+            };
+
+            self.selected_layer.push(Some(selected_mailbox));
+            None
+        }
+    }
+
+    pub fn go_up_one_level(&mut self) {
+        if self.selected_layer.len() > 1 {
+            self.selected_layer.pop();
         }
     }
 
@@ -113,14 +124,16 @@ impl Layers {
         }
     }
 
-    pub fn get_children_layer_mut(&mut self) -> &mut Layer {
+    pub fn get_children_layer_mut(&mut self) -> Option<&mut Layer> {
         let layer = self.get_current_layer();
 
         let selected_idx = layer.state.selected().unwrap();
-        let selected_mailbox = &layer.mailboxes[selected_idx];
-        self.layers
-            .get_mut(&Some(selected_mailbox.id.clone()))
-            .unwrap()
+        if !layer.mailboxes.is_empty() {
+            let selected_mailbox = &layer.mailboxes[selected_idx];
+            self.layers.get_mut(&Some(selected_mailbox.id.clone()))
+        } else {
+            None
+        }
     }
 }
 

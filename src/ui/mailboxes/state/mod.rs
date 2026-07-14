@@ -49,8 +49,9 @@ impl State {
                 ("k", Action::SelectPreviousMailbox),
                 // ("n", super::Action::OpenComposer),
                 (":", Action::OpenCommandPalette),
-                ("<CR>", Action::OpenSelectedMailbox),
-                ("l", Action::OpenSelectedMailbox),
+                ("<CR>", Action::OpenSelectedEntry),
+                ("l", Action::OpenSelectedEntry),
+                ("h", Action::GoUpOneLevel),
             ])),
         }
     }
@@ -87,14 +88,17 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
                     layers.select_previous_mailbox();
                 }
             }
-            Action::OpenSelectedMailbox => {
-                if let Some(layers) = self.layers.as_ref() {
-                    let id = layers.get_current_selected_entry();
-                    self.app_actions.push(crate::Action::OpenRootMails(id));
+            Action::OpenSelectedEntry => {
+                if let Some(layers) = self.layers.as_mut() {
+                    if let Some(id) = layers.open_selected_entry() {
+                        self.app_actions.push(crate::Action::OpenRootMails(id));
+                    }
                 }
             }
-            Action::EnterSelectedMailbox => {
-                todo!()
+            Action::GoUpOneLevel => {
+                if let Some(layers) = self.layers.as_mut() {
+                    layers.go_up_one_level();
+                }
             }
             Action::SetSortOrder => {
                 if let Some(layers) = self.layers.as_ref() {
