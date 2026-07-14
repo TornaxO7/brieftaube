@@ -132,7 +132,7 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
 
                     match layer.get_selected_mailbox() {
                         Some(mailbox) => {
-                            self.account.destroy_mailbox(mailbox.id.clone());
+                            self.account.destroy_mailbox(mailbox.clone());
                         }
                         None => {
                             error!(

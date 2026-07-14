@@ -139,14 +139,16 @@ impl Account {
             let mut created_mailbox = response.created(&id)?;
             mailbox.id = created_mailbox.take_id();
 
-            mailboxes.inner.insert(mailbox.id.clone(), mailbox);
+            mailboxes.inner.insert(mailbox.id.clone(), mailbox.clone());
             mailboxes.state = response.take_new_state();
+
+            info!("Successfully created mailbox '{}'.", mailbox.name.clone());
 
             Ok(())
         });
     }
 
-    pub fn destroy_mailbox(&self, id: MailboxId) {
+    pub fn destroy_mailbox(&self, mailbox: MailboxData) {
         let data = self.data.clone();
         let client = self.client.clone();
 
@@ -157,16 +159,16 @@ impl Account {
             let mut request = client.build();
             request
                 .set_mailbox()
-                .destroy([&id])
+                .destroy([&mailbox.id])
                 .arguments()
                 .on_destroy_remove_emails(false);
             let mut response = request.send_set_mailbox().await?;
-            response.destroyed(&id)?;
+            response.destroyed(&mailbox.id)?;
 
-            mailboxes.inner.remove(&id).unwrap();
+            mailboxes.inner.remove(&mailbox.id).unwrap();
             mailboxes.state = response.take_new_state();
 
-            info!("Successfully destroyed mailbox.");
+            info!("Successfully destroyed mailbox '{}'.", mailbox.name);
 
             Ok(())
         });
