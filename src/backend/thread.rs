@@ -10,11 +10,11 @@ pub struct Thread {
 }
 
 impl Thread {
-    pub async fn new(client: &Client, id: ThreadId) -> Self {
+    pub async fn new(client: &Client, id: ThreadId) -> color_eyre::Result<Self> {
         let mut request = client.build();
 
         request.get_thread().ids(Some([id]));
-        let mut response = request.send_get_thread().await.unwrap();
+        let mut response = request.send_get_thread().await?;
         let thread_state = response.take_state();
 
         let (mails, mails_state) = {
@@ -24,17 +24,17 @@ impl Thread {
                 .ids(Some(response.list()[0].email_ids()))
                 .arguments()
                 .fetch_all_body_values(true);
-            let mut response = request.send_get_email().await.unwrap();
+            let mut response = request.send_get_email().await?;
 
             (response.take_list(), response.take_state())
         };
 
-        Self {
+        Ok(Self {
             mails,
 
             thread_state,
             _mails_state: mails_state,
-        }
+        })
     }
 }
 
@@ -72,11 +72,12 @@ impl Account {
 
             let is_not_initialised = !threads.contains_key(&id);
             if is_not_initialised {
-                let thread = Thread::new(&client, id.clone()).await;
+                let thread = Thread::new(&client, id.clone()).await?;
                 trace!("Fetched thread '{}' successfully.", id);
 
                 threads.insert(id, thread);
             }
+            Ok(())
         });
     }
 }

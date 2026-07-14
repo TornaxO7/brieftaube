@@ -21,8 +21,7 @@ pub struct Account {
     client: Arc<jmap_client::client::Client>,
     _config: Config,
     data: Arc<tokio::sync::Mutex<Data>>,
-    // TODO: take `()` and return a `Result` to print errors
-    tasks: Arc<std::sync::Mutex<JoinSet<()>>>,
+    tasks: Arc<std::sync::Mutex<JoinSet<color_eyre::Result<()>>>>,
 }
 
 impl Account {
@@ -58,7 +57,7 @@ impl Account {
         !self.tasks.lock().unwrap().is_empty()
     }
 
-    pub async fn has_changed(&self) -> Option<Result<(), JoinError>> {
+    pub async fn has_changed(&self) -> Option<Result<color_eyre::Result<()>, JoinError>> {
         self.tasks.lock().unwrap().join_next().await
     }
 

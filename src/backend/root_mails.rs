@@ -11,7 +11,7 @@ pub struct RootMails {
 }
 
 impl RootMails {
-    async fn new(client: &Client, id: MailboxId) -> Self {
+    async fn new(client: &Client, id: MailboxId) -> color_eyre::Result<Self> {
         let mut request = client.build();
         request
             .query_email()
@@ -20,7 +20,7 @@ impl RootMails {
             .limit(INIT_ROOT_MAILS)
             .arguments()
             .collapse_threads(true);
-        let mut response = request.send_query_email().await.unwrap();
+        let mut response = request.send_query_email().await?;
         let state = response.take_query_state();
 
         let mails = {
@@ -30,12 +30,12 @@ impl RootMails {
                 .ids(Some(response.ids()))
                 .arguments()
                 .fetch_all_body_values(true);
-            let mut response = request.send_get_email().await.unwrap();
+            let mut response = request.send_get_email().await?;
 
             response.take_list()
         };
 
-        Self { mails, state }
+        Ok(Self { mails, state })
     }
 }
 
@@ -72,11 +72,12 @@ impl Account {
 
             let is_not_initialised = !root_mails.contains_key(&id);
             if is_not_initialised {
-                let new_root_mails = RootMails::new(&client, id.clone()).await;
-                trace!("Fetched root mails successfully.");
+                let new_root_mails = RootMails::new(&client, id.clone()).await?;
 
                 root_mails.insert(id, new_root_mails);
             }
+
+            Ok(())
         });
     }
 }

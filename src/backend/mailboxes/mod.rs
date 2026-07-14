@@ -12,10 +12,10 @@ pub struct Mailboxes {
 }
 
 impl Mailboxes {
-    pub async fn new(client: &Client) -> Self {
+    pub async fn new(client: &Client) -> color_eyre::Result<Self> {
         let mut request = client.build();
         request.get_mailbox().ids::<[_; 1], String>(None::<[_; 1]>);
-        let mut response = request.send_get_mailbox().await.unwrap();
+        let mut response = request.send_get_mailbox().await?;
         let state = response.take_state();
 
         let inner = response
@@ -27,7 +27,7 @@ impl Mailboxes {
             })
             .collect();
 
-        Self { inner, state }
+        Ok(Self { inner, state })
     }
 }
 
@@ -70,11 +70,12 @@ impl Account {
             let mailboxes = &mut data.mailboxes;
 
             if mailboxes.is_none() {
-                let new_mailboxes = Mailboxes::new(&client).await;
-                trace!("Fetched mailboxes successfully.");
+                let new_mailboxes = Mailboxes::new(&client).await?;
 
                 *mailboxes = Some(new_mailboxes);
             }
+
+            Ok(())
         });
     }
 
@@ -88,10 +89,12 @@ impl Account {
 
             let mut request = client.build();
             request.set_mailbox().update(&id).sort_order(new_order);
-            let mut response = request.send_set_mailbox().await.unwrap();
+            let mut response = request.send_set_mailbox().await?;
 
             mailboxes.inner.get_mut(&id).unwrap().sort_order = new_order;
             mailboxes.state = response.take_new_state();
+
+            Ok(())
         });
     }
 
@@ -130,11 +133,13 @@ impl Account {
                 .create_id()
                 .unwrap();
 
-            let mut response = request.send_set_mailbox().await.unwrap();
+            let mut response = request.send_set_mailbox().await?;
             mailbox.id = id.clone();
 
             mailboxes.inner.insert(id, mailbox);
             mailboxes.state = response.take_new_state();
+
+            Ok(())
         });
     }
 
@@ -152,10 +157,12 @@ impl Account {
                 .destroy([&id])
                 .arguments()
                 .on_destroy_remove_emails(false);
-            let mut response = request.send_set_mailbox().await.unwrap();
+            let mut response = request.send_set_mailbox().await?;
 
             mailboxes.inner.remove(&id);
             mailboxes.state = response.take_new_state();
+
+            Ok(())
         });
     }
 }
