@@ -8,7 +8,7 @@ use crate::{
         utils::{self, keybindmanager::KeybindManager},
     },
 };
-pub use layer::Layers;
+pub use layer::{Layer, Layers};
 use std::{collections::HashMap, sync::Arc};
 use tracing::{error, trace};
 
@@ -89,15 +89,28 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
             }
             Action::OpenSelectedMailbox => {
                 if let Some(layers) = self.layers.as_ref() {
-                    let id = layers.get_current_selected_mailbox_id();
+                    let id = layers.get_current_selected_entry();
                     self.app_actions.push(crate::Action::OpenRootMails(id));
                 }
             }
+            Action::EnterSelectedMailbox => {
+                todo!()
+            }
             Action::SetSortOrder => {
-                self.overlay = Some(ScreenOverlay::Input(utils::input::State::new(
-                    "Set sort order (>= 0):",
-                    InputType::SortOrder,
-                )));
+                if let Some(layers) = self.layers.as_ref() {
+                    let layer = layers.get_current_layer();
+
+                    if layer.selected_parent() {
+                        error!(
+                            "You can't set the sort order of the parent id. Move up one mailbox first."
+                        );
+                    } else {
+                        self.overlay = Some(ScreenOverlay::Input(utils::input::State::new(
+                            "Set sort order (>= 0):",
+                            InputType::SortOrder,
+                        )));
+                    }
+                }
             }
         }
     }
@@ -125,10 +138,16 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
                 InputType::SortOrder => {
                     if let Some(layers) = self.layers.as_mut() {
                         match value.parse::<u32>() {
-                            Ok(new_order) => {
-                                let id = layers.set_sort_order(new_order);
-                                self.account.update_mailbox_sort_order(id, new_order);
-                            }
+                            Ok(new_order) => match layers.set_sort_order(new_order) {
+                                Some(id) => {
+                                    self.account.update_mailbox_sort_order(id, new_order);
+                                }
+                                None => {
+                                    unreachable!(
+                                        "A check should have happened before that the current selected mailbox isn't a parent directory..."
+                                    );
+                                }
+                            },
                             Err(err) => {
                                 error!("'{}' isn't a 32-bit unsigned integer: {}", value, err)
                             }

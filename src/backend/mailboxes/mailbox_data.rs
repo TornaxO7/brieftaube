@@ -2,7 +2,7 @@ use jmap_client::mailbox::Role;
 
 use crate::ui::MailboxId;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MailboxData {
     pub id: MailboxId,
     pub name: String,

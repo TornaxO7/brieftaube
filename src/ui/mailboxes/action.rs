@@ -25,8 +25,10 @@ pub enum Action {
     #[strum(message = "Select previous mailbox")]
     SelectPreviousMailbox,
 
-    #[strum(message = "Open the selected mailbox")]
+    #[strum(message = "Open the selected mailbox.")]
     OpenSelectedMailbox,
+    #[strum(message = "Enter the seleted mailbox.")]
+    EnterSelectedMailbox,
 
     #[strum(message = "Set the sort order of the selected mailbox.")]
     SetSortOrder,

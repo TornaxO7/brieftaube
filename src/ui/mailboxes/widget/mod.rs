@@ -2,13 +2,13 @@ mod list;
 
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, HorizontalAlignment, Rect},
+    layout::{Constraint, Layout, Rect},
     widgets::{Block, Clear, Paragraph, StatefulWidget, Widget},
 };
 
 use crate::{
     backend::mailboxes::MailboxData,
-    ui::{ScreenOverlay, ScreenState, utils},
+    ui::{ScreenOverlay, ScreenState, mailboxes::state::Layer, utils},
 };
 
 #[derive(Default)]
@@ -19,15 +19,20 @@ impl StatefulWidget for Mailboxes {
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         if let Some(layers) = &mut state.layers {
-            if let Some(parent_layer) = layers.parent_layer_render_data() {
-                render_layer(area, buf, parent_layer);
+            let [left, center, right] = Layout::horizontal([
+                Constraint::Fill(0),
+                Constraint::Fill(0),
+                Constraint::Fill(0),
+            ])
+            .areas(area);
+
+            if let Some(parent_layer) = layers.get_parent_layer_mut() {
+                render_layer(left, buf, parent_layer);
             }
 
-            render_layer(area, buf, layers.current_layer_render_data());
+            render_layer(center, buf, layers.get_current_layer_mut());
 
-            if let Some(children_layer) = layers.current_selected_children_mailboxes() {
-                render_layer(area, buf, children_layer);
-            }
+            render_layer(right, buf, layers.get_children_layer_mut());
         } else {
             render_loading_screen(area, buf);
         }
@@ -36,20 +41,12 @@ impl StatefulWidget for Mailboxes {
     }
 }
 
-fn render_layer(
-    area: Rect,
-    buf: &mut Buffer,
-    render_data: (&[MailboxData], &mut tui_widget_list::ListState),
-) {
+fn render_layer(area: Rect, buf: &mut Buffer, layer: &mut Layer) {
     StatefulWidget::render(
-        list::List::new(render_data.0).block(
-            Block::new()
-                .title("Mailboxes")
-                .title_alignment(HorizontalAlignment::Center),
-        ),
+        list::List::new(&layer.mailboxes),
         area,
         buf,
-        render_data.1,
+        &mut layer.list_state,
     )
 }
 

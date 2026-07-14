@@ -6,7 +6,7 @@ use ratatui::{
 };
 use tui_widget_list::{ListBuilder, ListView};
 
-use crate::backend::mailboxes::MailboxData;
+use crate::{backend::mailboxes::MailboxData, ui::MailboxId};
 
 pub struct List<'a> {
     mailboxes: &'a [MailboxData],
@@ -31,13 +31,6 @@ impl<'a> StatefulWidget for List<'a> {
     type State = tui_widget_list::ListState;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let [_left, center, _right] = Layout::horizontal([
-            Constraint::Fill(0),
-            Constraint::Length(50),
-            Constraint::Fill(0),
-        ])
-        .areas(area);
-
         let builder = ListBuilder::new(|context| {
             const ENTRY_SIZE: u16 = 3;
 
@@ -68,7 +61,7 @@ impl<'a> StatefulWidget for List<'a> {
             list = list.block(block);
         }
 
-        StatefulWidget::render(list, center, buf, state);
+        StatefulWidget::render(list, area, buf, state);
     }
 }
 
