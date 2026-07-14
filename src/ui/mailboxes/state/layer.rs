@@ -131,13 +131,11 @@ impl Layers {
     pub fn get_children_layer_mut(&mut self) -> Option<&mut Layer> {
         let layer = self.get_current_layer();
 
-        let selected_idx = layer.state.selected().unwrap();
-        if !layer.mailboxes.is_empty() {
-            let selected_mailbox = &layer.mailboxes[selected_idx];
-            self.layers.get_mut(&Some(selected_mailbox.id.clone()))
-        } else {
-            None
-        }
+        let id = layer
+            .get_selected_mailbox()
+            .map(|mailbox| mailbox.id.clone());
+
+        self.layers.get_mut(&id)
     }
 }
 
