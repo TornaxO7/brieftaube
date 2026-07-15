@@ -1,5 +1,5 @@
 use crate::{
-    mailboxes::{Data, Layer, ui::State},
+    mailboxes::{Layer, ui::State},
     utils::ui::{ScreenOverlay, ScreenState, input::Input, palette::Palette},
 };
 use ratatui::{
@@ -19,9 +19,9 @@ impl StatefulWidget for Mailboxes {
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         {
-            let mut data = state.backend.data.lock().unwrap();
+            let mut guard = state.backend.data.lock().unwrap();
 
-            if let Some(layers) = data.layers.as_mut() {
+            if let Some(data) = guard.as_mut() {
                 let [left, center, right] = Layout::horizontal([
                     Constraint::Fill(0),
                     Constraint::Fill(0),
@@ -29,13 +29,13 @@ impl StatefulWidget for Mailboxes {
                 ])
                 .areas(area);
 
-                if let Some(parent_layer) = layers.get_parent_layer_mut() {
+                if let Some(parent_layer) = data.layers.get_parent_layer_mut() {
                     render_layer(left, buf, parent_layer);
                 }
 
-                render_layer(center, buf, layers.get_current_layer_mut());
+                render_layer(center, buf, data.layers.get_current_layer_mut());
 
-                if let Some(children_layer) = layers.get_children_layer_mut() {
+                if let Some(children_layer) = data.layers.get_children_layer_mut() {
                     render_layer(right, buf, children_layer);
                 }
             } else {

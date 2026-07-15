@@ -9,17 +9,20 @@ use std::sync::{Arc, Mutex};
 use tokio::task::JoinSet;
 use tracing::error;
 
-#[derive(Default)]
 pub(super) struct Data {
-    pub layers: Option<Layers>,
+    pub layers: Layers,
+    pub state: String,
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum TaskError {}
+pub enum TaskError {
+    #[error(transparent)]
+    Client(#[from] jmap_client::Error),
+}
 
 pub struct Backend {
     client: Arc<Client>,
-    pub data: Arc<Mutex<Data>>,
+    pub data: Arc<Mutex<Option<Data>>>,
     tasks: Arc<Mutex<JoinSet<Result<(), TaskError>>>>,
 }
 
@@ -27,61 +30,84 @@ impl Backend {
     pub fn new(client: Arc<Client>) -> Self {
         Self {
             client,
-            data: Arc::new(Mutex::new(Data::default())),
+            data: Arc::new(Mutex::new(None)),
             tasks: Arc::new(Mutex::new(JoinSet::new())),
         }
     }
 }
 
 impl Backend {
-    pub fn fetch_mailboxes(&self) {
-        todo!()
+    pub fn init(&self) {
+        let client = self.client.clone();
+        let data = self.data.clone();
+
+        self.tasks.lock().unwrap().spawn(async move {
+            let mut request = client.build();
+            request.get_mailbox().ids::<[_; 1], String>(None::<[_; 1]>);
+            let mut response = request.send_get_mailbox().await?;
+
+            let state = response.take_state();
+            let layers = {
+                let mailboxes: Vec<MailboxData> = response
+                    .take_list()
+                    .into_iter()
+                    .map(|mailbox| MailboxData::from(mailbox))
+                    .collect();
+
+                Layers::new(mailboxes)
+            };
+
+            let mut data = data.lock().unwrap();
+            let new_data = Data { layers, state };
+            *data = Some(new_data);
+
+            Ok(())
+        });
     }
 }
 
 impl Backend {
     pub fn select_next_mailbox(&self) {
-        let mut data = self.data.lock().unwrap();
-        if let Some(layers) = data.layers.as_mut() {
-            layers.select_next_mailbox();
+        let mut guard = self.data.lock().unwrap();
+        if let Some(data) = guard.as_mut() {
+            data.layers.select_next_mailbox();
         }
     }
 
     pub fn select_previous_mailbox(&self) {
-        let mut data = self.data.lock().unwrap();
-        if let Some(layers) = data.layers.as_mut() {
-            layers.select_previous_mailbox();
+        let mut guard = self.data.lock().unwrap();
+        if let Some(data) = guard.as_mut() {
+            data.layers.select_previous_mailbox();
         }
     }
 
     pub fn activate_selected_entry(&self) -> Option<MailboxId> {
-        let mut data = self.data.lock().unwrap();
-
-        data.layers
+        let mut guard = self.data.lock().unwrap();
+        guard
             .as_mut()
-            .and_then(|layers| layers.open_selected_entry())
+            .and_then(|data| data.layers.open_selected_entry())
     }
 
     pub fn go_back(&self) {
-        let mut data = self.data.lock().unwrap();
-        if let Some(layers) = data.layers.as_mut() {
-            layers.go_up_one_level();
+        let mut guard = self.data.lock().unwrap();
+        if let Some(data) = guard.as_mut() {
+            data.layers.go_up_one_level();
         }
     }
 
     pub fn can_set_sort_order(&self) -> bool {
-        let data = self.data.lock().unwrap();
-        let Some(layers) = data.layers.as_ref() else {
+        let guard = self.data.lock().unwrap();
+        let Some(data) = guard.as_ref() else {
             return false;
         };
-        let layer = layers.get_current_layer();
+        let layer = data.layers.get_current_layer();
         !layer.selected_parent()
     }
 
     pub fn destroy_selected_mailbox(&self) {
-        let mut data = self.data.lock().unwrap();
-        if let Some(layers) = data.layers.as_mut() {
-            let layer = layers.get_current_layer();
+        let mut guard = self.data.lock().unwrap();
+        if let Some(data) = guard.as_mut() {
+            let layer = data.layers.get_current_layer();
 
             match layer.get_selected_mailbox() {
                 Some(_mailbox) => {
@@ -97,9 +123,9 @@ impl Backend {
     }
 
     pub fn set_new_order(&self, new_order: u32) {
-        let mut data = self.data.lock().unwrap();
-        if let Some(layers) = data.layers.as_mut() {
-            match layers.set_sort_order(new_order) {
+        let mut guard = self.data.lock().unwrap();
+        if let Some(data) = guard.as_mut() {
+            match data.layers.set_sort_order(new_order) {
                 Some(_id) => {
                     todo!()
                     // pub fn update_mailbox_sort_order(&self, id: MailboxId, new_order: u32) {
@@ -129,8 +155,8 @@ impl Backend {
     }
 
     pub fn create_mailbox(&self, _name: String) {
-        let mut data = self.data.lock().unwrap();
-        if let Some(_layers) = data.layers.as_mut() {
+        let mut guard = self.data.lock().unwrap();
+        if let Some(_data) = guard.as_mut() {
             // validate
             // {
             //     let caps = self.account.mail_capability();
@@ -211,5 +237,5 @@ impl Backend {
         todo!()
     }
 
-    pub fn destroy_mailbox(&self, mailbox: MailboxData) {}
+    pub fn destroy_mailbox(&self, _mailbox: MailboxData) {}
 }

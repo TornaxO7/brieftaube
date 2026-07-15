@@ -26,17 +26,15 @@ pub struct State {
     overlay: Option<ScreenOverlay<PaletteValue, InputType>>,
 
     pub backend: Rc<Backend>,
-
-    data_state: String,
 }
 
 impl State {
     pub fn new(backend: Rc<Backend>) -> Self {
+        backend.init();
         Self {
             app_actions: vec![],
             backend,
 
-            data_state: String::new(),
             overlay: None,
 
             keybindings: KeybindManager::new(HashMap::from([
