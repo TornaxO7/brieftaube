@@ -5,10 +5,6 @@ pub mod palette;
 use crossterm::event::{Event, KeyEvent};
 use keybindmanager::KeybindManager;
 
-pub type MailboxId = String;
-pub type MailId = String;
-pub type ThreadId = String;
-
 pub trait ScreenState<A: Clone, P: Clone, I: Clone> {
     fn update(&mut self);
 

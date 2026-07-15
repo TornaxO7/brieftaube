@@ -1,4 +1,4 @@
-use crate::{backend::Account, utils::ui::ThreadId};
+use crate::{backend::Account, utils::ThreadId};
 use jmap_client::{client::Client, email::Email};
 use tracing::trace;
 

@@ -8,7 +8,7 @@ mod root_mails;
 mod thread_mails;
 mod utils;
 
-use crate::utils::ui::{MailboxId, ScreenState, ThreadId};
+use crate::utils::{MailboxId, ThreadId, ui::ScreenState};
 use color_eyre::eyre;
 use crossterm::event::Event;
 use futures::{FutureExt, StreamExt};

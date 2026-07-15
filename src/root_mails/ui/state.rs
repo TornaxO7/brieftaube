@@ -1,9 +1,12 @@
 use super::Action;
 use crate::{
     backend,
-    utils::ui::{
-        MailboxId, ScreenOverlay, ScreenOverlayResult, ScreenState,
-        {keybindmanager::KeybindManager, palette},
+    utils::{
+        MailboxId,
+        ui::{
+            ScreenOverlay, ScreenOverlayResult, ScreenState,
+            {keybindmanager::KeybindManager, palette},
+        },
     },
 };
 use jmap_client::email::Email;

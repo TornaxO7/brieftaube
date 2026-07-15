@@ -1,6 +1,6 @@
 mod mailbox_data;
 
-use crate::{backend::Account, utils::ui::MailboxId};
+use crate::{backend::Account, utils::MailboxId};
 use jmap_client::{client::Client, core::set::SetObject, mailbox::Role};
 pub use mailbox_data::MailboxData;
 use std::collections::HashMap;

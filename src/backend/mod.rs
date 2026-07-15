@@ -4,7 +4,7 @@ pub mod thread;
 
 use crate::{
     config::Config,
-    utils::ui::{MailboxId, ThreadId},
+    utils::{MailboxId, ThreadId},
 };
 use jmap_client::{URI, client::Client, core::session::Capabilities};
 use std::{collections::HashMap, sync::Arc};

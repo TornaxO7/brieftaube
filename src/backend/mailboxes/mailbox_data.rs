@@ -1,4 +1,4 @@
-use crate::utils::ui::MailboxId;
+use crate::utils::MailboxId;
 use jmap_client::mailbox::Role;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
