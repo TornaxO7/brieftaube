@@ -142,7 +142,7 @@ impl ScreenState<Action, PaletteType, InputType> for State {
                     self.apply_action(action);
                 }
             },
-            ScreenOverlayResult::Input { value, typ } => unreachable!(),
+            ScreenOverlayResult::Input { value: _, typ: _ } => unreachable!(),
         }
     }
 }

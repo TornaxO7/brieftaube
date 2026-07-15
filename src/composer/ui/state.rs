@@ -26,7 +26,7 @@ pub struct State {
 
     raw_mail: String,
 
-    draft_mailbox_id: Option<MailboxId>,
+    _draft_mailbox_id: Option<MailboxId>,
 
     scroll_offset: (u16, u16),
 
@@ -63,7 +63,7 @@ impl State {
             fetcher: fetcher.clone(),
             raw_mail: String::new(),
             scroll_offset: (0, 0),
-            draft_mailbox_id: None,
+            _draft_mailbox_id: None,
 
             overlay: None,
             keybindings: KeybindManager::new(HashMap::from([

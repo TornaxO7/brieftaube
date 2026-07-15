@@ -119,7 +119,7 @@ impl ScreenState<Action, PaletteType, InputType> for State {
             ScreenOverlayResult::Palette(value) => match value {
                 PaletteType::Action(action) => self.apply_action(action),
             },
-            ScreenOverlayResult::Input { value, typ } => unreachable!(),
+            ScreenOverlayResult::Input { value: _, typ: _ } => unreachable!(),
         }
     }
 }
