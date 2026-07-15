@@ -1,8 +1,14 @@
 mod backend;
+mod composer;
 mod config;
-mod ui;
+mod log_viewer;
+mod mail_viewer;
+mod mailboxes;
+mod root_mails;
+mod thread_mails;
+mod utils;
 
-use crate::ui::{MailboxId, ScreenState, ThreadId};
+use crate::utils::ui::{MailboxId, ScreenState, ThreadId};
 use color_eyre::eyre;
 use crossterm::event::Event;
 use futures::{FutureExt, StreamExt};
@@ -34,12 +40,12 @@ async fn main() -> eyre::Result<()> {
 }
 
 enum Screen {
-    Mailboxes(ui::mailboxes::State),
-    MailList(ui::root_mails::State),
-    Composer(ui::composer::State),
-    MailViewer(ui::mail_viewer::State),
-    LogViewer(ui::log_viewer::State),
-    ThreadMails(ui::thread_mails::State),
+    Mailboxes(mailboxes::ui::State),
+    MailList(root_mails::ui::State),
+    Composer(composer::ui::State),
+    MailViewer(mail_viewer::ui::State),
+    LogViewer(log_viewer::ui::State),
+    ThreadMails(thread_mails::ui::State),
 }
 
 #[derive(Debug)]
@@ -70,7 +76,7 @@ impl App {
         Self {
             is_running: true,
             account: account.clone(),
-            screens: vec![Screen::Mailboxes(ui::mailboxes::State::new(account))],
+            screens: vec![Screen::Mailboxes(mailboxes::ui::State::new(account))],
         }
     }
 
@@ -115,22 +121,22 @@ impl App {
 
         match self.screens.last_mut().unwrap() {
             Screen::Mailboxes(state) => {
-                frame.render_stateful_widget(ui::mailboxes::Mailboxes::default(), area, state);
+                frame.render_stateful_widget(mailboxes::ui::Mailboxes::default(), area, state);
             }
             Screen::MailList(state) => {
-                frame.render_stateful_widget(ui::root_mails::RootMails::default(), area, state);
+                frame.render_stateful_widget(root_mails::ui::RootMails::default(), area, state);
             }
             Screen::Composer(state) => {
-                frame.render_stateful_widget(ui::composer::Composer::default(), area, state);
+                frame.render_stateful_widget(composer::ui::Composer::default(), area, state);
             }
             Screen::MailViewer(state) => {
-                frame.render_stateful_widget(ui::mail_viewer::MailViewer::default(), area, state);
+                frame.render_stateful_widget(mail_viewer::ui::MailViewer::default(), area, state);
             }
             Screen::LogViewer(state) => {
-                frame.render_stateful_widget(ui::log_viewer::LogViewer::default(), area, state);
+                frame.render_stateful_widget(log_viewer::ui::LogViewer::default(), area, state);
             }
             Screen::ThreadMails(state) => {
-                frame.render_stateful_widget(ui::thread_mails::ThreadMails::default(), area, state);
+                frame.render_stateful_widget(thread_mails::ui::ThreadMails::default(), area, state);
             }
         };
     }
@@ -166,21 +172,21 @@ impl App {
                     self.account.init_root_mails(mailbox_id.clone());
 
                     self.screens
-                        .push(Screen::MailList(ui::root_mails::State::new(
+                        .push(Screen::MailList(root_mails::ui::State::new(
                             self.account.clone(),
                             mailbox_id,
                         )));
                 }
                 Action::OpenMailViewer(mail) => {
                     self.screens
-                        .push(Screen::MailViewer(ui::mail_viewer::State::new(mail)));
+                        .push(Screen::MailViewer(mail_viewer::ui::State::new(mail)));
                 }
                 Action::OpenLogViewer => {
                     self.screens
-                        .push(Screen::LogViewer(ui::log_viewer::State::new()));
+                        .push(Screen::LogViewer(log_viewer::ui::State::new()));
                 }
                 Action::OpenComposer => {
-                    self.screens.push(Screen::Composer(ui::composer::State::new(
+                    self.screens.push(Screen::Composer(composer::ui::State::new(
                         self.account.clone(),
                     )));
                 }
@@ -188,7 +194,7 @@ impl App {
                     self.account.init_thread(thread_id.clone());
 
                     self.screens
-                        .push(Screen::ThreadMails(ui::thread_mails::State::new(
+                        .push(Screen::ThreadMails(thread_mails::ui::State::new(
                             self.account.clone(),
                             thread_id,
                         )));

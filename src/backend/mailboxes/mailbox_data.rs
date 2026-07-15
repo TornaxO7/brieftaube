@@ -1,6 +1,5 @@
+use crate::utils::ui::MailboxId;
 use jmap_client::mailbox::Role;
-
-use crate::ui::MailboxId;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MailboxData {

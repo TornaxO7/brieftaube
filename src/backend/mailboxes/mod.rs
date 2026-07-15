@@ -1,11 +1,10 @@
 mod mailbox_data;
 
-use crate::{backend::Account, ui::MailboxId};
-use color_eyre::eyre::Context;
+use crate::{backend::Account, utils::ui::MailboxId};
 use jmap_client::{client::Client, core::set::SetObject, mailbox::Role};
 pub use mailbox_data::MailboxData;
 use std::collections::HashMap;
-use tracing::{debug, info, trace};
+use tracing::{info, trace};
 
 pub struct Mailboxes {
     inner: HashMap<MailboxId, MailboxData>,
