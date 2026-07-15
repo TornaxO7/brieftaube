@@ -1,5 +1,7 @@
-use super::Layer;
-use crate::utils::ui::{ScreenOverlay, ScreenState, input::Input, palette::Palette};
+use crate::{
+    mailboxes::{Data, Layer, ui::State},
+    utils::ui::{ScreenOverlay, ScreenState, input::Input, palette::Palette},
+};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
@@ -16,25 +18,29 @@ impl StatefulWidget for Mailboxes {
     type State = super::State;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        if let Some(layers) = &mut state.layers {
-            let [left, center, right] = Layout::horizontal([
-                Constraint::Fill(0),
-                Constraint::Fill(0),
-                Constraint::Fill(0),
-            ])
-            .areas(area);
+        {
+            let mut data = state.backend.data.lock().unwrap();
 
-            if let Some(parent_layer) = layers.get_parent_layer_mut() {
-                render_layer(left, buf, parent_layer);
+            if let Some(layers) = data.layers.as_mut() {
+                let [left, center, right] = Layout::horizontal([
+                    Constraint::Fill(0),
+                    Constraint::Fill(0),
+                    Constraint::Fill(0),
+                ])
+                .areas(area);
+
+                if let Some(parent_layer) = layers.get_parent_layer_mut() {
+                    render_layer(left, buf, parent_layer);
+                }
+
+                render_layer(center, buf, layers.get_current_layer_mut());
+
+                if let Some(children_layer) = layers.get_children_layer_mut() {
+                    render_layer(right, buf, children_layer);
+                }
+            } else {
+                render_loading_screen(area, buf);
             }
-
-            render_layer(center, buf, layers.get_current_layer_mut());
-
-            if let Some(children_layer) = layers.get_children_layer_mut() {
-                render_layer(right, buf, children_layer);
-            }
-        } else {
-            render_loading_screen(area, buf);
         }
 
         render_overlay(area, buf, state);
@@ -86,7 +92,7 @@ fn render_loading_screen(area: Rect, buf: &mut Buffer) {
     );
 }
 
-fn render_overlay(area: Rect, buf: &mut Buffer, state: &mut super::State) {
+fn render_overlay(area: Rect, buf: &mut Buffer, state: &mut State) {
     if let Some(state) = state.overlay() {
         match state {
             ScreenOverlay::Palette(state) => {

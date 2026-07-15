@@ -51,8 +51,6 @@ impl State {
 }
 
 impl ScreenState<Action, PaletteType, InputType> for State {
-    fn update(&mut self) {}
-
     fn apply_action(&mut self, action: Action) {
         tracing::debug!("Action: {:?}", action);
         match action {

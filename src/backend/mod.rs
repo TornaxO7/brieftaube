@@ -1,4 +1,4 @@
-pub mod mailboxes;
+// pub mod mailboxes;
 pub mod root_mails;
 pub mod thread;
 
@@ -7,19 +7,20 @@ use crate::{
     utils::{MailboxId, ThreadId},
 };
 use jmap_client::{URI, client::Client, core::session::Capabilities};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, rc::Rc, sync::Arc};
 use tokio::task::{JoinError, JoinSet};
 
 #[derive(Default)]
 struct Data {
-    mailboxes: Option<mailboxes::Mailboxes>,
-    root_mails: HashMap<MailboxId, root_mails::RootMails>,
-    threads: HashMap<ThreadId, thread::Thread>,
+    pub root_mails: HashMap<MailboxId, root_mails::RootMails>,
+    pub threads: HashMap<ThreadId, thread::Thread>,
 }
 
 pub struct Account {
     client: Arc<jmap_client::client::Client>,
     _config: Config,
+
+    pub mailboxes: Rc<crate::mailboxes::Backend>,
     data: Arc<tokio::sync::Mutex<Data>>,
     tasks: Arc<std::sync::Mutex<JoinSet<color_eyre::Result<()>>>>,
 }
@@ -33,6 +34,7 @@ impl Account {
             .follow_redirects([config.host.trim()])
             .connect(&format!("http://{}", config.host.trim()))
             .await
+            .map(|client| Arc::new(client))
             .unwrap();
 
         let session = client.session();
@@ -47,7 +49,8 @@ impl Account {
 
         Self {
             _config: config,
-            client: Arc::new(client),
+            client: client.clone(),
+            mailboxes: Rc::new(crate::mailboxes::Backend::new(client.clone())),
             data: Arc::new(tokio::sync::Mutex::new(Data::default())),
             tasks: Arc::new(std::sync::Mutex::new(JoinSet::new())),
         }

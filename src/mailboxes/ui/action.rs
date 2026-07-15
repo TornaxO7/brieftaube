@@ -33,7 +33,7 @@ pub enum Action {
     #[strum(message = "Create a new mailbox")]
     CreateMailbox,
     #[strum(message = "Destroy the selected mailbox")]
-    DestroyMailbox,
+    DestroySelectedMailbox,
 
     #[strum(message = "Set the sort order of the selected mailbox.")]
     SetSortOrder,

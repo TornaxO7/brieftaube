@@ -154,8 +154,6 @@ Subject:
 }
 
 impl ScreenState<Action, PaletteValue, InputType> for State {
-    fn update(&mut self) {}
-
     fn apply_action(&mut self, action: Action) {
         match action {
             Action::Quit => self.app_actions.push(crate::Action::Quit),

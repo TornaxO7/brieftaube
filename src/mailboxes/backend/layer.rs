@@ -1,6 +1,7 @@
 use ratatui::widgets::TableState;
 
-use crate::{backend::mailboxes::MailboxData, utils::MailboxId};
+use super::MailboxData;
+use crate::utils::MailboxId;
 use std::{cmp::Ordering, collections::HashMap};
 
 type MailboxOwner = Option<MailboxId>;

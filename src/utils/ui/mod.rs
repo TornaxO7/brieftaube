@@ -6,8 +6,6 @@ use crossterm::event::{Event, KeyEvent};
 use keybindmanager::KeybindManager;
 
 pub trait ScreenState<A: Clone, P: Clone, I: Clone> {
-    fn update(&mut self);
-
     fn apply_action(&mut self, action: A);
 
     fn get_app_actions(&mut self) -> std::vec::Drain<'_, crate::Action>;

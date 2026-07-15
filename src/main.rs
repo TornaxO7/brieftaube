@@ -56,7 +56,6 @@ pub enum Action {
     OpenComposer,
     OpenThread(ThreadId),
 
-    Refresh,
     Back,
     Quit,
 }
@@ -71,12 +70,13 @@ pub struct App {
 impl App {
     pub async fn new() -> Self {
         let account = Arc::new(backend::Account::new().await);
-        account.init_mailboxes();
 
         Self {
             is_running: true,
             account: account.clone(),
-            screens: vec![Screen::Mailboxes(mailboxes::ui::State::new(account))],
+            screens: vec![Screen::Mailboxes(mailboxes::ui::State::new(
+                account.mailboxes.clone(),
+            ))],
         }
     }
 
@@ -98,23 +98,22 @@ impl App {
             }
 
             self.apply_action();
-            self.update_state_of_active_screen();
             terminal.draw(|frame| self.draw(frame))?;
         }
 
         Ok(())
     }
 
-    fn update_state_of_active_screen(&mut self) {
-        match self.screens.last_mut().unwrap() {
-            Screen::Mailboxes(state) => state.update(),
-            Screen::MailList(state) => state.update(),
-            Screen::Composer(state) => state.update(),
-            Screen::MailViewer(state) => state.update(),
-            Screen::LogViewer(state) => state.update(),
-            Screen::ThreadMails(state) => state.update(),
-        }
-    }
+    // fn update_state_of_active_screen(&mut self) {
+    //     match self.screens.last_mut().unwrap() {
+    //         Screen::Mailboxes(state) => state.update(),
+    //         Screen::MailList(state) => state.update(),
+    //         Screen::Composer(state) => state.update(),
+    //         Screen::MailViewer(state) => state.update(),
+    //         Screen::LogViewer(state) => state.update(),
+    //         Screen::ThreadMails(state) => state.update(),
+    //     }
+    // }
 
     fn draw(&mut self, frame: &mut Frame) {
         let area = frame.area();
@@ -199,7 +198,6 @@ impl App {
                             thread_id,
                         )));
                 }
-                Action::Refresh => self.update_state_of_active_screen(),
                 Action::Back => {
                     self.screens.pop();
                 }
@@ -208,8 +206,6 @@ impl App {
                 }
             }
         }
-
-        self.update_state_of_active_screen();
     }
 }
 

@@ -80,20 +80,6 @@ impl State {
 }
 
 impl ScreenState<Action, PaletteType, InputType> for State {
-    fn update(&mut self) {
-        if let Some((root_mails, new_state)) = self
-            .account
-            .get_root_mails(&self.mailbox_id, &self.mails_state)
-        {
-            if self.list_state.selected.is_none() && !root_mails.is_empty() {
-                self.list_state.selected = Some(0);
-            }
-
-            self.root_mails = Some(root_mails);
-            self.mails_state = new_state;
-        }
-    }
-
     fn apply_action(&mut self, action: Action) {
         tracing::debug!("Action: {:?}", action);
         match action {
