@@ -1,8 +1,10 @@
-use ratatui::widgets::TableState;
+mod layer;
+
+use std::collections::HashMap;
 
 use super::MailboxData;
 use crate::utils::MailboxId;
-use std::{cmp::Ordering, collections::HashMap};
+pub use layer::Layer;
 
 type MailboxOwner = Option<MailboxId>;
 
@@ -48,27 +50,12 @@ impl Layers {
         self.selected_layer.len() - 1
     }
 
-    pub fn set_sort_order(&mut self, new_order: u32) -> Option<MailboxId> {
-        let layer = self.get_current_layer_mut();
-        let idx = {
-            if !layer.is_root_layer() && layer.selected_parent() {
-                return None;
-            }
+    pub fn set_sort_order(&mut self, id: MailboxId, new_order: u32) {
+        let mailbox = self.get_mailbox_mut(&id).unwrap();
+        mailbox.sort_order = new_order;
 
-            if layer.is_root_layer() {
-                layer.state.selected().unwrap()
-            } else {
-                layer.state.selected().unwrap() - 1
-            }
-        };
-
-        let mailbox_id = {
-            let mailbox = layer.mailboxes.get_mut(idx).unwrap();
-            mailbox.sort_order = new_order;
-            mailbox.id.clone()
-        };
+        let layer = self.get_layer_containing_mailbox_mut(&id).unwrap();
         layer.sort_mailboxes();
-        Some(mailbox_id)
     }
 
     pub fn open_selected_entry(&mut self) -> Option<MailboxId> {
@@ -106,6 +93,22 @@ impl Layers {
             .get_mut(self.selected_layer.last().unwrap())
             .unwrap()
     }
+
+    pub fn get_mailbox(&self, id: &MailboxId) -> Option<&MailboxData> {
+        self.layers.values().find_map(|layer| layer.get_mailbox(id))
+    }
+
+    pub fn get_mailbox_mut(&mut self, id: &MailboxId) -> Option<&mut MailboxData> {
+        self.layers
+            .values_mut()
+            .find_map(|layer| layer.get_mailbox_mut(id))
+    }
+
+    pub fn get_layer_containing_mailbox_mut(&mut self, id: &MailboxId) -> Option<&mut Layer> {
+        self.layers
+            .values_mut()
+            .find(|layer| layer.get_mailbox(id).is_some())
+    }
 }
 
 // For rendering
@@ -129,57 +132,6 @@ impl Layers {
             .map(|mailbox| mailbox.id.clone());
 
         self.layers.get_mut(&id)
-    }
-}
-
-#[derive(Clone, Default)]
-pub struct Layer {
-    pub mailbox_owner: Option<MailboxId>,
-    pub mailboxes: Vec<MailboxData>,
-    pub state: TableState,
-}
-
-impl Layer {
-    pub fn new(mailbox_owner: Option<MailboxId>) -> Self {
-        Self {
-            mailbox_owner,
-            mailboxes: vec![],
-            state: TableState::new().with_selected(Some(0)),
-        }
-    }
-
-    pub fn is_root_layer(&self) -> bool {
-        self.mailbox_owner.is_none()
-    }
-
-    pub fn selected_parent(&self) -> bool {
-        !self.is_root_layer() && self.state.selected().map(|idx| idx == 0).unwrap()
-    }
-
-    pub fn contains_mailbox_name(&self, name: &str) -> bool {
-        self.mailboxes.iter().any(|mailbox| mailbox.name == name)
-    }
-
-    pub fn get_selected_mailbox(&self) -> Option<&MailboxData> {
-        if self.is_root_layer() {
-            self.mailboxes.get(self.state.selected().unwrap())
-        } else if self.selected_parent() {
-            None
-        } else {
-            self.mailboxes.get(self.state.selected().unwrap() - 1)
-        }
-    }
-
-    fn sort_mailboxes(&mut self) {
-        self.mailboxes.sort_by(|a, b| {
-            let ordering = a.sort_order.cmp(&b.sort_order);
-
-            if ordering == Ordering::Equal {
-                a.name.cmp(&b.name)
-            } else {
-                ordering
-            }
-        })
     }
 }
 

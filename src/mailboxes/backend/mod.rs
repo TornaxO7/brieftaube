@@ -1,9 +1,9 @@
-mod layer;
+mod layers;
 mod mailbox_data;
 
 use crate::utils::MailboxId;
 use jmap_client::client::Client;
-pub use layer::{Layer, Layers};
+pub use layers::{Layer, Layers};
 pub use mailbox_data::MailboxData;
 use std::sync::{Arc, Mutex};
 use tokio::task::{JoinError, JoinSet};
@@ -106,14 +106,22 @@ impl Backend {
         }
     }
 
-    // pub fn can_set_sort_order(&self) -> bool {
-    //     let guard = self.data.lock().unwrap();
-    //     let Some(data) = guard.as_ref() else {
-    //         return false;
-    //     };
-    //     let layer = data.layers.get_current_layer();
-    //     !layer.selected_parent()
-    // }
+    pub fn can_set_sort_order(&self) -> Option<bool> {
+        let guard = self.data.lock().unwrap();
+        guard.as_ref().map(|data| {
+            let layer = data.layers.get_current_layer();
+            !layer.selected_parent()
+        })
+    }
+
+    pub fn get_selected_mailbox(&self) -> Option<MailboxId> {
+        let guard = self.data.lock().unwrap();
+        guard
+            .as_ref()
+            .map(|data| data.layers.get_current_layer())
+            .and_then(|layer| layer.get_selected_mailbox())
+            .map(|mailbox| mailbox.id.clone())
+    }
 
     pub fn destroy_selected_mailbox(&self) {
         let mut guard = self.data.lock().unwrap();
@@ -133,37 +141,23 @@ impl Backend {
         }
     }
 
-    // pub fn set_new_order(&self, new_order: u32) {
-    //     let mut guard = self.data.lock().unwrap();
-    //     if let Some(data) = guard.as_mut() {
-    //         match data.layers.set_sort_order(new_order) {
-    //             Some(_id) => {
-    //                 todo!()
-    //                 // pub fn update_mailbox_sort_order(&self, id: MailboxId, new_order: u32) {
-    //                 //         let data = self.data.clone();
-    //                 //         let client = self.client.clone();
+    pub fn set_new_order(&self, id: MailboxId, new_order: u32) {
+        let data = self.data.clone();
+        let client = self.client.clone();
 
-    //                 //         self.tasks.lock().unwrap().spawn(async move {
-    //                 //             let mut data = data.lock().await;
-    //                 //             let mailboxes = data.mailboxes.as_mut().unwrap();
+        self.tasks.lock().unwrap().spawn(async move {
+            let mut request = client.build();
+            request.set_mailbox().update(&id).sort_order(new_order);
+            request.send_set_mailbox().await?;
 
-    //                 //             let mut request = client.build();
-    //                 //             request.set_mailbox().update(&id).sort_order(new_order);
-    //                 //             let mut response = request.send_set_mailbox().await?;
+            let mut guard = data.lock().unwrap();
+            if let Some(data) = guard.as_mut() {
+                data.layers.set_sort_order(id, new_order);
+            }
 
-    //                 //             mailboxes.inner.get_mut(&id).unwrap().sort_order = new_order;
-    //                 //             mailboxes.state = response.take_new_state();
-
-    //                 //             Ok(())
-    //                 //         });
-    //                 //     }
-    //             }
-    //             None => unreachable!(
-    //                 "A check should have happened before that the current selected mailbox isn't a parent directory..."
-    //             ),
-    //         }
-    //     }
-    // }
+            Ok(())
+        });
+    }
 
     pub fn create_mailbox(&self, _name: String) {
         let mut guard = self.data.lock().unwrap();
@@ -245,10 +239,6 @@ impl Backend {
             //             Ok(())
             //         });        }
         }
-        todo!()
-    }
-
-    pub fn destroy_mailbox(&self, _mailbox: MailboxData) {
         todo!()
     }
 }
