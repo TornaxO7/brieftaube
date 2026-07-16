@@ -57,7 +57,7 @@ impl Account {
     }
 
     pub fn has_tasks_running(&self) -> bool {
-        !self.tasks.lock().unwrap().is_empty()
+        !self.tasks.lock().unwrap().is_empty() && self.mailboxes.has_tasks_running()
     }
 
     pub async fn has_changed(&self) -> Option<Result<color_eyre::Result<()>, JoinError>> {

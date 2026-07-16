@@ -44,14 +44,6 @@ impl Layers {
         }
     }
 
-    pub fn select_next_mailbox(&mut self) {
-        self.get_current_layer_mut().state.select_next();
-    }
-
-    pub fn select_previous_mailbox(&mut self) {
-        self.get_current_layer_mut().state.select_previous();
-    }
-
     pub fn depth(&self) -> usize {
         self.selected_layer.len() - 1
     }

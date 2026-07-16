@@ -3,15 +3,15 @@ mod mailbox_data;
 
 use crate::utils::MailboxId;
 use jmap_client::client::Client;
-pub(super) use layer::{Layer, Layers};
-pub(super) use mailbox_data::MailboxData;
+pub use layer::{Layer, Layers};
+pub use mailbox_data::MailboxData;
 use std::sync::{Arc, Mutex};
-use tokio::task::JoinSet;
+use tokio::task::{JoinError, JoinSet};
 use tracing::error;
 
-pub(super) struct Data {
+pub struct Data {
     pub layers: Layers,
-    pub state: String,
+    state: String,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -33,6 +33,14 @@ impl Backend {
             data: Arc::new(Mutex::new(None)),
             tasks: Arc::new(Mutex::new(JoinSet::new())),
         }
+    }
+
+    pub fn has_tasks_running(&self) -> bool {
+        !self.tasks.lock().unwrap().is_empty()
+    }
+
+    pub async fn has_changed(&self) -> Option<Result<Result<(), TaskError>, JoinError>> {
+        self.tasks.lock().unwrap().join_next().await
     }
 }
 
@@ -66,18 +74,21 @@ impl Backend {
     }
 }
 
+// ui functions
 impl Backend {
     pub fn select_next_mailbox(&self) {
         let mut guard = self.data.lock().unwrap();
         if let Some(data) = guard.as_mut() {
-            data.layers.select_next_mailbox();
+            let current_layer = data.layers.get_current_layer_mut();
+            current_layer.state.select_next();
         }
     }
 
     pub fn select_previous_mailbox(&self) {
         let mut guard = self.data.lock().unwrap();
         if let Some(data) = guard.as_mut() {
-            data.layers.select_previous_mailbox();
+            let current_layer = data.layers.get_current_layer_mut();
+            current_layer.state.select_previous();
         }
     }
 
@@ -95,14 +106,14 @@ impl Backend {
         }
     }
 
-    pub fn can_set_sort_order(&self) -> bool {
-        let guard = self.data.lock().unwrap();
-        let Some(data) = guard.as_ref() else {
-            return false;
-        };
-        let layer = data.layers.get_current_layer();
-        !layer.selected_parent()
-    }
+    // pub fn can_set_sort_order(&self) -> bool {
+    //     let guard = self.data.lock().unwrap();
+    //     let Some(data) = guard.as_ref() else {
+    //         return false;
+    //     };
+    //     let layer = data.layers.get_current_layer();
+    //     !layer.selected_parent()
+    // }
 
     pub fn destroy_selected_mailbox(&self) {
         let mut guard = self.data.lock().unwrap();
@@ -122,37 +133,37 @@ impl Backend {
         }
     }
 
-    pub fn set_new_order(&self, new_order: u32) {
-        let mut guard = self.data.lock().unwrap();
-        if let Some(data) = guard.as_mut() {
-            match data.layers.set_sort_order(new_order) {
-                Some(_id) => {
-                    todo!()
-                    // pub fn update_mailbox_sort_order(&self, id: MailboxId, new_order: u32) {
-                    //         let data = self.data.clone();
-                    //         let client = self.client.clone();
+    // pub fn set_new_order(&self, new_order: u32) {
+    //     let mut guard = self.data.lock().unwrap();
+    //     if let Some(data) = guard.as_mut() {
+    //         match data.layers.set_sort_order(new_order) {
+    //             Some(_id) => {
+    //                 todo!()
+    //                 // pub fn update_mailbox_sort_order(&self, id: MailboxId, new_order: u32) {
+    //                 //         let data = self.data.clone();
+    //                 //         let client = self.client.clone();
 
-                    //         self.tasks.lock().unwrap().spawn(async move {
-                    //             let mut data = data.lock().await;
-                    //             let mailboxes = data.mailboxes.as_mut().unwrap();
+    //                 //         self.tasks.lock().unwrap().spawn(async move {
+    //                 //             let mut data = data.lock().await;
+    //                 //             let mailboxes = data.mailboxes.as_mut().unwrap();
 
-                    //             let mut request = client.build();
-                    //             request.set_mailbox().update(&id).sort_order(new_order);
-                    //             let mut response = request.send_set_mailbox().await?;
+    //                 //             let mut request = client.build();
+    //                 //             request.set_mailbox().update(&id).sort_order(new_order);
+    //                 //             let mut response = request.send_set_mailbox().await?;
 
-                    //             mailboxes.inner.get_mut(&id).unwrap().sort_order = new_order;
-                    //             mailboxes.state = response.take_new_state();
+    //                 //             mailboxes.inner.get_mut(&id).unwrap().sort_order = new_order;
+    //                 //             mailboxes.state = response.take_new_state();
 
-                    //             Ok(())
-                    //         });
-                    //     }
-                }
-                None => unreachable!(
-                    "A check should have happened before that the current selected mailbox isn't a parent directory..."
-                ),
-            }
-        }
-    }
+    //                 //             Ok(())
+    //                 //         });
+    //                 //     }
+    //             }
+    //             None => unreachable!(
+    //                 "A check should have happened before that the current selected mailbox isn't a parent directory..."
+    //             ),
+    //         }
+    //     }
+    // }
 
     pub fn create_mailbox(&self, _name: String) {
         let mut guard = self.data.lock().unwrap();
@@ -237,5 +248,7 @@ impl Backend {
         todo!()
     }
 
-    pub fn destroy_mailbox(&self, _mailbox: MailboxData) {}
+    pub fn destroy_mailbox(&self, _mailbox: MailboxData) {
+        todo!()
+    }
 }

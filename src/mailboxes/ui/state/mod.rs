@@ -16,7 +16,7 @@ pub enum PaletteValue {
 
 #[derive(Debug, Clone)]
 pub enum InputType {
-    SortOrder,
+    // SortOrder,
     NewMailboxName,
 }
 
@@ -31,6 +31,7 @@ pub struct State {
 impl State {
     pub fn new(backend: Rc<Backend>) -> Self {
         backend.init();
+
         Self {
             app_actions: vec![],
             backend,
@@ -64,7 +65,6 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
             Action::OpenLogs => {
                 self.app_actions.push(crate::Action::OpenLogViewer);
             }
-
             Action::SelectNextMailbox => self.backend.select_next_mailbox(),
             Action::SelectPreviousMailbox => self.backend.select_previous_mailbox(),
             Action::ActivateSelectedEntry => {
@@ -73,17 +73,23 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
                 }
             }
             Action::GoBack => self.backend.go_back(),
-            Action::SetSortOrder => {
-                // if self.backend.can_set_sort_order() {
-                //     error!(
-                //         "You can't set the sort order of the parent id. Move up one mailbox first."
-                //     );
-                // } else {
-                //     self.overlay = Some(ScreenOverlay::Input(input::State::new(
-                //         "Set sort order (>= 0):",
-                //         InputType::SortOrder,
-                //     )));
-                // }
+            // Action::SetSortOrder => {
+            // if self.backend.can_set_sort_order() {
+            //     error!(
+            //         "You can't set the sort order of the parent id. Move up one mailbox first."
+            //     );
+            // } else {
+            //     self.overlay = Some(ScreenOverlay::Input(input::State::new(
+            //         "Set sort order (>= 0):",
+            //         InputType::SortOrder,
+            //     )));
+            // }
+            // todo!()
+            // }
+            Action::MoveMailboxUp => {
+                todo!()
+            }
+            Action::MoveMailboxDown => {
                 todo!()
             }
             Action::CreateMailbox => {
@@ -116,15 +122,15 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
                 PaletteValue::Action(action) => self.apply_action(action),
             },
             ScreenOverlayResult::Input { value, typ } => match typ {
-                InputType::SortOrder => match value.parse::<u32>() {
-                    Ok(new_order) => self.backend.set_new_order(new_order),
-                    Err(err) => {
-                        error!(
-                            "Can't set sor order: {}' isn't a 32-bit unsigned integer: {}",
-                            value, err
-                        )
-                    }
-                },
+                // InputType::SortOrder => match value.parse::<u32>() {
+                //     Ok(new_order) => self.backend.set_new_order(new_order),
+                //     Err(err) => {
+                //         error!(
+                //             "Can't set sor order: {}' isn't a 32-bit unsigned integer: {}",
+                //             value, err
+                //         )
+                //     }
+                // },
                 InputType::NewMailboxName => self.backend.create_mailbox(value),
             },
             ScreenOverlayResult::Cancel => {}
