@@ -19,8 +19,6 @@ impl StatefulWidget for LogViewer {
             .style_error(Style::default().red())
             .style_warn(Style::default().yellow())
             .style_info(Style::default().green())
-            .output_file(false)
-            .output_line(false)
             .output_target(false)
             .output_timestamp(Some("[%H:%M:%S]".to_string()))
             .state(state.scroll_state())

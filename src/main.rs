@@ -236,6 +236,8 @@ fn init_logging() -> eyre::Result<()> {
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_writer(log_file)
         .without_time()
+        .with_file(true)
+        .with_line_number(true)
         .pretty();
 
     tui_logger::init_logger(tui_logger::LevelFilter::Info)?;
