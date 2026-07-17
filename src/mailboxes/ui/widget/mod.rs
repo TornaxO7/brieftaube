@@ -1,7 +1,5 @@
-use std::collections::HashSet;
-
 use crate::{
-    mailboxes::{Layer, backend::MailboxData, ui::State},
+    mailboxes::{Layer, ui::State},
     utils::{
         MailboxId,
         ui::{ScreenOverlay, ScreenState, input::Input, palette::Palette},
@@ -13,6 +11,7 @@ use ratatui::{
     style::{Color, Style},
     widgets::{Block, Cell, Clear, List, ListItem, Paragraph, Row, StatefulWidget, Table, Widget},
 };
+use std::collections::HashSet;
 
 const DARK_TURQUOISE: Color = Color::from_u32(0x005eff);
 const ORANGE: Color = Color::from_u32(0xFFA500);
@@ -86,7 +85,7 @@ fn render_mailboxes(area: Rect, buf: &mut Buffer, layer: &mut Layer) {
             let mut rows = Vec::with_capacity(layer.mailboxes.capacity() + 1);
 
             if !layer.is_root_layer() {
-                rows.push(Row::new(["", "", "<open>"]).style(Style::default().yellow()));
+                rows.push(Row::new(["", "<open>"]).style(Style::default().yellow()));
             }
 
             for mailbox in layer.mailboxes.iter() {
