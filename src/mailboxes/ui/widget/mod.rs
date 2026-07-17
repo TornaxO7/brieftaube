@@ -66,7 +66,16 @@ fn render_layer(area: Rect, buf: &mut Buffer, selected: &HashSet<MailboxId>, lay
 }
 
 fn render_marker(area: Rect, buf: &mut Buffer, selected: &HashSet<MailboxId>, layer: &Layer) {
-    let mut items: Vec<ListItem> = vec![ListItem::new("")];
+    let mut items: Vec<ListItem> = {
+        let header_line = ListItem::new("");
+        let open_line = ListItem::new("");
+
+        if layer.is_root_layer() {
+            vec![header_line]
+        } else {
+            vec![header_line, open_line]
+        }
+    };
 
     for mailbox in layer.mailboxes.iter() {
         if selected.contains(&mailbox.id) {
