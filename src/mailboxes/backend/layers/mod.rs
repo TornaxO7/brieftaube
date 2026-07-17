@@ -124,6 +124,13 @@ impl Layers {
             .values_mut()
             .find(|layer| layer.get_mailbox(id).is_some())
     }
+
+    pub fn remove_mailbox(&mut self, id: MailboxId) {
+        self.layers.remove(&Some(id.clone()));
+
+        let parent_layer = self.get_layer_containing_mailbox_mut(&id).unwrap();
+        parent_layer.mailboxes.retain(|mailbox| mailbox.id != id);
+    }
 }
 
 // For rendering

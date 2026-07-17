@@ -138,22 +138,30 @@ impl Backend {
             .and_then(|layer| layer.mailbox_owner.clone())
     }
 
-    pub fn destroy_selected_mailbox(&self) {
-        let mut guard = self.data.lock().unwrap();
-        if let Some(data) = guard.as_mut() {
-            let layer = data.layers.get_current_layer();
-
-            match layer.get_selected_mailbox() {
-                Some(_mailbox) => {
-                    todo!()
-                }
-                None => {
-                    error!(
-                        "Can't destroy mailbox: You can't select the parent mailbox to destroy it."
-                    );
-                }
-            }
+    pub fn destroy_mailbox(&self, id: MailboxId) {
+        if !self.is_initialised() {
+            return;
         }
+
+        let data = self.data.clone();
+        let client = self.client.clone();
+
+        self.tasks.lock().unwrap().spawn(async move {
+            let mut request = client.build();
+            request
+                .set_mailbox()
+                .destroy([&id])
+                .arguments()
+                .on_destroy_remove_emails(false);
+            let mut response = request.send_set_mailbox().await?;
+            response.destroyed(&id)?;
+
+            let mut guard = data.lock().unwrap();
+            let data = guard.as_mut().expect("Data is initialised");
+            data.layers.remove_mailbox(id);
+
+            Ok(())
+        });
     }
 
     pub fn set_new_order(&self, id: MailboxId, new_order: u32) {

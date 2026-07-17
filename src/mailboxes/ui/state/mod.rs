@@ -108,7 +108,11 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
                     InputType::NewMailboxName { parent },
                 )));
             }
-            Action::DestroySelectedMailbox => self.backend.destroy_selected_mailbox(),
+            Action::DestroySelectedMailbox => {
+                if let Some(id) = self.backend.get_selected_mailbox() {
+                    self.backend.destroy_mailbox(id);
+                }
+            }
         }
     }
 
