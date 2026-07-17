@@ -1,6 +1,7 @@
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, HorizontalAlignment, Layout, Rect},
+    style::Style,
     widgets::{Block, Cell, Paragraph, Row, StatefulWidget, Table, Widget},
 };
 
@@ -45,7 +46,9 @@ fn render_error_warning_info_state(area: Rect, buf: &mut Buffer, state: &super::
 
 fn render_screen_name(area: Rect, buf: &mut Buffer, name: &str) {
     Widget::render(
-        Paragraph::new(name).alignment(HorizontalAlignment::Center),
+        Paragraph::new(name)
+            .alignment(HorizontalAlignment::Center)
+            .style(Style::default().bold().light_blue()),
         area,
         buf,
     );
