@@ -138,7 +138,7 @@ impl Backend {
             .and_then(|layer| layer.mailbox_owner.clone())
     }
 
-    pub fn destroy_mailbox(&self, id: MailboxId) {
+    pub fn destroy_mailboxes(&self, ids: Vec<MailboxId>) {
         if !self.is_initialised() {
             return;
         }
@@ -150,17 +150,34 @@ impl Backend {
             let mut request = client.build();
             request
                 .set_mailbox()
-                .destroy([&id])
+                .destroy(&ids)
                 .arguments()
                 .on_destroy_remove_emails(false);
             let mut response = request.send_set_mailbox().await?;
-            response.destroyed(&id)?;
+            let mut errors = Vec::new();
 
             let mut guard = data.lock().unwrap();
             let data = guard.as_mut().expect("Data is initialised");
-            data.layers.remove_mailbox(id);
 
-            Ok(())
+            for id in ids.into_iter() {
+                match response.destroyed(&id) {
+                    Ok(()) => {
+                        data.layers.remove_mailbox(id);
+                    }
+                    Err(err) => {
+                        let mailbox = data.layers.get_mailbox(&id).unwrap();
+                        let name = mailbox.name.clone();
+
+                        errors.push((name, err));
+                    }
+                }
+            }
+
+            if !errors.is_empty() {
+                Err(TaskError::DestroyMailboxes { errors })
+            } else {
+                Ok(())
+            }
         });
     }
 

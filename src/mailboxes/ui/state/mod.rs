@@ -122,9 +122,14 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
                     InputType::NewMailboxName { parent },
                 )));
             }
-            Action::DestroySelectedMailbox => {
-                if let Some(id) = self.backend.get_selected_mailbox() {
-                    self.backend.destroy_mailbox(id);
+            Action::DestroySelectedMailboxes => {
+                if self.selected.is_empty() {
+                    if let Some(id) = self.backend.get_selected_mailbox() {
+                        self.backend.destroy_mailboxes(vec![id]);
+                    }
+                } else {
+                    let ids = self.selected.drain().collect::<Vec<MailboxId>>();
+                    self.backend.destroy_mailboxes(ids);
                 }
             }
         }

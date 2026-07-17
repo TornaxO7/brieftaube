@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+type MailboxName = String;
+
 #[derive(Error, Debug)]
 pub enum TaskError {
     #[error(transparent)]
@@ -7,6 +9,11 @@ pub enum TaskError {
 
     #[error(transparent)]
     CreateMailbox(#[from] ErrorCreateMailbox),
+
+    #[error("{errors:#?}")]
+    DestroyMailboxes {
+        errors: Vec<(MailboxName, jmap_client::Error)>,
+    },
 }
 
 #[derive(Error, Debug)]
