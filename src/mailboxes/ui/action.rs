@@ -24,6 +24,10 @@ pub enum Action {
     SelectNextMailbox,
     #[strum(message = "Select previous mailbox")]
     SelectPreviousMailbox,
+    #[strum(message = "Select the first mailbox of the current list.")]
+    SelectTopMailbox,
+    #[strum(message = "Select the last mailbox of the current list.")]
+    SelectBottomMailbox,
 
     #[strum(message = "Open the selected mailbox.")]
     ActivateSelectedEntry,

@@ -57,6 +57,8 @@ impl State {
                 ("l", Action::ActivateSelectedEntry),
                 ("h", Action::GoBack),
                 ("<C-l>", Action::OpenLogs),
+                ("gg", Action::SelectTopMailbox),
+                ("ge", Action::SelectBottomMailbox),
             ])),
         }
     }
@@ -77,6 +79,8 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
             }
             Action::SelectNextMailbox => self.backend.select_next_mailbox(),
             Action::SelectPreviousMailbox => self.backend.select_previous_mailbox(),
+            Action::SelectTopMailbox => self.backend.select_first_mailbox(),
+            Action::SelectBottomMailbox => self.backend.select_last_mailbox(),
             Action::ActivateSelectedEntry => {
                 if let Some(id) = self.backend.activate_selected_entry() {
                     self.app_actions.push(crate::Action::OpenRootMails(id));

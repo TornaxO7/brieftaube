@@ -323,6 +323,26 @@ impl Backend {
         }
     }
 
+    pub fn select_first_mailbox(&self) {
+        let mut guard = self.data.lock().unwrap();
+        if let Some(data) = guard.as_mut() {
+            let current_layer = data.layers.get_current_layer_mut();
+            *current_layer.state.selected_mut() = Some(0);
+        }
+    }
+
+    pub fn select_last_mailbox(&self) {
+        let mut guard = self.data.lock().unwrap();
+        if let Some(data) = guard.as_mut() {
+            let layer = data.layers.get_current_layer_mut();
+            *layer.state.selected_mut() = if layer.is_root_layer() {
+                Some(layer.mailboxes.len())
+            } else {
+                Some(layer.mailboxes.len() - 1)
+            };
+        }
+    }
+
     pub fn activate_selected_entry(&self) -> Option<MailboxId> {
         let mut guard = self.data.lock().unwrap();
         guard
