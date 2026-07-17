@@ -5,15 +5,22 @@ mod log_viewer;
 mod mail_viewer;
 mod mailboxes;
 mod root_mails;
+mod statusbar;
 mod thread_mails;
 mod utils;
 
-use crate::utils::{MailboxId, ThreadId, ui::ScreenState};
+use crate::{
+    statusbar::Statusbar,
+    utils::{MailboxId, ThreadId, ui::ScreenState},
+};
 use color_eyre::eyre;
 use crossterm::event::Event;
 use futures::{FutureExt, StreamExt};
 use jmap_client::email::Email;
-use ratatui::{DefaultTerminal, Frame};
+use ratatui::{
+    DefaultTerminal, Frame,
+    layout::{Constraint, Layout},
+};
 use std::{
     fs::OpenOptions,
     io,
@@ -65,18 +72,22 @@ pub struct App {
     is_running: bool,
     account: Arc<backend::Account>,
     screens: Vec<Screen>,
+    statusbar: statusbar::State,
 }
 
 impl App {
     pub async fn new() -> Self {
         let account = Arc::new(backend::Account::new().await);
 
+        let initial_screen =
+            Screen::Mailboxes(mailboxes::ui::State::new(account.mailboxes.clone()));
+        let statusbar = statusbar::State::new(&initial_screen);
+
         Self {
             is_running: true,
             account: account.clone(),
-            screens: vec![Screen::Mailboxes(mailboxes::ui::State::new(
-                account.mailboxes.clone(),
-            ))],
+            screens: vec![initial_screen],
+            statusbar,
         }
     }
 
@@ -109,38 +120,36 @@ impl App {
         Ok(())
     }
 
-    // fn update_state_of_active_screen(&mut self) {
-    //     match self.screens.last_mut().unwrap() {
-    //         Screen::Mailboxes(state) => state.update(),
-    //         Screen::MailList(state) => state.update(),
-    //         Screen::Composer(state) => state.update(),
-    //         Screen::MailViewer(state) => state.update(),
-    //         Screen::LogViewer(state) => state.update(),
-    //         Screen::ThreadMails(state) => state.update(),
-    //     }
-    // }
-
     fn draw(&mut self, frame: &mut Frame) {
         let area = frame.area();
 
+        let [statusbar, screen] =
+            Layout::vertical([Constraint::Length(3), Constraint::Fill(0)]).areas(area);
+
+        frame.render_stateful_widget(Statusbar::default(), statusbar, &mut self.statusbar);
+
         match self.screens.last_mut().unwrap() {
             Screen::Mailboxes(state) => {
-                frame.render_stateful_widget(mailboxes::ui::Mailboxes::default(), area, state);
+                frame.render_stateful_widget(mailboxes::ui::Mailboxes::default(), screen, state);
             }
             Screen::MailList(state) => {
-                frame.render_stateful_widget(root_mails::ui::RootMails::default(), area, state);
+                frame.render_stateful_widget(root_mails::ui::RootMails::default(), screen, state);
             }
             Screen::Composer(state) => {
-                frame.render_stateful_widget(composer::ui::Composer::default(), area, state);
+                frame.render_stateful_widget(composer::ui::Composer::default(), screen, state);
             }
             Screen::MailViewer(state) => {
-                frame.render_stateful_widget(mail_viewer::ui::MailViewer::default(), area, state);
+                frame.render_stateful_widget(mail_viewer::ui::MailViewer::default(), screen, state);
             }
             Screen::LogViewer(state) => {
-                frame.render_stateful_widget(log_viewer::ui::LogViewer::default(), area, state);
+                frame.render_stateful_widget(log_viewer::ui::LogViewer::default(), screen, state);
             }
             Screen::ThreadMails(state) => {
-                frame.render_stateful_widget(thread_mails::ui::ThreadMails::default(), area, state);
+                frame.render_stateful_widget(
+                    thread_mails::ui::ThreadMails::default(),
+                    screen,
+                    state,
+                );
             }
         };
     }
@@ -174,37 +183,49 @@ impl App {
             match action {
                 Action::OpenRootMails(mailbox_id) => {
                     self.account.init_root_mails(mailbox_id.clone());
+                    let next_screen = Screen::MailList(root_mails::ui::State::new(
+                        self.account.clone(),
+                        mailbox_id,
+                    ));
 
-                    self.screens
-                        .push(Screen::MailList(root_mails::ui::State::new(
-                            self.account.clone(),
-                            mailbox_id,
-                        )));
+                    self.statusbar.set_screen(&next_screen);
+                    self.screens.push(next_screen);
                 }
                 Action::OpenMailViewer(mail) => {
-                    self.screens
-                        .push(Screen::MailViewer(mail_viewer::ui::State::new(mail)));
+                    let next_screen = Screen::MailViewer(mail_viewer::ui::State::new(mail));
+
+                    self.statusbar.set_screen(&next_screen);
+                    self.screens.push(next_screen);
                 }
                 Action::OpenLogViewer => {
-                    self.screens
-                        .push(Screen::LogViewer(log_viewer::ui::State::new()));
+                    let next_screen = Screen::LogViewer(log_viewer::ui::State::new());
+
+                    self.statusbar.set_screen(&next_screen);
+                    self.screens.push(next_screen);
                 }
                 Action::OpenComposer => {
-                    self.screens.push(Screen::Composer(composer::ui::State::new(
-                        self.account.clone(),
-                    )));
+                    let next_screen =
+                        Screen::Composer(composer::ui::State::new(self.account.clone()));
+
+                    self.statusbar.set_screen(&next_screen);
+                    self.screens.push(next_screen);
                 }
                 Action::OpenThread(thread_id) => {
                     self.account.init_thread(thread_id.clone());
 
-                    self.screens
-                        .push(Screen::ThreadMails(thread_mails::ui::State::new(
-                            self.account.clone(),
-                            thread_id,
-                        )));
+                    let next_screen = Screen::ThreadMails(thread_mails::ui::State::new(
+                        self.account.clone(),
+                        thread_id,
+                    ));
+
+                    self.statusbar.set_screen(&next_screen);
+                    self.screens.push(next_screen);
                 }
                 Action::Back => {
                     self.screens.pop();
+
+                    let screen = self.screens.last().unwrap();
+                    self.statusbar.set_screen(screen);
                 }
                 Action::Quit => {
                     self.is_running = false;

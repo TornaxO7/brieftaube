@@ -17,19 +17,13 @@ impl StatefulWidget for RootMails {
     type State = super::State;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let [headerbar, content] = area.layout(&Layout::vertical([
-            Constraint::Length(3),
-            Constraint::Fill(0),
-        ]));
-
-        let [mail_list, preview] = content.layout(&Layout::horizontal([
+        let [mail_list, preview] = area.layout(&Layout::horizontal([
             Constraint::Percentage(60),
             Constraint::Percentage(40),
         ]));
 
         self.render_mail_list(mail_list, buf, state);
         self.render_preview(preview, buf, state);
-        self.render_headerbar(headerbar, buf, state);
 
         if let Some(state) = state.overlay() {
             let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
@@ -86,34 +80,5 @@ impl RootMails {
                 buf,
             )
         }
-    }
-
-    fn render_headerbar(&self, area: Rect, buf: &mut Buffer, _state: &mut super::State) {
-        let block = Block::bordered();
-        let header_area = block.inner(area);
-
-        let [left, center, right] = Layout::horizontal([
-            Constraint::Fill(0),
-            Constraint::Fill(0),
-            Constraint::Fill(0),
-        ])
-        .areas(header_area);
-
-        Widget::render(block, area, buf);
-        Widget::render(
-            Paragraph::new("Left").alignment(HorizontalAlignment::Left),
-            left,
-            buf,
-        );
-        Widget::render(
-            Paragraph::new("Center").alignment(HorizontalAlignment::Center),
-            center,
-            buf,
-        );
-        Widget::render(
-            Paragraph::new("Right").alignment(HorizontalAlignment::Right),
-            right,
-            buf,
-        );
     }
 }
