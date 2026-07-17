@@ -56,6 +56,7 @@ impl State {
                 (" ", Action::ToggleMailbox),
                 ("l", Action::ActivateSelectedEntry),
                 ("h", Action::GoBack),
+                ("<C-l>", Action::OpenLogs),
             ])),
         }
     }
@@ -123,7 +124,7 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
                     InputType::NewMailboxName { parent },
                 )));
             }
-            Action::DestroySelectedMailboxes => {
+            Action::RemoveSelectedMailboxes => {
                 if self.selected.is_empty() {
                     if let Some(id) = self.backend.get_selected_mailbox() {
                         self.backend.destroy_mailboxes(vec![id]);

@@ -36,6 +36,7 @@ impl State {
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", Action::Quit),
                 ("h", Action::Back),
+                ("<C-l>", Action::Back),
                 (":", Action::OpenCommandPalette),
             ])),
         }
