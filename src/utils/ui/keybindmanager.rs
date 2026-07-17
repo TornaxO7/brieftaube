@@ -14,7 +14,7 @@ pub struct KeybindManager<A> {
     idx: usize,
 }
 
-impl<A: Clone> KeybindManager<A> {
+impl<A: Clone + std::fmt::Debug> KeybindManager<A> {
     pub fn new<S: AsRef<str>>(raw_mapping: HashMap<S, A>) -> Self {
         let mapping = {
             let mut mapping = Vec::new();
@@ -23,7 +23,7 @@ impl<A: Clone> KeybindManager<A> {
                 let keybinding = parse_keybinding().parse(key.as_ref()).unwrap();
                 let keybinding_len = keybinding.len();
 
-                if mapping.len() < keybinding.len() {
+                if mapping.len() < keybinding_len {
                     mapping.resize(keybinding_len, HashMap::new());
                 }
 
@@ -32,9 +32,8 @@ impl<A: Clone> KeybindManager<A> {
                     mapping[idx].insert(*key, Entry::NotFinished);
                 }
 
-                mapping
-                    .last_mut()
-                    .map(|last| last.insert(*keybinding.last().unwrap(), Entry::Action(value)));
+                mapping[keybinding_len - 1]
+                    .insert(*keybinding.last().unwrap(), Entry::Action(value));
             }
 
             mapping
