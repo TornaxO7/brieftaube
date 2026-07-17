@@ -195,7 +195,7 @@ impl Backend {
                         .map(|biggest_sort_order| {
                             (biggest_sort_order + 1).next_multiple_of(NEW_SORT_ORDER_SIZE)
                         })
-                        .unwrap_or(0)
+                        .unwrap_or(NEW_SORT_ORDER_SIZE)
                 };
 
                 MailboxData {
