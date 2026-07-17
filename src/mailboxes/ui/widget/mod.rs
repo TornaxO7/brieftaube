@@ -142,7 +142,7 @@ fn render_overlay(area: Rect, buf: &mut Buffer, state: &mut State) {
                 StatefulWidget::render(Palette::new(), area, buf, state);
             }
             ScreenOverlay::Input(state) => {
-                let area = area.centered(Constraint::Percentage(20), Constraint::Percentage(15));
+                let area = area.centered(Constraint::Percentage(30), Constraint::Length(3));
                 Widget::render(Clear, area, buf);
                 StatefulWidget::render(Input::new(), area, buf, state)
             }

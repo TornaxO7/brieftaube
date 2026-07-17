@@ -1,13 +1,12 @@
-use std::marker::PhantomData;
-
 use crate::utils::ui::ScreenOverlayResult;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Layout, Rect},
-    widgets::{Block, Paragraph, StatefulWidget, Widget},
+    layout::Rect,
+    widgets::{Block, StatefulWidget, Widget},
 };
 use ratatui_textarea::TextArea;
+use std::marker::PhantomData;
 
 pub struct State<I> {
     input: TextArea<'static>,
@@ -55,18 +54,9 @@ impl<I> StatefulWidget for Input<I> {
     type State = State<I>;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let block = Block::bordered();
-        let [top, bottom] = Layout::vertical([Constraint::Length(2), Constraint::Length(3)])
-            .areas(block.inner(area));
-
-        Widget::render(block, area, buf);
-        Widget::render(
-            Paragraph::new(state.desc.as_str()),
-            Block::default().inner(top),
-            buf,
-        );
-
-        state.input.set_block(Block::bordered());
-        state.input.render(bottom, buf);
+        state
+            .input
+            .set_block(Block::bordered().title(state.desc.clone()));
+        state.input.render(area, buf);
     }
 }
