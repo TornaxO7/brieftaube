@@ -1,3 +1,4 @@
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::style::Style;
 
 use crate::Screen;
@@ -11,6 +12,8 @@ pub struct State {
     pub(super) error_style: Style,
     pub(super) warning_style: Style,
     pub(super) info_style: Style,
+
+    pub(super) keypresses: String,
 }
 
 impl State {
@@ -24,11 +27,32 @@ impl State {
             error_style: Style::default().red(),
             warning_style: Style::default().yellow(),
             info_style: Style::default().green(),
+
+            keypresses: String::new(),
         }
     }
 
     pub fn set_screen(&mut self, screen: &Screen) {
         self.screen_name = get_screen_name(screen);
+    }
+
+    pub fn push_key_press(&mut self, event: KeyEvent) {
+        let code = match event.code {
+            KeyCode::Char(c) => c,
+            _ => '?',
+        };
+
+        let s = match event.modifiers {
+            KeyModifiers::ALT => format!("<A-{}>", code),
+            KeyModifiers::CONTROL => format!("<C-{}>", code),
+            _ => code.to_string(),
+        };
+
+        self.keypresses.push_str(&s);
+    }
+
+    pub fn reset_key_press(&mut self) {
+        self.keypresses.clear();
     }
 }
 

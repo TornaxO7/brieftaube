@@ -8,6 +8,12 @@ enum Entry<A> {
     Action(A),
 }
 
+pub enum HandleEvent<A> {
+    Action(A),
+    Registered,
+    Cancel,
+}
+
 #[derive(Debug)]
 pub struct KeybindManager<A> {
     mapping: Vec<HashMap<KeyEvent, Entry<A>>>,
@@ -42,23 +48,25 @@ impl<A: Clone + std::fmt::Debug> KeybindManager<A> {
         Self { mapping, idx: 0 }
     }
 
-    pub fn handle_event(&mut self, event: KeyEvent) -> Option<A> {
+    pub fn handle_event(&mut self, event: KeyEvent) -> HandleEvent<A> {
         let next_map = &self.mapping[self.idx];
 
         match next_map.get(&event) {
             Some(entry) => match entry {
-                Entry::NotFinished => self.idx += 1,
+                Entry::NotFinished => {
+                    self.idx += 1;
+                    HandleEvent::Registered
+                }
                 Entry::Action(a) => {
                     self.idx = 0;
-                    return Some(a.clone());
+                    HandleEvent::Action(a.clone())
                 }
             },
             None => {
                 self.idx = 0;
+                HandleEvent::Cancel
             }
         }
-
-        None
     }
 }
 

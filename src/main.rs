@@ -156,12 +156,12 @@ impl App {
 
     fn handle_event(&mut self, event: Event) {
         match self.screens.last_mut().unwrap() {
-            Screen::Mailboxes(state) => state.handle_event(event),
-            Screen::MailList(state) => state.handle_event(event),
-            Screen::Composer(state) => state.handle_event(event),
-            Screen::MailViewer(state) => state.handle_event(event),
-            Screen::LogViewer(state) => state.handle_event(event),
-            Screen::ThreadMails(state) => state.handle_event(event),
+            Screen::Mailboxes(state) => state.handle_event(event, &mut self.statusbar),
+            Screen::MailList(state) => state.handle_event(event, &mut self.statusbar),
+            Screen::Composer(state) => state.handle_event(event, &mut self.statusbar),
+            Screen::MailViewer(state) => state.handle_event(event, &mut self.statusbar),
+            Screen::LogViewer(state) => state.handle_event(event, &mut self.statusbar),
+            Screen::ThreadMails(state) => state.handle_event(event, &mut self.statusbar),
         };
     }
 

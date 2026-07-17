@@ -25,12 +25,7 @@ impl StatefulWidget for Statusbar {
 
         render_error_warning_info_state(left, buf, state);
         render_screen_name(center, buf, state.screen_name);
-
-        Widget::render(
-            Paragraph::new("Right").alignment(HorizontalAlignment::Right),
-            right,
-            buf,
-        );
+        render_keypress(right, buf, &state.keypresses);
     }
 }
 
@@ -51,6 +46,14 @@ fn render_error_warning_info_state(area: Rect, buf: &mut Buffer, state: &super::
 fn render_screen_name(area: Rect, buf: &mut Buffer, name: &str) {
     Widget::render(
         Paragraph::new(name).alignment(HorizontalAlignment::Center),
+        area,
+        buf,
+    );
+}
+
+fn render_keypress(area: Rect, buf: &mut Buffer, keypress: &str) {
+    Widget::render(
+        Paragraph::new(keypress).alignment(HorizontalAlignment::Right),
         area,
         buf,
     );

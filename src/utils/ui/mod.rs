@@ -3,7 +3,7 @@ pub mod keybindmanager;
 pub mod palette;
 
 use crossterm::event::{Event, KeyEvent};
-use keybindmanager::KeybindManager;
+use keybindmanager::{HandleEvent, KeybindManager};
 
 pub trait ScreenState<A: Clone + std::fmt::Debug, P: Clone, I: Clone> {
     fn apply_action(&mut self, action: A);
@@ -12,7 +12,7 @@ pub trait ScreenState<A: Clone + std::fmt::Debug, P: Clone, I: Clone> {
 
     fn keybinding_manager(&mut self) -> &mut KeybindManager<A>;
 
-    fn handle_event(&mut self, event: Event) {
+    fn handle_event(&mut self, event: Event, statusbar: &mut crate::statusbar::State) {
         match event {
             Event::Key(event) => {
                 if let Some(overlay) = self.overlay() {
@@ -22,8 +22,16 @@ pub trait ScreenState<A: Clone + std::fmt::Debug, P: Clone, I: Clone> {
                     return;
                 }
 
-                if let Some(action) = self.keybinding_manager().handle_event(event) {
-                    self.apply_action(action);
+                statusbar.push_key_press(event);
+                match self.keybinding_manager().handle_event(event) {
+                    HandleEvent::Action(action) => {
+                        self.apply_action(action);
+                        statusbar.reset_key_press();
+                    }
+                    HandleEvent::Registered => {}
+                    HandleEvent::Cancel => {
+                        statusbar.reset_key_press();
+                    }
                 }
             }
             Event::Mouse(_event) => {}
