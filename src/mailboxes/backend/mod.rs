@@ -11,10 +11,13 @@ use jmap_client::{
 };
 pub use layers::{Layer, Layers};
 pub use mailbox_data::MailboxData;
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 use task_error::*;
 use tokio::task::{JoinError, JoinSet};
-use tracing::debug;
+use tracing::{debug, warn};
 
 const NEW_SORT_ORDER_SIZE: u32 = 32;
 
@@ -223,6 +226,62 @@ impl Backend {
             let data = guard.as_mut().expect("Data is initialised");
             data.layers.add_mailbox(new_mailbox);
             data.state = response.take_new_state();
+
+            Ok(())
+        });
+    }
+
+    pub fn normalize_sort_order(&self) {
+        if !self.is_initialised() {
+            return;
+        }
+
+        let data = self.data.clone();
+        let client = self.client.clone();
+
+        self.tasks.lock().unwrap().spawn(async move {
+            let ids: Vec<MailboxId> = {
+                let guard = data.lock().unwrap();
+                let data = guard.as_ref().expect("Is initialised");
+                let layer = data.layers.get_current_layer();
+                layer
+                    .mailboxes
+                    .iter()
+                    .map(|mailbox| mailbox.id.clone())
+                    .collect()
+            };
+
+            let new_sort_orders: HashMap<MailboxId, u32> = ids
+                .into_iter()
+                .enumerate()
+                .map(|(idx, id)| (id, (idx + 1) as u32 * NEW_SORT_ORDER_SIZE))
+                .collect();
+
+            // send changes
+            {
+                let mut request = client.build();
+                let set_mailbox = request.set_mailbox();
+                for (id, new_sort_order) in new_sort_orders.iter() {
+                    set_mailbox.update(id).sort_order(*new_sort_order);
+                }
+                let mut response = request.send_set_mailbox().await?;
+
+                // check that everything worked fine
+                for id in new_sort_orders.keys() {
+                    response.updated(id)?;
+                }
+            }
+
+            // apply changes to local
+            let mut guard = data.lock().unwrap();
+            let data = guard.as_mut().expect("Is initialised");
+            let layer = data.layers.get_current_layer_mut();
+            for mailbox in layer.mailboxes.iter_mut() {
+                match new_sort_orders.get(&mailbox.id).cloned() {
+                    Some(new_order) => mailbox.sort_order = new_order,
+                    None => warn!("The mailbox '{}' didn't exist, before fetching its sort order... skipping new sort order for it.", &mailbox.name),
+                }
+            }
 
             Ok(())
         });

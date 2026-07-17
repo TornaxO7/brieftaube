@@ -44,6 +44,8 @@ pub enum Action {
     MoveMailboxUp,
     #[strum(message = "Move the selected mailbox down")]
     MoveMailboxDown,
+    #[strum(message = "Normalize the sort order of the current layer.")]
+    NormalizeSortOrder,
 
     #[strum(message = "Open logs")]
     OpenLogs,

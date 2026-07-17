@@ -114,6 +114,7 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
             Action::MoveMailboxDown => {
                 todo!()
             }
+            Action::NormalizeSortOrder => self.backend.normalize_sort_order(),
             Action::CreateMailbox => {
                 let parent = self.backend.get_parent_mailbox();
 

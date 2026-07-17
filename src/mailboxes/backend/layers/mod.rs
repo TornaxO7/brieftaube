@@ -119,6 +119,12 @@ impl Layers {
             .find_map(|layer| layer.get_mailbox_mut(id))
     }
 
+    pub fn get_layer_containing_mailbox(&self, id: &MailboxId) -> Option<&Layer> {
+        self.layers
+            .values()
+            .find(|layer| layer.get_mailbox(id).is_some())
+    }
+
     pub fn get_layer_containing_mailbox_mut(&mut self, id: &MailboxId) -> Option<&mut Layer> {
         self.layers
             .values_mut()
