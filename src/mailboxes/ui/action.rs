@@ -35,6 +35,9 @@ pub enum Action {
     #[strum(message = "Destroy the selected mailbox")]
     DestroySelectedMailbox,
 
+    #[strum(message = "Tag the mailbox if it isn't tagged yet, otherwise untag it.")]
+    ToggleMailbox,
+
     #[strum(message = "Set the sort order of the selected mailbox.")]
     SetSortOrder,
     #[strum(message = "Move the selected mailbox up")]

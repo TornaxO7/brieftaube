@@ -1,15 +1,21 @@
+use std::collections::HashSet;
+
 use crate::{
-    mailboxes::{Layer, ui::State},
-    utils::ui::{ScreenOverlay, ScreenState, input::Input, palette::Palette},
+    mailboxes::{Layer, backend::MailboxData, ui::State},
+    utils::{
+        MailboxId,
+        ui::{ScreenOverlay, ScreenState, input::Input, palette::Palette},
+    },
 };
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     style::{Color, Style},
-    widgets::{Block, Clear, Paragraph, Row, StatefulWidget, Table, Widget},
+    widgets::{Block, Cell, Clear, List, ListItem, Paragraph, Row, StatefulWidget, Table, Widget},
 };
 
 const DARK_TURQUOISE: Color = Color::from_u32(0x005eff);
+const ORANGE: Color = Color::from_u32(0xFFA500);
 
 #[derive(Default)]
 pub struct Mailboxes {}
@@ -30,13 +36,18 @@ impl StatefulWidget for Mailboxes {
                 .areas(area);
 
                 if let Some(parent_layer) = data.layers.get_parent_layer_mut() {
-                    render_layer(left, buf, parent_layer);
+                    render_layer(left, buf, &state.selected, parent_layer);
                 }
 
-                render_layer(center, buf, data.layers.get_current_layer_mut());
+                render_layer(
+                    center,
+                    buf,
+                    &state.selected,
+                    data.layers.get_current_layer_mut(),
+                );
 
                 if let Some(children_layer) = data.layers.get_children_layer_mut() {
-                    render_layer(right, buf, children_layer);
+                    render_layer(right, buf, &state.selected, children_layer);
                 }
             } else {
                 render_loading_screen(area, buf);
@@ -47,20 +58,42 @@ impl StatefulWidget for Mailboxes {
     }
 }
 
-fn render_layer(area: Rect, buf: &mut Buffer, layer: &mut Layer) {
+fn render_layer(area: Rect, buf: &mut Buffer, selected: &HashSet<MailboxId>, layer: &mut Layer) {
+    let [marker_area, layer_area] =
+        Layout::horizontal([Constraint::Length(1), Constraint::Fill(0)]).areas(area);
+
+    render_marker(marker_area, buf, selected, layer);
+    render_mailboxes(layer_area, buf, layer);
+}
+
+fn render_marker(area: Rect, buf: &mut Buffer, selected: &HashSet<MailboxId>, layer: &Layer) {
+    let mut items: Vec<ListItem> = vec![ListItem::new("")];
+
+    for mailbox in layer.mailboxes.iter() {
+        if selected.contains(&mailbox.id) {
+            items.push(ListItem::new(" ").style(Style::default().bg(ORANGE)));
+        } else {
+            items.push(ListItem::new(" "));
+        }
+    }
+
+    Widget::render(List::new(items), area, buf)
+}
+
+fn render_mailboxes(area: Rect, buf: &mut Buffer, layer: &mut Layer) {
     let table = {
         let rows = {
             let mut rows = Vec::with_capacity(layer.mailboxes.capacity() + 1);
 
             if !layer.is_root_layer() {
-                rows.push(Row::new(["", "<open>"]).style(Style::default().yellow()));
+                rows.push(Row::new(["", "", "<open>"]).style(Style::default().yellow()));
             }
 
             for mailbox in layer.mailboxes.iter() {
                 rows.push(Row::new(vec![
-                    format!("{}", mailbox.sort_order),
-                    mailbox.name.clone(),
-                    format!("{}", mailbox.unread_mails),
+                    Cell::from(format!("{}", mailbox.sort_order)),
+                    Cell::from(mailbox.name.clone()),
+                    Cell::from(format!("{}", mailbox.unread_mails)),
                 ]));
             }
 

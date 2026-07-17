@@ -14,7 +14,7 @@ pub use mailbox_data::MailboxData;
 use std::sync::{Arc, Mutex};
 use task_error::*;
 use tokio::task::{JoinError, JoinSet};
-use tracing::{debug, error};
+use tracing::debug;
 
 const NEW_SORT_ORDER_SIZE: u32 = 32;
 

@@ -9,7 +9,10 @@ use crate::{
         },
     },
 };
-use std::{collections::HashMap, rc::Rc};
+use std::{
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 use tracing::{error, trace};
 
 #[derive(Debug, Clone)]
@@ -28,6 +31,7 @@ pub struct State {
     keybindings: KeybindManager<Action>,
     overlay: Option<ScreenOverlay<PaletteValue, InputType>>,
 
+    pub selected: HashSet<MailboxId>,
     pub backend: Rc<Backend>,
 }
 
@@ -40,6 +44,7 @@ impl State {
             backend,
 
             overlay: None,
+            selected: HashSet::new(),
 
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", Action::Quit),
@@ -48,6 +53,7 @@ impl State {
                 // ("n", super::Action::OpenComposer),
                 (":", Action::OpenCommandPalette),
                 ("<CR>", Action::ActivateSelectedEntry),
+                (" ", Action::ToggleMailbox),
                 ("l", Action::ActivateSelectedEntry),
                 ("h", Action::GoBack),
             ])),
@@ -73,6 +79,14 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
             Action::ActivateSelectedEntry => {
                 if let Some(id) = self.backend.activate_selected_entry() {
                     self.app_actions.push(crate::Action::OpenRootMails(id));
+                }
+            }
+            Action::ToggleMailbox => {
+                if let Some(id) = self.backend.get_selected_mailbox() {
+                    if !self.selected.remove(&id) {
+                        self.selected.insert(id);
+                    }
+                    self.backend.select_next_mailbox();
                 }
             }
             Action::GoBack => self.backend.go_back(),
