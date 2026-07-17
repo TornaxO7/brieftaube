@@ -45,13 +45,14 @@ impl Backend {
     pub async fn has_changed(&self) -> Option<Result<Result<(), TaskError>, JoinError>> {
         self.tasks.lock().unwrap().join_next().await
     }
-}
 
-impl Backend {
     pub fn is_initialised(&self) -> bool {
         self.data.lock().unwrap().is_some()
     }
+}
 
+// methods which also communicate with the server
+impl Backend {
     pub fn init(&self) {
         let client = self.client.clone();
         let data = self.data.clone();
@@ -78,64 +79,6 @@ impl Backend {
 
             Ok(())
         });
-    }
-}
-
-// ui functions
-impl Backend {
-    pub fn select_next_mailbox(&self) {
-        let mut guard = self.data.lock().unwrap();
-        if let Some(data) = guard.as_mut() {
-            let current_layer = data.layers.get_current_layer_mut();
-            current_layer.state.select_next();
-        }
-    }
-
-    pub fn select_previous_mailbox(&self) {
-        let mut guard = self.data.lock().unwrap();
-        if let Some(data) = guard.as_mut() {
-            let current_layer = data.layers.get_current_layer_mut();
-            current_layer.state.select_previous();
-        }
-    }
-
-    pub fn activate_selected_entry(&self) -> Option<MailboxId> {
-        let mut guard = self.data.lock().unwrap();
-        guard
-            .as_mut()
-            .and_then(|data| data.layers.open_selected_entry())
-    }
-
-    pub fn go_back(&self) {
-        let mut guard = self.data.lock().unwrap();
-        if let Some(data) = guard.as_mut() {
-            data.layers.go_up_one_level();
-        }
-    }
-
-    pub fn can_set_sort_order(&self) -> Option<bool> {
-        let guard = self.data.lock().unwrap();
-        guard.as_ref().map(|data| {
-            let layer = data.layers.get_current_layer();
-            !layer.selected_parent()
-        })
-    }
-
-    pub fn get_selected_mailbox(&self) -> Option<MailboxId> {
-        let guard = self.data.lock().unwrap();
-        guard
-            .as_ref()
-            .map(|data| data.layers.get_current_layer())
-            .and_then(|layer| layer.get_selected_mailbox())
-            .map(|mailbox| mailbox.id.clone())
-    }
-
-    pub fn get_parent_mailbox(&self) -> Option<MailboxId> {
-        let guard = self.data.lock().unwrap();
-        guard
-            .as_ref()
-            .map(|data| data.layers.get_current_layer())
-            .and_then(|layer| layer.mailbox_owner.clone())
     }
 
     pub fn destroy_mailboxes(&self, ids: Vec<MailboxId>) {
@@ -182,6 +125,10 @@ impl Backend {
     }
 
     pub fn set_new_order(&self, id: MailboxId, new_order: u32) {
+        if !self.is_initialised() {
+            return;
+        }
+
         let data = self.data.clone();
         let client = self.client.clone();
 
@@ -191,9 +138,8 @@ impl Backend {
             request.send_set_mailbox().await?;
 
             let mut guard = data.lock().unwrap();
-            if let Some(data) = guard.as_mut() {
-                data.layers.set_sort_order(id, new_order);
-            }
+            let data = guard.as_mut().expect("Is initialised");
+            data.layers.set_sort_order(id, new_order);
 
             Ok(())
         });
@@ -297,5 +243,63 @@ impl Backend {
             Capabilities::Mail(cap) => cap,
             _ => unreachable!(),
         }
+    }
+}
+
+// ui functions
+impl Backend {
+    pub fn select_next_mailbox(&self) {
+        let mut guard = self.data.lock().unwrap();
+        if let Some(data) = guard.as_mut() {
+            let current_layer = data.layers.get_current_layer_mut();
+            current_layer.state.select_next();
+        }
+    }
+
+    pub fn select_previous_mailbox(&self) {
+        let mut guard = self.data.lock().unwrap();
+        if let Some(data) = guard.as_mut() {
+            let current_layer = data.layers.get_current_layer_mut();
+            current_layer.state.select_previous();
+        }
+    }
+
+    pub fn activate_selected_entry(&self) -> Option<MailboxId> {
+        let mut guard = self.data.lock().unwrap();
+        guard
+            .as_mut()
+            .and_then(|data| data.layers.open_selected_entry())
+    }
+
+    pub fn go_back(&self) {
+        let mut guard = self.data.lock().unwrap();
+        if let Some(data) = guard.as_mut() {
+            data.layers.go_up_one_level();
+        }
+    }
+
+    pub fn can_set_sort_order(&self) -> Option<bool> {
+        let guard = self.data.lock().unwrap();
+        guard.as_ref().map(|data| {
+            let layer = data.layers.get_current_layer();
+            !layer.selected_parent()
+        })
+    }
+
+    pub fn get_selected_mailbox(&self) -> Option<MailboxId> {
+        let guard = self.data.lock().unwrap();
+        guard
+            .as_ref()
+            .map(|data| data.layers.get_current_layer())
+            .and_then(|layer| layer.get_selected_mailbox())
+            .map(|mailbox| mailbox.id.clone())
+    }
+
+    pub fn get_parent_mailbox(&self) -> Option<MailboxId> {
+        let guard = self.data.lock().unwrap();
+        guard
+            .as_ref()
+            .map(|data| data.layers.get_current_layer())
+            .and_then(|layer| layer.mailbox_owner.clone())
     }
 }
