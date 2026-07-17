@@ -1,23 +1,26 @@
 mod layers;
 mod mailbox_data;
+mod task_error;
 
 use crate::utils::MailboxId;
-use jmap_client::client::Client;
+use jmap_client::{
+    URI,
+    client::Client,
+    core::{session::Capabilities, set::SetObject},
+    mailbox::Role,
+};
 pub use layers::{Layer, Layers};
 pub use mailbox_data::MailboxData;
 use std::sync::{Arc, Mutex};
+use task_error::*;
 use tokio::task::{JoinError, JoinSet};
-use tracing::error;
+use tracing::{debug, error};
+
+const NEW_SORT_ORDER_SIZE: u32 = 32;
 
 pub struct Data {
     pub layers: Layers,
     state: String,
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum TaskError {
-    #[error(transparent)]
-    Client(#[from] jmap_client::Error),
 }
 
 pub struct Backend {
@@ -45,6 +48,10 @@ impl Backend {
 }
 
 impl Backend {
+    pub fn is_initialised(&self) -> bool {
+        self.data.lock().unwrap().is_some()
+    }
+
     pub fn init(&self) {
         let client = self.client.clone();
         let data = self.data.clone();
@@ -123,6 +130,14 @@ impl Backend {
             .map(|mailbox| mailbox.id.clone())
     }
 
+    pub fn get_parent_mailbox(&self) -> Option<MailboxId> {
+        let guard = self.data.lock().unwrap();
+        guard
+            .as_ref()
+            .map(|data| data.layers.get_current_layer())
+            .and_then(|layer| layer.mailbox_owner.clone())
+    }
+
     pub fn destroy_selected_mailbox(&self) {
         let mut guard = self.data.lock().unwrap();
         if let Some(data) = guard.as_mut() {
@@ -159,86 +174,103 @@ impl Backend {
         });
     }
 
-    pub fn create_mailbox(&self, _name: String) {
-        let mut guard = self.data.lock().unwrap();
-        if let Some(_data) = guard.as_mut() {
-            // validate
-            // {
-            //     let caps = self.account.mail_capability();
-
-            //     let msg = {
-            //         if layers.depth() > caps.max_mailbox_depth() {
-            //             Some(format!(
-            //                 "Max mailbox depth reached for the mail server :( You can't create another sub-mailbox in the current mailbox. The maximum depth is {} for the server.",
-            //                 caps.max_mailbox_depth()
-            //             ))
-            //         } else if value.len() > caps.max_size_mailbox_name() {
-            //             Some(format!(
-            //                 "The mailbox name is too long. It can be at most {} characters long.",
-            //                 caps.max_size_mailbox_name()
-            //             ))
-            //         } else if layers
-            //             .get_current_layer()
-            //             .contains_mailbox_name(value.as_str())
-            //         {
-            //             Some(format!(
-            //                 "There's already a mailbox in the current mailbox with the name '{}'.",
-            //                 &value
-            //             ))
-            //         } else {
-            //             None
-            //         }
-            //     };
-
-            //     if let Some(msg) = msg {
-            //         error!("Can't create mailbox: {}", msg);
-            //         return;
-            //     }
-            // }
-
-            // let layer = layers.get_current_layer();
-            // let new_mailbox_data = MailboxData {
-            //     name: value.clone(),
-            //     parent_id: layer.mailbox_owner.clone(),
-            //     sort_order: layer
-            //         .mailboxes
-            //         .iter()
-            //         .map(|mailbox| mailbox.sort_order)
-            //         .max()
-            //         .map(|biggest_sort_order| biggest_sort_order + 1)
-            //         .unwrap_or(0),
-            //     ..Default::default()
-            // };
-
-            // self.tasks.lock().unwrap().spawn(async move {
-            //             let mut data = data.lock().await;
-            //             let mailboxes = data.mailboxes.as_mut().unwrap();
-
-            //             let mut request = client.build();
-
-            //             let id = request
-            //                 .set_mailbox()
-            //                 .create()
-            //                 .parent_id(mailbox.parent_id.clone())
-            //                 .name(mailbox.name.clone())
-            //                 .sort_order(mailbox.sort_order)
-            //                 .role(Role::None)
-            //                 .is_subscribed(true)
-            //                 .create_id()
-            //                 .unwrap();
-
-            //             let mut response = request.send_set_mailbox().await?;
-            //             let mut created_mailbox = response.created(&id)?;
-            //             mailbox.id = created_mailbox.take_id();
-
-            //             mailboxes.inner.insert(mailbox.id.clone(), mailbox.clone());
-            //             mailboxes.state = response.take_new_state();
-
-            //             info!("Successfully created mailbox '{}'.", mailbox.name.clone());
-
-            //             Ok(())
-            //         });        }
+    pub fn create_mailbox(&self, parent: Option<MailboxId>, name: String) {
+        debug!("Creating mailbox: '{}' with parent '{:?}'.", &name, &parent);
+        if !self.is_initialised() {
+            return;
         }
-        todo!()
+
+        let client = self.client.clone();
+        let data = self.data.clone();
+        let caps = self.mail_capability();
+
+        self.tasks.lock().unwrap().spawn(async move {
+            {
+                let guard = data.lock().unwrap();
+                let data = guard.as_ref().expect("Is initialised");
+
+                if data.layers.depth() > caps.max_mailbox_depth() {
+                    Err(ErrorCreateMailbox::ReachedMaxDepth(
+                        caps.max_mailbox_depth(),
+                    ))
+                } else if name.len() > caps.max_size_mailbox_name() {
+                    Err(ErrorCreateMailbox::NameTooLong(
+                        caps.max_size_mailbox_name(),
+                    ))
+                } else if data
+                    .layers
+                    .get_current_layer()
+                    .contains_mailbox_name(name.as_str())
+                {
+                    Err(ErrorCreateMailbox::NameAlreadyUsed(name.clone()))
+                } else {
+                    Ok(())
+                }
+            }?;
+
+            let mut new_mailbox = {
+                let sort_order = {
+                    let guard = data.lock().unwrap();
+                    let data = guard.as_ref().expect("Is initialised");
+                    let layer = data.layers.get_layer(&parent);
+                    layer
+                        .mailboxes
+                        .iter()
+                        .map(|mailbox| mailbox.sort_order)
+                        .max()
+                        .map(|biggest_sort_order| {
+                            (biggest_sort_order + 1).next_multiple_of(NEW_SORT_ORDER_SIZE)
+                        })
+                        .unwrap_or(0)
+                };
+
+                MailboxData {
+                    name: name.clone(),
+                    role: Role::None,
+                    sort_order,
+                    parent_id: parent.clone(),
+                    ..Default::default()
+                }
+            };
+
+            let mut request = client.build();
+            let id = request
+                .set_mailbox()
+                .create()
+                .name(&new_mailbox.name)
+                .parent_id(new_mailbox.parent_id.as_ref())
+                .role(new_mailbox.role.clone())
+                .sort_order(new_mailbox.sort_order)
+                .is_subscribed(true)
+                .create_id()
+                .unwrap();
+            let mut response = request.send_set_mailbox().await?;
+            let mut create_mailbox = response.created(&id)?;
+            new_mailbox.id = create_mailbox.take_id();
+
+            let mut guard = data.lock().unwrap();
+            let data = guard.as_mut().expect("Data is initialised");
+            data.layers.add_mailbox(new_mailbox);
+            data.state = response.take_new_state();
+
+            Ok(())
+        });
+    }
+
+    pub fn mail_capability(&self) -> jmap_client::email::MailCapabilities {
+        let id = self.client.default_account_id();
+
+        match self
+            .client
+            .session()
+            .account(id)
+            .unwrap()
+            .capability(URI::Mail.as_ref())
+            .unwrap()
+            .clone()
+        {
+            Capabilities::Mail(cap) => cap,
+            _ => unreachable!(),
+        }
     }
 }

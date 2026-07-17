@@ -70,7 +70,7 @@ fn render_layer(area: Rect, buf: &mut Buffer, layer: &mut Layer) {
         Table::new(
             rows,
             [
-                Constraint::Min(2),
+                Constraint::Min(3),
                 Constraint::Percentage(50),
                 Constraint::Percentage(50),
             ],

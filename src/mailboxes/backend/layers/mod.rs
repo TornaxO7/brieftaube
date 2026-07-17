@@ -76,6 +76,17 @@ impl Layers {
         }
     }
 
+    pub fn add_mailbox(&mut self, mailbox: MailboxData) {
+        self.layers.insert(
+            Some(mailbox.id.clone()),
+            Layer::new(Some(mailbox.id.clone())),
+        );
+
+        let parent = self.layers.get_mut(&mailbox.parent_id).unwrap();
+        parent.mailboxes.push(mailbox);
+        parent.sort_mailboxes();
+    }
+
     pub fn go_up_one_level(&mut self) {
         if self.selected_layer.len() > 1 {
             self.selected_layer.pop();
@@ -92,6 +103,10 @@ impl Layers {
         self.layers
             .get_mut(self.selected_layer.last().unwrap())
             .unwrap()
+    }
+
+    pub fn get_layer(&self, id: &Option<MailboxId>) -> &Layer {
+        self.layers.get(id).expect("Mailbox has a layer")
     }
 
     pub fn get_mailbox(&self, id: &MailboxId) -> Option<&MailboxData> {

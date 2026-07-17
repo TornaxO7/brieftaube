@@ -72,22 +72,3 @@ impl Account {
     //     &self.config
     // }
 }
-
-impl Account {
-    pub fn mail_capability(&self) -> jmap_client::email::MailCapabilities {
-        let id = self.client.default_account_id();
-
-        match self
-            .client
-            .session()
-            .account(id)
-            .unwrap()
-            .capability(URI::Mail.as_ref())
-            .unwrap()
-            .clone()
-        {
-            Capabilities::Mail(cap) => cap,
-            _ => unreachable!(),
-        }
-    }
-}

@@ -20,7 +20,7 @@ pub enum PaletteValue {
 #[derive(Debug, Clone)]
 pub enum InputType {
     SortOrder(MailboxId),
-    NewMailboxName,
+    NewMailboxName { parent: Option<MailboxId> },
 }
 
 pub struct State {
@@ -101,9 +101,11 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
                 todo!()
             }
             Action::CreateMailbox => {
+                let parent = self.backend.get_parent_mailbox();
+
                 self.overlay = Some(ScreenOverlay::Input(input::State::new(
                     "Create:",
-                    InputType::NewMailboxName,
+                    InputType::NewMailboxName { parent },
                 )));
             }
             Action::DestroySelectedMailbox => self.backend.destroy_selected_mailbox(),
@@ -134,12 +136,12 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
                     Ok(new_order) => self.backend.set_new_order(id, new_order),
                     Err(err) => {
                         error!(
-                            "Can't set sor order: {}' isn't a 32-bit unsigned integer: {}",
+                            "Can't set sort order: {}' isn't a 32-bit unsigned integer: {}",
                             value, err
                         )
                     }
                 },
-                InputType::NewMailboxName => self.backend.create_mailbox(value),
+                InputType::NewMailboxName { parent } => self.backend.create_mailbox(parent, value),
             },
             ScreenOverlayResult::Cancel => {}
         }
