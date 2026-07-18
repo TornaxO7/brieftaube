@@ -244,7 +244,6 @@ impl Backend {
                     .parent_id(new_mailbox.parent_id.as_ref())
                     .role(new_mailbox.role.clone())
                     .sort_order(new_mailbox.sort_order)
-                    .is_subscribed(true)
                     .create_id()
                     .unwrap();
 
@@ -530,10 +529,6 @@ impl Backend {
 
                             if let Some(parent_id) = server.parent_id() {
                                 new.parent_id = Some(parent_id.to_string());
-                            }
-
-                            if let Some(id) = server.id() {
-                                new.id = id.to_string();
                             }
                         }
 
