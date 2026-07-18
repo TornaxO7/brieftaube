@@ -7,7 +7,6 @@ use crate::utils::MailboxId;
 pub use layer::Layer;
 
 type MailboxOwner = Option<MailboxId>;
-type ParentId = MailboxId;
 
 pub struct Layers {
     // each mailbox has its own layer

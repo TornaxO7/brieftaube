@@ -102,11 +102,7 @@ impl App {
                 _ = self.statusbar.has_changed() => {
                     // just the statusbar
                 }
-                res = self.account.mailboxes.has_changed(), if self.account.mailboxes.has_tasks_running() => {
-                    if let Ok(Err(err)) = res.expect("No join error") {
-                        error!("{}", err);
-                    }
-                }
+                _ = self.account.mailboxes.has_changed(), if self.account.mailboxes.has_tasks_running() => { }
                 res = self.account.has_changed(), if self.account.has_tasks_running() => {
                     if let Ok(Err(err)) = res.expect("A task finished") {
                         error!("{}", err);

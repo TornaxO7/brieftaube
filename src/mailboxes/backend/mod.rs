@@ -1,6 +1,5 @@
 mod layers;
 mod mailbox_data;
-mod task_error;
 
 use crate::{config::Config, utils::MailboxId};
 use jmap_client::{
@@ -16,11 +15,11 @@ use std::{
     rc::Rc,
     sync::{Arc, Mutex},
 };
-use task_error::*;
 use tokio::task::{JoinError, JoinSet};
-use tracing::{debug, warn};
+use tracing::{error, warn};
 
 const NEW_SORT_ORDER_SIZE: u32 = 32;
+const DATA_INITIALISED_MSG: &str = "Is initialised";
 
 pub struct Data {
     pub layers: Layers,
@@ -31,7 +30,7 @@ pub struct Backend {
     client: Arc<Client>,
     pub data: Arc<Mutex<Option<Data>>>,
     pub config: Rc<Config>,
-    tasks: Arc<Mutex<JoinSet<Result<(), TaskError>>>>,
+    tasks: Arc<Mutex<JoinSet<()>>>,
 }
 
 impl Backend {
@@ -48,7 +47,7 @@ impl Backend {
         !self.tasks.lock().unwrap().is_empty()
     }
 
-    pub async fn has_changed(&self) -> Option<Result<Result<(), TaskError>, JoinError>> {
+    pub async fn has_changed(&self) -> Option<Result<(), JoinError>> {
         self.tasks.lock().unwrap().join_next().await
     }
 
@@ -66,7 +65,13 @@ impl Backend {
         self.tasks.lock().unwrap().spawn(async move {
             let mut request = client.build();
             request.get_mailbox().ids::<[_; 1], String>(None::<[_; 1]>);
-            let mut response = request.send_get_mailbox().await?;
+            let mut response = match request.send_get_mailbox().await {
+                Ok(r) => r,
+                Err(err) => {
+                    error!("Couldn't request mailboxes from server: {err}");
+                    return;
+                }
+            };
 
             let state = response.take_state();
             let layers = {
@@ -82,8 +87,6 @@ impl Backend {
             let mut data = data.lock().unwrap();
             let new_data = Data { layers, state };
             *data = Some(new_data);
-
-            Ok(())
         });
     }
 
@@ -96,18 +99,25 @@ impl Backend {
         let client = self.client.clone();
 
         self.tasks.lock().unwrap().spawn(async move {
-            let mut request = client.build();
-            request
-                .set_mailbox()
-                .destroy(&ids)
-                .arguments()
-                .on_destroy_remove_emails(false);
-            let mut response = request.send_set_mailbox().await?;
-            let mut errors = Vec::new();
+            let mut response = {
+                let mut request = client.build();
+                request
+                    .set_mailbox()
+                    .destroy(&ids)
+                    .arguments()
+                    .on_destroy_remove_emails(false);
+
+                match request.send_set_mailbox().await {
+                    Ok(r) => r,
+                    Err(err) => {
+                        error!("Couldn't request server to destroy mailboxes: {err}");
+                        return;
+                    }
+                }
+            };
 
             let mut guard = data.lock().unwrap();
-            let data = guard.as_mut().expect("Data is initialised");
-
+            let data = guard.as_mut().expect(DATA_INITIALISED_MSG);
             for id in ids.into_iter() {
                 match response.destroyed(&id) {
                     Ok(()) => {
@@ -116,16 +126,9 @@ impl Backend {
                     Err(err) => {
                         let mailbox = data.layers.get_mailbox(&id).unwrap();
                         let name = mailbox.name.clone();
-
-                        errors.push((name, err));
+                        error!("Couldn't destroy the mailbox '{name}': {err}");
                     }
                 }
-            }
-
-            if !errors.is_empty() {
-                Err(TaskError::DestroyMailboxes { errors })
-            } else {
-                Ok(())
             }
         });
     }
@@ -139,20 +142,35 @@ impl Backend {
         let client = self.client.clone();
 
         self.tasks.lock().unwrap().spawn(async move {
-            let mut request = client.build();
-            request.set_mailbox().update(&id).sort_order(new_order);
-            request.send_set_mailbox().await?;
+            let mut response = {
+                let mut request = client.build();
+                request.set_mailbox().update(&id).sort_order(new_order);
+
+                match request.send_set_mailbox().await {
+                    Ok(r) => r,
+                    Err(err) => {
+                        error!("Couldn't request server to update the sort order: {err}");
+                        return;
+                    }
+                }
+            };
 
             let mut guard = data.lock().unwrap();
-            let data = guard.as_mut().expect("Is initialised");
-            data.layers.set_sort_order(id, new_order);
-
-            Ok(())
+            let data = guard.as_mut().expect(DATA_INITIALISED_MSG);
+            match response.updated(&id) {
+                Ok(_) => {
+                    data.layers.set_sort_order(id, new_order);
+                }
+                Err(err) => {
+                    let mailbox = data.layers.get_mailbox(&id).unwrap();
+                    let name = mailbox.name.clone();
+                    error!("Couldn't update the sort order of '{name}': {err}");
+                }
+            };
         });
     }
 
     pub fn create_mailbox(&self, parent: Option<MailboxId>, name: String) {
-        debug!("Creating mailbox: '{}' with parent '{:?}'.", &name, &parent);
         if !self.is_initialised() {
             return;
         }
@@ -162,33 +180,37 @@ impl Backend {
         let caps = self.mail_capability();
 
         self.tasks.lock().unwrap().spawn(async move {
-            {
+            let err_msg = {
                 let guard = data.lock().unwrap();
-                let data = guard.as_ref().expect("Is initialised");
+                let data = guard.as_ref().expect(DATA_INITIALISED_MSG);
 
                 if data.layers.depth() > caps.max_mailbox_depth() {
-                    Err(ErrorCreateMailbox::ReachedMaxDepth(
-                        caps.max_mailbox_depth(),
-                    ))
+                    let max = caps.max_mailbox_depth();
+                    Some(format!("Max mailbox depth reached for the mail server :( You can't create another sub-mailbox in the current mailbox. The maximum depth is {max} for the server."))
                 } else if name.len() > caps.max_size_mailbox_name() {
-                    Err(ErrorCreateMailbox::NameTooLong(
-                        caps.max_size_mailbox_name(),
-                    ))
+                    let max = caps.max_size_mailbox_name();
+                    Some(format!("The mailbox name is too long. It can be at most {max} characters long."))
                 } else if data
                     .layers
                     .get_current_layer()
                     .contains_mailbox_name(name.as_str())
                 {
-                    Err(ErrorCreateMailbox::NameAlreadyUsed(name.clone()))
+                    let n = name.clone();
+                    Some(format!("There's already a mailbox in the current mailbox with the name '{n}'."))
                 } else {
-                    Ok(())
+                    None
                 }
-            }?;
+            };
+
+            if let Some(msg) = err_msg {
+                error!("Can't create mailbox: {msg}");
+                return;
+            }
 
             let mut new_mailbox = {
                 let sort_order = {
                     let guard = data.lock().unwrap();
-                    let data = guard.as_ref().expect("Is initialised");
+                    let data = guard.as_ref().expect(DATA_INITIALISED_MSG);
                     let layer = data.layers.get_layer(&parent);
                     layer
                         .mailboxes
@@ -210,27 +232,46 @@ impl Backend {
                 }
             };
 
-            let mut request = client.build();
-            let id = request
-                .set_mailbox()
-                .create()
-                .name(&new_mailbox.name)
-                .parent_id(new_mailbox.parent_id.as_ref())
-                .role(new_mailbox.role.clone())
-                .sort_order(new_mailbox.sort_order)
-                .is_subscribed(true)
-                .create_id()
-                .unwrap();
-            let mut response = request.send_set_mailbox().await?;
-            let mut create_mailbox = response.created(&id)?;
-            new_mailbox.id = create_mailbox.take_id();
+            let (mut response, id) = {
+                let mut request = client.build();
+
+                let id = request
+                    .set_mailbox()
+                    .create()
+                    .name(&new_mailbox.name)
+                    .parent_id(new_mailbox.parent_id.as_ref())
+                    .role(new_mailbox.role.clone())
+                    .sort_order(new_mailbox.sort_order)
+                    .is_subscribed(true)
+                    .create_id()
+                    .unwrap();
+
+                match request.send_set_mailbox().await {
+                    Ok(r) => (r, id),
+                    Err(err) => {
+                        error!("Couldn't send request to server to create mailbox: {err}");
+                        return;
+                    }
+                }
+            };
+            
+            new_mailbox.id = {
+                let mut create_mailbox = match response.created(&id) {
+                    Ok(m) => m,
+                    Err(err) => {
+                        let name = &new_mailbox.name;
+                        error!("Couldn't create mailbox '{name}': {err}");
+                        return;
+                    }
+                };
+                create_mailbox.take_id()
+            };
 
             let mut guard = data.lock().unwrap();
-            let data = guard.as_mut().expect("Data is initialised");
+            let data = guard.as_mut().expect(DATA_INITIALISED_MSG);
             data.layers.add_mailbox(new_mailbox);
             data.state = response.take_new_state();
-
-            Ok(())
+          
         });
     }
 
@@ -245,7 +286,7 @@ impl Backend {
         self.tasks.lock().unwrap().spawn(async move {
             let ids: Vec<MailboxId> = {
                 let guard = data.lock().unwrap();
-                let data = guard.as_ref().expect("Is initialised");
+                let data = guard.as_ref().expect(DATA_INITIALISED_MSG);
                 let layer = data.layers.get_current_layer();
                 layer
                     .mailboxes
@@ -261,32 +302,35 @@ impl Backend {
                 .collect();
 
             // send changes
-            {
+            let mut response = {
                 let mut request = client.build();
                 let set_mailbox = request.set_mailbox();
                 for (id, new_sort_order) in new_sort_orders.iter() {
                     set_mailbox.update(id).sort_order(*new_sort_order);
                 }
-                let mut response = request.send_set_mailbox().await?;
-
-                // check that everything worked fine
-                for id in new_sort_orders.keys() {
-                    response.updated(id)?;
+                match request.send_set_mailbox().await {
+                    Ok(r) => r,
+                    Err(err) => {
+                        error!("Couldn't send new sort-order requests: {err}");
+                        return;
+                    }
                 }
-            }
+            };
 
-            // apply changes to local
             let mut guard = data.lock().unwrap();
-            let data = guard.as_mut().expect("Is initialised");
-            let layer = data.layers.get_current_layer_mut();
-            for mailbox in layer.mailboxes.iter_mut() {
-                match new_sort_orders.get(&mailbox.id).cloned() {
-                    Some(new_order) => mailbox.sort_order = new_order,
-                    None => warn!("The mailbox '{}' didn't exist, before fetching its sort order... skipping new sort order for it.", &mailbox.name),
-                }
-            }
+            let data = guard.as_mut().expect(DATA_INITIALISED_MSG);
 
-            Ok(())
+            // check that everything worked fine
+            for (id, new_sort_order) in new_sort_orders.into_iter() {
+                let mailbox = data.layers.get_mailbox_mut(&id).unwrap();
+                if let Err(err) = response.updated(&id) {
+                    let name = mailbox.name.clone();
+                    warn!("Couldn't update sort order of '{name}': {err}\nGoing to skip it ...");
+                    continue;
+                }
+
+                mailbox.sort_order = new_sort_order;
+            }
         });
     }
 
@@ -299,31 +343,39 @@ impl Backend {
         let client = self.client.clone();
 
         self.tasks.lock().unwrap().spawn(async move {
-            let mut request = client.build();
-            {
-                let set_mailbox = request.set_mailbox();
-                for map in mapping.iter() {
-                    set_mailbox.update(&map.0).name(&map.1);
+            let mut response = {
+                let mut request = client.build();
+                {
+                    let set_mailbox = request.set_mailbox();
+                    for map in mapping.iter() {
+                        set_mailbox.update(&map.0).name(&map.1);
+                    }
                 }
-            }
-            let mut response = request.send_set_mailbox().await?;
-
-            // check
-            {
-                for map in mapping.iter() {
-                    response.updated(&map.0)?;
+                match request.send_set_mailbox().await {
+                    Ok(r) => r,
+                    Err(err) => {
+                        error!("Couldn't request server to rename mailboxes: {err}");
+                        return;
+                    }
                 }
-            }
+            };
 
-            // apply changes to local
             let mut guard = data.lock().unwrap();
-            let data = guard.as_mut().expect("Is initialised");
-            for map in mapping {
-                let mailbox = data.layers.get_mailbox_mut(&map.0).expect("Mailbox exists");
-                mailbox.name = map.1;
-            }
+            let data = guard.as_mut().expect(DATA_INITIALISED_MSG);
+            for (id, new_name) in mapping.into_iter() {
+                let mailbox = data.layers.get_mailbox_mut(&id).expect("Mailbox exists");
+                if let Err(err) = response.updated(&id) {
+                    let old_name = &mailbox.name;
+                    let new_name = &new_name;
+                    warn!("Couldn't rename mailbox '{old_name}' to '{new_name}': {err}\nSkipping this mailbox.");
+                    continue;
+                }
 
-            Ok(())
+                mailbox.name = new_name;
+            }
+            
+            
+
         });
     }
 
