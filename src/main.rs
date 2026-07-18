@@ -118,7 +118,6 @@ impl App {
             self.sync_throbber();
 
             self.apply_action();
-
             if self.needs_full_redraw {
                 self.needs_full_redraw = false;
                 terminal.clear().unwrap();
