@@ -16,7 +16,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tokio::task::{JoinError, JoinSet};
-use tracing::{debug, error, warn};
+use tracing::{ error, warn};
 
 const NEW_SORT_ORDER_SIZE: u32 = 32;
 const DATA_INITIALISED_MSG: &str = "Is initialised";
@@ -436,6 +436,126 @@ impl Backend {
         };
 
         self.set_new_order(id, new_order);
+    }
+
+    pub fn move_mailboxes_to(&self, ids: Vec<MailboxId>, new_parent: Option<MailboxId>) {
+        if !self.is_initialised() {
+            return;
+        }
+
+        struct MailboxToMove {
+            id: MailboxId,
+            old_name: String,
+            new_name: Option<String>,
+        }
+
+        let filtered_ids: Vec<MailboxToMove> = {
+            let guard = self.data.lock().unwrap();
+            let data = guard.as_ref().expect(DATA_INITIALISED_MSG);
+
+            let mut filtered_ids = Vec::with_capacity(ids.len());
+            let new_parent_layer = data.layers.get_layer(&new_parent);
+            for id in ids.into_iter() {
+                let mailbox = data.layers.get_mailbox(&id).unwrap();
+                let old_name = mailbox.name.clone();
+
+                if new_parent_layer.contains_mailbox(&id) {
+                    continue;
+                }
+
+                let new_name = if new_parent_layer.contains_mailbox_name(&mailbox.name) {
+                    Some(format!("{}-1", &mailbox.name))
+                } else {
+                    None
+                };
+
+                filtered_ids.push(MailboxToMove {
+                    id,
+                    old_name,
+                    new_name
+                });
+            }
+
+            filtered_ids
+        };
+
+        let data = self.data.clone();
+        let client = self.client.clone();
+
+        self.tasks.lock().unwrap().spawn(async move {
+            let mut response = {
+                let mut request = client.build();
+                let set_mailbox = request.set_mailbox();
+                for MailboxToMove { id, new_name,.. } in filtered_ids.iter() {
+                    match new_name {
+                        Some(name) => set_mailbox.update(id).parent_id(new_parent.clone()).name(name),
+                        None => set_mailbox.update(id).parent_id(new_parent.clone()),
+                    };
+                }
+                match request.send_set_mailbox().await {
+                    Ok(r) => r,
+                    Err(err) => {
+                        error!("Couldn't send request to server for moving mailboxes: {err}");
+                        return;
+                    }
+                }
+            };
+
+            let mut guard = data.lock().unwrap();
+            let data = guard.as_mut().expect(DATA_INITIALISED_MSG);
+            data.state = response.take_new_state();
+            
+            for MailboxToMove {id, old_name, new_name} in filtered_ids.into_iter() {
+                match response.updated(&id) {
+                    Ok(server_changes) => {
+                        let old = data.layers.get_mailbox(&id).unwrap().clone();
+                        let mut new = old.clone();
+                        new.parent_id = new_parent.clone();
+                        if let Some(name) = new_name {
+                            new.name = name;
+                        }
+
+                        if let Some(server) = server_changes {
+                            if let Some(name) = server.name() {
+                                new.name = name.to_string()
+                            }
+
+                            if let Some(parent_id) = server.parent_id() {
+                                new.parent_id = Some(parent_id.to_string());
+                            }
+
+                            if let Some(id) = server.id() {
+                                new.id = id.to_string();
+                            }
+                        }
+
+                        // update its layer
+                        {
+                            let mut layer = data.layers.remove_layer(&Some(old.id.clone()));
+                            layer.mailbox_owner = Some(new.id.clone());
+                            data.layers.insert_layer(Some(new.id.clone()), layer);
+                        }
+
+                        // update its old and new parent layer
+                        if old.parent_id != new.parent_id {
+                            let prev_layer = data.layers.get_layer_mut(&old.parent_id);
+                            prev_layer
+                                .mailboxes
+                                .extract_if(.., |mailbox| mailbox.id == old.id)
+                                .for_each(drop);
+
+                            let new_layer = data.layers.get_layer_mut(&new.parent_id);
+                            new_layer.mailboxes.push(new);
+                            new_layer.sort_mailboxes();
+                        }
+                    },
+                    Err(err) => {
+                        error!("Couldn't update '{old_name}': {err}");
+                        continue;
+                    }
+                }
+            }
+        });
     }
 
     pub fn mail_capability(&self) -> jmap_client::email::MailCapabilities {

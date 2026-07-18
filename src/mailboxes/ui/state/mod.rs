@@ -9,10 +9,7 @@ use crate::{
         },
     },
 };
-use std::{
-    collections::{HashMap, HashSet},
-    rc::Rc,
-};
+use std::{collections::HashMap, rc::Rc};
 use tracing::{error, trace};
 
 #[derive(Debug, Clone)]
@@ -26,13 +23,19 @@ pub enum InputType {
     NewMailboxName { parent: Option<MailboxId> },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectionType {
+    Selected,
+    Cut,
+}
+
 pub struct State {
     app_actions: Vec<crate::Action>,
     keybindings: KeybindManager<Action>,
     overlay: Option<ScreenOverlay<PaletteValue, InputType>>,
 
     is_in_select_mode: bool,
-    pub selected: HashSet<MailboxId>,
+    pub selected: HashMap<MailboxId, SelectionType>,
     pub backend: Rc<Backend>,
 }
 
@@ -45,7 +48,7 @@ impl State {
             backend,
 
             overlay: None,
-            selected: HashSet::new(),
+            selected: HashMap::new(),
             is_in_select_mode: false,
 
             keybindings: KeybindManager::new(HashMap::from([
@@ -63,6 +66,8 @@ impl State {
                 ("ge", Action::SelectBottomMailbox),
                 ("v", Action::EnterSelectMode),
                 ("<ESC>", Action::LeaveSelectMode),
+                ("yx", Action::CutSelection),
+                ("p", Action::PasteSelection),
             ])),
         }
     }
@@ -84,7 +89,7 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
             Action::SelectNextMailbox => {
                 if self.is_in_select_mode {
                     if let Some(mailbox) = self.backend.get_selected_mailbox() {
-                        self.selected.insert(mailbox.id);
+                        self.selected.insert(mailbox.id, SelectionType::Selected);
                     }
                 }
                 self.backend.select_next_mailbox();
@@ -92,7 +97,7 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
             Action::SelectPreviousMailbox => {
                 if self.is_in_select_mode {
                     if let Some(mailbox) = self.backend.get_selected_mailbox() {
-                        self.selected.insert(mailbox.id);
+                        self.selected.insert(mailbox.id, SelectionType::Selected);
                     }
                 }
                 self.backend.select_previous_mailbox()
@@ -106,8 +111,8 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
             }
             Action::ToggleMailbox => {
                 if let Some(data) = self.backend.get_selected_mailbox() {
-                    if !self.selected.remove(&data.id) {
-                        self.selected.insert(data.id);
+                    if self.selected.remove(&data.id).is_none() {
+                        self.selected.insert(data.id, SelectionType::Selected);
                     }
                     self.backend.select_next_mailbox();
                 }
@@ -115,6 +120,29 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
             Action::EnterSelectMode => self.is_in_select_mode = true,
             Action::LeaveSelectMode => self.is_in_select_mode = false,
             Action::DiscardSelection => self.selected.clear(),
+            Action::CutSelection => {
+                if self.selected.is_empty() {
+                    if let Some(data) = self.backend.get_selected_mailbox() {
+                        self.selected.insert(data.id, SelectionType::Cut);
+                    }
+                } else {
+                    for ty in self.selected.values_mut() {
+                        *ty = SelectionType::Cut;
+                    }
+                }
+            }
+            Action::PasteSelection => {
+                let ids = self
+                    .selected
+                    .drain()
+                    .filter_map(|(id, ty)| (ty == SelectionType::Cut).then_some(id))
+                    .collect::<Vec<MailboxId>>();
+
+                if !ids.is_empty() {
+                    let new_parent = self.backend.get_parent_mailbox();
+                    self.backend.move_mailboxes_to(ids, new_parent);
+                }
+            }
 
             Action::GoBack => self.backend.go_back(),
             Action::SetSortOrder => {
@@ -160,7 +188,11 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
                         self.backend.destroy_mailboxes(vec![data.id]);
                     }
                 } else {
-                    let ids = self.selected.drain().collect::<Vec<MailboxId>>();
+                    let ids = self
+                        .selected
+                        .drain()
+                        .map(|(id, _)| id)
+                        .collect::<Vec<MailboxId>>();
                     self.backend.destroy_mailboxes(ids);
                 }
             }
@@ -171,7 +203,11 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
                         .get_selected_mailbox()
                         .map(|mailbox| vec![mailbox])
                 } else {
-                    let ids = self.selected.drain().collect::<Vec<MailboxId>>();
+                    let ids = self
+                        .selected
+                        .drain()
+                        .map(|(id, _)| id)
+                        .collect::<Vec<MailboxId>>();
                     self.backend.get_mailboxes(&ids)
                 };
 

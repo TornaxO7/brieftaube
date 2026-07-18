@@ -49,6 +49,10 @@ pub enum Action {
     LeaveSelectMode,
     #[strum(message = "Remove the selection of each selected mailbox.")]
     DiscardSelection,
+    #[strum(message = "Cut selection")]
+    CutSelection,
+    #[strum(message = "Paste the cut selection.")]
+    PasteSelection,
 
     #[strum(message = "Set the sort order of the selected mailbox.")]
     SetSortOrder,

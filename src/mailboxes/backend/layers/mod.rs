@@ -116,6 +116,10 @@ impl Layers {
         self.layers.get(id).expect(err_msg::MAILBOX_HAS_LAYER)
     }
 
+    pub fn get_layer_mut(&mut self, id: &Option<MailboxId>) -> &mut Layer {
+        self.layers.get_mut(id).expect(err_msg::MAILBOX_HAS_LAYER)
+    }
+
     pub fn get_mailbox(&self, id: &MailboxId) -> Option<&MailboxData> {
         self.layers.values().find_map(|layer| layer.get_mailbox(id))
     }
@@ -145,6 +149,14 @@ impl Layers {
 
         let parent_layer = self.get_layer_containing_mailbox_mut(&id);
         parent_layer.mailboxes.retain(|mailbox| mailbox.id != id);
+    }
+
+    pub fn remove_layer(&mut self, id: &Option<MailboxId>) -> Layer {
+        self.layers.remove(id).expect(err_msg::MAILBOX_HAS_LAYER)
+    }
+
+    pub fn insert_layer(&mut self, owner: Option<MailboxId>, layer: Layer) {
+        self.layers.insert(owner, layer);
     }
 }
 

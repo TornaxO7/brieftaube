@@ -1,5 +1,8 @@
 use crate::{
-    mailboxes::{Layer, ui::State},
+    mailboxes::{
+        Layer,
+        ui::{State, state::SelectionType},
+    },
     utils::{
         MailboxId,
         ui::{ScreenOverlay, ScreenState, input::Input, palette::Palette},
@@ -11,7 +14,7 @@ use ratatui::{
     style::{Color, Style},
     widgets::{Block, Cell, Clear, List, ListItem, Paragraph, Row, StatefulWidget, Table, Widget},
 };
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 const DARK_TURQUOISE: Color = Color::from_u32(0x005eff);
 const ORANGE: Color = Color::from_u32(0xFFA500);
@@ -57,7 +60,12 @@ impl StatefulWidget for Mailboxes {
     }
 }
 
-fn render_layer(area: Rect, buf: &mut Buffer, selected: &HashSet<MailboxId>, layer: &mut Layer) {
+fn render_layer(
+    area: Rect,
+    buf: &mut Buffer,
+    selected: &HashMap<MailboxId, SelectionType>,
+    layer: &mut Layer,
+) {
     let [marker_area, layer_area] =
         Layout::horizontal([Constraint::Length(1), Constraint::Fill(0)]).areas(area);
 
@@ -65,7 +73,12 @@ fn render_layer(area: Rect, buf: &mut Buffer, selected: &HashSet<MailboxId>, lay
     render_mailboxes(layer_area, buf, layer);
 }
 
-fn render_marker(area: Rect, buf: &mut Buffer, selected: &HashSet<MailboxId>, layer: &Layer) {
+fn render_marker(
+    area: Rect,
+    buf: &mut Buffer,
+    selected: &HashMap<MailboxId, SelectionType>,
+    layer: &Layer,
+) {
     let mut items: Vec<ListItem> = {
         let header_line = ListItem::new("");
         let open_line = ListItem::new("");
@@ -78,11 +91,12 @@ fn render_marker(area: Rect, buf: &mut Buffer, selected: &HashSet<MailboxId>, la
     };
 
     for mailbox in layer.mailboxes.iter() {
-        if selected.contains(&mailbox.id) {
-            items.push(ListItem::new(" ").style(Style::default().bg(ORANGE)));
-        } else {
-            items.push(ListItem::new(" "));
-        }
+        let style = match selected.get(&mailbox.id) {
+            Some(SelectionType::Selected) => Style::default().bg(ORANGE),
+            Some(SelectionType::Cut) => Style::default().on_red(),
+            None => Style::default(),
+        };
+        items.push(ListItem::new(" ").style(style));
     }
 
     Widget::render(List::new(items), area, buf)
