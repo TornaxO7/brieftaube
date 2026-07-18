@@ -63,6 +63,7 @@ pub enum Action {
     OpenComposer,
     OpenThread(ThreadId),
 
+    Redraw,
     Back,
     Quit,
 }
@@ -73,6 +74,8 @@ pub struct App {
     account: Arc<backend::Account>,
     screens: Vec<Screen>,
     statusbar: statusbar::State,
+
+    needs_full_redraw: bool,
 }
 
 impl App {
@@ -88,6 +91,7 @@ impl App {
             account: account.clone(),
             screens: vec![initial_screen],
             statusbar,
+            needs_full_redraw: false,
         }
     }
 
@@ -114,6 +118,12 @@ impl App {
             }
 
             self.apply_action();
+
+            if self.needs_full_redraw {
+                self.needs_full_redraw = false;
+                terminal.clear().unwrap();
+            }
+
             terminal.draw(|frame| self.draw(frame))?;
         }
 
@@ -220,6 +230,9 @@ impl App {
 
                     self.statusbar.set_screen(&next_screen);
                     self.screens.push(next_screen);
+                }
+                Action::Redraw => {
+                    self.needs_full_redraw = true;
                 }
                 Action::Back => {
                     self.screens.pop();
