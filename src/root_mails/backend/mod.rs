@@ -1,10 +1,12 @@
 mod backend;
 mod mail_data;
+mod mail_renderable;
 
 use crate::utils::MailboxId;
 pub use backend::RootMailsBackend;
 use jmap_client::client::Client;
 pub use mail_data::{EmailAddress, RootMailData};
+pub use mail_renderable::MailRenderable;
 use std::{collections::HashMap, rc::Rc, sync::Arc};
 
 pub struct RootMailsManager {

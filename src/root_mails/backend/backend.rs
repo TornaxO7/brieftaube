@@ -1,4 +1,7 @@
-use crate::{root_mails::backend::RootMailData, utils::MailboxId};
+use crate::{
+    root_mails::backend::{MailRenderable, RootMailData},
+    utils::MailboxId,
+};
 use jmap_client::client::Client;
 use ratatui::widgets::TableState;
 use std::{
@@ -13,6 +16,7 @@ const DATA_INITIALISED_MSG: &str = "Is initialised";
 
 pub struct Data {
     pub mails: Vec<RootMailData>,
+    pub mails_renderable: Vec<MailRenderable>,
     state: String,
 
     pub table_state: TableState,
@@ -90,6 +94,7 @@ impl RootMailsBackend {
                         jmap_client::email::Property::Subject,
                         jmap_client::email::Property::Preview,
                         jmap_client::email::Property::ReceivedAt,
+                        jmap_client::email::Property::HasAttachment,
                     ]);
 
                     match request.send().await {
@@ -114,15 +119,18 @@ impl RootMailsBackend {
                     }
                 };
 
-                let mails = get_mail_response
+                let mails: Vec<RootMailData> = get_mail_response
                     .take_list()
                     .into_iter()
                     .map(RootMailData::from)
                     .collect();
 
+                let mails_renderable = mails.iter().map(MailRenderable::from).collect();
+
                 let mut data = data.lock().unwrap();
                 *data = Some(Data {
                     mails,
+                    mails_renderable,
                     state: get_mail_response.take_state(),
                     table_state: TableState::new(),
                 });

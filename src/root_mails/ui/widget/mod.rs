@@ -1,6 +1,6 @@
 use super::State;
 use crate::{
-    root_mails::backend::{EmailAddress, RootMailData},
+    root_mails::backend::MailRenderable,
     utils::ui::{DARK_TURQUOISE, ScreenOverlay, ScreenState, input::Input, palette::Palette},
 };
 use ratatui::{
@@ -21,8 +21,7 @@ impl StatefulWidget for RootMails {
             let mut guard = state.backend.data.lock().unwrap();
 
             if let Some(data) = guard.as_mut() {
-                let mails: Vec<MailRenderable> =
-                    data.mails.iter().map(MailRenderable::from).collect();
+                let mails = &data.mails_renderable;
 
                 let [mails_area, preview_area] = area.layout(&Layout::horizontal([
                     Constraint::Percentage(60),
@@ -146,44 +145,4 @@ fn render_overlay(area: Rect, buf: &mut Buffer, state: &mut State) {
             ScreenOverlay::Input(state) => StatefulWidget::render(Input::new(), a, buf, state),
         }
     }
-}
-
-struct MailRenderable {
-    from: String,
-    to: String,
-    cc: String,
-    subject: String,
-    preview: String,
-    received_at: String,
-}
-
-impl From<&RootMailData> for MailRenderable {
-    fn from(mail: &RootMailData) -> Self {
-        let from = addresses_to_string(&mail.from);
-        let to = addresses_to_string(&mail.to);
-        let cc = addresses_to_string(&mail.cc);
-
-        let subject = mail.subject.clone();
-        let preview = mail.preview.clone();
-        let received_at = mail.received_at.format("%e %b %Y, %H:%M:%S").to_string();
-
-        Self {
-            from,
-            to,
-            cc,
-            subject,
-            preview,
-            received_at,
-        }
-    }
-}
-
-fn addresses_to_string(addresses: &[EmailAddress]) -> String {
-    let mut iterator = addresses.iter();
-    let first = iterator
-        .next()
-        .map(|addr| format!("{}", addr))
-        .unwrap_or(String::new());
-
-    iterator.fold(first, |acc, addr| format!("{acc}, {}", addr.to_string()))
 }

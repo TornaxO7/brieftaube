@@ -11,6 +11,7 @@ pub struct RootMailData {
     pub subject: String,
     pub preview: String,
     pub received_at: DateTime<Local>,
+    pub has_attachment: bool,
 }
 
 impl From<jmap_client::email::Email> for RootMailData {
@@ -36,6 +37,7 @@ impl From<jmap_client::email::Email> for RootMailData {
             received_at: DateTime::<Utc>::from_timestamp(mail.received_at().unwrap(), 0)
                 .expect("Valid timestamp")
                 .with_timezone(&Local),
+            has_attachment: mail.has_attachment(),
         }
     }
 }
