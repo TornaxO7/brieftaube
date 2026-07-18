@@ -40,6 +40,8 @@ impl State {
                 ("h", Action::Back),
                 ("l", Action::OpenThread),
                 ("<C-l>", Action::OpenLogs),
+                ("gg", Action::GotoTop),
+                ("ge", Action::GotoBottom),
             ])),
         }
     }
@@ -54,6 +56,8 @@ impl ScreenState<Action, PaletteType, InputType> for State {
 
             Action::SelectNextMail => self.backend.select_next_mail(),
             Action::SelectPreviousMail => self.backend.select_previous_mail(),
+            Action::GotoTop => self.backend.go_to_top(),
+            Action::GotoBottom => self.backend.go_to_bottom(),
 
             Action::OpenCommandPalette => {
                 self.overlay = Some(ScreenOverlay::Palette(palette::State::new(

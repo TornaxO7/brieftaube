@@ -159,4 +159,18 @@ impl RootMailsBackend {
             data.table_state.select_previous();
         }
     }
+
+    pub fn go_to_top(&self) {
+        let mut guard = self.data.lock().unwrap();
+        if let Some(data) = guard.as_mut() {
+            data.table_state.select_first();
+        }
+    }
+
+    pub fn go_to_bottom(&self) {
+        let mut guard = self.data.lock().unwrap();
+        if let Some(data) = guard.as_mut() {
+            data.table_state.select_last();
+        }
+    }
 }

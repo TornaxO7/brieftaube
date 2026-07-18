@@ -37,6 +37,10 @@ pub enum Action {
     SelectNextMail,
     #[strum(message = "Select the previous mail.")]
     SelectPreviousMail,
+    #[strum(message = "Go to the top of the list.")]
+    GotoTop,
+    #[strum(message = "Go to the top of the list.")]
+    GotoBottom,
     #[strum(message = "View the selected mail.")]
     ViewSelectedMail,
 }
