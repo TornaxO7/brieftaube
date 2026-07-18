@@ -393,23 +393,49 @@ impl Backend {
             // validate
             let layer = data.layers.get_layer_containing_mailbox(&id);
             let idx = layer.mailboxes.iter().enumerate().find_map(|(idx, mailbox)| (mailbox.id == id).then_some(idx)).unwrap();
-
             let is_at_top = idx == 0;
             if is_at_top {
                 return;
             }
             
-            let current = layer.mailboxes[idx - 1].sort_order;
-            let prev = &layer.mailboxes.get(idx - 2).map(|mailbox| mailbox.sort_order).unwrap_or(0);
+            let top1 = layer.mailboxes[idx - 1].sort_order;
+            let top2 = &layer.mailboxes.get(idx - 2).map(|mailbox| mailbox.sort_order).unwrap_or(0);
 
-            current - (current - prev) / 2
+            top1 - (top1 - top2) / 2
         };
 
         self.set_new_order(id, new_order);
     }
 
     pub fn move_mailbox_down(&self, id: MailboxId) {
-        todo!()
+        if !self.is_initialised() {
+            return;
+        }
+
+        let new_order = {
+            let guard = self.data.lock().unwrap();
+            let data = guard.as_ref().expect(DATA_INITIALISED_MSG);
+
+            // validate
+            let layer = data.layers.get_layer_containing_mailbox(&id);
+            let idx = layer.mailboxes.iter().enumerate().find_map(|(idx, mailbox)| (mailbox.id == id).then_some(idx)).unwrap();
+            let is_at_bottom = idx == layer.mailboxes.len() - 1;
+            if is_at_bottom {
+                return;
+            }
+
+            let below1 = layer.mailboxes[idx + 1].sort_order;
+            match layer.mailboxes.get(idx + 2) {
+                Some(below2_mailbox) => {
+                    let below2 = below2_mailbox.sort_order;
+                    below1 + (below2 - below1) / 2
+                }
+                None => (below1 + 1).next_multiple_of(NEW_SORT_ORDER_SIZE),
+                
+            }
+        };
+
+        self.set_new_order(id, new_order);
     }
 
     pub fn mail_capability(&self) -> jmap_client::email::MailCapabilities {
