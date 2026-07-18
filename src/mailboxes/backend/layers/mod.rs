@@ -8,6 +8,11 @@ pub use layer::Layer;
 
 type MailboxOwner = Option<MailboxId>;
 
+mod err_msg {
+    pub const NON_EMPTY_SELECTED_LAYER: &str = "`selected_layer` can't become empty!";
+    pub const MAILBOX_HAS_LAYER: &str = "Every mailbox must have a layer.";
+}
+
 pub struct Layers {
     // each mailbox has its own layer
     layers: HashMap<Option<MailboxId>, Layer>,
@@ -97,17 +102,17 @@ impl Layers {
     pub fn get_current_layer(&self) -> &Layer {
         self.layers
             .get(self.selected_layer.last().unwrap())
-            .unwrap()
+            .expect(err_msg::NON_EMPTY_SELECTED_LAYER)
     }
 
     pub fn get_current_layer_mut(&mut self) -> &mut Layer {
         self.layers
             .get_mut(self.selected_layer.last().unwrap())
-            .unwrap()
+            .expect(err_msg::NON_EMPTY_SELECTED_LAYER)
     }
 
     pub fn get_layer(&self, id: &Option<MailboxId>) -> &Layer {
-        self.layers.get(id).expect("Mailbox has a layer")
+        self.layers.get(id).expect(err_msg::MAILBOX_HAS_LAYER)
     }
 
     pub fn get_mailbox(&self, id: &MailboxId) -> Option<&MailboxData> {
