@@ -67,10 +67,10 @@ impl Layers {
     pub fn open_selected_entry(&mut self) -> Option<MailboxId> {
         let layer = self.get_current_layer();
 
-        let idx = layer.state.selected().unwrap();
         if layer.selected_parent() {
             return layer.mailbox_owner.clone();
         } else {
+            let idx = layer.state.selected().unwrap();
             let selected_mailbox = if layer.is_root_layer() {
                 layer.mailboxes[idx].id.clone()
             } else {
