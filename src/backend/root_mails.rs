@@ -1,6 +1,5 @@
 use crate::{backend::Account, utils::MailboxId};
 use jmap_client::{client::Client, email::Email};
-use tracing::trace;
 
 const INIT_ROOT_MAILS: usize = 10;
 
@@ -56,28 +55,5 @@ impl Account {
             }
             Err(_already_locked) => None,
         }
-    }
-}
-
-impl Account {
-    #[tracing::instrument(level = "debug", skip_all)]
-    pub fn init_root_mails(&self, id: MailboxId) {
-        let data = self.data.clone();
-        let client = self.client.clone();
-
-        trace!("Init root mails");
-        self.tasks.lock().unwrap().spawn(async move {
-            let mut data = data.lock().await;
-            let root_mails = &mut data.root_mails;
-
-            let is_not_initialised = !root_mails.contains_key(&id);
-            if is_not_initialised {
-                let new_root_mails = RootMails::new(&client, id.clone()).await?;
-
-                root_mails.insert(id, new_root_mails);
-            }
-
-            Ok(())
-        });
     }
 }

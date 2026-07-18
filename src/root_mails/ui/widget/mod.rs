@@ -1,10 +1,15 @@
 mod list;
 
-use crate::utils::ui::{ScreenOverlay, ScreenState, input::Input, palette::Palette};
+use super::State;
+use crate::{
+    root_mails::backend::Data,
+    utils::ui::{DARK_TURQUOISE, ScreenOverlay, ScreenState, input::Input, palette::Palette},
+};
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, HorizontalAlignment, Layout, Rect},
-    widgets::{Block, Clear, Paragraph, StatefulWidget, Widget},
+    layout::{Constraint, Layout, Rect},
+    style::Style,
+    widgets::{Cell, Clear, Paragraph, Row, StatefulWidget, Table, TableState, Widget},
 };
 
 const MAIL_LIST_PANEL_TITLE: &str = "Mails";
@@ -17,68 +22,84 @@ impl StatefulWidget for RootMails {
     type State = super::State;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let [mail_list, preview] = area.layout(&Layout::horizontal([
-            Constraint::Percentage(60),
-            Constraint::Percentage(40),
-        ]));
+        {
+            let mut guard = state.backend.data.lock().unwrap();
 
-        self.render_mail_list(mail_list, buf, state);
-        self.render_preview(preview, buf, state);
+            if let Some(data) = guard.as_mut() {
+                let [mails_area, preview_area] = area.layout(&Layout::horizontal([
+                    Constraint::Percentage(60),
+                    Constraint::Percentage(40),
+                ]));
 
-        if let Some(state) = state.overlay() {
-            let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
-            Widget::render(Clear, a, buf);
-            match state {
-                ScreenOverlay::Palette(state) => {
-                    StatefulWidget::render(Palette::new(), a, buf, state);
-                }
-                ScreenOverlay::Input(state) => StatefulWidget::render(Input::new(), a, buf, state),
+                render_mail_list(mails_area, buf, data);
+                render_preview(preview_area, buf, &data);
+            } else {
             }
         }
+
+        render_overlay(area, buf, state);
     }
 }
 
-/// Render functions
-impl RootMails {
-    fn render_mail_list(&self, area: Rect, buf: &mut Buffer, state: &mut super::State) {
-        match state.root_mails.as_ref() {
-            Some(root_mails) => {
-                StatefulWidget::render(
-                    list::MailListWidget::new(root_mails).block(
-                        Block::bordered()
-                            .title(MAIL_LIST_PANEL_TITLE)
-                            .title_alignment(HorizontalAlignment::Center),
-                    ),
-                    area,
-                    buf,
-                    &mut state.list_state,
-                );
-            }
-            None => Widget::render(
-                Paragraph::new("Loading...").block(Block::bordered().title(MAIL_LIST_PANEL_TITLE)),
-                area,
-                buf,
-            ),
-        }
+fn render_mail_list(area: Rect, buf: &mut Buffer, data: &mut Data) {
+    const DATE_EXAMPLE: &str = "15 May 2015, HH:MM:SS";
+
+    let table = {
+        let rows: Vec<Row<'_>> = data
+            .mails
+            .iter()
+            .map(|mail| {
+                let date = mail.received_at.format("%e %b %Y, %H:%M:%S").to_string();
+                let from = mail.from.iter().fold(String::new(), |acc, addr| {
+                    format!("{acc}, {}", addr.to_string())
+                });
+                let subject = mail.subject.as_str();
+
+                Row::new(vec![
+                    Cell::from(date),
+                    Cell::from(from),
+                    Cell::from(subject),
+                ])
+            })
+            .collect();
+
+        Table::new(
+            rows,
+            [
+                Constraint::Min(DATE_EXAMPLE.len() as u16),
+                Constraint::Fill(1),
+                Constraint::Fill(1),
+            ],
+        )
+        .header(Row::new(["Received at", "From", "Subject"]).style(Style::default().underlined()))
+        .row_highlight_style(Style::default().bg(DARK_TURQUOISE))
+    };
+
+    StatefulWidget::render(table, area, buf, &mut data.table_state)
+}
+
+fn render_preview(area: Rect, buf: &mut Buffer, data: &Data) {
+    if let Some(idx) = data.table_state.selected() {
+        let mail = &data.mails[idx];
+        Widget::render(Paragraph::new(mail.preview.as_str()), area, buf);
+    } else {
+        Widget::render(Paragraph::new("loading..."), area, buf);
     }
+}
 
-    fn render_preview(&self, area: Rect, buf: &mut Buffer, state: &mut super::State) {
-        if let (Some(root_mails), Some(idx)) = (&state.root_mails, state.list_state.selected) {
-            let mail = &root_mails[idx];
-            let preview = mail.preview().unwrap();
+fn render_headers(area: Rect, buf: &mut Buffer, headers: &[(&'static str, &str)]) {
+    todo!()
+}
 
-            Widget::render(
-                Paragraph::new(preview).block(Block::bordered().title(PREVIEW_PANEL_TITLE)),
-                area,
-                buf,
-            )
-        } else {
-            Widget::render(
-                Paragraph::new("No mail selected")
-                    .block(Block::bordered().title(PREVIEW_PANEL_TITLE)),
-                area,
-                buf,
-            )
+fn render_overlay(area: Rect, buf: &mut Buffer, state: &mut State) {
+    if let Some(state) = state.overlay() {
+        let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
+        Widget::render(Clear, a, buf);
+        match state {
+            ScreenOverlay::Palette(state) => {
+                StatefulWidget::render(Palette::new(), a, buf, state);
+            }
+            ScreenOverlay::Input(state) => StatefulWidget::render(Input::new(), a, buf, state),
         }
     }
 }

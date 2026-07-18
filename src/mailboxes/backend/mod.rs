@@ -53,7 +53,7 @@ impl Backend {
         Some(task.await)
     }
 
-    pub fn pop_front(&self) {
+    pub fn pop_task(&self) {
         self.tasks.lock().unwrap().pop_front().expect("There are tasks.");
     }
 

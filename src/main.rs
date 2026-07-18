@@ -21,12 +21,7 @@ use ratatui::{
     DefaultTerminal, Frame,
     layout::{Constraint, Layout},
 };
-use std::{
-    fs::OpenOptions,
-    io,
-    path::PathBuf,
-    sync::{Arc, OnceLock},
-};
+use std::{fs::OpenOptions, io, path::PathBuf, sync::OnceLock};
 use tracing::{error, level_filters::LevelFilter};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use xdg::BaseDirectories;
@@ -71,7 +66,7 @@ pub enum Action {
 /// Stores the app state
 pub struct App {
     is_running: bool,
-    account: Arc<backend::Account>,
+    account: backend::Account,
     screens: Vec<Screen>,
     statusbar: statusbar::State,
 
@@ -80,14 +75,14 @@ pub struct App {
 
 impl App {
     pub async fn new(counter: statusbar::Counter) -> eyre::Result<Self> {
-        let account = Arc::new(backend::Account::new().await);
+        let account = backend::Account::new().await;
         let initial_screen =
             Screen::Mailboxes(mailboxes::ui::State::new(account.mailboxes.clone()));
         let statusbar = statusbar::State::new(&initial_screen, counter);
 
         Ok(Self {
             is_running: true,
-            account: account.clone(),
+            account: account,
             screens: vec![initial_screen],
             statusbar,
             needs_full_redraw: false,
@@ -101,9 +96,14 @@ impl App {
             self.sync_throbber();
             tokio::select! {
                 _ = self.statusbar.has_changed() => { }
+
                 _ = self.account.mailboxes.has_changed(), if self.account.mailboxes.has_tasks_running() => {
-                    self.account.mailboxes.pop_front();
+                    self.account.mailboxes.pop_task();
                 }
+                _ = self.account.root_mails.has_changed(), if self.account.root_mails.has_tasks_running() => {
+                    self.account.root_mails.pop_task();
+                }
+
                 res = self.account.has_changed(), if self.account.has_tasks_running() => {
                     if let Ok(Err(err)) = res.expect("A task finished") {
                         error!("{}", err);
@@ -189,12 +189,10 @@ impl App {
 
         for action in actions {
             match action {
-                Action::OpenRootMails(mailbox_id) => {
-                    self.account.init_root_mails(mailbox_id.clone());
-                    let next_screen = Screen::RootMails(root_mails::ui::State::new(
-                        self.account.clone(),
-                        mailbox_id,
-                    ));
+                Action::OpenRootMails(id) => {
+                    let client = self.account.client.clone();
+                    let backend = self.account.root_mails.get_backend(id, client);
+                    let next_screen = Screen::RootMails(root_mails::ui::State::new(backend));
 
                     self.statusbar.set_screen(&next_screen);
                     self.screens.push(next_screen);
@@ -212,22 +210,24 @@ impl App {
                     self.screens.push(next_screen);
                 }
                 Action::OpenComposer => {
-                    let next_screen =
-                        Screen::Composer(composer::ui::State::new(self.account.clone()));
+                    // let next_screen =
+                    //     Screen::Composer(composer::ui::State::new(self.account.clone()));
+                    todo!()
 
-                    self.statusbar.set_screen(&next_screen);
-                    self.screens.push(next_screen);
+                    // self.statusbar.set_screen(&next_screen);
+                    // self.screens.push(next_screen);
                 }
                 Action::OpenThread(thread_id) => {
-                    self.account.init_thread(thread_id.clone());
+                    todo!()
+                    // self.account.init_thread(thread_id.clone());
 
-                    let next_screen = Screen::ThreadMails(thread_mails::ui::State::new(
-                        self.account.clone(),
-                        thread_id,
-                    ));
+                    // let next_screen = Screen::ThreadMails(thread_mails::ui::State::new(
+                    //     self.account.clone(),
+                    //     thread_id,
+                    // ));
 
-                    self.statusbar.set_screen(&next_screen);
-                    self.screens.push(next_screen);
+                    // self.statusbar.set_screen(&next_screen);
+                    // self.screens.push(next_screen);
                 }
                 Action::Redraw => {
                     self.needs_full_redraw = true;
@@ -249,7 +249,11 @@ impl App {
         let top_screen_has_tasks_running =
             match self.screens.last().expect("There's at least one screen") {
                 Screen::Mailboxes(_) => self.account.mailboxes.has_tasks_running(),
-                _ => false,
+                Screen::RootMails(_) => self.account.root_mails.has_tasks_running(),
+                Screen::ThreadMails(_) => todo!(),
+                Screen::Composer(_) => todo!(),
+                Screen::MailViewer(_) => todo!(),
+                Screen::LogViewer(_) => false,
             };
 
         if top_screen_has_tasks_running {

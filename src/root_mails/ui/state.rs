@@ -1,17 +1,11 @@
 use super::Action;
 use crate::{
-    backend,
-    utils::{
-        MailboxId,
-        ui::{
-            ScreenOverlay, ScreenOverlayResult, ScreenState,
-            {keybindmanager::KeybindManager, palette},
-        },
+    root_mails::backend::RootMailsBackend,
+    utils::ui::{
+        ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager, palette,
     },
 };
-use jmap_client::email::Email;
-use std::{collections::HashMap, sync::Arc};
-use tracing::error;
+use std::{collections::HashMap, rc::Rc};
 
 #[derive(Debug, Clone)]
 pub enum PaletteType {
@@ -25,21 +19,19 @@ pub enum InputType {}
 pub struct State {
     app_actions: Vec<crate::Action>,
     keybindings: KeybindManager<Action>,
-    account: Arc<backend::Account>,
-    mailbox_id: String,
     overlay: Option<ScreenOverlay<PaletteType, InputType>>,
 
-    pub root_mails: Option<Vec<Email>>,
-    pub list_state: tui_widget_list::ListState,
-    mails_state: String,
+    pub backend: Rc<RootMailsBackend>,
 }
 
 impl State {
-    pub fn new(fetcher: Arc<backend::Account>, id: MailboxId) -> Self {
+    pub fn new(backend: Rc<RootMailsBackend>) -> Self {
+        backend.init();
+
         Self {
-            app_actions: vec![],
+            app_actions: Vec::with_capacity(2),
             overlay: None,
-            account: fetcher,
+            backend,
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", Action::Quit),
                 (":", Action::OpenCommandPalette),
@@ -48,34 +40,7 @@ impl State {
                 ("h", Action::Back),
                 ("l", Action::OpenThread),
             ])),
-
-            root_mails: None,
-            mails_state: String::new(),
-            mailbox_id: id,
-            list_state: tui_widget_list::ListState::default(),
         }
-    }
-
-    fn select_next_mail(&mut self) {
-        self.list_state.next();
-    }
-
-    fn select_previous_mail(&mut self) {
-        self.list_state.previous();
-    }
-
-    fn get_selected_mail(&self) -> Option<&Email> {
-        let Some(mails) = self.root_mails.as_ref() else {
-            error!("Can't get selected mail: Mails aren't available yet.");
-            return None;
-        };
-
-        let Some(idx) = self.list_state.selected else {
-            error!("Can't get selected mail: No mail is selected.");
-            return None;
-        };
-
-        Some(&mails[idx])
     }
 }
 
@@ -86,8 +51,8 @@ impl ScreenState<Action, PaletteType, InputType> for State {
             Action::Quit => self.app_actions.push(crate::Action::Quit),
             Action::Back => self.app_actions.push(crate::Action::Back),
 
-            Action::SelectNextMail => self.select_next_mail(),
-            Action::SelectPreviousMail => self.select_previous_mail(),
+            Action::SelectNextMail => self.backend.select_next_mail(),
+            Action::SelectPreviousMail => self.backend.select_previous_mail(),
 
             Action::OpenCommandPalette => {
                 self.overlay = Some(ScreenOverlay::Palette(palette::State::new(
@@ -98,16 +63,10 @@ impl ScreenState<Action, PaletteType, InputType> for State {
                 self.app_actions.push(crate::Action::OpenLogViewer);
             }
             Action::OpenThread => {
-                if let Some(selected_mail) = self.get_selected_mail() {
-                    let thread_id = selected_mail.thread_id().unwrap().to_string();
-                    self.app_actions.push(crate::Action::OpenThread(thread_id));
-                }
+                todo!()
             }
             Action::ViewSelectedMail => {
-                if let Some(selected_mail) = self.get_selected_mail() {
-                    self.app_actions
-                        .push(crate::Action::OpenMailViewer(selected_mail.clone()));
-                }
+                todo!()
             }
             Action::ComposeMail => {
                 self.app_actions.push(crate::Action::OpenComposer);

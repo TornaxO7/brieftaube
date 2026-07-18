@@ -5,21 +5,18 @@ use crate::{
     },
     utils::{
         MailboxId,
-        ui::{ScreenOverlay, ScreenState, input::Input, palette::Palette},
+        ui::{DARK_TURQUOISE, ORANGE, ScreenOverlay, ScreenState, input::Input, palette::Palette},
     },
 };
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     widgets::{
         Block, Borders, Cell, Clear, List, ListItem, Paragraph, Row, StatefulWidget, Table, Widget,
     },
 };
 use std::collections::HashMap;
-
-const DARK_TURQUOISE: Color = Color::from_u32(0x005eff);
-const ORANGE: Color = Color::from_u32(0xFFA500);
 
 #[derive(Default)]
 pub struct Mailboxes {}

@@ -1,25 +1,21 @@
-// pub mod mailboxes;
-pub mod root_mails;
 pub mod thread;
 
-use crate::{
-    config::Config,
-    utils::{MailboxId, ThreadId},
-};
+use crate::{config::Config, utils::ThreadId};
 use jmap_client::client::Client;
 use std::{collections::HashMap, rc::Rc, sync::Arc};
 use tokio::task::{JoinError, JoinSet};
 
 #[derive(Default)]
 struct Data {
-    pub root_mails: HashMap<MailboxId, root_mails::RootMails>,
     pub threads: HashMap<ThreadId, thread::Thread>,
 }
 
+// TODO: Rename to `Backends`
 pub struct Account {
-    client: Arc<jmap_client::client::Client>,
+    pub client: Arc<jmap_client::client::Client>,
 
     pub mailboxes: Rc<crate::mailboxes::Backend>,
+    pub root_mails: crate::root_mails::RootMailsManager,
     data: Arc<tokio::sync::Mutex<Data>>,
     tasks: Arc<std::sync::Mutex<JoinSet<color_eyre::Result<()>>>>,
 }
@@ -52,6 +48,7 @@ impl Account {
                 client.clone(),
                 config.clone(),
             )),
+            root_mails: crate::root_mails::RootMailsManager::new(),
             data: Arc::new(tokio::sync::Mutex::new(Data::default())),
             tasks: Arc::new(std::sync::Mutex::new(JoinSet::new())),
         }
@@ -68,8 +65,4 @@ impl Account {
     pub fn address(&self) -> String {
         self.client.session().username().to_string()
     }
-
-    // pub fn config(&self) -> &Config {
-    //     &self.config
-    // }
 }

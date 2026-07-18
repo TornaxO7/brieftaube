@@ -98,10 +98,11 @@ impl ScreenState<Action, PaletteType, InputType> for State {
                 self.app_actions.push(crate::Action::OpenLogViewer);
             }
             Action::ViewSelectedMail => {
-                if let Some(mail) = self.get_selected_mail() {
-                    self.app_actions
-                        .push(crate::Action::OpenMailViewer(mail.clone()));
-                }
+                // if let Some(mail) = self.get_selected_mail() {
+                //     self.app_actions
+                //         .push(crate::Action::OpenRootMails(mail.clone()));
+                // }
+                todo!()
             }
         }
     }
