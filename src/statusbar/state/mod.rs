@@ -74,14 +74,14 @@ impl State {
         if self.throbber_state.is_some() {
             tokio::select! {
                 _ = self.counter.has_changed() => { }
-                _ = tokio::time::sleep(std::time::Duration::from_millis(500)) => {}
+                _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {}
             }
         } else {
             self.counter.has_changed().await;
         }
     }
 
-    pub fn start_or_run_throbber(&mut self) {
+    pub fn tick(&mut self) {
         match self.throbber_state.as_mut() {
             Some(throbber) => throbber.calc_next(),
             None => self.throbber_state = Some(ThrobberState::default()),

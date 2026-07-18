@@ -98,23 +98,9 @@ impl App {
         let mut reader = crossterm::event::EventStream::new();
 
         while self.is_running {
-            let top_screen_has_tasks_running =
-                match self.screens.last().expect("There's at least one screen") {
-                    Screen::Mailboxes(_) => self.account.mailboxes.has_tasks_running(),
-                    _ => todo!(),
-                };
-
-            if top_screen_has_tasks_running {
-                self.statusbar.start_or_run_throbber();
-            } else {
-                self.statusbar.remove_throbber();
-            }
-
+            self.sync_throbber();
             tokio::select! {
-                _ = self.statusbar.has_changed() => {
-                    terminal.draw(|frame| self.draw_statusbar(frame))?;
-                    continue;
-                }
+                _ = self.statusbar.has_changed() => { }
                 _ = self.account.mailboxes.has_changed(), if self.account.mailboxes.has_tasks_running() => {
                     self.account.mailboxes.pop_front();
                 }
@@ -129,6 +115,7 @@ impl App {
                     None => {},
                 }
             }
+            self.sync_throbber();
 
             self.apply_action();
 
@@ -146,7 +133,8 @@ impl App {
     fn draw_screen(&mut self, frame: &mut Frame) {
         let area = frame.area();
 
-        let [statusbar, screen] = get_main_layout().areas(area);
+        let [statusbar, screen] =
+            Layout::vertical([Constraint::Length(3), Constraint::Fill(0)]).areas(area);
         frame.render_stateful_widget(Statusbar::default(), statusbar, &mut self.statusbar);
 
         match self.screens.last_mut().unwrap() {
@@ -173,12 +161,6 @@ impl App {
                 );
             }
         };
-    }
-
-    fn draw_statusbar(&mut self, frame: &mut Frame) {
-        let area = frame.area();
-        let [statusbar, _screen] = get_main_layout().areas(area);
-        frame.render_stateful_widget(Statusbar::default(), statusbar, &mut self.statusbar);
     }
 
     fn handle_event(&mut self, event: Event) {
@@ -263,6 +245,20 @@ impl App {
             }
         }
     }
+
+    fn sync_throbber(&mut self) {
+        let top_screen_has_tasks_running =
+            match self.screens.last().expect("There's at least one screen") {
+                Screen::Mailboxes(_) => self.account.mailboxes.has_tasks_running(),
+                _ => false,
+            };
+
+        if top_screen_has_tasks_running {
+            self.statusbar.tick();
+        } else {
+            self.statusbar.remove_throbber();
+        }
+    }
 }
 
 fn init_logging() -> eyre::Result<statusbar::Counter> {
@@ -305,8 +301,4 @@ fn get_xdg() -> &'static BaseDirectories {
 
 fn get_log_file_path() -> io::Result<PathBuf> {
     get_xdg().place_state_file(&format!("{}.log", APP_NAME))
-}
-
-fn get_main_layout() -> Layout {
-    Layout::vertical([Constraint::Length(3), Constraint::Fill(0)])
 }
