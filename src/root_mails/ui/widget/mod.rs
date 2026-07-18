@@ -50,15 +50,21 @@ fn render_mail_list(area: Rect, buf: &mut Buffer, data: &mut Data) {
             .iter()
             .map(|mail| {
                 let date = mail.received_at.format("%e %b %Y, %H:%M:%S").to_string();
-                let from = mail.from.iter().fold(String::new(), |acc, addr| {
-                    format!("{acc}, {}", addr.to_string())
-                });
+                let from = {
+                    let mut iterator = mail.from.iter();
+                    let first = iterator
+                        .next()
+                        .map(|addr| format!("{}", addr))
+                        .unwrap_or(String::new());
+
+                    iterator.fold(first, |acc, addr| format!("{acc}, {}", addr.to_string()))
+                };
                 let subject = mail.subject.as_str();
 
                 Row::new(vec![
-                    Cell::from(date),
-                    Cell::from(from),
                     Cell::from(subject),
+                    Cell::from(from),
+                    Cell::from(date),
                 ])
             })
             .collect();
@@ -71,7 +77,7 @@ fn render_mail_list(area: Rect, buf: &mut Buffer, data: &mut Data) {
                 Constraint::Fill(1),
             ],
         )
-        .header(Row::new(["Received at", "From", "Subject"]).style(Style::default().underlined()))
+        .header(Row::new(["Subject", "From", "Received at"]).style(Style::default().underlined()))
         .row_highlight_style(Style::default().bg(DARK_TURQUOISE))
     };
 
