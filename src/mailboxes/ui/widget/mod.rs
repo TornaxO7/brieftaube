@@ -138,7 +138,7 @@ fn render_mailboxes(area: Rect, buf: &mut Buffer, layer: &mut Layer) {
                 Constraint::Percentage(50),
             ],
         )
-        .header(Row::new(["Sort order", "Name", "Unread"]))
+        .header(Row::new(["Sort order", "Name", "Unread"]).style(Style::default().underlined()))
         .row_highlight_style(Style::default().bg(DARK_TURQUOISE))
     };
 
