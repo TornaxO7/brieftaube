@@ -1,3 +1,8 @@
+use std::sync::{
+    Arc,
+    atomic::{AtomicU16, Ordering},
+};
+
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, HorizontalAlignment, Layout, Rect},
@@ -24,18 +29,49 @@ impl StatefulWidget for Statusbar {
 
         Widget::render(block, area, buf);
 
-        render_error_warning_info_state(left, buf, state);
+        if state.show_counter {
+            render_error_warning_info_state(left, buf, &state.counter);
+        }
         render_screen_name(center, buf, state.screen_name);
         render_keypress(right, buf, &state.keypresses);
     }
 }
 
-fn render_error_warning_info_state(area: Rect, buf: &mut Buffer, state: &super::State) {
-    let errors = Cell::new(format!("E: {}", state.errors)).style(state.error_style);
-    let warnings = Cell::new(format!("W: {}", state.warnings)).style(state.warning_style);
-    let info = Cell::new(format!("I: {}", state.info)).style(state.info_style);
+fn render_error_warning_info_state(area: Rect, buf: &mut Buffer, counter: &super::Counter) {
+    fn get_cell(
+        label: &str,
+        count: &Arc<AtomicU16>,
+        active: Style,
+        inactive: Style,
+    ) -> Cell<'static> {
+        let value = count.load(Ordering::Relaxed);
+        let style = if value > 0 { active.bold() } else { inactive };
 
-    let rows = [Row::new([errors, warnings, info])];
+        Cell::new(format!("{}: {}", label, value)).style(style)
+    }
+
+    let errors = get_cell(
+        "E",
+        &counter.errors,
+        Style::default().light_red(),
+        Style::default().red(),
+    );
+
+    let warnings = get_cell(
+        "W",
+        &counter.warnings,
+        Style::default().light_yellow(),
+        Style::default().yellow(),
+    );
+
+    let infos = get_cell(
+        "I",
+        &counter.infos,
+        Style::default().light_green(),
+        Style::default().green(),
+    );
+
+    let rows = [Row::new([errors, warnings, infos])];
     let widths = [
         Constraint::Length(5),
         Constraint::Length(5),

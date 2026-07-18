@@ -13,7 +13,7 @@ use std::{
     collections::{HashMap, HashSet},
     rc::Rc,
 };
-use tracing::{error, trace, warn};
+use tracing::{error, trace};
 
 #[derive(Debug, Clone)]
 pub enum PaletteValue {

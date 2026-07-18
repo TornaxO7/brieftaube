@@ -37,10 +37,10 @@ static XDG: OnceLock<BaseDirectories> = OnceLock::new();
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     color_eyre::install()?;
-    init_logging()?;
+    let counter = init_logging()?;
 
     let mut terminal = ratatui::init();
-    App::new().await.run(&mut terminal).await?;
+    App::new(counter).await?.run(&mut terminal).await?;
     ratatui::restore();
 
     Ok(())
@@ -79,20 +79,19 @@ pub struct App {
 }
 
 impl App {
-    pub async fn new() -> Self {
+    pub async fn new(counter: statusbar::Counter) -> eyre::Result<Self> {
         let account = Arc::new(backend::Account::new().await);
-
         let initial_screen =
             Screen::Mailboxes(mailboxes::ui::State::new(account.mailboxes.clone()));
-        let statusbar = statusbar::State::new(&initial_screen);
+        let statusbar = statusbar::State::new(&initial_screen, counter);
 
-        Self {
+        Ok(Self {
             is_running: true,
             account: account.clone(),
             screens: vec![initial_screen],
             statusbar,
             needs_full_redraw: false,
-        }
+        })
     }
 
     pub async fn run(mut self, terminal: &mut DefaultTerminal) -> eyre::Result<()> {
@@ -100,6 +99,9 @@ impl App {
 
         while self.is_running {
             tokio::select! {
+                _ = self.statusbar.has_changed() => {
+                    // just the statusbar
+                }
                 res = self.account.mailboxes.has_changed(), if self.account.mailboxes.has_tasks_running() => {
                     if let Ok(Err(err)) = res.expect("No join error") {
                         error!("{}", err);
@@ -248,15 +250,7 @@ impl App {
     }
 }
 
-impl std::fmt::Debug for App {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("App")
-            .field("is_running", &self.is_running)
-            .finish()
-    }
-}
-
-fn init_logging() -> eyre::Result<()> {
+fn init_logging() -> eyre::Result<statusbar::Counter> {
     let log_file = OpenOptions::new()
         .write(true)
         .truncate(true)
@@ -276,17 +270,18 @@ fn init_logging() -> eyre::Result<()> {
 
     tui_logger::init_logger(tui_logger::LevelFilter::Info)?;
 
+    let counter = statusbar::Counter::new();
     tracing_subscriber::registry()
+        .with(counter.clone())
         .with(env_filter)
         .with(fmt_layer)
         .with(tui_logger::TuiTracingSubscriberLayer)
         .init();
 
-    tracing::info!("Greetings!");
     tracing::debug!("Debug logging enabled");
     tracing::trace!("Trace logging enabled");
 
-    Ok(())
+    Ok(counter)
 }
 
 fn get_xdg() -> &'static BaseDirectories {
