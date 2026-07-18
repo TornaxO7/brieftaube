@@ -124,10 +124,14 @@ impl Backend {
                     Ok(()) => {
                         data.layers.remove_mailbox(id);
                     }
-                    Err(err) => {
-                        let mailbox = data.layers.get_mailbox(&id).unwrap();
-                        let name = mailbox.name.clone();
-                        error!("Couldn't destroy the mailbox '{name}': {err}");
+                    Err(err) => match data.layers.get_mailbox(&id) {
+                        Some(mailbox) => {
+                            let name = mailbox.name.clone();
+                            error!("Couldn't destroy the mailbox '{name}': {err}");
+                        },
+                        None => {
+                            error!("Couldn't destroy mailbox:\n{err}");
+                        }
                     }
                 }
             }
@@ -163,10 +167,14 @@ impl Backend {
                 Ok(_) => {
                     data.layers.set_sort_order(id, new_order);
                 }
-                Err(err) => {
-                    let mailbox = data.layers.get_mailbox(&id).unwrap();
-                    let name = mailbox.name.clone();
-                    error!("Couldn't update the sort order of '{name}': {err}");
+                Err(err) => match data.layers.get_mailbox(&id) {
+                    Some(mailbox) => {
+                        let name = mailbox.name.clone();
+                        error!("Couldn't update the sort order of '{name}':\n{err}");
+                    },
+                    None => {
+                        error!("Couldn't update the sort order:\n{err}");
+                    }
                 }
             };
         });
@@ -324,7 +332,13 @@ impl Backend {
 
             // check that everything worked fine
             for (id, new_sort_order) in new_sort_orders.into_iter() {
-                let mailbox = data.layers.get_mailbox_mut(&id).unwrap();
+                let Some(mailbox) = data.layers.get_mailbox_mut(&id) else {
+                    warn!(concat![
+                        "It looks like as if a mailbox has been removed while requesting a new sort order.\n",
+                        "We are going to skip one mailbox."
+                    ]);
+                    continue;
+                };
                 if let Err(err) = response.updated(&id) {
                     let name = mailbox.name.clone();
                     warn!("Couldn't update sort order of '{name}': {err}\nGoing to skip it ...");
