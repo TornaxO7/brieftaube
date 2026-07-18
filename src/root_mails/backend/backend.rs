@@ -9,7 +9,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tokio::task::JoinHandle;
-use tracing::error;
+use tracing::{error, trace};
 
 const INIT_ROOT_MAILS: usize = 10;
 const DATA_INITIALISED_MSG: &str = "Is initialised";
@@ -30,6 +30,7 @@ pub struct RootMailsBackend {
 }
 
 impl RootMailsBackend {
+    #[tracing::instrument(level = "trace", skip_all)]
     pub fn new(client: Arc<Client>, id: MailboxId) -> Self {
         Self {
             id,
@@ -61,6 +62,11 @@ impl RootMailsBackend {
 // methods which need to interact with the server
 impl RootMailsBackend {
     pub fn init(&self) {
+        if self.is_initialised() {
+            // TODO: fetch changes
+            return;
+        }
+
         let client = self.client.clone();
         let data = self.data.clone();
         let id = self.id.clone();
