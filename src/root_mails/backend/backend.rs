@@ -9,7 +9,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tokio::task::JoinHandle;
-use tracing::{error, trace};
+use tracing::error;
 
 const INIT_ROOT_MAILS: usize = 10;
 const DATA_INITIALISED_MSG: &str = "Is initialised";

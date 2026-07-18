@@ -33,14 +33,15 @@ pub enum Action {
     #[strum(message = "Compose a new mail.")]
     ComposeMail,
 
-    #[strum(message = "Select the next mail.")]
-    SelectNextMail,
-    #[strum(message = "Select the previous mail.")]
-    SelectPreviousMail,
-    #[strum(message = "Go to the top of the list.")]
-    GotoTop,
-    #[strum(message = "Go to the top of the list.")]
-    GotoBottom,
+    #[strum(message = "Navigate to the next (below) mail.")]
+    NavigateToNextMail,
+    #[strum(message = "Navigate to the previous (above) mail.")]
+    NavigateToPreviousMail,
+    #[strum(message = "Navigate to the top of the list.")]
+    NavigateToTop,
+    #[strum(message = "Navigate to the bottom of the list.")]
+    NavigateToBottom,
+
     #[strum(message = "View the selected mail.")]
     ViewSelectedMail,
 }

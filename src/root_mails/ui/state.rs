@@ -35,13 +35,13 @@ impl State {
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", Action::Quit),
                 (":", Action::OpenCommandPalette),
-                ("j", Action::SelectNextMail),
-                ("k", Action::SelectPreviousMail),
+                ("j", Action::NavigateToNextMail),
+                ("k", Action::NavigateToPreviousMail),
                 ("h", Action::Back),
                 ("l", Action::OpenThread),
                 ("<C-l>", Action::OpenLogs),
-                ("gg", Action::GotoTop),
-                ("ge", Action::GotoBottom),
+                ("gg", Action::NavigateToTop),
+                ("ge", Action::NavigateToBottom),
             ])),
         }
     }
@@ -54,10 +54,10 @@ impl ScreenState<Action, PaletteType, InputType> for State {
             Action::Quit => self.app_actions.push(crate::Action::Quit),
             Action::Back => self.app_actions.push(crate::Action::Back),
 
-            Action::SelectNextMail => self.backend.select_next_mail(),
-            Action::SelectPreviousMail => self.backend.select_previous_mail(),
-            Action::GotoTop => self.backend.go_to_top(),
-            Action::GotoBottom => self.backend.go_to_bottom(),
+            Action::NavigateToNextMail => self.backend.select_next_mail(),
+            Action::NavigateToPreviousMail => self.backend.select_previous_mail(),
+            Action::NavigateToTop => self.backend.go_to_top(),
+            Action::NavigateToBottom => self.backend.go_to_bottom(),
 
             Action::OpenCommandPalette => {
                 self.overlay = Some(ScreenOverlay::Palette(palette::State::new(
