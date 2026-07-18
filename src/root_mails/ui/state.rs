@@ -1,11 +1,18 @@
 use super::Action;
 use crate::{
     root_mails::backend::RootMailsBackend,
-    utils::ui::{
-        ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager, palette,
+    utils::{
+        MailId,
+        ui::{
+            ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager,
+            palette,
+        },
     },
 };
-use std::{collections::HashMap, rc::Rc};
+use std::{
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 
 #[derive(Debug, Clone)]
 pub enum PaletteType {
@@ -21,6 +28,7 @@ pub struct State {
     keybindings: KeybindManager<Action>,
     overlay: Option<ScreenOverlay<PaletteType, InputType>>,
 
+    pub selected: HashSet<MailId>,
     pub backend: Rc<RootMailsBackend>,
 }
 
@@ -32,6 +40,8 @@ impl State {
             app_actions: Vec::with_capacity(2),
             overlay: None,
             backend,
+
+            selected: HashSet::new(),
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", Action::Quit),
                 (":", Action::OpenCommandPalette),
@@ -42,6 +52,7 @@ impl State {
                 ("<C-l>", Action::OpenLogs),
                 ("gg", Action::NavigateToTop),
                 ("ge", Action::NavigateToBottom),
+                (" ", Action::ToggleMailSelection),
             ])),
         }
     }
@@ -54,10 +65,19 @@ impl ScreenState<Action, PaletteType, InputType> for State {
             Action::Quit => self.app_actions.push(crate::Action::Quit),
             Action::Back => self.app_actions.push(crate::Action::Back),
 
-            Action::NavigateToNextMail => self.backend.select_next_mail(),
-            Action::NavigateToPreviousMail => self.backend.select_previous_mail(),
-            Action::NavigateToTop => self.backend.go_to_top(),
-            Action::NavigateToBottom => self.backend.go_to_bottom(),
+            Action::NavigateToNextMail => self.backend.navigate_to_next_mail(),
+            Action::NavigateToPreviousMail => self.backend.navigate_to_previous_mail(),
+            Action::NavigateToTop => self.backend.navigate_to_top(),
+            Action::NavigateToBottom => self.backend.navigate_to_bottom(),
+
+            Action::ToggleMailSelection => {
+                if let Some(id) = self.backend.get_selected_mail() {
+                    if !self.selected.remove(&id) {
+                        self.selected.insert(id);
+                    }
+                    self.backend.navigate_to_next_mail();
+                }
+            }
 
             Action::OpenCommandPalette => {
                 self.overlay = Some(ScreenOverlay::Palette(palette::State::new(

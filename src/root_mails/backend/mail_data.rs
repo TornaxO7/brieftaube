@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use crate::utils::{EmailKeyword, ThreadId};
 use chrono::{DateTime, Local, Utc};
 
+#[derive(Debug, Clone)]
 pub struct RootMailData {
     pub id: String,
     pub thread_id: ThreadId,
@@ -48,6 +49,7 @@ impl From<jmap_client::email::Email> for RootMailData {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct EmailAddress {
     pub name: Option<String>,
     pub address: String,

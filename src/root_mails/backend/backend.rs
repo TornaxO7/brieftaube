@@ -1,6 +1,6 @@
 use crate::{
     root_mails::backend::{MailRenderable, RootMailData},
-    utils::MailboxId,
+    utils::{MailId, MailboxId},
 };
 use jmap_client::client::Client;
 use ratatui::widgets::TableState;
@@ -146,31 +146,40 @@ impl RootMailsBackend {
 
 // `state` methods
 impl RootMailsBackend {
-    pub fn select_next_mail(&self) {
+    pub fn navigate_to_next_mail(&self) {
         let mut guard = self.data.lock().unwrap();
         if let Some(data) = guard.as_mut() {
             data.table_state.select_next();
         }
     }
 
-    pub fn select_previous_mail(&self) {
+    pub fn navigate_to_previous_mail(&self) {
         let mut guard = self.data.lock().unwrap();
         if let Some(data) = guard.as_mut() {
             data.table_state.select_previous();
         }
     }
 
-    pub fn go_to_top(&self) {
+    pub fn navigate_to_top(&self) {
         let mut guard = self.data.lock().unwrap();
         if let Some(data) = guard.as_mut() {
             data.table_state.select_first();
         }
     }
 
-    pub fn go_to_bottom(&self) {
+    pub fn navigate_to_bottom(&self) {
         let mut guard = self.data.lock().unwrap();
         if let Some(data) = guard.as_mut() {
             data.table_state.select_last();
         }
+    }
+
+    pub fn get_selected_mail(&self) -> Option<MailId> {
+        let guard = self.data.lock().unwrap();
+        guard.as_ref().and_then(|data| {
+            data.table_state
+                .selected()
+                .map(|idx| data.mails[idx].id.clone())
+        })
     }
 }

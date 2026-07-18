@@ -33,6 +33,9 @@ pub enum Action {
     #[strum(message = "Compose a new mail.")]
     ComposeMail,
 
+    #[strum(message = "Toggle mail selection.")]
+    ToggleMailSelection,
+
     #[strum(message = "Navigate to the next (below) mail.")]
     NavigateToNextMail,
     #[strum(message = "Navigate to the previous (above) mail.")]

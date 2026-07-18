@@ -6,6 +6,7 @@ use crate::{
 };
 
 pub struct MailRenderable {
+    pub id: String,
     pub from: String,
     pub to: String,
     pub cc: String,
@@ -18,6 +19,7 @@ pub struct MailRenderable {
 
 impl From<&RootMailData> for MailRenderable {
     fn from(mail: &RootMailData) -> Self {
+        let id = mail.id.clone();
         let from = addresses_to_string(&mail.from);
         let to = addresses_to_string(&mail.to);
         let cc = addresses_to_string(&mail.cc);
@@ -29,6 +31,7 @@ impl From<&RootMailData> for MailRenderable {
         let keywords = mail.keywords.clone();
 
         Self {
+            id,
             from,
             to,
             cc,

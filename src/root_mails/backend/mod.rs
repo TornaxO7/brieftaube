@@ -3,7 +3,7 @@ mod mail_data;
 mod mail_renderable;
 
 use crate::utils::MailboxId;
-pub use backend::RootMailsBackend;
+pub use backend::{Data, RootMailsBackend};
 use jmap_client::client::Client;
 pub use mail_data::{EmailAddress, RootMailData};
 pub use mail_renderable::MailRenderable;

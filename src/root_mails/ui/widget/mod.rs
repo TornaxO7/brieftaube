@@ -1,14 +1,16 @@
+use std::collections::HashSet;
+
 use super::State;
 use crate::{
-    root_mails::backend::MailRenderable,
+    root_mails::backend::{Data, MailRenderable},
     utils::{
-        EmailKeyword,
+        EmailKeyword, MailId,
         ui::{
             ScreenOverlay, ScreenState,
             color::{DARK_BLUE, DARK_TURQUOISE},
             input::Input,
             palette::Palette,
-            symbol::{ATTACHMENT_SYMBOL, UNREAD_SYMBOL},
+            symbol::{ATTACHMENT_SYMBOL, CHECKMARK, UNREAD_SYMBOL},
         },
     },
 };
@@ -16,7 +18,7 @@ use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     style::Style,
-    widgets::{Block, Cell, Clear, Paragraph, Row, StatefulWidget, Table, TableState, Widget},
+    widgets::{Block, Cell, Clear, Paragraph, Row, StatefulWidget, Table, Widget},
 };
 
 #[derive(Default)]
@@ -27,19 +29,21 @@ impl StatefulWidget for RootMails {
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         {
+            let selection = &state.selected;
             let mut guard = state.backend.data.lock().unwrap();
 
             if let Some(data) = guard.as_mut() {
-                let mails = &data.mails_renderable;
-
                 let [mails_area, preview_area] = area.layout(&Layout::horizontal([
                     Constraint::Percentage(60),
                     Constraint::Fill(1),
                 ]));
 
-                render_mail_list(mails_area, buf, &mails, &mut data.table_state);
+                render_mail_list(mails_area, buf, data, selection);
 
-                let selected_mail = data.table_state.selected().and_then(|idx| mails.get(idx));
+                let selected_mail = data
+                    .table_state
+                    .selected()
+                    .and_then(|idx| data.mails_renderable.get(idx));
                 render_preview(preview_area, buf, selected_mail);
             } else {
             }
@@ -49,18 +53,14 @@ impl StatefulWidget for RootMails {
     }
 }
 
-fn render_mail_list(
-    area: Rect,
-    buf: &mut Buffer,
-    mails: &Vec<MailRenderable>,
-    state: &mut TableState,
-) {
+fn render_mail_list(area: Rect, buf: &mut Buffer, data: &mut Data, selection: &HashSet<MailId>) {
     const DATE_EXAMPLE: &str = "15 May 2015, HH:MM:SS";
 
     let area = Block::default().inner(area);
 
     let table = {
-        let rows: Vec<Row<'_>> = mails
+        let rows: Vec<Row<'_>> = data
+            .mails_renderable
             .iter()
             .map(|mail| {
                 let has_attachment = if mail.has_attachment {
@@ -75,6 +75,12 @@ fn render_mail_list(
                     ""
                 };
 
+                let is_selected = if selection.contains(&mail.id) {
+                    CHECKMARK
+                } else {
+                    ""
+                };
+
                 let style = if mail.keywords.contains(&EmailKeyword::Flagged) {
                     Style::default().on_yellow().black()
                 } else if !mail.keywords.contains(&EmailKeyword::Seen) {
@@ -84,6 +90,7 @@ fn render_mail_list(
                 };
 
                 Row::new(vec![
+                    Cell::from(is_selected),
                     Cell::from(is_unread),
                     Cell::from(mail.subject.as_str()),
                     Cell::from(has_attachment),
@@ -98,6 +105,7 @@ fn render_mail_list(
             rows,
             [
                 Constraint::Length(1),
+                Constraint::Length(1),
                 Constraint::Fill(1),
                 Constraint::Length(2),
                 Constraint::Fill(1),
@@ -105,14 +113,14 @@ fn render_mail_list(
             ],
         )
         .header(
-            Row::new(["", "Subject", "", "From", "Received at"])
+            Row::new(["", "", "Subject", "", "From", "Received at"])
                 .style(Style::default().underlined()),
         )
         .row_highlight_style(Style::default().white().bg(DARK_TURQUOISE))
         .block(Block::bordered())
     };
 
-    StatefulWidget::render(table, area, buf, state)
+    StatefulWidget::render(table, area, buf, &mut data.table_state)
 }
 
 fn render_preview(area: Rect, buf: &mut Buffer, mail: Option<&MailRenderable>) {
