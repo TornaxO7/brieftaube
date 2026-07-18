@@ -26,6 +26,13 @@ impl Layer {
         !self.is_root_layer() && self.state.selected().map(|idx| idx == 0).unwrap()
     }
 
+    pub fn get_pos(&self, id: &MailboxId) -> Option<usize> {
+        self.mailboxes
+            .iter()
+            .enumerate()
+            .find_map(|(idx, mailbox)| (&mailbox.id == id).then_some(idx))
+    }
+
     pub fn contains_mailbox_name(&self, name: &str) -> bool {
         self.mailboxes.iter().any(|mailbox| mailbox.name == name)
     }

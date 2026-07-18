@@ -11,6 +11,7 @@ type MailboxOwner = Option<MailboxId>;
 mod err_msg {
     pub const NON_EMPTY_SELECTED_LAYER: &str = "`selected_layer` can't become empty!";
     pub const MAILBOX_HAS_LAYER: &str = "Every mailbox must have a layer.";
+    pub const MAILBOX_IS_IN_LAYER: &str = "Each mailbox must be in a layer.";
 }
 
 pub struct Layers {
@@ -60,7 +61,7 @@ impl Layers {
         let mailbox = self.get_mailbox_mut(&id).unwrap();
         mailbox.sort_order = new_order;
 
-        let layer = self.get_layer_containing_mailbox_mut(&id).unwrap();
+        let layer = self.get_layer_containing_mailbox_mut(&id);
         layer.sort_mailboxes();
     }
 
@@ -125,22 +126,24 @@ impl Layers {
             .find_map(|layer| layer.get_mailbox_mut(id))
     }
 
-    // pub fn get_layer_containing_mailbox(&self, id: &MailboxId) -> Option<&Layer> {
-    //     self.layers
-    //         .values()
-    //         .find(|layer| layer.get_mailbox(id).is_some())
-    // }
+    pub fn get_layer_containing_mailbox(&self, id: &MailboxId) -> &Layer {
+        self.layers
+            .values()
+            .find(|layer| layer.get_mailbox(id).is_some())
+            .expect(err_msg::MAILBOX_IS_IN_LAYER)
+    }
 
-    pub fn get_layer_containing_mailbox_mut(&mut self, id: &MailboxId) -> Option<&mut Layer> {
+    pub fn get_layer_containing_mailbox_mut(&mut self, id: &MailboxId) -> &mut Layer {
         self.layers
             .values_mut()
             .find(|layer| layer.get_mailbox(id).is_some())
+            .expect(err_msg::MAILBOX_IS_IN_LAYER)
     }
 
     pub fn remove_mailbox(&mut self, id: MailboxId) {
         self.layers.remove(&Some(id.clone()));
 
-        let parent_layer = self.get_layer_containing_mailbox_mut(&id).unwrap();
+        let parent_layer = self.get_layer_containing_mailbox_mut(&id);
         parent_layer.mailboxes.retain(|mailbox| mailbox.id != id);
     }
 }

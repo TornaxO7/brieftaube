@@ -16,7 +16,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tokio::task::{JoinError, JoinSet};
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 
 const NEW_SORT_ORDER_SIZE: u32 = 32;
 const DATA_INITIALISED_MSG: &str = "Is initialised";
@@ -339,6 +339,8 @@ impl Backend {
             return;
         }
 
+        // TODO: add check if that's even possible
+
         let data = self.data.clone();
         let client = self.client.clone();
 
@@ -377,6 +379,37 @@ impl Backend {
             
 
         });
+    }
+
+    pub fn move_mailbox_up(&self, id: MailboxId) {
+        if !self.is_initialised() {
+            return;
+        }
+
+        let new_order = {
+            let guard = self.data.lock().unwrap();
+            let data = guard.as_ref().expect(DATA_INITIALISED_MSG);
+
+            // validate
+            let layer = data.layers.get_layer_containing_mailbox(&id);
+            let idx = layer.mailboxes.iter().enumerate().find_map(|(idx, mailbox)| (mailbox.id == id).then_some(idx)).unwrap();
+
+            let is_at_top = idx == 0;
+            if is_at_top {
+                return;
+            }
+            
+            let current = layer.mailboxes[idx - 1].sort_order;
+            let prev = &layer.mailboxes.get(idx - 2).map(|mailbox| mailbox.sort_order).unwrap_or(0);
+
+            current - (current - prev) / 2
+        };
+
+        self.set_new_order(id, new_order);
+    }
+
+    pub fn move_mailbox_down(&self, id: MailboxId) {
+        todo!()
     }
 
     pub fn mail_capability(&self) -> jmap_client::email::MailCapabilities {

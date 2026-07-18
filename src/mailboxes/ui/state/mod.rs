@@ -136,10 +136,14 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
                 }
             }
             Action::MoveMailboxUp => {
-                todo!()
+                if let Some(mailbox) = self.backend.get_selected_mailbox() {
+                    self.backend.move_mailbox_up(mailbox.id);
+                }
             }
             Action::MoveMailboxDown => {
-                todo!()
+                if let Some(mailbox) = self.backend.get_selected_mailbox() {
+                    self.backend.move_mailbox_down(mailbox.id);
+                }
             }
             Action::NormalizeSortOrder => self.backend.normalize_sort_order(),
             Action::CreateMailbox => {
