@@ -5,9 +5,10 @@ use crate::{
         EmailKeyword,
         ui::{
             ScreenOverlay, ScreenState,
-            color::{DARK_BLUE, DARK_CYAN, DARK_TURQUOISE},
+            color::{DARK_BLUE, DARK_TURQUOISE},
             input::Input,
             palette::Palette,
+            symbol::{ATTACHMENT_SYMBOL, UNREAD_SYMBOL},
         },
     },
 };
@@ -17,11 +18,6 @@ use ratatui::{
     style::Style,
     widgets::{Block, Cell, Clear, Paragraph, Row, StatefulWidget, Table, TableState, Widget},
 };
-
-// I can't use `.unwrap()` >:(
-// But yeah, it works.
-const ATTACHMENT_SYMBOL: &str = unsafe { str::from_utf8_unchecked(&[0xF0, 0x9F, 0x93, 0x8E]) };
-const UNREAD_SYMBOL: &str = unsafe { str::from_utf8_unchecked(&[0xE2, 0xAC, 0xA4]) };
 
 #[derive(Default)]
 pub struct RootMails {}
@@ -73,6 +69,12 @@ fn render_mail_list(
                     ""
                 };
 
+                let is_unread = if !mail.keywords.contains(&EmailKeyword::Seen) {
+                    UNREAD_SYMBOL
+                } else {
+                    ""
+                };
+
                 let style = if mail.keywords.contains(&EmailKeyword::Flagged) {
                     Style::default().on_yellow().black()
                 } else if !mail.keywords.contains(&EmailKeyword::Seen) {
@@ -82,6 +84,7 @@ fn render_mail_list(
                 };
 
                 Row::new(vec![
+                    Cell::from(is_unread),
                     Cell::from(mail.subject.as_str()),
                     Cell::from(has_attachment),
                     Cell::from(mail.from.as_str()),
@@ -94,6 +97,7 @@ fn render_mail_list(
         Table::new(
             rows,
             [
+                Constraint::Length(1),
                 Constraint::Fill(1),
                 Constraint::Length(2),
                 Constraint::Fill(1),
@@ -101,7 +105,8 @@ fn render_mail_list(
             ],
         )
         .header(
-            Row::new(["Subject", "", "From", "Received at"]).style(Style::default().underlined()),
+            Row::new(["", "Subject", "", "From", "Received at"])
+                .style(Style::default().underlined()),
         )
         .row_highlight_style(Style::default().white().bg(DARK_TURQUOISE))
         .block(Block::bordered())
