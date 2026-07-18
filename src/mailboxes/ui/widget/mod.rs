@@ -5,7 +5,12 @@ use crate::{
     },
     utils::{
         MailboxId,
-        ui::{DARK_TURQUOISE, ORANGE, ScreenOverlay, ScreenState, input::Input, palette::Palette},
+        ui::{
+            ScreenOverlay, ScreenState,
+            color::{DARK_TURQUOISE, ORANGE},
+            input::Input,
+            palette::Palette,
+        },
     },
 };
 use ratatui::{

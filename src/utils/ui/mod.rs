@@ -1,13 +1,10 @@
+pub mod color;
 pub mod input;
 pub mod keybindmanager;
 pub mod palette;
 
 use crossterm::event::{Event, KeyEvent};
 use keybindmanager::{HandleEvent, KeybindManager};
-use ratatui::style::Color;
-
-pub const DARK_TURQUOISE: Color = Color::from_u32(0x005eff);
-pub const ORANGE: Color = Color::from_u32(0xFFA500);
 
 pub trait ScreenState<A: Clone + std::fmt::Debug, P: Clone, I: Clone> {
     fn apply_action(&mut self, action: A);

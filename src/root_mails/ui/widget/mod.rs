@@ -3,22 +3,25 @@ use crate::{
     root_mails::backend::MailRenderable,
     utils::{
         EmailKeyword,
-        ui::{DARK_TURQUOISE, ScreenOverlay, ScreenState, input::Input, palette::Palette},
+        ui::{
+            ScreenOverlay, ScreenState,
+            color::{DARK_BLUE, DARK_CYAN, DARK_TURQUOISE},
+            input::Input,
+            palette::Palette,
+        },
     },
 };
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     style::Style,
-    widgets::{
-        Block, Cell, Clear, List, ListItem, Paragraph, Row, StatefulWidget, Table, TableState,
-        Widget,
-    },
+    widgets::{Block, Cell, Clear, Paragraph, Row, StatefulWidget, Table, TableState, Widget},
 };
 
 // I can't use `.unwrap()` >:(
 // But yeah, it works.
 const ATTACHMENT_SYMBOL: &str = unsafe { str::from_utf8_unchecked(&[0xF0, 0x9F, 0x93, 0x8E]) };
+const UNREAD_SYMBOL: &str = unsafe { str::from_utf8_unchecked(&[0xE2, 0xAC, 0xA4]) };
 
 #[derive(Default)]
 pub struct RootMails {}
@@ -71,16 +74,16 @@ fn render_mail_list(
                 };
 
                 let style = if mail.keywords.contains(&EmailKeyword::Flagged) {
-                    Style::default().on_yellow()
-                } else if mail.keywords.contains(&EmailKeyword::Seen) {
-                    Style::default().on_blue()
+                    Style::default().on_yellow().black()
+                } else if !mail.keywords.contains(&EmailKeyword::Seen) {
+                    Style::default().bg(DARK_BLUE)
                 } else {
                     Style::default()
                 };
 
                 Row::new(vec![
-                    Cell::from(has_attachment),
                     Cell::from(mail.subject.as_str()),
+                    Cell::from(has_attachment),
                     Cell::from(mail.from.as_str()),
                     Cell::from(mail.received_at.as_str()),
                 ])
@@ -91,16 +94,16 @@ fn render_mail_list(
         Table::new(
             rows,
             [
-                Constraint::Length(2),
                 Constraint::Fill(1),
+                Constraint::Length(2),
                 Constraint::Fill(1),
                 Constraint::Min(DATE_EXAMPLE.len() as u16),
             ],
         )
         .header(
-            Row::new(["", "Subject", "From", "Received at"]).style(Style::default().underlined()),
+            Row::new(["Subject", "", "From", "Received at"]).style(Style::default().underlined()),
         )
-        .row_highlight_style(Style::default().bg(DARK_TURQUOISE))
+        .row_highlight_style(Style::default().white().bg(DARK_TURQUOISE))
         .block(Block::bordered())
     };
 
