@@ -77,15 +77,6 @@ fn parse_keybinding<'src>()
         keybinding_with_modifier(),
         keybinding_char(),
     ))
-    .validate(|event, e, emitter| {
-        if event.code == KeyCode::Esc {
-            emitter.emit(Rich::custom(
-                e.span(),
-                format!("You are not allowed to map the escape key!"),
-            ))
-        }
-        event
-    })
     .repeated()
     .at_least(1)
     .collect()
@@ -179,11 +170,5 @@ mod tests {
             parse_keybinding().parse("<A-s>").unwrap(),
             vec![KeyEvent::new(KeyCode::Char('s'), KeyModifiers::ALT)]
         );
-    }
-
-    #[test]
-    #[should_panic]
-    fn esc_keybinding() {
-        parse_keybinding().parse("<ESC>").unwrap();
     }
 }
