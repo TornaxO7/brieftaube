@@ -12,7 +12,9 @@ use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     style::{Color, Style},
-    widgets::{Block, Cell, Clear, List, ListItem, Paragraph, Row, StatefulWidget, Table, Widget},
+    widgets::{
+        Block, Borders, Cell, Clear, List, ListItem, Paragraph, Row, StatefulWidget, Table, Widget,
+    },
 };
 use std::collections::HashMap;
 
@@ -37,8 +39,11 @@ impl StatefulWidget for Mailboxes {
                 ])
                 .areas(area);
 
+                let left_block = Block::new().borders(Borders::RIGHT);
+                let left_inner = left_block.inner(left);
+                left_block.render(left, buf);
                 if let Some(parent_layer) = data.layers.get_parent_layer_mut() {
-                    render_layer(left, buf, &state.selected, parent_layer);
+                    render_layer(left_inner, buf, &state.selected, parent_layer);
                 }
 
                 render_layer(
@@ -48,8 +53,11 @@ impl StatefulWidget for Mailboxes {
                     data.layers.get_current_layer_mut(),
                 );
 
+                let right_block = Block::new().borders(Borders::LEFT);
+                let right_inner = right_block.inner(right);
+                right_block.render(right, buf);
                 if let Some(children_layer) = data.layers.get_children_layer_mut() {
-                    render_layer(right, buf, &state.selected, children_layer);
+                    render_layer(right_inner, buf, &state.selected, children_layer);
                 }
             } else {
                 render_loading_screen(area, buf);
