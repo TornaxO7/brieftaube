@@ -1,13 +1,12 @@
-use std::sync::{
-    Arc,
-    atomic::{AtomicU16, Ordering},
-};
-
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, HorizontalAlignment, Layout, Rect},
     style::Style,
     widgets::{Block, Cell, Paragraph, Row, StatefulWidget, Table, Widget},
+};
+use std::sync::{
+    Arc,
+    atomic::{AtomicU16, Ordering},
 };
 
 #[derive(Default)]
