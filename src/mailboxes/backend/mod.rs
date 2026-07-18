@@ -365,13 +365,13 @@ impl Backend {
         })
     }
 
-    pub fn get_selected_mailbox(&self) -> Option<MailboxId> {
+    pub fn get_selected_mailbox(&self) -> Option<MailboxData> {
         let guard = self.data.lock().unwrap();
         guard
             .as_ref()
             .map(|data| data.layers.get_current_layer())
             .and_then(|layer| layer.get_selected_mailbox())
-            .map(|mailbox| mailbox.id.clone())
+            .map(|mailbox| mailbox.clone())
     }
 
     pub fn get_parent_mailbox(&self) -> Option<MailboxId> {
