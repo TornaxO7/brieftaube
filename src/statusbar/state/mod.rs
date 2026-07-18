@@ -3,6 +3,7 @@ mod counter;
 use crate::Screen;
 pub use counter::Counter;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use throbber_widgets_tui::ThrobberState;
 
 pub struct State {
     pub(super) screen_name: &'static str,
@@ -10,6 +11,7 @@ pub struct State {
 
     pub(super) counter: Counter,
     pub(super) show_counter: bool,
+    pub(super) throbber_state: ThrobberState,
 }
 
 impl State {
@@ -20,6 +22,7 @@ impl State {
 
             keypresses: String::new(),
             show_counter: true,
+            throbber_state: ThrobberState::default(),
         };
 
         state.set_screen(init_screen);
