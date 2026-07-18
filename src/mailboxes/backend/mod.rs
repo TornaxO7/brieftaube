@@ -118,6 +118,7 @@ impl Backend {
 
             let mut guard = data.lock().unwrap();
             let data = guard.as_mut().expect(DATA_INITIALISED_MSG);
+            data.state = response.take_new_state();
             for id in ids.into_iter() {
                 match response.destroyed(&id) {
                     Ok(()) => {
@@ -157,6 +158,7 @@ impl Backend {
 
             let mut guard = data.lock().unwrap();
             let data = guard.as_mut().expect(DATA_INITIALISED_MSG);
+            data.state = response.take_new_state();
             match response.updated(&id) {
                 Ok(_) => {
                     data.layers.set_sort_order(id, new_order);
@@ -255,16 +257,16 @@ impl Backend {
                 }
             };
             
-            new_mailbox.id = {
-                let mut create_mailbox = match response.created(&id) {
-                    Ok(m) => m,
-                    Err(err) => {
-                        let name = &new_mailbox.name;
-                        error!("Couldn't create mailbox '{name}': {err}");
-                        return;
-                    }
-                };
-                create_mailbox.take_id()
+            
+            match response.created(&id) {
+                Ok(mut server) => {
+                    new_mailbox.id = server.take_id();
+                },
+                Err(err) => {
+                    let name = &new_mailbox.name;
+                    error!("Couldn't create mailbox '{name}': {err}");
+                    return;
+                }
             };
 
             let mut guard = data.lock().unwrap();
@@ -319,6 +321,7 @@ impl Backend {
 
             let mut guard = data.lock().unwrap();
             let data = guard.as_mut().expect(DATA_INITIALISED_MSG);
+            data.state = response.take_new_state();
 
             // check that everything worked fine
             for (id, new_sort_order) in new_sort_orders.into_iter() {
@@ -326,7 +329,7 @@ impl Backend {
                 if let Err(err) = response.updated(&id) {
                     let name = mailbox.name.clone();
                     warn!("Couldn't update sort order of '{name}': {err}\nGoing to skip it ...");
-                    continue;
+                    continue;   
                 }
 
                 mailbox.sort_order = new_sort_order;
@@ -364,6 +367,7 @@ impl Backend {
 
             let mut guard = data.lock().unwrap();
             let data = guard.as_mut().expect(DATA_INITIALISED_MSG);
+            data.state = response.take_new_state();
             for (id, new_name) in mapping.into_iter() {
                 let mailbox = data.layers.get_mailbox_mut(&id).expect("Mailbox exists");
                 if let Err(err) = response.updated(&id) {
