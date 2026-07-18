@@ -43,6 +43,12 @@ pub enum Action {
 
     #[strum(message = "Tag the mailbox if it isn't tagged yet, otherwise untag it.")]
     ToggleMailbox,
+    #[strum(message = "Enter select mode.")]
+    EnterSelectMode,
+    #[strum(message = "Leave select mode.")]
+    LeaveSelectMode,
+    #[strum(message = "Remove the selection of each selected mailbox.")]
+    DiscardSelection,
 
     #[strum(message = "Set the sort order of the selected mailbox.")]
     SetSortOrder,

@@ -31,6 +31,7 @@ pub struct State {
     keybindings: KeybindManager<Action>,
     overlay: Option<ScreenOverlay<PaletteValue, InputType>>,
 
+    is_in_select_mode: bool,
     pub selected: HashSet<MailboxId>,
     pub backend: Rc<Backend>,
 }
@@ -45,6 +46,7 @@ impl State {
 
             overlay: None,
             selected: HashSet::new(),
+            is_in_select_mode: false,
 
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", Action::Quit),
@@ -59,6 +61,8 @@ impl State {
                 ("<C-l>", Action::OpenLogs),
                 ("gg", Action::SelectTopMailbox),
                 ("ge", Action::SelectBottomMailbox),
+                ("v", Action::EnterSelectMode),
+                ("<ESC>", Action::LeaveSelectMode),
             ])),
         }
     }
@@ -77,8 +81,22 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
             Action::OpenLogs => {
                 self.app_actions.push(crate::Action::OpenLogViewer);
             }
-            Action::SelectNextMailbox => self.backend.select_next_mailbox(),
-            Action::SelectPreviousMailbox => self.backend.select_previous_mailbox(),
+            Action::SelectNextMailbox => {
+                if self.is_in_select_mode {
+                    if let Some(mailbox) = self.backend.get_selected_mailbox() {
+                        self.selected.insert(mailbox.id);
+                    }
+                }
+                self.backend.select_next_mailbox();
+            }
+            Action::SelectPreviousMailbox => {
+                if self.is_in_select_mode {
+                    if let Some(mailbox) = self.backend.get_selected_mailbox() {
+                        self.selected.insert(mailbox.id);
+                    }
+                }
+                self.backend.select_previous_mailbox()
+            }
             Action::SelectTopMailbox => self.backend.select_first_mailbox(),
             Action::SelectBottomMailbox => self.backend.select_last_mailbox(),
             Action::ActivateSelectedEntry => {
@@ -94,6 +112,10 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
                     self.backend.select_next_mailbox();
                 }
             }
+            Action::EnterSelectMode => self.is_in_select_mode = true,
+            Action::LeaveSelectMode => self.is_in_select_mode = false,
+            Action::DiscardSelection => self.selected.clear(),
+
             Action::GoBack => self.backend.go_back(),
             Action::SetSortOrder => {
                 if let Some(can_set_sort_order) = self.backend.can_set_sort_order() {
