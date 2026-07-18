@@ -399,7 +399,11 @@ impl Backend {
             }
             
             let top1 = layer.mailboxes[idx - 1].sort_order;
-            let top2 = &layer.mailboxes.get(idx - 2).map(|mailbox| mailbox.sort_order).unwrap_or(0);
+            let top2 = if idx < 2 {
+                0
+            } else {
+                layer.mailboxes[idx - 2].sort_order
+            };
 
             top1 - (top1 - top2) / 2
         };
