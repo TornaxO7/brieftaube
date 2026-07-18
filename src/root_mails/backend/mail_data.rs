@@ -1,10 +1,12 @@
-use crate::utils::ThreadId;
+use std::collections::HashSet;
+
+use crate::utils::{EmailKeyword, ThreadId};
 use chrono::{DateTime, Local, Utc};
 
 pub struct RootMailData {
     pub id: String,
     pub thread_id: ThreadId,
-    pub keywords: Vec<String>,
+    pub keywords: HashSet<EmailKeyword>,
     pub from: Vec<EmailAddress>,
     pub to: Vec<EmailAddress>,
     pub cc: Vec<EmailAddress>,
@@ -19,7 +21,11 @@ impl From<jmap_client::email::Email> for RootMailData {
         Self {
             id: mail.take_id(),
             thread_id: mail.take_thread_id().unwrap(),
-            keywords: mail.keywords().into_iter().map(|k| k.to_string()).collect(),
+            keywords: mail
+                .keywords()
+                .into_iter()
+                .map(EmailKeyword::from)
+                .collect(),
             from: mail
                 .take_from()
                 .map(|addresses| addresses.into_iter().map(EmailAddress::from).collect())

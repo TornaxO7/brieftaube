@@ -1,4 +1,9 @@
-use crate::root_mails::backend::{EmailAddress, RootMailData};
+use std::collections::HashSet;
+
+use crate::{
+    root_mails::backend::{EmailAddress, RootMailData},
+    utils::EmailKeyword,
+};
 
 pub struct MailRenderable {
     pub from: String,
@@ -8,6 +13,7 @@ pub struct MailRenderable {
     pub preview: String,
     pub received_at: String,
     pub has_attachment: bool,
+    pub keywords: HashSet<EmailKeyword>,
 }
 
 impl From<&RootMailData> for MailRenderable {
@@ -20,6 +26,7 @@ impl From<&RootMailData> for MailRenderable {
         let preview = mail.preview.clone();
         let received_at = mail.received_at.format("%e %b %Y, %H:%M:%S").to_string();
         let has_attachment = mail.has_attachment;
+        let keywords = mail.keywords.clone();
 
         Self {
             from,
@@ -29,6 +36,7 @@ impl From<&RootMailData> for MailRenderable {
             preview,
             received_at,
             has_attachment,
+            keywords,
         }
     }
 }

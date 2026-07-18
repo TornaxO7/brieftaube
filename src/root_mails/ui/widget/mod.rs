@@ -1,13 +1,19 @@
 use super::State;
 use crate::{
     root_mails::backend::MailRenderable,
-    utils::ui::{DARK_TURQUOISE, ScreenOverlay, ScreenState, input::Input, palette::Palette},
+    utils::{
+        EmailKeyword,
+        ui::{DARK_TURQUOISE, ScreenOverlay, ScreenState, input::Input, palette::Palette},
+    },
 };
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     style::Style,
-    widgets::{Block, Cell, Clear, Paragraph, Row, StatefulWidget, Table, TableState, Widget},
+    widgets::{
+        Block, Cell, Clear, List, ListItem, Paragraph, Row, StatefulWidget, Table, TableState,
+        Widget,
+    },
 };
 
 // I can't use `.unwrap()` >:(
@@ -29,7 +35,7 @@ impl StatefulWidget for RootMails {
 
                 let [mails_area, preview_area] = area.layout(&Layout::horizontal([
                     Constraint::Percentage(60),
-                    Constraint::Percentage(40),
+                    Constraint::Fill(1),
                 ]));
 
                 render_mail_list(mails_area, buf, &mails, &mut data.table_state);
@@ -63,12 +69,22 @@ fn render_mail_list(
                 } else {
                     ""
                 };
+
+                let style = if mail.keywords.contains(&EmailKeyword::Flagged) {
+                    Style::default().on_yellow()
+                } else if mail.keywords.contains(&EmailKeyword::Seen) {
+                    Style::default().on_blue()
+                } else {
+                    Style::default()
+                };
+
                 Row::new(vec![
                     Cell::from(has_attachment),
                     Cell::from(mail.subject.as_str()),
                     Cell::from(mail.from.as_str()),
                     Cell::from(mail.received_at.as_str()),
                 ])
+                .style(style)
             })
             .collect();
 
