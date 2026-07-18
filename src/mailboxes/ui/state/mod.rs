@@ -53,8 +53,8 @@ impl State {
 
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", Action::Quit),
-                ("j", Action::SelectNextMailbox),
-                ("k", Action::SelectPreviousMailbox),
+                ("j", Action::NavigateToNextMailbox),
+                ("k", Action::NavigateToPreviousMailbox),
                 // ("n", super::Action::OpenComposer),
                 (":", Action::OpenCommandPalette),
                 ("<CR>", Action::ActivateSelectedEntry),
@@ -62,8 +62,8 @@ impl State {
                 ("l", Action::ActivateSelectedEntry),
                 ("h", Action::GoBack),
                 ("<C-l>", Action::OpenLogs),
-                ("gg", Action::SelectTopMailbox),
-                ("ge", Action::SelectBottomMailbox),
+                ("gg", Action::NavigateToTop),
+                ("ge", Action::NavigateToBottom),
                 ("v", Action::EnterSelectMode),
                 ("<ESC>", Action::LeaveSelectMode),
                 ("yx", Action::CutSelection),
@@ -86,7 +86,7 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
             Action::OpenLogs => {
                 self.app_actions.push(crate::Action::OpenLogViewer);
             }
-            Action::SelectNextMailbox => {
+            Action::NavigateToNextMailbox => {
                 if self.is_in_select_mode {
                     if let Some(mailbox) = self.backend.get_selected_mailbox() {
                         self.selected.insert(mailbox.id, SelectionType::Selected);
@@ -94,7 +94,7 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
                 }
                 self.backend.select_next_mailbox();
             }
-            Action::SelectPreviousMailbox => {
+            Action::NavigateToPreviousMailbox => {
                 if self.is_in_select_mode {
                     if let Some(mailbox) = self.backend.get_selected_mailbox() {
                         self.selected.insert(mailbox.id, SelectionType::Selected);
@@ -102,8 +102,8 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
                 }
                 self.backend.select_previous_mailbox()
             }
-            Action::SelectTopMailbox => self.backend.select_first_mailbox(),
-            Action::SelectBottomMailbox => self.backend.select_last_mailbox(),
+            Action::NavigateToTop => self.backend.select_first_mailbox(),
+            Action::NavigateToBottom => self.backend.select_last_mailbox(),
             Action::ActivateSelectedEntry => {
                 if let Some(id) = self.backend.activate_selected_entry() {
                     self.app_actions.push(crate::Action::OpenRootMails(id));

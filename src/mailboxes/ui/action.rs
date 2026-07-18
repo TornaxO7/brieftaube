@@ -20,14 +20,14 @@ pub enum Action {
     #[strum(props(intern = true))]
     OpenCommandPalette,
 
-    #[strum(message = "Select next mailbox")]
-    SelectNextMailbox,
-    #[strum(message = "Select previous mailbox")]
-    SelectPreviousMailbox,
-    #[strum(message = "Select the first mailbox of the current list.")]
-    SelectTopMailbox,
-    #[strum(message = "Select the last mailbox of the current list.")]
-    SelectBottomMailbox,
+    #[strum(message = "Navigate to the next (below) mailbox.")]
+    NavigateToNextMailbox,
+    #[strum(message = "Navigate to the previous (above) mailbox.")]
+    NavigateToPreviousMailbox,
+    #[strum(message = "Navigate to the top of the list.")]
+    NavigateToTop,
+    #[strum(message = "Navigate to the bottom of the list.")]
+    NavigateToBottom,
 
     #[strum(message = "Open the selected mailbox.")]
     ActivateSelectedEntry,
