@@ -10,6 +10,10 @@ use ratatui::{
     widgets::{Block, Cell, Clear, Paragraph, Row, StatefulWidget, Table, TableState, Widget},
 };
 
+// I can't use `.unwrap()` >:(
+// But yeah, it works.
+const ATTACHMENT_SYMBOL: &str = unsafe { str::from_utf8_unchecked(&[0xF0, 0x9F, 0x93, 0x8E]) };
+
 #[derive(Default)]
 pub struct RootMails {}
 
@@ -54,7 +58,13 @@ fn render_mail_list(
         let rows: Vec<Row<'_>> = mails
             .iter()
             .map(|mail| {
+                let has_attachment = if mail.has_attachment {
+                    ATTACHMENT_SYMBOL
+                } else {
+                    ""
+                };
                 Row::new(vec![
+                    Cell::from(has_attachment),
                     Cell::from(mail.subject.as_str()),
                     Cell::from(mail.from.as_str()),
                     Cell::from(mail.received_at.as_str()),
@@ -65,12 +75,15 @@ fn render_mail_list(
         Table::new(
             rows,
             [
+                Constraint::Length(2),
+                Constraint::Fill(1),
+                Constraint::Fill(1),
                 Constraint::Min(DATE_EXAMPLE.len() as u16),
-                Constraint::Fill(1),
-                Constraint::Fill(1),
             ],
         )
-        .header(Row::new(["Subject", "From", "Received at"]).style(Style::default().underlined()))
+        .header(
+            Row::new(["", "Subject", "From", "Received at"]).style(Style::default().underlined()),
+        )
         .row_highlight_style(Style::default().bg(DARK_TURQUOISE))
         .block(Block::bordered())
     };
