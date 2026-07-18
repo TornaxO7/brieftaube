@@ -7,8 +7,10 @@ use crate::utils::MailboxId;
 pub use layer::Layer;
 
 type MailboxOwner = Option<MailboxId>;
+type ParentId = MailboxId;
 
 pub struct Layers {
+    // each mailbox has its own layer
     layers: HashMap<Option<MailboxId>, Layer>,
     selected_layer: Vec<Option<MailboxId>>,
 }
@@ -119,11 +121,11 @@ impl Layers {
             .find_map(|layer| layer.get_mailbox_mut(id))
     }
 
-    pub fn get_layer_containing_mailbox(&self, id: &MailboxId) -> Option<&Layer> {
-        self.layers
-            .values()
-            .find(|layer| layer.get_mailbox(id).is_some())
-    }
+    // pub fn get_layer_containing_mailbox(&self, id: &MailboxId) -> Option<&Layer> {
+    //     self.layers
+    //         .values()
+    //         .find(|layer| layer.get_mailbox(id).is_some())
+    // }
 
     pub fn get_layer_containing_mailbox_mut(&mut self, id: &MailboxId) -> Option<&mut Layer> {
         self.layers

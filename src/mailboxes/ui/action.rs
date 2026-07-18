@@ -38,6 +38,8 @@ pub enum Action {
     CreateMailbox,
     #[strum(message = "Destroy the selected mailbox")]
     RemoveSelectedMailboxes,
+    #[strum(message = "Rename the selected mailbox(es).")]
+    RenameSelectedMailboxes,
 
     #[strum(message = "Tag the mailbox if it isn't tagged yet, otherwise untag it.")]
     ToggleMailbox,

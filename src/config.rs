@@ -7,6 +7,7 @@ pub struct Config {
     pub address: String,
     pub password: String,
     pub host: String,
+    editor: Option<String>,
 }
 
 impl Config {
@@ -17,5 +18,9 @@ impl Config {
         let config_content = std::fs::read_to_string(path).unwrap();
 
         Ok(toml::from_str(&config_content).unwrap())
+    }
+
+    pub fn editor(&self) -> Option<String> {
+        self.editor.clone().or_else(|| std::env::var("EDITOR").ok())
     }
 }

@@ -13,7 +13,7 @@ use std::{
     collections::{HashMap, HashSet},
     rc::Rc,
 };
-use tracing::{error, trace};
+use tracing::{error, trace, warn};
 
 #[derive(Debug, Clone)]
 pub enum PaletteValue {
@@ -136,6 +136,60 @@ impl ScreenState<Action, PaletteValue, InputType> for State {
                 } else {
                     let ids = self.selected.drain().collect::<Vec<MailboxId>>();
                     self.backend.destroy_mailboxes(ids);
+                }
+            }
+            Action::RenameSelectedMailboxes => {
+                // TODO: Error handling
+                let mailboxes = if self.selected.is_empty() {
+                    self.backend
+                        .get_selected_mailbox()
+                        .map(|mailbox| vec![mailbox])
+                } else {
+                    let ids = self.selected.drain().collect::<Vec<MailboxId>>();
+                    self.backend.get_mailboxes(&ids)
+                };
+
+                for mailbox in mailboxes.as_ref().unwrap().iter() {
+                    tracing::debug!("{}", &mailbox.id);
+                }
+
+                if let Some(mailboxes) = mailboxes {
+                    const RENAMING_PATH: &str = "/tmp/brieftaube-renaming.txt";
+                    let file_content = mailboxes
+                        .iter()
+                        .map(|mailbox| format!("{}\n", mailbox.name))
+                        .collect::<String>();
+                    std::fs::write(RENAMING_PATH, file_content).expect("Create renaming file");
+
+                    // open editor
+                    {
+                        ratatui::restore();
+                        let status =
+                            std::process::Command::new(self.backend.config.editor().unwrap())
+                                .arg(RENAMING_PATH)
+                                .status()
+                                .unwrap();
+                        if !status.success() {
+                            error!("Couldn't start editor: {}", status);
+                            return;
+                        }
+                        ratatui::init();
+                    }
+
+                    let new_names: Vec<String> = std::fs::read_to_string(RENAMING_PATH)
+                        .unwrap()
+                        .lines()
+                        .map(|line| line.to_string())
+                        .collect();
+
+                    let mapping: Vec<(MailboxId, String)> = {
+                        let ids = mailboxes.iter().map(|mailbox| mailbox.id.clone());
+                        ids.zip(new_names.into_iter()).collect()
+                    };
+
+                    self.backend.rename_mailboxes(mapping);
+
+                    self.app_actions.push(crate::Action::Redraw);
                 }
             }
         }

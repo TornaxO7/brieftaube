@@ -2,7 +2,7 @@ mod layers;
 mod mailbox_data;
 mod task_error;
 
-use crate::utils::MailboxId;
+use crate::{config::Config, utils::MailboxId};
 use jmap_client::{
     URI,
     client::Client,
@@ -13,6 +13,7 @@ pub use layers::{Layer, Layers};
 pub use mailbox_data::MailboxData;
 use std::{
     collections::HashMap,
+    rc::Rc,
     sync::{Arc, Mutex},
 };
 use task_error::*;
@@ -29,15 +30,17 @@ pub struct Data {
 pub struct Backend {
     client: Arc<Client>,
     pub data: Arc<Mutex<Option<Data>>>,
+    pub config: Rc<Config>,
     tasks: Arc<Mutex<JoinSet<Result<(), TaskError>>>>,
 }
 
 impl Backend {
-    pub fn new(client: Arc<Client>) -> Self {
+    pub fn new(client: Arc<Client>, config: Rc<Config>) -> Self {
         Self {
             client,
             data: Arc::new(Mutex::new(None)),
             tasks: Arc::new(Mutex::new(JoinSet::new())),
+            config,
         }
     }
 
@@ -287,6 +290,43 @@ impl Backend {
         });
     }
 
+    pub fn rename_mailboxes(&self, mapping: Vec<(MailboxId, String)>) {
+        if !self.is_initialised() {
+            return;
+        }
+
+        let data = self.data.clone();
+        let client = self.client.clone();
+
+        self.tasks.lock().unwrap().spawn(async move {
+            let mut request = client.build();
+            {
+                let set_mailbox = request.set_mailbox();
+                for map in mapping.iter() {
+                    set_mailbox.update(&map.0).name(&map.1);
+                }
+            }
+            let mut response = request.send_set_mailbox().await?;
+
+            // check
+            {
+                for map in mapping.iter() {
+                    response.updated(&map.0)?;
+                }
+            }
+
+            // apply changes to local
+            let mut guard = data.lock().unwrap();
+            let data = guard.as_mut().expect("Is initialised");
+            for map in mapping {
+                let mailbox = data.layers.get_mailbox_mut(&map.0).expect("Mailbox exists");
+                mailbox.name = map.1;
+            }
+
+            Ok(())
+        });
+    }
+
     pub fn mail_capability(&self) -> jmap_client::email::MailCapabilities {
         let id = self.client.default_account_id();
 
@@ -305,7 +345,7 @@ impl Backend {
     }
 }
 
-// ui functions
+// methods for `state.rs`
 impl Backend {
     pub fn select_next_mailbox(&self) {
         let mut guard = self.data.lock().unwrap();
@@ -372,6 +412,22 @@ impl Backend {
             .map(|data| data.layers.get_current_layer())
             .and_then(|layer| layer.get_selected_mailbox())
             .map(|mailbox| mailbox.clone())
+    }
+
+    pub fn get_mailboxes(&self, ids: &[MailboxId]) -> Option<Vec<MailboxData>> {
+        let guard = self.data.lock().unwrap();
+        guard.as_ref().map(|data| &data.layers).map(|layers| {
+            let mut mailboxes = Vec::with_capacity(ids.len());
+
+            for id in ids.iter() {
+                let mailbox = layers
+                    .get_mailbox(id)
+                    .expect(&format!("Mailbox with id '{}' exsist.", id));
+                mailboxes.push(mailbox.clone());
+            }
+
+            mailboxes
+        })
     }
 
     pub fn get_parent_mailbox(&self) -> Option<MailboxId> {

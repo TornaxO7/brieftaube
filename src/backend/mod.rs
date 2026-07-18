@@ -6,7 +6,7 @@ use crate::{
     config::Config,
     utils::{MailboxId, ThreadId},
 };
-use jmap_client::{URI, client::Client, core::session::Capabilities};
+use jmap_client::client::Client;
 use std::{collections::HashMap, rc::Rc, sync::Arc};
 use tokio::task::{JoinError, JoinSet};
 
@@ -18,7 +18,6 @@ struct Data {
 
 pub struct Account {
     client: Arc<jmap_client::client::Client>,
-    _config: Config,
 
     pub mailboxes: Rc<crate::mailboxes::Backend>,
     data: Arc<tokio::sync::Mutex<Data>>,
@@ -27,7 +26,7 @@ pub struct Account {
 
 impl Account {
     pub async fn new() -> Self {
-        let config = Config::load().unwrap();
+        let config = Rc::new(Config::load().unwrap());
 
         let client = Client::new()
             .credentials((config.address.trim(), config.password.trim()))
@@ -48,9 +47,11 @@ impl Account {
         );
 
         Self {
-            _config: config,
             client: client.clone(),
-            mailboxes: Rc::new(crate::mailboxes::Backend::new(client.clone())),
+            mailboxes: Rc::new(crate::mailboxes::Backend::new(
+                client.clone(),
+                config.clone(),
+            )),
             data: Arc::new(tokio::sync::Mutex::new(Data::default())),
             tasks: Arc::new(std::sync::Mutex::new(JoinSet::new())),
         }
