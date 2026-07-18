@@ -27,7 +27,7 @@ impl StatefulWidget for Statusbar {
         ])
         .areas(header_area);
 
-        let [_padding1, throbber, screen_name, _padding2] = Layout::horizontal([
+        let [_padding1, throbber_area, screen_name, _padding2] = Layout::horizontal([
             Constraint::Fill(1),
             Constraint::Length(3),
             Constraint::Length(state.screen_name.len() as u16),
@@ -40,7 +40,9 @@ impl StatefulWidget for Statusbar {
         if state.show_counter {
             render_error_warning_info_state(left, buf, &state.counter);
         }
-        render_throbber(throbber, buf, &mut state.throbber_state);
+        if let Some(throbber) = state.throbber_state.as_mut() {
+            render_throbber(throbber_area, buf, throbber);
+        }
         render_screen_name(screen_name, buf, state.screen_name);
         render_keypress(right, buf, &state.keypresses);
     }

@@ -11,11 +11,11 @@ use jmap_client::{
 pub use layers::{Layer, Layers};
 pub use mailbox_data::MailboxData;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     rc::Rc,
     sync::{Arc, Mutex},
 };
-use tokio::task::{JoinError, JoinSet};
+use tokio::task::{JoinError, JoinHandle};
 use tracing::{ error, warn};
 
 const NEW_SORT_ORDER_SIZE: u32 = 32;
@@ -30,7 +30,7 @@ pub struct Backend {
     client: Arc<Client>,
     pub data: Arc<Mutex<Option<Data>>>,
     pub config: Rc<Config>,
-    tasks: Arc<Mutex<JoinSet<()>>>,
+    tasks: Arc<Mutex<VecDeque<JoinHandle<()>>>>,
 }
 
 impl Backend {
@@ -38,7 +38,7 @@ impl Backend {
         Self {
             client,
             data: Arc::new(Mutex::new(None)),
-            tasks: Arc::new(Mutex::new(JoinSet::new())),
+            tasks: Arc::new(Mutex::new(VecDeque::with_capacity(16))),
             config,
         }
     }
@@ -48,7 +48,13 @@ impl Backend {
     }
 
     pub async fn has_changed(&self) -> Option<Result<(), JoinError>> {
-        self.tasks.lock().unwrap().join_next().await
+        let mut guard = self.tasks.lock().unwrap();
+        let task = guard.front_mut().unwrap();
+        Some(task.await)
+    }
+
+    pub fn pop_front(&self) {
+        self.tasks.lock().unwrap().pop_front().expect("There are tasks.");
     }
 
     pub fn is_initialised(&self) -> bool {
@@ -62,7 +68,7 @@ impl Backend {
         let client = self.client.clone();
         let data = self.data.clone();
 
-        self.tasks.lock().unwrap().spawn(async move {
+        self.tasks.lock().unwrap().push_back(tokio::spawn(async move {
             let mut request = client.build();
             request.get_mailbox().ids::<[_; 1], String>(None::<[_; 1]>);
             let mut response = match request.send_get_mailbox().await {
@@ -87,7 +93,7 @@ impl Backend {
             let mut data = data.lock().unwrap();
             let new_data = Data { layers, state };
             *data = Some(new_data);
-        });
+        }));
     }
 
     pub fn destroy_mailboxes(&self, ids: Vec<MailboxId>) {
@@ -98,7 +104,7 @@ impl Backend {
         let data = self.data.clone();
         let client = self.client.clone();
 
-        self.tasks.lock().unwrap().spawn(async move {
+        self.tasks.lock().unwrap().push_back(tokio::spawn(async move {
             let mut response = {
                 let mut request = client.build();
                 request
@@ -135,7 +141,7 @@ impl Backend {
                     }
                 }
             }
-        });
+        }));
     }
 
     pub fn set_new_order(&self, id: MailboxId, new_order: u32) {
@@ -146,7 +152,7 @@ impl Backend {
         let data = self.data.clone();
         let client = self.client.clone();
 
-        self.tasks.lock().unwrap().spawn(async move {
+        self.tasks.lock().unwrap().push_back(tokio::spawn(async move {
             let mut response = {
                 let mut request = client.build();
                 request.set_mailbox().update(&id).sort_order(new_order);
@@ -177,7 +183,7 @@ impl Backend {
                     }
                 }
             };
-        });
+        }));
     }
 
     pub fn create_mailbox(&self, parent: Option<MailboxId>, name: String) {
@@ -189,7 +195,7 @@ impl Backend {
         let data = self.data.clone();
         let caps = self.mail_capability();
 
-        self.tasks.lock().unwrap().spawn(async move {
+        self.tasks.lock().unwrap().push_back(tokio::spawn(async move {
             let err_msg = {
                 let guard = data.lock().unwrap();
                 let data = guard.as_ref().expect(DATA_INITIALISED_MSG);
@@ -281,7 +287,7 @@ impl Backend {
             data.layers.add_mailbox(new_mailbox);
             data.state = response.take_new_state();
           
-        });
+        }));
     }
 
     pub fn normalize_sort_order(&self) {
@@ -292,7 +298,7 @@ impl Backend {
         let data = self.data.clone();
         let client = self.client.clone();
 
-        self.tasks.lock().unwrap().spawn(async move {
+        self.tasks.lock().unwrap().push_back(tokio::spawn(async move {
             let ids: Vec<MailboxId> = {
                 let guard = data.lock().unwrap();
                 let data = guard.as_ref().expect(DATA_INITIALISED_MSG);
@@ -347,7 +353,7 @@ impl Backend {
 
                 mailbox.sort_order = new_sort_order;
             }
-        });
+        }));
     }
 
     pub fn rename_mailboxes(&self, mapping: Vec<(MailboxId, String)>) {
@@ -360,7 +366,7 @@ impl Backend {
         let data = self.data.clone();
         let client = self.client.clone();
 
-        self.tasks.lock().unwrap().spawn(async move {
+        self.tasks.lock().unwrap().push_back(tokio::spawn(async move {
             let mut response = {
                 let mut request = client.build();
                 {
@@ -395,7 +401,7 @@ impl Backend {
             
             
 
-        });
+        }));
     }
 
     pub fn move_mailbox_up(&self, id: MailboxId) {
@@ -503,7 +509,7 @@ impl Backend {
         let data = self.data.clone();
         let client = self.client.clone();
 
-        self.tasks.lock().unwrap().spawn(async move {
+        self.tasks.lock().unwrap().push_back(tokio::spawn(async move {
             let mut response = {
                 let mut request = client.build();
                 let set_mailbox = request.set_mailbox();
@@ -572,7 +578,7 @@ impl Backend {
                     }
                 }
             }
-        });
+        }));
     }
 
     pub fn mail_capability(&self) -> jmap_client::email::MailCapabilities {

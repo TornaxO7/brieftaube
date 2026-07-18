@@ -11,7 +11,7 @@ pub struct State {
 
     pub(super) counter: Counter,
     pub(super) show_counter: bool,
-    pub(super) throbber_state: ThrobberState,
+    pub(super) throbber_state: Option<ThrobberState>,
 }
 
 impl State {
@@ -22,7 +22,7 @@ impl State {
 
             keypresses: String::new(),
             show_counter: true,
-            throbber_state: ThrobberState::default(),
+            throbber_state: None,
         };
 
         state.set_screen(init_screen);
@@ -71,6 +71,24 @@ impl State {
     }
 
     pub async fn has_changed(&self) {
-        self.counter.has_changed().await;
+        if self.throbber_state.is_some() {
+            tokio::select! {
+                _ = self.counter.has_changed() => { }
+                _ = tokio::time::sleep(std::time::Duration::from_millis(500)) => {}
+            }
+        } else {
+            self.counter.has_changed().await;
+        }
+    }
+
+    pub fn start_or_run_throbber(&mut self) {
+        match self.throbber_state.as_mut() {
+            Some(throbber) => throbber.calc_next(),
+            None => self.throbber_state = Some(ThrobberState::default()),
+        }
+    }
+
+    pub fn remove_throbber(&mut self) {
+        self.throbber_state = None;
     }
 }
