@@ -48,7 +48,7 @@ async fn main() -> eyre::Result<()> {
 
 enum Screen {
     Mailboxes(mailboxes::ui::State),
-    MailList(root_mails::ui::State),
+    RootMails(root_mails::ui::State),
     Composer(composer::ui::State),
     MailViewer(mail_viewer::ui::State),
     LogViewer(log_viewer::ui::State),
@@ -140,7 +140,7 @@ impl App {
             Screen::Mailboxes(state) => {
                 frame.render_stateful_widget(mailboxes::ui::Mailboxes::default(), screen, state);
             }
-            Screen::MailList(state) => {
+            Screen::RootMails(state) => {
                 frame.render_stateful_widget(root_mails::ui::RootMails::default(), screen, state);
             }
             Screen::Composer(state) => {
@@ -165,7 +165,7 @@ impl App {
     fn handle_event(&mut self, event: Event) {
         match self.screens.last_mut().unwrap() {
             Screen::Mailboxes(state) => state.handle_event(event, &mut self.statusbar),
-            Screen::MailList(state) => state.handle_event(event, &mut self.statusbar),
+            Screen::RootMails(state) => state.handle_event(event, &mut self.statusbar),
             Screen::Composer(state) => state.handle_event(event, &mut self.statusbar),
             Screen::MailViewer(state) => state.handle_event(event, &mut self.statusbar),
             Screen::LogViewer(state) => state.handle_event(event, &mut self.statusbar),
@@ -177,7 +177,7 @@ impl App {
         let actions = {
             let actions = match self.screens.last_mut().unwrap() {
                 Screen::Mailboxes(state) => state.get_app_actions(),
-                Screen::MailList(state) => state.get_app_actions(),
+                Screen::RootMails(state) => state.get_app_actions(),
                 Screen::Composer(state) => state.get_app_actions(),
                 Screen::MailViewer(state) => state.get_app_actions(),
                 Screen::LogViewer(state) => state.get_app_actions(),
@@ -191,7 +191,7 @@ impl App {
             match action {
                 Action::OpenRootMails(mailbox_id) => {
                     self.account.init_root_mails(mailbox_id.clone());
-                    let next_screen = Screen::MailList(root_mails::ui::State::new(
+                    let next_screen = Screen::RootMails(root_mails::ui::State::new(
                         self.account.clone(),
                         mailbox_id,
                     ));

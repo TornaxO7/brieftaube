@@ -33,11 +33,11 @@ impl State {
     pub fn set_screen(&mut self, screen: &Screen) {
         self.screen_name = match screen {
             Screen::Mailboxes(_) => "Mailboxes",
-            Screen::MailList(_) => "Mail list",
+            Screen::RootMails(_) => "Root-Mails",
             Screen::Composer(_) => "Composer",
-            Screen::MailViewer(_) => "Mail Viewer",
-            Screen::LogViewer(_) => "Log Viewer",
-            Screen::ThreadMails(_) => "Thread Viewer",
+            Screen::MailViewer(_) => "Mail-Viewer",
+            Screen::LogViewer(_) => "Log-Viewer",
+            Screen::ThreadMails(_) => "Thread-Viewer",
         };
 
         match screen {
