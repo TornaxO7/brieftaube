@@ -1,6 +1,4 @@
-use crate::utils::MailboxId;
-
-use super::RootMailData;
+use crate::{root_mails::backend::RootMailData, utils::MailboxId};
 use jmap_client::client::Client;
 use ratatui::widgets::TableState;
 use std::{
@@ -87,6 +85,7 @@ impl RootMailsBackend {
                         jmap_client::email::Property::ThreadId,
                         jmap_client::email::Property::Keywords,
                         jmap_client::email::Property::From,
+                        jmap_client::email::Property::To,
                         jmap_client::email::Property::Cc,
                         jmap_client::email::Property::Subject,
                         jmap_client::email::Property::Preview,

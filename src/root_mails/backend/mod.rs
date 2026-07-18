@@ -2,9 +2,9 @@ mod backend;
 mod mail_data;
 
 use crate::utils::MailboxId;
-pub use backend::{Data, RootMailsBackend};
+pub use backend::RootMailsBackend;
 use jmap_client::client::Client;
-pub use mail_data::RootMailData;
+pub use mail_data::{EmailAddress, RootMailData};
 use std::{collections::HashMap, rc::Rc, sync::Arc};
 
 pub struct RootMailsManager {

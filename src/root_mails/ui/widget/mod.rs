@@ -1,19 +1,14 @@
-mod list;
-
 use super::State;
 use crate::{
-    root_mails::backend::Data,
+    root_mails::backend::{EmailAddress, RootMailData},
     utils::ui::{DARK_TURQUOISE, ScreenOverlay, ScreenState, input::Input, palette::Palette},
 };
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     style::Style,
-    widgets::{Cell, Clear, Paragraph, Row, StatefulWidget, Table, TableState, Widget},
+    widgets::{Block, Cell, Clear, Paragraph, Row, StatefulWidget, Table, TableState, Widget},
 };
-
-const MAIL_LIST_PANEL_TITLE: &str = "Mails";
-const PREVIEW_PANEL_TITLE: &str = "Mail content";
 
 #[derive(Default)]
 pub struct RootMails {}
@@ -26,13 +21,18 @@ impl StatefulWidget for RootMails {
             let mut guard = state.backend.data.lock().unwrap();
 
             if let Some(data) = guard.as_mut() {
+                let mails: Vec<MailRenderable> =
+                    data.mails.iter().map(MailRenderable::from).collect();
+
                 let [mails_area, preview_area] = area.layout(&Layout::horizontal([
                     Constraint::Percentage(60),
                     Constraint::Percentage(40),
                 ]));
 
-                render_mail_list(mails_area, buf, data);
-                render_preview(preview_area, buf, &data);
+                render_mail_list(mails_area, buf, &mails, &mut data.table_state);
+
+                let selected_mail = data.table_state.selected().and_then(|idx| mails.get(idx));
+                render_preview(preview_area, buf, selected_mail);
             } else {
             }
         }
@@ -41,30 +41,24 @@ impl StatefulWidget for RootMails {
     }
 }
 
-fn render_mail_list(area: Rect, buf: &mut Buffer, data: &mut Data) {
+fn render_mail_list(
+    area: Rect,
+    buf: &mut Buffer,
+    mails: &Vec<MailRenderable>,
+    state: &mut TableState,
+) {
     const DATE_EXAMPLE: &str = "15 May 2015, HH:MM:SS";
 
+    let area = Block::default().inner(area);
+
     let table = {
-        let rows: Vec<Row<'_>> = data
-            .mails
+        let rows: Vec<Row<'_>> = mails
             .iter()
             .map(|mail| {
-                let date = mail.received_at.format("%e %b %Y, %H:%M:%S").to_string();
-                let from = {
-                    let mut iterator = mail.from.iter();
-                    let first = iterator
-                        .next()
-                        .map(|addr| format!("{}", addr))
-                        .unwrap_or(String::new());
-
-                    iterator.fold(first, |acc, addr| format!("{acc}, {}", addr.to_string()))
-                };
-                let subject = mail.subject.as_str();
-
                 Row::new(vec![
-                    Cell::from(subject),
-                    Cell::from(from),
-                    Cell::from(date),
+                    Cell::from(mail.subject.as_str()),
+                    Cell::from(mail.from.as_str()),
+                    Cell::from(mail.received_at.as_str()),
                 ])
             })
             .collect();
@@ -79,22 +73,66 @@ fn render_mail_list(area: Rect, buf: &mut Buffer, data: &mut Data) {
         )
         .header(Row::new(["Subject", "From", "Received at"]).style(Style::default().underlined()))
         .row_highlight_style(Style::default().bg(DARK_TURQUOISE))
+        .block(Block::bordered())
     };
 
-    StatefulWidget::render(table, area, buf, &mut data.table_state)
+    StatefulWidget::render(table, area, buf, state)
 }
 
-fn render_preview(area: Rect, buf: &mut Buffer, data: &Data) {
-    if let Some(idx) = data.table_state.selected() {
-        let mail = &data.mails[idx];
-        Widget::render(Paragraph::new(mail.preview.as_str()), area, buf);
+fn render_preview(area: Rect, buf: &mut Buffer, mail: Option<&MailRenderable>) {
+    if let Some(mail) = mail {
+        let headers = vec![
+            ("Received at:", mail.received_at.as_str()),
+            ("From:", mail.from.as_str()),
+            ("To:", mail.to.as_str()),
+            ("Subject:", mail.subject.as_str()),
+            ("Cc:", mail.cc.as_str()),
+        ];
+
+        let [header_area, preview_area] = Layout::vertical([
+            Constraint::Length(headers.len() as u16 + 2),
+            Constraint::Fill(1),
+        ])
+        .areas(area);
+
+        render_headers(header_area, buf, &headers);
+
+        Widget::render(
+            Paragraph::new(mail.preview.as_str()).block(Block::bordered()),
+            preview_area,
+            buf,
+        );
     } else {
-        Widget::render(Paragraph::new("loading..."), area, buf);
+        Widget::render(
+            Paragraph::new("loading...").block(Block::bordered()),
+            area,
+            buf,
+        );
     }
 }
 
 fn render_headers(area: Rect, buf: &mut Buffer, headers: &[(&'static str, &str)]) {
-    todo!()
+    let table = {
+        let rows: Vec<Row<'_>> = headers
+            .iter()
+            .map(|(name, value)| Row::new([Cell::new(*name), Cell::new(*value)]))
+            .collect();
+
+        let widths = [
+            Constraint::Length(
+                headers
+                    .iter()
+                    .map(|(header, _)| header.len())
+                    .max()
+                    .unwrap_or(5) as u16,
+            ),
+            Constraint::Fill(1),
+        ];
+
+        Table::new(rows, widths).block(Block::bordered())
+    };
+
+    Widget::render(table, area, buf);
 }
 
 fn render_overlay(area: Rect, buf: &mut Buffer, state: &mut State) {
@@ -108,4 +146,44 @@ fn render_overlay(area: Rect, buf: &mut Buffer, state: &mut State) {
             ScreenOverlay::Input(state) => StatefulWidget::render(Input::new(), a, buf, state),
         }
     }
+}
+
+struct MailRenderable {
+    from: String,
+    to: String,
+    cc: String,
+    subject: String,
+    preview: String,
+    received_at: String,
+}
+
+impl From<&RootMailData> for MailRenderable {
+    fn from(mail: &RootMailData) -> Self {
+        let from = addresses_to_string(&mail.from);
+        let to = addresses_to_string(&mail.to);
+        let cc = addresses_to_string(&mail.cc);
+
+        let subject = mail.subject.clone();
+        let preview = mail.preview.clone();
+        let received_at = mail.received_at.format("%e %b %Y, %H:%M:%S").to_string();
+
+        Self {
+            from,
+            to,
+            cc,
+            subject,
+            preview,
+            received_at,
+        }
+    }
+}
+
+fn addresses_to_string(addresses: &[EmailAddress]) -> String {
+    let mut iterator = addresses.iter();
+    let first = iterator
+        .next()
+        .map(|addr| format!("{}", addr))
+        .unwrap_or(String::new());
+
+    iterator.fold(first, |acc, addr| format!("{acc}, {}", addr.to_string()))
 }

@@ -6,6 +6,7 @@ pub struct RootMailData {
     pub thread_id: ThreadId,
     pub keywords: Vec<String>,
     pub from: Vec<EmailAddress>,
+    pub to: Vec<EmailAddress>,
     pub cc: Vec<EmailAddress>,
     pub subject: String,
     pub preview: String,
@@ -20,6 +21,10 @@ impl From<jmap_client::email::Email> for RootMailData {
             keywords: mail.keywords().into_iter().map(|k| k.to_string()).collect(),
             from: mail
                 .take_from()
+                .map(|addresses| addresses.into_iter().map(EmailAddress::from).collect())
+                .unwrap_or(vec![]),
+            to: mail
+                .to()
                 .map(|addresses| addresses.into_iter().map(EmailAddress::from).collect())
                 .unwrap_or(vec![]),
             cc: mail
@@ -53,6 +58,12 @@ impl std::fmt::Display for EmailAddress {
 
 impl From<jmap_client::email::EmailAddress> for EmailAddress {
     fn from(addr: jmap_client::email::EmailAddress) -> Self {
+        Self::from(&addr)
+    }
+}
+
+impl From<&jmap_client::email::EmailAddress> for EmailAddress {
+    fn from(addr: &jmap_client::email::EmailAddress) -> Self {
         Self {
             name: addr.name().map(|name| name.to_string()).clone(),
             address: addr.email().to_string(),
