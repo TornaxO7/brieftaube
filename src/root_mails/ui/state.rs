@@ -39,6 +39,7 @@ impl State {
                 ("k", Action::SelectPreviousMail),
                 ("h", Action::Back),
                 ("l", Action::OpenThread),
+                ("<C-l>", Action::OpenLogs),
             ])),
         }
     }
