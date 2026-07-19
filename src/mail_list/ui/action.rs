@@ -43,6 +43,11 @@ pub enum Action {
     )]
     MarkSelectedMailsAsSeen,
 
+    #[strum(message = "Unfold thread.")]
+    UnfoldThread,
+    #[strum(message = "Fold thread.")]
+    FoldThread,
+
     #[strum(message = "Navigate to the next (below) mail.")]
     NavigateToNextMail,
     #[strum(message = "Navigate to the previous (above) mail.")]

@@ -1,5 +1,7 @@
-use super::{EmailAddress, MailData};
-use crate::utils::EmailKeyword;
+use crate::{
+    mail_list::backend::{EmailAddress, MailData},
+    utils::EmailKeyword,
+};
 use std::collections::HashSet;
 
 pub struct MailRenderable {
@@ -12,6 +14,12 @@ pub struct MailRenderable {
     pub received_at: String,
     pub has_attachment: bool,
     pub keywords: HashSet<EmailKeyword>,
+}
+
+impl From<MailData> for MailRenderable {
+    fn from(mail: MailData) -> Self {
+        Self::from(&mail)
+    }
 }
 
 impl From<&MailData> for MailRenderable {

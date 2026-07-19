@@ -1,6 +1,8 @@
+mod mail_renderable;
+
 use super::State;
 use crate::{
-    mail_list::backend::{Data, MailRenderable},
+    mail_list::{backend, ui::widget::mail_renderable::MailRenderable},
     utils::{
         EmailKeyword, MailId,
         ui::{
@@ -16,12 +18,15 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{
         Style,
-        palette::material::{BLUE, BLUE_GRAY, GRAY, ORANGE},
+        palette::material::{BLUE, BLUE_GRAY, ORANGE},
     },
     text::Text,
-    widgets::{Block, Cell, Clear, Paragraph, Row, StatefulWidget, Table, Widget},
+    widgets::{Block, Cell, Clear, Paragraph, StatefulWidget, Table, Widget},
 };
 use std::collections::HashSet;
+
+pub const THREAD_BRANCH: &str = "├─";
+pub const THREAD_LAST: &str = "╰─";
 
 #[derive(Default)]
 pub struct RootMails {}
@@ -42,10 +47,7 @@ impl StatefulWidget for RootMails {
 
                 render_mail_list(mails_area, buf, data, selection);
 
-                let selected_mail = data
-                    .table_state
-                    .selected()
-                    .and_then(|idx| data.mails.get(idx).map(MailRenderable::from));
+                let selected_mail = data.get_selected_mail().map(MailRenderable::from);
                 render_preview(preview_area, buf, selected_mail);
             } else {
             }
@@ -55,17 +57,34 @@ impl StatefulWidget for RootMails {
     }
 }
 
-fn render_mail_list(area: Rect, buf: &mut Buffer, data: &mut Data, selection: &HashSet<MailId>) {
+fn render_mail_list(
+    area: Rect,
+    buf: &mut Buffer,
+    data: &mut backend::DataCollection,
+    selection: &HashSet<MailId>,
+) {
     const DATE_EXAMPLE: &str = "Mon, 15 May 2015, HH:MM:SS";
 
     let area = Block::default().inner(area);
 
     let table = {
-        let rows: Vec<Row<'_>> = data
-            .mails
+        let rows: Vec<ratatui::widgets::Row<'_>> = data
+            .rows()
             .iter()
-            .map(MailRenderable::from)
-            .map(|mail| {
+            .enumerate()
+            .map(|(idx, row)| {
+                let mail = MailRenderable::from(data.get_mail_from_row(row));
+
+                let subject = match row {
+                    backend::Row::Root(_) => mail.subject.clone(),
+                    backend::Row::Child(id, _) => match data.rows.get(idx + 1) {
+                        Some(backend::Row::Child(next_id, _)) if next_id == id => {
+                            format!("{} {}", THREAD_BRANCH, mail.subject)
+                        }
+                        _ => format!("{} {}", THREAD_LAST, mail.subject),
+                    },
+                };
+
                 let has_attachment = if mail.has_attachment {
                     ATTACHMENT_SYMBOL
                 } else {
@@ -92,10 +111,10 @@ fn render_mail_list(area: Rect, buf: &mut Buffer, data: &mut Data, selection: &H
                     Style::default()
                 };
 
-                Row::new(vec![
+                ratatui::widgets::Row::new(vec![
                     Cell::from(is_selected),
                     Cell::from(is_unread),
-                    Cell::from(mail.subject),
+                    Cell::from(subject),
                     Cell::from(has_attachment),
                     Cell::from(mail.from),
                     Cell::from(mail.received_at),
@@ -116,7 +135,7 @@ fn render_mail_list(area: Rect, buf: &mut Buffer, data: &mut Data, selection: &H
             ],
         )
         .header(
-            Row::new(["", "", "Subject", "", "From", "Received at"])
+            ratatui::widgets::Row::new(["", "", "Subject", "", "From", "Received at"])
                 .style(Style::default().underlined()),
         )
         .row_highlight_style(Style::default().white().bg(BLUE.c700))
@@ -160,10 +179,10 @@ fn render_preview(area: Rect, buf: &mut Buffer, mail: Option<MailRenderable>) {
 
 fn render_headers(area: Rect, buf: &mut Buffer, headers: &[(&'static str, &str)]) {
     let table = {
-        let rows: Vec<Row<'_>> = headers
+        let rows: Vec<ratatui::widgets::Row<'_>> = headers
             .iter()
             .map(|(name, value)| {
-                Row::new([
+                ratatui::widgets::Row::new([
                     Cell::new(Text::from(*name).right_aligned())
                         .style(Style::default().fg(BLUE_GRAY.c400)),
                     Cell::new(*value),

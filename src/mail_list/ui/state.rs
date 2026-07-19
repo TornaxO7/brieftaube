@@ -47,7 +47,9 @@ impl State {
                 (":", Action::OpenCommandPalette),
                 ("j", Action::NavigateToNextMail),
                 ("k", Action::NavigateToPreviousMail),
-                ("h", Action::Back),
+                ("h", Action::FoldThread),
+                ("l", Action::UnfoldThread),
+                ("<BS>", Action::Back),
                 ("<C-l>", Action::OpenLogs),
                 ("gg", Action::NavigateToTop),
                 ("ge", Action::NavigateToBottom),
@@ -105,6 +107,17 @@ impl ScreenState<Action, PaletteType, InputType> for State {
                     let ids: Vec<MailId> = self.selected.drain().collect();
                     self.backend
                         .update_keywords(ids, HashSet::from([EmailKeyword::Seen]), true);
+                }
+            }
+
+            Action::FoldThread => {
+                if let Some(pos) = self.backend.get_selected_mail_position() {
+                    self.backend.fold_thread(pos);
+                }
+            }
+            Action::UnfoldThread => {
+                if let Some(pos) = self.backend.get_selected_mail_position() {
+                    self.backend.unfold_thread(pos);
                 }
             }
 

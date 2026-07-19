@@ -1,7 +1,8 @@
-use std::collections::HashSet;
-
+use super::EmailAddress;
 use crate::utils::{EmailKeyword, ThreadId};
 use chrono::{DateTime, Local, Utc};
+use jmap_client::email::Property;
+use std::collections::HashSet;
 
 #[derive(Debug, Clone)]
 pub struct MailData {
@@ -15,6 +16,21 @@ pub struct MailData {
     pub preview: String,
     pub received_at: DateTime<Local>,
     pub has_attachment: bool,
+}
+
+impl MailData {
+    pub const PROPERTIES: [Property; 10] = [
+        jmap_client::email::Property::Id,
+        jmap_client::email::Property::ThreadId,
+        jmap_client::email::Property::Keywords,
+        jmap_client::email::Property::From,
+        jmap_client::email::Property::To,
+        jmap_client::email::Property::Cc,
+        jmap_client::email::Property::Subject,
+        jmap_client::email::Property::Preview,
+        jmap_client::email::Property::ReceivedAt,
+        jmap_client::email::Property::HasAttachment,
+    ];
 }
 
 impl From<jmap_client::email::Email> for MailData {
@@ -45,38 +61,6 @@ impl From<jmap_client::email::Email> for MailData {
                 .expect("Valid timestamp")
                 .with_timezone(&Local),
             has_attachment: mail.has_attachment(),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct EmailAddress {
-    pub name: Option<String>,
-    pub address: String,
-}
-
-impl std::fmt::Display for EmailAddress {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let addr = self.address.as_str();
-        if let Some(name) = &self.name {
-            write!(f, "{name} <{addr}>")
-        } else {
-            write!(f, "{addr}")
-        }
-    }
-}
-
-impl From<jmap_client::email::EmailAddress> for EmailAddress {
-    fn from(addr: jmap_client::email::EmailAddress) -> Self {
-        Self::from(&addr)
-    }
-}
-
-impl From<&jmap_client::email::EmailAddress> for EmailAddress {
-    fn from(addr: &jmap_client::email::EmailAddress) -> Self {
-        Self {
-            name: addr.name().map(|name| name.to_string()).clone(),
-            address: addr.email().to_string(),
         }
     }
 }
