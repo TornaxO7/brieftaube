@@ -2,7 +2,7 @@ mod thread;
 
 use super::{Data, types::MailData};
 use crate::utils::{MailId, ThreadId};
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::HashMap;
 pub use thread::Thread;
 
 pub struct Threads {
@@ -22,8 +22,18 @@ impl Threads {
         self.threads.get(id)
     }
 
-    pub fn get_thread_entry<'a>(&'a mut self, id: ThreadId) -> Entry<'a, String, Thread> {
-        self.threads.entry(id)
+    pub fn insert_thread(&mut self, id: ThreadId, thread: Thread) {
+        let new = thread.clone();
+
+        if let Some(old) = self.threads.insert(id.clone(), thread) {
+            for mail in old.mails() {
+                self.mail_index.remove(&mail.id);
+            }
+        }
+
+        for mail in new.mails() {
+            self.mail_index.insert(mail.id.clone(), id.clone());
+        }
     }
 
     pub fn get_mail_from_thread(

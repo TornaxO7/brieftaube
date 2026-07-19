@@ -142,16 +142,17 @@ impl MailListBackend {
                     let guard = data.lock().unwrap();
                     let data = guard.as_ref().expect(DATA_INITIALISED_MSG);
                     
-                    ids.into_iter()
-                    .filter(|id| {
-                        data.get_mail(id).map(|mail| {
-                            if add_keywords {
-                                mail.keywords.symmetric_difference(&keywords).next().is_some()
-                            } else {
-                                mail.keywords.intersection(&keywords).next().is_some()
-                            }
-                        }).unwrap_or(false)
-                    }).collect()
+                    ids
+                        .into_iter()
+                        .filter(|id| {
+                            data.get_mail(id).map(|mail| {
+                                if add_keywords {
+                                    mail.keywords.symmetric_difference(&keywords).next().is_some()
+                                } else {
+                                    mail.keywords.intersection(&keywords).next().is_some()
+                                }
+                            }).unwrap_or(false)
+                        }).collect()
                 };
 
                 debug!("{:?} will be applied to: {:?}", &keywords, &filtered_ids);

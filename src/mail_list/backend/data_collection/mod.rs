@@ -155,10 +155,7 @@ impl DataCollection {
             Thread::new(thread_state, thread_mails)
         };
 
-        self.threads
-            .get_thread_entry(id.clone())
-            .and_modify(|thread| *thread = new_thread.clone())
-            .or_insert(new_thread.clone());
+        self.threads.insert_thread(id.clone(), new_thread);
     }
 }
 
