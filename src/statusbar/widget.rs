@@ -1,7 +1,10 @@
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, HorizontalAlignment, Layout, Rect},
-    style::Style,
+    style::{
+        Style,
+        palette::material::{GREEN, ORANGE, RED},
+    },
     widgets::{Block, Cell, Paragraph, Row, StatefulWidget, Table, Widget},
 };
 use std::sync::{
@@ -64,22 +67,22 @@ fn render_error_warning_info_state(area: Rect, buf: &mut Buffer, counter: &super
     let errors = get_cell(
         "E",
         &counter.errors,
-        Style::default().light_red(),
-        Style::default().red(),
+        Style::default().fg(RED.c500),
+        Style::default().fg(RED.c800),
     );
 
     let warnings = get_cell(
         "W",
         &counter.warnings,
-        Style::default().light_yellow(),
-        Style::default().yellow(),
+        Style::default().fg(ORANGE.c500),
+        Style::default().fg(ORANGE.c800),
     );
 
     let infos = get_cell(
         "I",
         &counter.infos,
-        Style::default().light_green(),
-        Style::default().green(),
+        Style::default().fg(GREEN.c500),
+        Style::default().fg(GREEN.c800),
     );
 
     let rows = [Row::new([errors, warnings, infos])];
