@@ -1,14 +1,6 @@
-pub mod thread;
-
-use crate::{config::Config, utils::ThreadId};
+use crate::config::Config;
 use jmap_client::client::Client;
-use std::{collections::HashMap, rc::Rc, sync::Arc};
-use tokio::task::{JoinError, JoinSet};
-
-#[derive(Default)]
-struct Data {
-    pub threads: HashMap<ThreadId, thread::Thread>,
-}
+use std::{rc::Rc, sync::Arc};
 
 // TODO: Rename to `Backends`
 pub struct Account {
@@ -16,8 +8,6 @@ pub struct Account {
 
     pub mailboxes: Rc<crate::mailboxes::Backend>,
     pub root_mails: crate::root_mails::RootMailsManager,
-    data: Arc<tokio::sync::Mutex<Data>>,
-    tasks: Arc<std::sync::Mutex<JoinSet<color_eyre::Result<()>>>>,
 }
 
 impl Account {
@@ -49,17 +39,7 @@ impl Account {
                 config.clone(),
             )),
             root_mails: crate::root_mails::RootMailsManager::new(),
-            data: Arc::new(tokio::sync::Mutex::new(Data::default())),
-            tasks: Arc::new(std::sync::Mutex::new(JoinSet::new())),
         }
-    }
-
-    pub fn has_tasks_running(&self) -> bool {
-        !self.tasks.lock().unwrap().is_empty() && self.mailboxes.has_tasks_running()
-    }
-
-    pub async fn has_changed(&self) -> Option<Result<color_eyre::Result<()>, JoinError>> {
-        self.tasks.lock().unwrap().join_next().await
     }
 
     pub fn address(&self) -> String {

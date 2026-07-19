@@ -104,11 +104,6 @@ impl App {
                     self.account.root_mails.pop_task();
                 }
 
-                res = self.account.has_changed(), if self.account.has_tasks_running() => {
-                    if let Ok(Err(err)) = res.expect("A task finished") {
-                        error!("{}", err);
-                    }
-                }
                 maybe_event = reader.next().fuse() => match maybe_event {
                     Some(Ok(event)) => self.handle_event(event),
                     Some(Err(e)) => error!("{}", e),
