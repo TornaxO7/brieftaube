@@ -2,16 +2,15 @@ mod backend;
 mod composer;
 mod config;
 mod log_viewer;
+mod mail_list;
 mod mail_viewer;
 mod mailboxes;
-mod root_mails;
 mod statusbar;
-mod thread_mails;
 mod utils;
 
 use crate::{
     statusbar::Statusbar,
-    utils::{MailboxId, ThreadId, ui::ScreenState},
+    utils::{MailboxId, ui::ScreenState},
 };
 use color_eyre::eyre;
 use crossterm::event::Event;
@@ -43,11 +42,10 @@ async fn main() -> eyre::Result<()> {
 
 enum Screen {
     Mailboxes(mailboxes::ui::State),
-    RootMails(root_mails::ui::State),
+    MailList(mail_list::ui::State),
     Composer(composer::ui::State),
     MailViewer(mail_viewer::ui::State),
     LogViewer(log_viewer::ui::State),
-    ThreadMails(thread_mails::ui::State),
 }
 
 #[derive(Debug)]
@@ -56,7 +54,6 @@ pub enum Action {
     OpenMailViewer(Email),
     OpenLogViewer,
     OpenComposer,
-    OpenThread(ThreadId),
 
     Redraw,
     Back,
@@ -100,8 +97,8 @@ impl App {
                 _ = self.account.mailboxes.has_changed(), if self.account.mailboxes.has_tasks_running() => {
                     self.account.mailboxes.pop_task();
                 }
-                _ = self.account.root_mails.has_changed(), if self.account.root_mails.has_tasks_running() => {
-                    self.account.root_mails.pop_task();
+                _ = self.account.mail_lists.has_changed(), if self.account.mail_lists.has_tasks_running() => {
+                    self.account.mail_lists.pop_task();
                 }
 
                 maybe_event = reader.next().fuse() => match maybe_event {
@@ -135,8 +132,8 @@ impl App {
             Screen::Mailboxes(state) => {
                 frame.render_stateful_widget(mailboxes::ui::Mailboxes::default(), screen, state);
             }
-            Screen::RootMails(state) => {
-                frame.render_stateful_widget(root_mails::ui::RootMails::default(), screen, state);
+            Screen::MailList(state) => {
+                frame.render_stateful_widget(mail_list::ui::RootMails::default(), screen, state);
             }
             Screen::Composer(state) => {
                 frame.render_stateful_widget(composer::ui::Composer::default(), screen, state);
@@ -147,24 +144,16 @@ impl App {
             Screen::LogViewer(state) => {
                 frame.render_stateful_widget(log_viewer::ui::LogViewer::default(), screen, state);
             }
-            Screen::ThreadMails(state) => {
-                frame.render_stateful_widget(
-                    thread_mails::ui::ThreadMails::default(),
-                    screen,
-                    state,
-                );
-            }
         };
     }
 
     fn handle_event(&mut self, event: Event) {
         match self.screens.last_mut().unwrap() {
             Screen::Mailboxes(state) => state.handle_event(event, &mut self.statusbar),
-            Screen::RootMails(state) => state.handle_event(event, &mut self.statusbar),
+            Screen::MailList(state) => state.handle_event(event, &mut self.statusbar),
             Screen::Composer(state) => state.handle_event(event, &mut self.statusbar),
             Screen::MailViewer(state) => state.handle_event(event, &mut self.statusbar),
             Screen::LogViewer(state) => state.handle_event(event, &mut self.statusbar),
-            Screen::ThreadMails(state) => state.handle_event(event, &mut self.statusbar),
         };
     }
 
@@ -172,11 +161,10 @@ impl App {
         let actions = {
             let actions = match self.screens.last_mut().unwrap() {
                 Screen::Mailboxes(state) => state.get_app_actions(),
-                Screen::RootMails(state) => state.get_app_actions(),
+                Screen::MailList(state) => state.get_app_actions(),
                 Screen::Composer(state) => state.get_app_actions(),
                 Screen::MailViewer(state) => state.get_app_actions(),
                 Screen::LogViewer(state) => state.get_app_actions(),
-                Screen::ThreadMails(state) => state.get_app_actions(),
             };
 
             actions.collect::<Vec<Action>>()
@@ -186,8 +174,8 @@ impl App {
             match action {
                 Action::OpenRootMails(id) => {
                     let client = self.account.client.clone();
-                    let backend = self.account.root_mails.get_backend(id, client);
-                    let next_screen = Screen::RootMails(root_mails::ui::State::new(backend));
+                    let backend = self.account.mail_lists.get_backend(id, client);
+                    let next_screen = Screen::MailList(mail_list::ui::State::new(backend));
 
                     self.statusbar.set_screen(&next_screen);
                     self.screens.push(next_screen);
@@ -212,18 +200,7 @@ impl App {
                     // self.statusbar.set_screen(&next_screen);
                     // self.screens.push(next_screen);
                 }
-                Action::OpenThread(thread_id) => {
-                    todo!()
-                    // self.account.init_thread(thread_id.clone());
 
-                    // let next_screen = Screen::ThreadMails(thread_mails::ui::State::new(
-                    //     self.account.clone(),
-                    //     thread_id,
-                    // ));
-
-                    // self.statusbar.set_screen(&next_screen);
-                    // self.screens.push(next_screen);
-                }
                 Action::Redraw => {
                     self.needs_full_redraw = true;
                 }
@@ -244,8 +221,7 @@ impl App {
         let top_screen_has_tasks_running =
             match self.screens.last().expect("There's at least one screen") {
                 Screen::Mailboxes(_) => self.account.mailboxes.has_tasks_running(),
-                Screen::RootMails(_) => self.account.root_mails.has_tasks_running(),
-                Screen::ThreadMails(_) => todo!(),
+                Screen::MailList(_) => self.account.mail_lists.has_tasks_running(),
                 Screen::Composer(_) => todo!(),
                 Screen::MailViewer(_) => todo!(),
                 Screen::LogViewer(_) => false,

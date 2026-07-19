@@ -1,6 +1,6 @@
 use super::Action;
 use crate::{
-    root_mails::backend::RootMailsBackend,
+    mail_list::backend::MailListBackend,
     utils::{
         EmailKeyword, MailId,
         ui::{
@@ -29,11 +29,11 @@ pub struct State {
     overlay: Option<ScreenOverlay<PaletteType, InputType>>,
 
     pub selected: HashSet<MailId>,
-    pub backend: Rc<RootMailsBackend>,
+    pub backend: Rc<MailListBackend>,
 }
 
 impl State {
-    pub fn new(backend: Rc<RootMailsBackend>) -> Self {
+    pub fn new(backend: Rc<MailListBackend>) -> Self {
         backend.init();
 
         Self {
@@ -48,7 +48,6 @@ impl State {
                 ("j", Action::NavigateToNextMail),
                 ("k", Action::NavigateToPreviousMail),
                 ("h", Action::Back),
-                ("l", Action::OpenThread),
                 ("<C-l>", Action::OpenLogs),
                 ("gg", Action::NavigateToTop),
                 ("ge", Action::NavigateToBottom),
@@ -116,12 +115,6 @@ impl ScreenState<Action, PaletteType, InputType> for State {
             }
             Action::OpenLogs => {
                 self.app_actions.push(crate::Action::OpenLogViewer);
-            }
-            Action::OpenThread => {
-                if let Some(mail) = self.backend.get_selected_mail() {
-                    self.app_actions
-                        .push(crate::Action::OpenThread(mail.thread_id));
-                }
             }
             Action::ViewSelectedMail => {
                 todo!()

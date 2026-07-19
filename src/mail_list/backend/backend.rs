@@ -1,7 +1,7 @@
 use crate::{
-    root_mails::backend::RootMailData,
     utils::{EmailKeyword, MailId, MailboxId},
 };
+use super::MailData;
 use jmap_client::client::Client;
 use ratatui::widgets::TableState;
 use std::{
@@ -15,7 +15,7 @@ const INIT_ROOT_MAILS: usize = 10;
 const DATA_INITIALISED_MSG: &str = "Is initialised";
 
 pub struct Data {
-    pub mails: Vec<RootMailData>,
+    pub mails: Vec<MailData>,
     // pub mails_renderable: Vec<MailRenderable>,
     mapping: HashMap<MailId, usize>,
     state: String,
@@ -23,14 +23,14 @@ pub struct Data {
     pub table_state: TableState,
 }
 
-pub struct RootMailsBackend {
+pub struct MailListBackend {
     id: MailboxId,
     client: Arc<Client>,
     pub data: Arc<Mutex<Option<Data>>>,
     tasks: Mutex<VecDeque<JoinHandle<()>>>,
 }
 
-impl RootMailsBackend {
+impl MailListBackend {
     #[tracing::instrument(level = "trace", skip_all)]
     pub fn new(client: Arc<Client>, id: MailboxId) -> Self {
         Self {
@@ -61,7 +61,7 @@ impl RootMailsBackend {
 }
 
 // methods which need to interact with the server
-impl RootMailsBackend {
+impl MailListBackend {
     pub fn init(&self) {
         if self.is_initialised() {
             // TODO: fetch changes
@@ -126,10 +126,10 @@ impl RootMailsBackend {
                     }
                 };
 
-                let mails: Vec<RootMailData> = get_mail_response
+                let mails: Vec<MailData> = get_mail_response
                     .take_list()
                     .into_iter()
-                    .map(RootMailData::from)
+                    .map(MailData::from)
                     .collect();
 
                 let mapping: HashMap<MailId, usize> = mails
@@ -238,7 +238,7 @@ impl RootMailsBackend {
 }
 
 // `state` methods
-impl RootMailsBackend {
+impl MailListBackend {
     pub fn navigate_to_next_mail(&self) {
         let mut guard = self.data.lock().unwrap();
         if let Some(data) = guard.as_mut() {
@@ -267,7 +267,7 @@ impl RootMailsBackend {
         }
     }
 
-    pub fn get_selected_mail(&self) -> Option<RootMailData> {
+    pub fn get_selected_mail(&self) -> Option<MailData> {
         let guard = self.data.lock().unwrap();
         guard.as_ref().and_then(|data| {
             data.table_state
@@ -279,14 +279,14 @@ impl RootMailsBackend {
 
 // helper functions
 impl Data {
-    fn get_mail(&self, id: &MailId) -> Option<&RootMailData> {
+    fn get_mail(&self, id: &MailId) -> Option<&MailData> {
         self.mapping
             .get(id)
             .cloned()
             .and_then(|idx| self.mails.get(idx))
     }
 
-    fn get_mail_mut(&mut self, id: &MailId) -> Option<&mut RootMailData> {
+    fn get_mail_mut(&mut self, id: &MailId) -> Option<&mut MailData> {
         self.mapping
             .get(id)
             .cloned()

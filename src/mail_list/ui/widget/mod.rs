@@ -1,8 +1,6 @@
-use std::collections::HashSet;
-
 use super::State;
 use crate::{
-    root_mails::backend::{Data, MailRenderable},
+    mail_list::backend::{Data, MailRenderable},
     utils::{
         EmailKeyword, MailId,
         ui::{
@@ -23,6 +21,7 @@ use ratatui::{
     text::Text,
     widgets::{Block, Cell, Clear, Paragraph, Row, StatefulWidget, Table, Widget},
 };
+use std::collections::HashSet;
 
 #[derive(Default)]
 pub struct RootMails {}

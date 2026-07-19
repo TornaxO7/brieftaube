@@ -4,7 +4,7 @@ use crate::utils::{EmailKeyword, ThreadId};
 use chrono::{DateTime, Local, Utc};
 
 #[derive(Debug, Clone)]
-pub struct RootMailData {
+pub struct MailData {
     pub id: String,
     pub thread_id: ThreadId,
     pub keywords: HashSet<EmailKeyword>,
@@ -17,7 +17,7 @@ pub struct RootMailData {
     pub has_attachment: bool,
 }
 
-impl From<jmap_client::email::Email> for RootMailData {
+impl From<jmap_client::email::Email> for MailData {
     fn from(mut mail: jmap_client::email::Email) -> Self {
         Self {
             id: mail.take_id(),

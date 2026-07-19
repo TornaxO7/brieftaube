@@ -3,18 +3,18 @@ mod mail_data;
 mod mail_renderable;
 
 use crate::utils::MailboxId;
-pub use backend::{Data, RootMailsBackend};
+pub use backend::{Data, MailListBackend};
 use jmap_client::client::Client;
-pub use mail_data::{EmailAddress, RootMailData};
+pub use mail_data::{EmailAddress, MailData};
 pub use mail_renderable::MailRenderable;
 use std::{collections::HashMap, rc::Rc, sync::Arc};
 
-pub struct RootMailsManager {
-    backends: HashMap<MailboxId, Rc<RootMailsBackend>>,
+pub struct MailListManager {
+    backends: HashMap<MailboxId, Rc<MailListBackend>>,
     selected: Option<MailboxId>,
 }
 
-impl RootMailsManager {
+impl MailListManager {
     pub fn new() -> Self {
         Self {
             backends: HashMap::with_capacity(16),
@@ -22,12 +22,12 @@ impl RootMailsManager {
         }
     }
 
-    pub fn get_backend(&mut self, id: MailboxId, client: Arc<Client>) -> Rc<RootMailsBackend> {
+    pub fn get_backend(&mut self, id: MailboxId, client: Arc<Client>) -> Rc<MailListBackend> {
         self.selected = Some(id.clone());
 
         self.backends
             .entry(id.clone())
-            .or_insert(Rc::new(RootMailsBackend::new(client, id.clone())))
+            .or_insert(Rc::new(MailListBackend::new(client, id.clone())))
             .clone()
     }
 

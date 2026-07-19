@@ -1,7 +1,5 @@
-use crate::{
-    root_mails::backend::{EmailAddress, RootMailData},
-    utils::EmailKeyword,
-};
+use super::{EmailAddress, MailData};
+use crate::utils::EmailKeyword;
 use std::collections::HashSet;
 
 pub struct MailRenderable {
@@ -16,8 +14,8 @@ pub struct MailRenderable {
     pub keywords: HashSet<EmailKeyword>,
 }
 
-impl From<&RootMailData> for MailRenderable {
-    fn from(mail: &RootMailData) -> Self {
+impl From<&MailData> for MailRenderable {
+    fn from(mail: &MailData) -> Self {
         let id = mail.id.clone();
         let from = addresses_to_string(&mail.from);
         let to = addresses_to_string(&mail.to);

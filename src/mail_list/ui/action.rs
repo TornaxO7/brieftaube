@@ -27,8 +27,6 @@ pub enum Action {
 
     #[strum(message = "Open logs")]
     OpenLogs,
-    #[strum(message = "Open the thread of the selected mail.")]
-    OpenThread,
 
     #[strum(message = "Compose a new mail.")]
     ComposeMail,

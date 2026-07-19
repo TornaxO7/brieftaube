@@ -7,7 +7,7 @@ pub struct Account {
     pub client: Arc<jmap_client::client::Client>,
 
     pub mailboxes: Rc<crate::mailboxes::Backend>,
-    pub root_mails: crate::root_mails::RootMailsManager,
+    pub mail_lists: crate::mail_list::MailListManager,
 }
 
 impl Account {
@@ -38,7 +38,7 @@ impl Account {
                 client.clone(),
                 config.clone(),
             )),
-            root_mails: crate::root_mails::RootMailsManager::new(),
+            mail_lists: crate::mail_list::MailListManager::new(),
         }
     }
 

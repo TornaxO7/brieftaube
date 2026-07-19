@@ -1,5 +1,5 @@
 mod backend;
 pub mod ui;
 
-pub use backend::RootMailsManager;
+pub use backend::MailListManager;
 use backend::*;
