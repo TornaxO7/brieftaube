@@ -1,22 +1,23 @@
 use crate::{
-    root_mails::backend::{MailRenderable, RootMailData},
-    utils::{MailId, MailboxId},
+    root_mails::backend::RootMailData,
+    utils::{EmailKeyword, MailId, MailboxId},
 };
 use jmap_client::client::Client;
 use ratatui::widgets::TableState;
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, HashSet, VecDeque},
     sync::{Arc, Mutex},
 };
 use tokio::task::JoinHandle;
-use tracing::error;
+use tracing::{error, warn};
 
 const INIT_ROOT_MAILS: usize = 10;
 const DATA_INITIALISED_MSG: &str = "Is initialised";
 
 pub struct Data {
     pub mails: Vec<RootMailData>,
-    pub mails_renderable: Vec<MailRenderable>,
+    // pub mails_renderable: Vec<MailRenderable>,
+    mapping: HashMap<MailId, usize>,
     state: String,
 
     pub table_state: TableState,
@@ -131,15 +132,103 @@ impl RootMailsBackend {
                     .map(RootMailData::from)
                     .collect();
 
-                let mails_renderable = mails.iter().map(MailRenderable::from).collect();
+                let mapping: HashMap<MailId, usize> = mails
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, mail)| (mail.id.clone(), idx))
+                    .collect();
 
                 let mut data = data.lock().unwrap();
                 *data = Some(Data {
                     mails,
-                    mails_renderable,
+                    mapping,
                     state: get_mail_response.take_state(),
                     table_state: TableState::new(),
                 });
+            }));
+    }
+
+    pub fn update_keywords(&self, ids: Vec<MailId>, keywords: HashSet<EmailKeyword>, add_keywords: bool) {
+        if !self.is_initialised() {
+            return;
+        }
+
+        let data = self.data.clone();
+        let client = self.client.clone();
+
+        self.tasks
+            .lock()
+            .unwrap()
+            .push_back(tokio::spawn(async move {
+                let filtered_ids: Vec<MailId> = {
+                    let guard = data.lock().unwrap();
+                    let data = guard.as_ref().expect(DATA_INITIALISED_MSG);
+                    
+                    ids.into_iter()
+                    .filter(|id| {
+                        data.get_mail(id).map(|mail| {
+                            if add_keywords {
+                                mail.keywords.symmetric_difference(&keywords).next().is_some()
+                            } else {
+                                mail.keywords.intersection(&keywords).next().is_some()
+                            }
+                        }).unwrap_or(false)
+                    }).collect()
+                };
+
+                tracing::debug!("{:?}", filtered_ids);
+
+                let current_state = {
+                    let guard = data.lock().unwrap();
+                    let data = guard.as_ref().expect(DATA_INITIALISED_MSG);
+                    data.state.clone()
+                };
+
+                let mut response = {
+                    let mut request = client.build();
+                    let set_mail = request.set_email().if_in_state(current_state);
+
+                    for id in filtered_ids.iter() {
+                        for keyword in keywords.iter() {
+                            set_mail.update(id).keyword(keyword.to_string().as_str(), add_keywords);
+                        }
+                    }
+
+                    match request.send_set_email().await {
+                        Ok(r) => r,
+                        Err(err) => {
+                            error!("Couldn't send request to server to add keywords: {err}");
+                            return;
+                        }
+                    }
+                };
+
+                let mut guard = data.lock().unwrap();
+                let data = guard.as_mut().expect(DATA_INITIALISED_MSG);
+                data.state = response.take_new_state();
+                for id in filtered_ids {
+                    match response.updated(&id) {
+                        Ok(server) => {
+                            if server.is_some() {
+                                warn!("This shouldn't happen <.<");
+                            }
+
+                            let Some(mail) = data.get_mail_mut(&id) else {
+                                warn!("A mail seems to be removed during the request. Skipping the update of its keywords.");
+                                continue;
+                            };
+
+                            if add_keywords {
+                                mail.keywords.extend(keywords.iter().cloned());
+                            } else {
+                                mail.keywords = mail.keywords.difference(&keywords).cloned().collect();
+                            }
+                        }
+                        Err(err) => {
+                            error!("Couldn't set the keyword for an email: {err}");
+                        }
+                    }
+                }
             }));
     }
 }
@@ -181,5 +270,22 @@ impl RootMailsBackend {
                 .selected()
                 .map(|idx| data.mails[idx].id.clone())
         })
+    }
+}
+
+// helper functions
+impl Data {
+    fn get_mail(&self, id: &MailId) -> Option<&RootMailData> {
+        self.mapping
+            .get(id)
+            .cloned()
+            .and_then(|idx| self.mails.get(idx))
+    }
+
+    fn get_mail_mut(&mut self, id: &MailId) -> Option<&mut RootMailData> {
+        self.mapping
+            .get(id)
+            .cloned()
+            .and_then(|idx| self.mails.get_mut(idx))
     }
 }

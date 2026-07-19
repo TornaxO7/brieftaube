@@ -2,6 +2,10 @@ const DRAFT: &str = "$draft";
 const SEEN: &str = "$seen";
 const FLAGGED: &str = "$flagged";
 const ANSWERED: &str = "$answered";
+const FORWARDED: &str = "$forwarded";
+const PHISING: &str = "$phishing";
+const JUNK: &str = "$junk";
+const NOTJUNK: &str = "$notjunk";
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum EmailKeyword {
@@ -9,18 +13,34 @@ pub enum EmailKeyword {
     Seen,
     Flagged,
     Answered,
+    Forwarded,
+    Phising,
+    Junk,
+    Notjunk,
     Other(String),
 }
 
-impl EmailKeyword {
-    pub fn as_str(&self) -> String {
-        match self {
-            Self::Draft => DRAFT.to_string(),
-            Self::Seen => SEEN.to_string(),
-            Self::Flagged => FLAGGED.to_string(),
-            Self::Answered => ANSWERED.to_string(),
-            Self::Other(other) => other.clone(),
-        }
+impl std::fmt::Display for EmailKeyword {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Self::Draft => DRAFT,
+            Self::Seen => SEEN,
+            Self::Flagged => FLAGGED,
+            Self::Answered => ANSWERED,
+            Self::Forwarded => FORWARDED,
+            Self::Phising => PHISING,
+            Self::Junk => JUNK,
+            Self::Notjunk => NOTJUNK,
+            Self::Other(other) => other.as_str(),
+        };
+
+        write!(f, "{}", s)
+    }
+}
+
+impl Into<String> for EmailKeyword {
+    fn into(self) -> String {
+        self.to_string()
     }
 }
 
@@ -31,6 +51,10 @@ impl From<&str> for EmailKeyword {
             SEEN => Self::Seen,
             FLAGGED => Self::Flagged,
             ANSWERED => Self::Answered,
+            FORWARDED => Self::Forwarded,
+            PHISING => Self::Phising,
+            JUNK => Self::Junk,
+            NOTJUNK => Self::Notjunk,
             other => Self::Other(other.to_string()),
         }
     }

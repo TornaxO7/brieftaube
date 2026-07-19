@@ -43,7 +43,7 @@ impl StatefulWidget for RootMails {
                 let selected_mail = data
                     .table_state
                     .selected()
-                    .and_then(|idx| data.mails_renderable.get(idx));
+                    .and_then(|idx| data.mails.get(idx).map(MailRenderable::from));
                 render_preview(preview_area, buf, selected_mail);
             } else {
             }
@@ -60,8 +60,9 @@ fn render_mail_list(area: Rect, buf: &mut Buffer, data: &mut Data, selection: &H
 
     let table = {
         let rows: Vec<Row<'_>> = data
-            .mails_renderable
+            .mails
             .iter()
+            .map(MailRenderable::from)
             .map(|mail| {
                 let has_attachment = if mail.has_attachment {
                     ATTACHMENT_SYMBOL
@@ -92,10 +93,10 @@ fn render_mail_list(area: Rect, buf: &mut Buffer, data: &mut Data, selection: &H
                 Row::new(vec![
                     Cell::from(is_selected),
                     Cell::from(is_unread),
-                    Cell::from(mail.subject.as_str()),
+                    Cell::from(mail.subject),
                     Cell::from(has_attachment),
-                    Cell::from(mail.from.as_str()),
-                    Cell::from(mail.received_at.as_str()),
+                    Cell::from(mail.from),
+                    Cell::from(mail.received_at),
                 ])
                 .style(style)
             })
@@ -123,7 +124,7 @@ fn render_mail_list(area: Rect, buf: &mut Buffer, data: &mut Data, selection: &H
     StatefulWidget::render(table, area, buf, &mut data.table_state)
 }
 
-fn render_preview(area: Rect, buf: &mut Buffer, mail: Option<&MailRenderable>) {
+fn render_preview(area: Rect, buf: &mut Buffer, mail: Option<MailRenderable>) {
     if let Some(mail) = mail {
         let headers = vec![
             ("Received at:", mail.received_at.as_str()),

@@ -2,7 +2,7 @@ use super::Action;
 use crate::{
     root_mails::backend::RootMailsBackend,
     utils::{
-        MailId,
+        EmailKeyword, MailId,
         ui::{
             ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager,
             palette,
@@ -76,6 +76,36 @@ impl ScreenState<Action, PaletteType, InputType> for State {
                         self.selected.insert(id);
                     }
                     self.backend.navigate_to_next_mail();
+                }
+            }
+            Action::MarkSelectedMailsAsUnseen => {
+                if self.selected.is_empty() {
+                    if let Some(id) = self.backend.get_selected_mail() {
+                        self.backend.update_keywords(
+                            vec![id],
+                            HashSet::from([EmailKeyword::Seen]),
+                            false,
+                        );
+                    }
+                } else {
+                    let ids: Vec<MailId> = self.selected.drain().collect();
+                    self.backend
+                        .update_keywords(ids, HashSet::from([EmailKeyword::Seen]), false);
+                }
+            }
+            Action::MarkSelectedMailsAsSeen => {
+                if self.selected.is_empty() {
+                    if let Some(id) = self.backend.get_selected_mail() {
+                        self.backend.update_keywords(
+                            vec![id],
+                            HashSet::from([EmailKeyword::Seen]),
+                            true,
+                        );
+                    }
+                } else {
+                    let ids: Vec<MailId> = self.selected.drain().collect();
+                    self.backend
+                        .update_keywords(ids, HashSet::from([EmailKeyword::Seen]), true);
                 }
             }
 

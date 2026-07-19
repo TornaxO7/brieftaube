@@ -36,6 +36,15 @@ pub enum Action {
     #[strum(message = "Toggle mail selection.")]
     ToggleMailSelection,
 
+    #[strum(
+        message = "Mark the selected mails as unseen. If no mails are selected it will use the mail under the current cursor."
+    )]
+    MarkSelectedMailsAsUnseen,
+    #[strum(
+        message = "Mark the selected mails as seen. If no mails are selected it will use the mail under the current cursor."
+    )]
+    MarkSelectedMailsAsSeen,
+
     #[strum(message = "Navigate to the next (below) mail.")]
     NavigateToNextMail,
     #[strum(message = "Navigate to the previous (above) mail.")]

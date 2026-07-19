@@ -1,9 +1,8 @@
-use std::collections::HashSet;
-
 use crate::{
     root_mails::backend::{EmailAddress, RootMailData},
     utils::EmailKeyword,
 };
+use std::collections::HashSet;
 
 pub struct MailRenderable {
     pub id: String,
