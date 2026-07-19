@@ -47,9 +47,8 @@ impl State {
                 (":", Action::OpenCommandPalette),
                 ("j", Action::NavigateToNextMail),
                 ("k", Action::NavigateToPreviousMail),
-                ("h", Action::FoldThread),
+                ("h", Action::FoldThreadOrGoBack),
                 ("l", Action::UnfoldThread),
-                ("<BS>", Action::Back),
                 ("<C-l>", Action::OpenLogs),
                 ("gg", Action::NavigateToTop),
                 ("ge", Action::NavigateToBottom),
@@ -113,6 +112,14 @@ impl ScreenState<Action, PaletteType, InputType> for State {
             Action::FoldThread => {
                 if let Some(pos) = self.backend.get_selected_mail_position() {
                     self.backend.fold_thread(pos);
+                }
+            }
+
+            Action::FoldThreadOrGoBack => {
+                if let Some(pos) = self.backend.get_selected_mail_position() {
+                    if !self.backend.fold_thread(pos) {
+                        self.apply_action(Action::Back);
+                    }
                 }
             }
             Action::UnfoldThread => {

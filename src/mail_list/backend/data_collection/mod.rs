@@ -121,11 +121,11 @@ impl DataCollection {
         Ok(())
     }
 
-    pub fn fold_row(&mut self, row_idx: usize) {
+    pub fn fold_row(&mut self, row_idx: usize) -> bool {
         let thread_id = match &self.rows[row_idx] {
             Row::Root(_) => match self.rows.get(row_idx + 1) {
                 Some(Row::Child(thread_id, _)) => thread_id.clone(),
-                _ => return,
+                _ => return false,
             },
             Row::Child(thread_id, _) => thread_id.clone(),
         };
@@ -139,6 +139,7 @@ impl DataCollection {
         self.table_state.select(Some(thread_start - 1));
         self.rows
             .retain(|row| !matches!(row, Row::Child(id, _) if *id == thread_id));
+        true
     }
 
     pub fn insert_thread(

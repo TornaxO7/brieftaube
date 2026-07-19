@@ -335,8 +335,8 @@ impl MailListBackend {
         guard.as_ref().and_then(|data| data.table_state.selected())
     }
   
-    pub fn fold_thread(&self, row: usize) {
+    pub fn fold_thread(&self, row: usize) -> bool {
         let mut guard = self.data.lock().unwrap();
-        guard.as_mut().map(|data| data.fold_row(row));
+        guard.as_mut().map(|data| data.fold_row(row)).unwrap_or(false)
     }
 }
