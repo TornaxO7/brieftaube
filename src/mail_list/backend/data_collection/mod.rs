@@ -47,6 +47,12 @@ impl DataCollection {
         let query_state = query.take_query_state();
 
         let mails = get.take_list();
+        let table_state = if !mails.is_empty() {
+            TableState::new().with_selected(Some(0))
+        } else {
+            TableState::new()
+        };
+
         let rows = mails
             .iter()
             .map(|mail| Row::Root(mail.id().unwrap().to_string()))
@@ -58,7 +64,7 @@ impl DataCollection {
             root_mails,
             rows,
             threads: Threads::new(),
-            table_state: TableState::new(),
+            table_state,
             state: get_state,
         }
     }
