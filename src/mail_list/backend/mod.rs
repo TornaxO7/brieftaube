@@ -232,6 +232,10 @@ impl MailListBackend {
                 warn!("Can't unfold row at index {row}. It's not a root mail in the thread");
                 return;
             }
+            Err(UnfoldRowError::AlreadyUnfolded) => {
+                warn!("Can't unfold thread: Thread is already unfolded.");
+                return;
+            }
             Err(UnfoldRowError::NotInitialised(thread_id)) => thread_id,
         };
 

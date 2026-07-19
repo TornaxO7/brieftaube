@@ -4,4 +4,5 @@ use crate::utils::ThreadId;
 pub enum UnfoldRowError {
     NonRootRow,
     NotInitialised(ThreadId),
+    AlreadyUnfolded,
 }

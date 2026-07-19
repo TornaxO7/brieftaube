@@ -92,6 +92,13 @@ impl DataCollection {
         };
         let mail = self.get_mail(root_mail_id).expect("Mail exists.");
 
+        match self.rows.get(row_idx + 1) {
+            Some(Row::Child(thread_id, _)) if *thread_id == mail.thread_id => {
+                return Err(UnfoldRowError::AlreadyUnfolded);
+            }
+            _ => {}
+        };
+
         let Some(thread) = self.threads.get_thread(&mail.thread_id) else {
             return Err(UnfoldRowError::NotInitialised(mail.thread_id.clone()));
         };
