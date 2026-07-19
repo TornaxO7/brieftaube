@@ -18,7 +18,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{
         Style,
-        palette::material::{BLUE, BLUE_GRAY, ORANGE},
+        palette::material::{BLUE, BLUE_GRAY, GRAY, GREEN, ORANGE},
     },
     text::Text,
     widgets::{Block, Cell, Clear, Paragraph, StatefulWidget, Table, Widget},
@@ -103,23 +103,22 @@ fn render_mail_list(
                     ""
                 };
 
-                let style = if mail.keywords.contains(&EmailKeyword::Flagged) {
-                    Style::default().bg(ORANGE.c900)
+                let subject_style = if mail.keywords.contains(&EmailKeyword::Flagged) {
+                    Style::default().fg(ORANGE.c300)
                 } else if !mail.keywords.contains(&EmailKeyword::Seen) {
-                    Style::default().bg(BLUE.c900)
+                    Style::default().fg(BLUE.c200)
                 } else {
                     Style::default()
                 };
 
                 ratatui::widgets::Row::new(vec![
-                    Cell::from(is_selected),
-                    Cell::from(is_unread),
-                    Cell::from(subject),
-                    Cell::from(has_attachment),
-                    Cell::from(mail.from),
-                    Cell::from(mail.received_at),
+                    Cell::from(is_selected).style(Style::default().fg(GREEN.c400)),
+                    Cell::from(is_unread).style(Style::default().fg(BLUE.c400)),
+                    Cell::from(subject).style(subject_style),
+                    Cell::from(has_attachment).style(Style::default().fg(GRAY.c400)),
+                    Cell::from(mail.from).style(Style::default().fg(BLUE_GRAY.c300)),
+                    Cell::from(mail.received_at).style(Style::default().fg(GRAY.c400)),
                 ])
-                .style(style)
             })
             .collect();
 
