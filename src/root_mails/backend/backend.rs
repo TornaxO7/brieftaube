@@ -267,12 +267,12 @@ impl RootMailsBackend {
         }
     }
 
-    pub fn get_selected_mail(&self) -> Option<MailId> {
+    pub fn get_selected_mail(&self) -> Option<RootMailData> {
         let guard = self.data.lock().unwrap();
         guard.as_ref().and_then(|data| {
             data.table_state
                 .selected()
-                .map(|idx| data.mails[idx].id.clone())
+                .map(|idx| data.mails[idx].clone())
         })
     }
 }

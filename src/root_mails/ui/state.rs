@@ -71,18 +71,18 @@ impl ScreenState<Action, PaletteType, InputType> for State {
             Action::NavigateToBottom => self.backend.navigate_to_bottom(),
 
             Action::ToggleMailSelection => {
-                if let Some(id) = self.backend.get_selected_mail() {
-                    if !self.selected.remove(&id) {
-                        self.selected.insert(id);
+                if let Some(mail) = self.backend.get_selected_mail() {
+                    if !self.selected.remove(&mail.id) {
+                        self.selected.insert(mail.id);
                     }
                     self.backend.navigate_to_next_mail();
                 }
             }
             Action::MarkSelectedMailsAsUnseen => {
                 if self.selected.is_empty() {
-                    if let Some(id) = self.backend.get_selected_mail() {
+                    if let Some(mail) = self.backend.get_selected_mail() {
                         self.backend.update_keywords(
-                            vec![id],
+                            vec![mail.id],
                             HashSet::from([EmailKeyword::Seen]),
                             false,
                         );
@@ -95,9 +95,9 @@ impl ScreenState<Action, PaletteType, InputType> for State {
             }
             Action::MarkSelectedMailsAsSeen => {
                 if self.selected.is_empty() {
-                    if let Some(id) = self.backend.get_selected_mail() {
+                    if let Some(mail) = self.backend.get_selected_mail() {
                         self.backend.update_keywords(
-                            vec![id],
+                            vec![mail.id],
                             HashSet::from([EmailKeyword::Seen]),
                             true,
                         );
@@ -118,7 +118,10 @@ impl ScreenState<Action, PaletteType, InputType> for State {
                 self.app_actions.push(crate::Action::OpenLogViewer);
             }
             Action::OpenThread => {
-                todo!()
+                if let Some(mail) = self.backend.get_selected_mail() {
+                    self.app_actions
+                        .push(crate::Action::OpenThread(mail.thread_id));
+                }
             }
             Action::ViewSelectedMail => {
                 todo!()
