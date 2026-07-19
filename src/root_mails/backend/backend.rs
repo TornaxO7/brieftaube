@@ -9,7 +9,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tokio::task::JoinHandle;
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 
 const INIT_ROOT_MAILS: usize = 10;
 const DATA_INITIALISED_MSG: &str = "Is initialised";
@@ -176,7 +176,11 @@ impl RootMailsBackend {
                     }).collect()
                 };
 
-                tracing::debug!("{:?}", filtered_ids);
+                debug!("{:?} will be applied to: {:?}", &keywords, &filtered_ids);
+
+                if filtered_ids.is_empty() {
+                    return;
+                }
 
                 let current_state = {
                     let guard = data.lock().unwrap();
