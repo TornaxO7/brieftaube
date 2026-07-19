@@ -77,7 +77,7 @@ impl MailListBackend {
                             .query_email()
                             .filter(jmap_client::email::query::Filter::InMailbox { value: id })
                             .sort([
-                                jmap_client::email::query::Comparator::received_at().descending()
+                                jmap_client::email::query::Comparator::received_at().ascending()
                             ])
                             .limit(INIT_ROOT_MAILS);
                         query.arguments().collapse_threads(true);
