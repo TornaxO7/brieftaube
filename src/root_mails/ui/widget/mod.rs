@@ -18,8 +18,9 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{
         Style,
-        palette::material::{BLUE, ORANGE},
+        palette::material::{BLUE, BLUE_GRAY, GRAY, ORANGE},
     },
+    text::Text,
     widgets::{Block, Cell, Clear, Paragraph, Row, StatefulWidget, Table, Widget},
 };
 
@@ -56,7 +57,7 @@ impl StatefulWidget for RootMails {
 }
 
 fn render_mail_list(area: Rect, buf: &mut Buffer, data: &mut Data, selection: &HashSet<MailId>) {
-    const DATE_EXAMPLE: &str = "15 May 2015, HH:MM:SS";
+    const DATE_EXAMPLE: &str = "Mon, 15 May 2015, HH:MM:SS";
 
     let area = Block::default().inner(area);
 
@@ -162,7 +163,13 @@ fn render_headers(area: Rect, buf: &mut Buffer, headers: &[(&'static str, &str)]
     let table = {
         let rows: Vec<Row<'_>> = headers
             .iter()
-            .map(|(name, value)| Row::new([Cell::new(*name), Cell::new(*value)]))
+            .map(|(name, value)| {
+                Row::new([
+                    Cell::new(Text::from(*name).right_aligned())
+                        .style(Style::default().fg(BLUE_GRAY.c400)),
+                    Cell::new(*value),
+                ])
+            })
             .collect();
 
         let widths = [

@@ -25,7 +25,10 @@ impl From<&RootMailData> for MailRenderable {
 
         let subject = mail.subject.clone();
         let preview = mail.preview.clone();
-        let received_at = mail.received_at.format("%e %b %Y, %H:%M:%S").to_string();
+        let received_at = mail
+            .received_at
+            .format("%a, %e %b %Y, %H:%M:%S")
+            .to_string();
         let has_attachment = mail.has_attachment;
         let keywords = mail.keywords.clone();
 
