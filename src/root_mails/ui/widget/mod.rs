@@ -7,7 +7,6 @@ use crate::{
         EmailKeyword, MailId,
         ui::{
             ScreenOverlay, ScreenState,
-            color::{DARK_BLUE, DARK_TURQUOISE},
             input::Input,
             palette::Palette,
             symbol::{ATTACHMENT_SYMBOL, CHECKMARK, UNREAD_SYMBOL},
@@ -17,7 +16,10 @@ use crate::{
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
-    style::Style,
+    style::{
+        Style,
+        palette::material::{BLUE, ORANGE},
+    },
     widgets::{Block, Cell, Clear, Paragraph, Row, StatefulWidget, Table, Widget},
 };
 
@@ -83,9 +85,9 @@ fn render_mail_list(area: Rect, buf: &mut Buffer, data: &mut Data, selection: &H
                 };
 
                 let style = if mail.keywords.contains(&EmailKeyword::Flagged) {
-                    Style::default().on_yellow().black()
+                    Style::default().bg(ORANGE.c900)
                 } else if !mail.keywords.contains(&EmailKeyword::Seen) {
-                    Style::default().bg(DARK_BLUE)
+                    Style::default().bg(BLUE.c900)
                 } else {
                     Style::default()
                 };
@@ -117,7 +119,7 @@ fn render_mail_list(area: Rect, buf: &mut Buffer, data: &mut Data, selection: &H
             Row::new(["", "", "Subject", "", "From", "Received at"])
                 .style(Style::default().underlined()),
         )
-        .row_highlight_style(Style::default().white().bg(DARK_TURQUOISE))
+        .row_highlight_style(Style::default().white().bg(BLUE.c700))
         .block(Block::bordered())
     };
 

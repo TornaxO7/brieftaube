@@ -5,18 +5,16 @@ use crate::{
     },
     utils::{
         MailboxId,
-        ui::{
-            ScreenOverlay, ScreenState,
-            color::{DARK_TURQUOISE, ORANGE},
-            input::Input,
-            palette::Palette,
-        },
+        ui::{ScreenOverlay, ScreenState, input::Input, palette::Palette},
     },
 };
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
-    style::Style,
+    style::{
+        Style,
+        palette::material::{BLUE, ORANGE},
+    },
     widgets::{
         Block, Borders, Cell, Clear, List, ListItem, Paragraph, Row, StatefulWidget, Table, Widget,
     },
@@ -102,7 +100,7 @@ fn render_marker(
 
     for mailbox in layer.mailboxes.iter() {
         let style = match selected.get(&mailbox.id) {
-            Some(SelectionType::Selected) => Style::default().bg(ORANGE),
+            Some(SelectionType::Selected) => Style::default().bg(ORANGE.c800),
             Some(SelectionType::Cut) => Style::default().on_red(),
             None => Style::default(),
         };
@@ -141,7 +139,7 @@ fn render_mailboxes(area: Rect, buf: &mut Buffer, layer: &mut Layer) {
             ],
         )
         .header(Row::new(["Sort order", "Name", "Unread"]).style(Style::default().underlined()))
-        .row_highlight_style(Style::default().bg(DARK_TURQUOISE))
+        .row_highlight_style(Style::default().bg(BLUE.c700))
     };
 
     StatefulWidget::render(table, area, buf, &mut layer.state)
