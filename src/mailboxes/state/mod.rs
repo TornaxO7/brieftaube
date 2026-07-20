@@ -586,10 +586,7 @@ impl State {
         let children = self.backend.get_children_ids(&focus.mailbox)?;
 
         match &children[idx] {
-            Entry::This => Some(ColumnData {
-                mailboxes: vec![MailboxDisplay::This],
-                state: None,
-            }),
+            Entry::This => None,
             Entry::Child(id) => {
                 let children = self.backend.get_children(&Some(id.clone()))?;
                 let mailboxes = to_mailbox_display(children, &self.selected);
