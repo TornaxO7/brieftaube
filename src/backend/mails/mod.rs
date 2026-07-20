@@ -391,6 +391,7 @@ impl MailsBackend {
             }));
     }
 
+    // TODO: Use an enum instead of a boolean...
     // returns `true` if unfolding was successfull, otherwise `false`
     pub fn unfold_mail(&self, mailbox: &MailboxId, mail: &MailId) -> bool {
         let result = {

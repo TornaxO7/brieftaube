@@ -39,6 +39,21 @@ impl StatefulWidget for MailViewer {
 fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
     let text = data.mail.rest.text_body.clone().unwrap();
 
+    {
+        let amount_unseen_lines = text.lines().count().saturating_sub(area.height as usize);
+        *data.vertical = data.vertical.content_length(amount_unseen_lines);
+    }
+
+    {
+        let amount_unseen_columns = text
+            .lines()
+            .next()
+            .map(|line| line.len().saturating_sub(area.width as usize))
+            .unwrap_or(0);
+
+        *data.horizontal = data.horizontal.content_length(amount_unseen_columns);
+    }
+
     Widget::render(
         Paragraph::new(text).block(Block::bordered()).scroll((
             data.vertical.get_position() as u16,
