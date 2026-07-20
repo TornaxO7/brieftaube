@@ -1,7 +1,7 @@
 use super::{MailAddress, MailKeyword, ThreadId};
 use crate::backend::mailbox::types::MailboxId;
 use chrono::{DateTime, Local, Utc};
-use jmap_client::email::Property;
+use jmap_client::email::{Email, EmailBodyPart, Property};
 use std::collections::HashSet;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -17,26 +17,26 @@ pub struct MailData {
     pub received_at: DateTime<Local>,
     pub has_attachment: bool,
     pub mailbox_ids: HashSet<MailboxId>,
+
+    pub rest: Option<MailDataRest>,
 }
 
 impl MailData {
     pub const PROPERTIES: [Property; 11] = [
-        jmap_client::email::Property::Id,
-        jmap_client::email::Property::ThreadId,
-        jmap_client::email::Property::Keywords,
-        jmap_client::email::Property::From,
-        jmap_client::email::Property::To,
-        jmap_client::email::Property::Cc,
-        jmap_client::email::Property::Subject,
-        jmap_client::email::Property::Preview,
-        jmap_client::email::Property::ReceivedAt,
-        jmap_client::email::Property::HasAttachment,
-        jmap_client::email::Property::MailboxIds,
+        Property::Id,
+        Property::ThreadId,
+        Property::Keywords,
+        Property::From,
+        Property::To,
+        Property::Cc,
+        Property::Subject,
+        Property::Preview,
+        Property::ReceivedAt,
+        Property::HasAttachment,
+        Property::MailboxIds,
     ];
-}
 
-impl From<jmap_client::email::Email> for MailData {
-    fn from(mut mail: jmap_client::email::Email) -> Self {
+    pub fn new(mut mail: Email) -> Self {
         Self {
             id: mail.take_id(),
             thread_id: mail.take_thread_id().unwrap(),
@@ -64,6 +64,84 @@ impl From<jmap_client::email::Email> for MailData {
                 .into_iter()
                 .map(|id| id.to_owned())
                 .collect(),
+            rest: None,
         }
     }
+
+    pub fn extend(&mut self, mail: &Email) {
+        self.rest = Some(MailDataRest::new(mail));
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct MailDataRest {
+    pub text_body: Option<String>,
+    pub html_body: Option<String>,
+    pub attachments: Vec<MailDataAttachment>,
+}
+
+impl MailDataRest {
+    pub const PROPERTIES: [Property; 5] = [
+        Property::Id,
+        Property::TextBody,
+        Property::HtmlBody,
+        Property::BodyValues,
+        Property::Attachments,
+    ];
+
+    pub fn new(mail: &Email) -> Self {
+        let text_body = mail
+            .text_body()
+            .and_then(|text_body| join_body_values(mail, text_body));
+
+        let html_body = mail
+            .html_body()
+            .and_then(|html_body| join_body_values(mail, html_body));
+
+        let attachments = mail
+            .attachments()
+            .map(|parts| parts.iter().map(MailDataAttachment::from).collect())
+            .unwrap_or_default();
+
+        Self {
+            text_body,
+            html_body,
+            attachments,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct MailDataAttachment {
+    pub name: Option<String>,
+    pub content_type: Option<String>,
+    pub size: usize,
+    pub blob_id: Option<String>,
+}
+
+impl From<&EmailBodyPart> for MailDataAttachment {
+    fn from(part: &EmailBodyPart) -> Self {
+        Self {
+            name: part.name().map(ToString::to_string),
+            content_type: part.content_type().map(ToString::to_string),
+            size: part.size(),
+            blob_id: part.blob_id().map(ToString::to_string),
+        }
+    }
+}
+
+fn join_body_values(mail: &Email, parts: &[EmailBodyPart]) -> Option<String> {
+    let mut body = String::new();
+
+    for part in parts {
+        let Some(part_id) = part.part_id() else {
+            continue;
+        };
+
+        if let Some(value) = mail.body_value(part_id) {
+            body.push_str(value.value());
+        }
+    }
+
+    if body.is_empty() { None } else { Some(body) }
 }

@@ -50,6 +50,8 @@ pub enum Action {
 
     #[strum(message = "Tries to fold the thread. If that doesn't work. Go back instead.")]
     FoldThreadOrGoBack,
+    #[strum(message = "Tries to unfold the thread, otherwise open mail in viewer.")]
+    UnfoldThreadOrViewMail,
 
     #[strum(message = "Navigate to the next (below) mail.")]
     NavigateToNextMail,

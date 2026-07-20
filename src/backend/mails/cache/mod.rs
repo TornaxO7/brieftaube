@@ -37,7 +37,7 @@ impl Cache {
 
         let mails: HashMap<MailId, MailData> = raw_mail_list
             .into_iter()
-            .map(MailData::from)
+            .map(MailData::new)
             .map(|mail| (mail.id.clone(), mail))
             .collect();
 
@@ -91,6 +91,10 @@ impl Cache {
 
     pub fn get_mail(&self, id: &MailId) -> Option<&MailData> {
         self.mails.get(id)
+    }
+
+    pub fn get_mail_mut(&mut self, id: &MailId) -> Option<&mut MailData> {
+        self.mails.get_mut(id)
     }
 
     pub fn get_mails_from_mailbox(&self, id: &MailboxId) -> Option<&[MailEntry]> {
@@ -194,7 +198,7 @@ impl Cache {
         self.email_get_state = get_mail_response.take_state();
 
         for mail in get_mail_response.take_list() {
-            self.add_mail(MailData::from(mail));
+            self.add_mail(MailData::new(mail));
         }
     }
 

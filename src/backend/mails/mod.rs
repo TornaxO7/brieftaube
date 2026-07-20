@@ -5,7 +5,7 @@ use crate::backend::{
     mailbox::types::MailboxId,
     mails::{
         cache::error::UnfoldError,
-        types::{MailData, MailEntry, MailUpdate},
+        types::{MailData, MailDataRest, MailEntry, MailUpdate},
     },
 };
 use cache::Cache;
@@ -135,6 +135,94 @@ impl MailsBackend {
 
                 let mut cache = cache.lock().unwrap();
                 *cache = Some(Cache::new(query_mail_response, get_mail_response));
+            }));
+    }
+
+    pub fn request_get_mails(&self, mails: Vec<MailId>) {
+        let cache = self.cache.clone();
+        let client = self.client.clone();
+
+        self.tasks
+            .lock()
+            .unwrap()
+            .push_back(tokio::spawn(async move {
+                let mut response = {
+                    let mut request = client.build();
+                    request
+                        .get_email()
+                        .ids(Some(mails))
+                        .properties(MailData::PROPERTIES);
+                    match request.send_get_email().await {
+                        Ok(r) => r,
+                        Err(err) => {
+                            error!("Couldn't request mails: {err}");
+                            return;
+                        }
+                    }
+                };
+
+                let mut guard = cache.lock().unwrap();
+                let cache = guard.as_mut().expect(DATA_INITIALISED_MSG);
+                cache.set_mail_state(response.take_state());
+
+                for mail in response.take_list() {
+                    cache.add_mail(MailData::new(mail));
+                }
+            }));
+    }
+
+    pub fn request_get_mails_rest(&self, mails: Vec<MailId>) {
+        let cache = self.cache.clone();
+        let client = self.client.clone();
+
+        let non_full_mails = {
+            let mut ids: Vec<MailId> = Vec::new();
+
+            let guard = self.cache.lock().unwrap();
+            let cache = guard.as_ref().expect(DATA_INITIALISED_MSG);
+
+            for id in mails.into_iter() {
+                let mail = cache.get_mail(&id).unwrap();
+                if mail.rest.is_none() {
+                    ids.push(id);
+                }
+            }
+
+            ids
+        };
+
+        self.tasks
+            .lock()
+            .unwrap()
+            .push_back(tokio::spawn(async move {
+                let mut response = {
+                    let mut request = client.build();
+                    request
+                        .get_email()
+                        .ids(Some(non_full_mails))
+                        .properties(MailDataRest::PROPERTIES)
+                        .arguments()
+                        .fetch_all_body_values(true);
+                    match request.send_get_email().await {
+                        Ok(r) => r,
+                        Err(err) => {
+                            error!("Couldn't send request for mail rest to server:\n{err}");
+                            return;
+                        }
+                    }
+                };
+
+                let mut guard = cache.lock().unwrap();
+                let cache = guard.as_mut().expect(DATA_INITIALISED_MSG);
+                cache.set_mail_state(response.take_state());
+
+                for mut rest_mail in response.take_list() {
+                    let mail = cache
+                        .get_mail_mut(&rest_mail.take_id())
+                        .expect("Response contains mail ids.");
+
+                    mail.extend(&rest_mail);
+                }
             }));
     }
 
@@ -303,7 +391,8 @@ impl MailsBackend {
             }));
     }
 
-    pub fn unfold_mail(&self, mailbox: &MailboxId, mail: &MailId) {
+    // returns `true` if unfolding was successfull, otherwise `false`
+    pub fn unfold_mail(&self, mailbox: &MailboxId, mail: &MailId) -> bool {
         let result = {
             let mut guard = self.cache.lock().unwrap();
             let cache = guard.as_mut().expect(DATA_INITIALISED_MSG);
@@ -312,7 +401,7 @@ impl MailsBackend {
         };
 
         match result {
-            Ok(()) => return,
+            Ok(()) => return true,
             Err(UnfoldError::MailboxMailsMissing) => {
                 unreachable!("Mails should be already fetched...");
             }
@@ -337,5 +426,7 @@ impl MailsBackend {
                 }));
             }
         };
+
+        false
     }
 }

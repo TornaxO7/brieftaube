@@ -1,11 +1,13 @@
 use super::Action;
-use crate::utils::ui::{
-    ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager, palette,
+use crate::{
+    backend::mails::{MailsBackend, types::MailId},
+    mail_viewer::{types::FullMailDisplay, widget::RenderData},
+    utils::ui::{
+        ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager, palette,
+    },
 };
-use chrono::DateTime;
-use jmap_client::email::{Email, EmailAddress};
 use ratatui::widgets::ScrollbarState;
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 use tracing::debug;
 
 #[derive(Debug, Clone)]
@@ -22,23 +24,19 @@ pub struct State {
     overlay: Option<ScreenOverlay<PaletteType, InputType>>,
     keybindings: KeybindManager<Action>,
 
-    pub mail: Email,
-    /// String representation of mail
-    pub mail_str: String,
-
-    pub vertical: ScrollbarState,
-    pub horizontal: ScrollbarState,
+    backend: Rc<MailsBackend>,
+    id: MailId,
+    vertical: ScrollbarState,
+    horizontal: ScrollbarState,
 }
 
 impl State {
-    pub fn new(mail: Email) -> Self {
-        let mail_str = get_string_representation(&mail);
-
-        let vertical = ScrollbarState::new(mail_str.lines().count());
-        let horizontal =
-            ScrollbarState::new(mail_str.lines().map(|line| line.len()).max().unwrap());
+    pub fn new(id: MailId, backend: Rc<MailsBackend>) -> Self {
+        backend.request_get_mails_rest(vec![id.clone()]);
 
         Self {
+            id,
+            backend,
             app_actions: vec![],
             overlay: None,
             keybindings: KeybindManager::new(HashMap::from([
@@ -50,11 +48,8 @@ impl State {
                 (":", Action::OpenCommandPalette),
                 ("<BS>", Action::Back),
             ])),
-
-            mail,
-            mail_str,
-            vertical,
-            horizontal,
+            vertical: ScrollbarState::default(),
+            horizontal: ScrollbarState::default(),
         }
     }
 
@@ -122,48 +117,20 @@ impl ScreenState<Action, PaletteType, InputType> for State {
     }
 }
 
-fn get_string_representation(mail: &Email) -> String {
-    tracing::debug!("{:#?}", mail);
-    let date = DateTime::from_timestamp_millis(mail.received_at().unwrap())
-        .unwrap()
-        .format("%A, %d %B %Y %T");
+// for `widget`
+impl State {
+    pub fn get_render_data<'a>(&'a mut self) -> Option<RenderData<'a>> {
+        let mail = self.backend.get_mail(&self.id)?;
 
-    let from = addresses_to_string(mail.from().unwrap());
-    let to = addresses_to_string(mail.to().unwrap());
-    let subject = mail.subject().unwrap();
-
-    let body = {
-        let mut s = String::new();
-
-        for body in mail.text_body().unwrap() {
-            let id = body.part_id().unwrap();
-
-            s.push_str(mail.body_value(id).expect("Body value exists").value());
+        if mail.rest.is_none() {
+            self.backend.request_get_mails_rest(vec![mail.id]);
+            return None;
         }
 
-        s
-    };
-
-    format!(
-        "\
-Date: {date}
-From: {from}
-To: {to}
-Subject: {subject}
-
-
-{body}"
-    )
-}
-
-fn addresses_to_string(addresses: &[EmailAddress]) -> String {
-    let mut iter = addresses.iter();
-
-    let mut s = format!("{}", iter.next().unwrap().email());
-
-    for addr in iter {
-        s.push_str(&format!(", {}", addr.email()))
+        Some(RenderData {
+            horizontal: &mut self.horizontal,
+            vertical: &mut self.vertical,
+            mail: FullMailDisplay::from(&mail),
+        })
     }
-
-    s
 }

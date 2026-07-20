@@ -8,11 +8,14 @@ mod mailboxes;
 mod statusbar;
 mod utils;
 
-use crate::{backend::mailbox::types::MailboxId, statusbar::Statusbar, utils::ui::ScreenState};
+use crate::{
+    backend::{mailbox::types::MailboxId, mails::types::MailId},
+    statusbar::Statusbar,
+    utils::ui::ScreenState,
+};
 use color_eyre::eyre;
 use crossterm::event::Event;
 use futures::{FutureExt, StreamExt};
-use jmap_client::email::Email;
 use ratatui::{
     DefaultTerminal, Frame,
     layout::{Constraint, Layout},
@@ -41,14 +44,14 @@ enum Screen {
     Mailboxes(mailboxes::State),
     MailList(mail_list::State),
     Composer(composer::ui::State),
-    MailViewer(mail_viewer::ui::State),
+    MailViewer(mail_viewer::State),
     LogViewer(log_viewer::ui::State),
 }
 
 #[derive(Debug)]
 pub enum Action {
     OpenRootMails(MailboxId),
-    OpenMailViewer(Email),
+    OpenMailViewer(MailId),
     OpenLogViewer,
     OpenComposer,
 
@@ -138,7 +141,7 @@ impl App {
                 frame.render_stateful_widget(composer::ui::Composer::default(), screen, state);
             }
             Screen::MailViewer(state) => {
-                frame.render_stateful_widget(mail_viewer::ui::MailViewer::default(), screen, state);
+                frame.render_stateful_widget(mail_viewer::MailViewer::default(), screen, state);
             }
             Screen::LogViewer(state) => {
                 frame.render_stateful_widget(log_viewer::ui::LogViewer::default(), screen, state);
@@ -178,8 +181,9 @@ impl App {
                     self.statusbar.set_screen(&next_screen);
                     self.screens.push(next_screen);
                 }
-                Action::OpenMailViewer(mail) => {
-                    let next_screen = Screen::MailViewer(mail_viewer::ui::State::new(mail));
+                Action::OpenMailViewer(id) => {
+                    let backend = self.account.mails.clone();
+                    let next_screen = Screen::MailViewer(mail_viewer::State::new(id, backend));
 
                     self.statusbar.set_screen(&next_screen);
                     self.screens.push(next_screen);
@@ -221,7 +225,7 @@ impl App {
                 Screen::Mailboxes(_) => self.account.mailboxes.has_tasks_running(),
                 Screen::MailList(_) => self.account.mails.has_tasks_running(),
                 Screen::Composer(_) => todo!(),
-                Screen::MailViewer(_) => todo!(),
+                Screen::MailViewer(_) => self.account.mails.has_tasks_running(),
                 Screen::LogViewer(_) => false,
             };
 

@@ -54,7 +54,7 @@ impl From<(&MailData, ThreadMarker)> for MailDisplay {
     }
 }
 
-pub(crate) fn addresses_to_string(addresses: &[MailAddress]) -> String {
+pub fn addresses_to_string(addresses: &[MailAddress]) -> String {
     let mut iterator = addresses.iter();
     let first = iterator
         .next()

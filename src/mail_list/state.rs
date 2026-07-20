@@ -58,7 +58,7 @@ impl State {
                 ("j", Action::NavigateToNextMail),
                 ("k", Action::NavigateToPreviousMail),
                 ("h", Action::FoldThreadOrGoBack),
-                ("l", Action::UnfoldThread),
+                ("l", Action::UnfoldThreadOrViewMail),
                 ("<C-l>", Action::OpenLogs),
                 ("gg", Action::NavigateToTop),
                 ("ge", Action::NavigateToBottom),
@@ -94,10 +94,17 @@ impl ScreenState<Action, PaletteType, InputType> for State {
 
             Action::FoldThreadOrGoBack => {
                 if !self.fold_thread() {
-                    self.app_actions.push(crate::Action::Back);
+                    self.apply_action(Action::Back);
                 }
             }
-            Action::UnfoldThread => self.unfold_thread(),
+            Action::UnfoldThreadOrViewMail => {
+                if !self.unfold_thread() {
+                    self.apply_action(Action::ViewSelectedMail);
+                }
+            }
+            Action::UnfoldThread => {
+                self.unfold_thread();
+            }
 
             Action::OpenCommandPalette => {
                 self.overlay = Some(ScreenOverlay::Palette(palette::State::new(
@@ -107,9 +114,8 @@ impl ScreenState<Action, PaletteType, InputType> for State {
             Action::OpenLogs => {
                 self.app_actions.push(crate::Action::OpenLogViewer);
             }
-            Action::ViewSelectedMail => {
-                todo!()
-            }
+            Action::ViewSelectedMail => self.view_selected_mail(),
+
             Action::ComposeMail => {
                 self.app_actions.push(crate::Action::OpenComposer);
             }
@@ -223,18 +229,18 @@ impl State {
         }
     }
 
-    fn unfold_thread(&mut self) {
+    fn unfold_thread(&mut self) -> bool {
         let Some(idx) = self.table_state.selected() else {
-            return;
+            return false;
         };
 
         let Some(mails) = self.backend.get_mails(&self.in_mailbox) else {
-            return;
+            return false;
         };
 
         match &mails[idx] {
             MailEntry::Root(id) => self.backend.unfold_mail(&self.in_mailbox, id),
-            MailEntry::Child { .. } => {}
+            MailEntry::Child { .. } => false,
         }
     }
 
@@ -277,6 +283,24 @@ impl State {
                 true
             }
         }
+    }
+
+    fn view_selected_mail(&mut self) {
+        let Some(mails) = self.backend.get_mails(&self.in_mailbox) else {
+            return;
+        };
+
+        let Some(idx) = self.table_state.selected() else {
+            return;
+        };
+
+        let mail_id = match &mails[idx] {
+            MailEntry::Root(id) => id,
+            MailEntry::Child { mail, .. } => mail,
+        };
+
+        self.app_actions
+            .push(crate::Action::OpenMailViewer(mail_id.clone()));
     }
 }
 
