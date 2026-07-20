@@ -366,8 +366,7 @@ impl State {
             None | Some(Children::This) => return,
             Some(Children::Child(_, order1)) => {
                 let order2 = {
-                    let above2 = children.get(idx - 2);
-                    match above2 {
+                    match idx.checked_sub(2).and_then(|idx| children.get(idx)) {
                         None | Some(Children::This) => 0,
                         Some(Children::Child(_, order2)) => *order2,
                     }
@@ -404,8 +403,7 @@ impl State {
         let new_sort_order = match below1 {
             None | Some(Children::This) => return,
             Some(Children::Child(_, order1)) => {
-                let below2 = children.get(idx - 2);
-                match below2 {
+                match idx.checked_sub(2).and_then(|idx| children.get(idx)) {
                     None | Some(Children::This) => {
                         (*order1 + 1).next_multiple_of(NEW_SORT_ORDER_SIZE)
                     }
