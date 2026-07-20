@@ -39,7 +39,7 @@ async fn main() -> eyre::Result<()> {
 
 enum Screen {
     Mailboxes(mailboxes::State),
-    MailList(mail_list::ui::State),
+    MailList(mail_list::State),
     Composer(composer::ui::State),
     MailViewer(mail_viewer::ui::State),
     LogViewer(log_viewer::ui::State),
@@ -96,8 +96,8 @@ impl App {
                 _ = self.account.mailboxes.has_changed(), if self.account.mailboxes.has_tasks_running() => {
                     self.account.mailboxes.pop_task();
                 }
-                _ = self.account.mail_lists.has_changed(), if self.account.mail_lists.has_tasks_running() => {
-                    self.account.mail_lists.pop_task();
+                _ = self.account.mails.has_changed(), if self.account.mails.has_tasks_running() => {
+                    self.account.mails.pop_task();
                 }
 
                 maybe_event = reader.next().fuse() => match maybe_event {
@@ -132,7 +132,7 @@ impl App {
                 frame.render_stateful_widget(mailboxes::Mailboxes::default(), screen, state);
             }
             Screen::MailList(state) => {
-                frame.render_stateful_widget(mail_list::ui::RootMails::default(), screen, state);
+                frame.render_stateful_widget(mail_list::RootMails::default(), screen, state);
             }
             Screen::Composer(state) => {
                 frame.render_stateful_widget(composer::ui::Composer::default(), screen, state);
@@ -172,9 +172,8 @@ impl App {
         for action in actions {
             match action {
                 Action::OpenRootMails(id) => {
-                    let client = self.account.client.clone();
-                    let backend = self.account.mail_lists.get_backend(id, client);
-                    let next_screen = Screen::MailList(mail_list::ui::State::new(backend));
+                    let backend = self.account.mails.clone();
+                    let next_screen = Screen::MailList(mail_list::State::new(id, backend));
 
                     self.statusbar.set_screen(&next_screen);
                     self.screens.push(next_screen);
@@ -220,7 +219,7 @@ impl App {
         let top_screen_has_tasks_running =
             match self.screens.last().expect("There's at least one screen") {
                 Screen::Mailboxes(_) => self.account.mailboxes.has_tasks_running(),
-                Screen::MailList(_) => self.account.mail_lists.has_tasks_running(),
+                Screen::MailList(_) => self.account.mails.has_tasks_running(),
                 Screen::Composer(_) => todo!(),
                 Screen::MailViewer(_) => todo!(),
                 Screen::LogViewer(_) => false,

@@ -202,7 +202,7 @@ impl MailboxBackend {
                     match request.send_set_mailbox().await {
                         Ok(r) => r,
                         Err(err) => {
-                            error!("Couldn't request server to update the sort order: {err}");
+                            error!("Couldn't request server to update the mailboxes:\n{err}");
                             return;
                         }
                     }
@@ -220,10 +220,10 @@ impl MailboxBackend {
                         Err(err) => match cache.get_mailbox(&mailbox.id) {
                             Some(mailbox) => {
                                 let name = mailbox.name.clone();
-                                error!("Couldn't update the sort order of '{name}':\n{err}");
+                                error!("Couldn't update the mailbox of '{name}':\n{err}");
                             }
                             None => {
-                                error!("Couldn't update the sort order:\n{err}");
+                                error!("Couldn't update a mailbox:\n{err}");
                             }
                         },
                     };

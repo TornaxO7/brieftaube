@@ -44,7 +44,7 @@ impl FocusCtx {
     pub fn new(mailbox: Option<MailboxId>) -> Self {
         Self {
             mailbox,
-            state: TableState::new().with_selected(Some(1)),
+            state: TableState::new().with_selected(Some(0)),
         }
     }
 }

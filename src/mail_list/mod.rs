@@ -1,5 +1,7 @@
-mod backend;
-pub mod ui;
+mod action;
+mod state;
+mod widget;
 
-pub use backend::MailListManager;
-use backend::*;
+pub use action::Action;
+pub use state::State;
+pub use widget::RootMails;

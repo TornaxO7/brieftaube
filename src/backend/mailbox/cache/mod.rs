@@ -2,7 +2,6 @@ use super::types::{Entry, MailboxData, MailboxId};
 use crate::backend::mailbox::types::MailboxUpdate;
 use jmap_client::core::response::MailboxGetResponse;
 use std::collections::HashMap;
-use tracing::warn;
 
 pub struct Cache {
     mailboxes: HashMap<MailboxId, MailboxData>,

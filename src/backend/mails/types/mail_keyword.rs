@@ -8,7 +8,7 @@ const JUNK: &str = "$junk";
 const NOTJUNK: &str = "$notjunk";
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub enum EmailKeyword {
+pub enum MailKeyword {
     Draft,
     Seen,
     Flagged,
@@ -20,7 +20,7 @@ pub enum EmailKeyword {
     Other(String),
 }
 
-impl std::fmt::Display for EmailKeyword {
+impl std::fmt::Display for MailKeyword {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             Self::Draft => DRAFT,
@@ -38,13 +38,13 @@ impl std::fmt::Display for EmailKeyword {
     }
 }
 
-impl Into<String> for EmailKeyword {
+impl Into<String> for MailKeyword {
     fn into(self) -> String {
         self.to_string()
     }
 }
 
-impl From<&str> for EmailKeyword {
+impl From<&str> for MailKeyword {
     fn from(s: &str) -> Self {
         match s {
             DRAFT => Self::Draft,

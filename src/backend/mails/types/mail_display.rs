@@ -1,11 +1,14 @@
-use crate::{
-    mail_list::backend::{EmailAddress, MailData},
-    utils::EmailKeyword,
-};
+use super::{MailAddress, MailData};
+use crate::backend::mails::types::{MailId, MailKeyword};
 use std::collections::HashSet;
 
-pub struct MailRenderable {
-    pub id: String,
+pub enum ThreadMarker {
+    Root,
+    Child,
+}
+
+pub struct MailDisplay {
+    pub id: MailId,
     pub from: String,
     pub to: String,
     pub cc: String,
@@ -13,17 +16,15 @@ pub struct MailRenderable {
     pub preview: String,
     pub received_at: String,
     pub has_attachment: bool,
-    pub keywords: HashSet<EmailKeyword>,
+    pub keywords: HashSet<MailKeyword>,
+    pub thread_marker: ThreadMarker,
 }
 
-impl From<MailData> for MailRenderable {
-    fn from(mail: MailData) -> Self {
-        Self::from(&mail)
-    }
-}
+impl From<(&MailData, ThreadMarker)> for MailDisplay {
+    fn from(data: (&MailData, ThreadMarker)) -> Self {
+        let mail = data.0;
+        let thread_marker = data.1;
 
-impl From<&MailData> for MailRenderable {
-    fn from(mail: &MailData) -> Self {
         let id = mail.id.clone();
         let from = addresses_to_string(&mail.from);
         let to = addresses_to_string(&mail.to);
@@ -48,11 +49,12 @@ impl From<&MailData> for MailRenderable {
             received_at,
             has_attachment,
             keywords,
+            thread_marker,
         }
     }
 }
 
-fn addresses_to_string(addresses: &[EmailAddress]) -> String {
+pub(crate) fn addresses_to_string(addresses: &[MailAddress]) -> String {
     let mut iterator = addresses.iter();
     let first = iterator
         .next()

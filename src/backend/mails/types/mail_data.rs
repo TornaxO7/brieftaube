@@ -1,25 +1,26 @@
-use super::EmailAddress;
-use crate::utils::{EmailKeyword, ThreadId};
+use super::{MailAddress, MailKeyword, ThreadId};
+use crate::backend::mailbox::types::MailboxId;
 use chrono::{DateTime, Local, Utc};
 use jmap_client::email::Property;
 use std::collections::HashSet;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MailData {
     pub id: String,
     pub thread_id: ThreadId,
-    pub keywords: HashSet<EmailKeyword>,
-    pub from: Vec<EmailAddress>,
-    pub to: Vec<EmailAddress>,
-    pub cc: Vec<EmailAddress>,
+    pub keywords: HashSet<MailKeyword>,
+    pub from: Vec<MailAddress>,
+    pub to: Vec<MailAddress>,
+    pub cc: Vec<MailAddress>,
     pub subject: String,
     pub preview: String,
     pub received_at: DateTime<Local>,
     pub has_attachment: bool,
+    pub mailbox_ids: HashSet<MailboxId>,
 }
 
 impl MailData {
-    pub const PROPERTIES: [Property; 10] = [
+    pub const PROPERTIES: [Property; 11] = [
         jmap_client::email::Property::Id,
         jmap_client::email::Property::ThreadId,
         jmap_client::email::Property::Keywords,
@@ -30,6 +31,7 @@ impl MailData {
         jmap_client::email::Property::Preview,
         jmap_client::email::Property::ReceivedAt,
         jmap_client::email::Property::HasAttachment,
+        jmap_client::email::Property::MailboxIds,
     ];
 }
 
@@ -38,22 +40,18 @@ impl From<jmap_client::email::Email> for MailData {
         Self {
             id: mail.take_id(),
             thread_id: mail.take_thread_id().unwrap(),
-            keywords: mail
-                .keywords()
-                .into_iter()
-                .map(EmailKeyword::from)
-                .collect(),
+            keywords: mail.keywords().into_iter().map(MailKeyword::from).collect(),
             from: mail
                 .take_from()
-                .map(|addresses| addresses.into_iter().map(EmailAddress::from).collect())
+                .map(|addresses| addresses.into_iter().map(MailAddress::from).collect())
                 .unwrap_or(vec![]),
             to: mail
                 .to()
-                .map(|addresses| addresses.into_iter().map(EmailAddress::from).collect())
+                .map(|addresses| addresses.into_iter().map(MailAddress::from).collect())
                 .unwrap_or(vec![]),
             cc: mail
                 .take_cc()
-                .map(|cc| cc.into_iter().map(EmailAddress::from).collect())
+                .map(|cc| cc.into_iter().map(MailAddress::from).collect())
                 .unwrap_or(vec![]),
             subject: mail.take_subject().unwrap(),
             preview: mail.take_preview().unwrap(),
@@ -61,6 +59,11 @@ impl From<jmap_client::email::Email> for MailData {
                 .expect("Valid timestamp")
                 .with_timezone(&Local),
             has_attachment: mail.has_attachment(),
+            mailbox_ids: mail
+                .mailbox_ids()
+                .into_iter()
+                .map(|id| id.to_owned())
+                .collect(),
         }
     }
 }
