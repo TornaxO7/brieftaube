@@ -54,7 +54,7 @@ impl Cache {
                                     MailEntry::Child { mail, .. } => mails.get(mail).unwrap(),
                                 };
 
-                                other.received_at < mail.received_at
+                                other.received_at > mail.received_at
                             });
 
                             mailbox_mails.insert(idx, MailEntry::Root(mail.id.clone()));
@@ -112,7 +112,7 @@ impl Cache {
                     let idx = thread_mails.partition_point(|id| {
                         let other = self.mails.get(id).unwrap();
 
-                        other.received_at < mail.received_at
+                        other.received_at > mail.received_at
                     });
 
                     thread_mails.insert(idx, mail.id.clone());
@@ -152,7 +152,7 @@ impl Cache {
 
                                 let other = self.mails.get(id).unwrap();
 
-                                other.received_at < mail.received_at
+                                other.received_at > mail.received_at
                             });
 
                             children.insert(idx, MailEntry::Root(mail.id.clone()));
