@@ -8,10 +8,7 @@ mod mailboxes;
 mod statusbar;
 mod utils;
 
-use crate::{
-    statusbar::Statusbar,
-    utils::{MailboxId, ui::ScreenState},
-};
+use crate::{backend::mailbox::types::MailboxId, statusbar::Statusbar, utils::ui::ScreenState};
 use color_eyre::eyre;
 use crossterm::event::Event;
 use futures::{FutureExt, StreamExt};
@@ -41,7 +38,7 @@ async fn main() -> eyre::Result<()> {
 }
 
 enum Screen {
-    Mailboxes(mailboxes::ui::State),
+    Mailboxes(mailboxes::State),
     MailList(mail_list::ui::State),
     Composer(composer::ui::State),
     MailViewer(mail_viewer::ui::State),
@@ -73,8 +70,10 @@ pub struct App {
 impl App {
     pub async fn new(counter: statusbar::Counter) -> eyre::Result<Self> {
         let account = backend::Account::new().await;
-        let initial_screen =
-            Screen::Mailboxes(mailboxes::ui::State::new(account.mailboxes.clone()));
+        let initial_screen = Screen::Mailboxes(mailboxes::State::new(
+            account.mailboxes.clone(),
+            account.config.clone(),
+        ));
         let statusbar = statusbar::State::new(&initial_screen, counter);
 
         Ok(Self {
@@ -130,7 +129,7 @@ impl App {
 
         match self.screens.last_mut().unwrap() {
             Screen::Mailboxes(state) => {
-                frame.render_stateful_widget(mailboxes::ui::Mailboxes::default(), screen, state);
+                frame.render_stateful_widget(mailboxes::Mailboxes::default(), screen, state);
             }
             Screen::MailList(state) => {
                 frame.render_stateful_widget(mail_list::ui::RootMails::default(), screen, state);

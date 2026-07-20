@@ -1,5 +1,9 @@
-mod backend;
-pub mod ui;
+mod action;
+mod state;
+mod widget;
 
-pub use backend::Backend;
-use backend::*;
+pub use action::Action;
+pub use state::State;
+pub use widget::Mailboxes;
+
+use state::SelectionType;

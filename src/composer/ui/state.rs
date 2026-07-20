@@ -1,12 +1,8 @@
 use super::action::Action;
 use crate::{
-    backend::Account,
-    utils::{
-        MailboxId,
-        ui::{
-            ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager,
-            palette,
-        },
+    backend::{Account, mailbox::types::MailboxId},
+    utils::ui::{
+        ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager, palette,
     },
 };
 use std::{collections::HashMap, path::PathBuf, sync::Arc};

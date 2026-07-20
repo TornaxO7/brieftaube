@@ -1,5 +1,6 @@
+use crate::backend::mailbox::types::MailboxId;
+
 use super::MailListBackend;
-use crate::utils::MailboxId;
 use jmap_client::client::Client;
 use std::{collections::HashMap, rc::Rc, sync::Arc};
 

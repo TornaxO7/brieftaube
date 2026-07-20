@@ -1,3 +1,5 @@
+pub mod mailbox;
+
 use crate::config::Config;
 use jmap_client::client::Client;
 use std::{rc::Rc, sync::Arc};
@@ -6,7 +8,8 @@ use std::{rc::Rc, sync::Arc};
 pub struct Account {
     pub client: Arc<jmap_client::client::Client>,
 
-    pub mailboxes: Rc<crate::mailboxes::Backend>,
+    pub config: Rc<Config>,
+    pub mailboxes: Rc<mailbox::MailboxBackend>,
     pub mail_lists: crate::mail_list::MailListManager,
 }
 
@@ -34,11 +37,9 @@ impl Account {
 
         Self {
             client: client.clone(),
-            mailboxes: Rc::new(crate::mailboxes::Backend::new(
-                client.clone(),
-                config.clone(),
-            )),
+            mailboxes: Rc::new(mailbox::MailboxBackend::new(client.clone())),
             mail_lists: crate::mail_list::MailListManager::new(),
+            config,
         }
     }
 

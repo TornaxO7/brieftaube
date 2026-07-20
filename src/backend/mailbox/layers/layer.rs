@@ -1,15 +1,15 @@
-use crate::{mailboxes::backend::MailboxData, utils::MailboxId};
+use crate::{backend::mailbox::MailboxData, utils::MailboxId};
 use ratatui::widgets::TableState;
 use std::cmp::Ordering;
 
 #[derive(Clone, Default)]
-pub struct Layer {
+pub struct Node {
     pub mailbox_owner: Option<MailboxId>,
     pub mailboxes: Vec<MailboxData>,
     pub state: TableState,
 }
 
-impl Layer {
+impl Node {
     pub fn new(mailbox_owner: Option<MailboxId>) -> Self {
         Self {
             mailbox_owner,

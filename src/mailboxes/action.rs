@@ -21,9 +21,9 @@ pub enum Action {
     OpenCommandPalette,
 
     #[strum(message = "Navigate to the next (below) mailbox.")]
-    NavigateToNextMailbox,
+    NavigateToMailboxBelow,
     #[strum(message = "Navigate to the previous (above) mailbox.")]
-    NavigateToPreviousMailbox,
+    NavigateToMailboxAbove,
     #[strum(message = "Navigate to the top of the list.")]
     NavigateToTop,
     #[strum(message = "Navigate to the bottom of the list.")]

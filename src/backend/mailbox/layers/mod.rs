@@ -1,10 +1,9 @@
 mod layer;
 
-use std::collections::HashMap;
-
 use super::MailboxData;
 use crate::utils::MailboxId;
-pub use layer::Layer;
+pub use layer::Node;
+use std::collections::HashMap;
 
 type MailboxOwner = Option<MailboxId>;
 
@@ -14,47 +13,14 @@ mod err_msg {
     pub const MAILBOX_IS_IN_LAYER: &str = "Each mailbox must be in a layer.";
 }
 
-pub struct Layers {
+pub struct Tree {
     // each mailbox has its own layer
-    layers: HashMap<Option<MailboxId>, Layer>,
-    selected_layer: Vec<Option<MailboxId>>,
+    layers: HashMap<Option<MailboxId>, Node>,
 }
 
-impl Layers {
+impl Tree {
     pub fn new(mailboxes: Vec<MailboxData>) -> Self {
-        let mut layers: HashMap<MailboxOwner, Layer> = HashMap::with_capacity(mailboxes.len());
-
-        // create for each mailbox a layer
-        {
-            // root layer
-            layers.insert(None, Layer::new(None));
-            for mailbox in mailboxes.clone() {
-                let id = mailbox.id.clone();
-                layers.insert(Some(id.clone()), Layer::new(Some(id.clone())));
-            }
-        }
-
-        // add children
-        {
-            for mailbox in mailboxes {
-                let parent_id = &mailbox.parent_id;
-                let layer = layers.get_mut(parent_id).expect("Parent layer exists.");
-                layer.mailboxes.push(mailbox);
-            }
-        }
-
-        for layer in layers.values_mut() {
-            layer.sort_mailboxes();
-        }
-
-        Self {
-            layers,
-            selected_layer: vec![None],
-        }
-    }
-
-    pub fn depth(&self) -> usize {
-        self.selected_layer.len() - 1
+        Self { layers }
     }
 
     pub fn set_sort_order(&mut self, id: MailboxId, new_order: u32) {
@@ -78,7 +44,6 @@ impl Layers {
                 layer.mailboxes[idx - 1].id.clone()
             };
 
-            self.selected_layer.push(Some(selected_mailbox));
             None
         }
     }
@@ -86,7 +51,7 @@ impl Layers {
     pub fn add_mailbox(&mut self, mailbox: MailboxData) {
         self.layers.insert(
             Some(mailbox.id.clone()),
-            Layer::new(Some(mailbox.id.clone())),
+            Node::new(Some(mailbox.id.clone())),
         );
 
         let parent = self.layers.get_mut(&mailbox.parent_id).unwrap();
@@ -94,29 +59,11 @@ impl Layers {
         parent.sort_mailboxes();
     }
 
-    pub fn go_up_one_level(&mut self) {
-        if self.selected_layer.len() > 1 {
-            self.selected_layer.pop();
-        }
-    }
-
-    pub fn get_current_layer(&self) -> &Layer {
-        self.layers
-            .get(self.selected_layer.last().unwrap())
-            .expect(err_msg::NON_EMPTY_SELECTED_LAYER)
-    }
-
-    pub fn get_current_layer_mut(&mut self) -> &mut Layer {
-        self.layers
-            .get_mut(self.selected_layer.last().unwrap())
-            .expect(err_msg::NON_EMPTY_SELECTED_LAYER)
-    }
-
-    pub fn get_layer(&self, id: &Option<MailboxId>) -> &Layer {
+    pub fn get_layer(&self, id: &Option<MailboxId>) -> &Node {
         self.layers.get(id).expect(err_msg::MAILBOX_HAS_LAYER)
     }
 
-    pub fn get_layer_mut(&mut self, id: &Option<MailboxId>) -> &mut Layer {
+    pub fn get_layer_mut(&mut self, id: &Option<MailboxId>) -> &mut Node {
         self.layers.get_mut(id).expect(err_msg::MAILBOX_HAS_LAYER)
     }
 
@@ -130,14 +77,14 @@ impl Layers {
             .find_map(|layer| layer.get_mailbox_mut(id))
     }
 
-    pub fn get_layer_containing_mailbox(&self, id: &MailboxId) -> &Layer {
+    pub fn get_layer_containing_mailbox(&self, id: &MailboxId) -> &Node {
         self.layers
             .values()
             .find(|layer| layer.get_mailbox(id).is_some())
             .expect(err_msg::MAILBOX_IS_IN_LAYER)
     }
 
-    pub fn get_layer_containing_mailbox_mut(&mut self, id: &MailboxId) -> &mut Layer {
+    pub fn get_layer_containing_mailbox_mut(&mut self, id: &MailboxId) -> &mut Node {
         self.layers
             .values_mut()
             .find(|layer| layer.get_mailbox(id).is_some())
@@ -151,18 +98,18 @@ impl Layers {
         parent_layer.mailboxes.retain(|mailbox| mailbox.id != id);
     }
 
-    pub fn remove_layer(&mut self, id: &Option<MailboxId>) -> Layer {
+    pub fn remove_layer(&mut self, id: &Option<MailboxId>) -> Node {
         self.layers.remove(id).expect(err_msg::MAILBOX_HAS_LAYER)
     }
 
-    pub fn insert_layer(&mut self, owner: Option<MailboxId>, layer: Layer) {
+    pub fn insert_layer(&mut self, owner: Option<MailboxId>, layer: Node) {
         self.layers.insert(owner, layer);
     }
 }
 
 // For rendering
-impl Layers {
-    pub fn get_parent_layer_mut(&mut self) -> Option<&mut Layer> {
+impl Tree {
+    pub fn get_parent_layer_mut(&mut self) -> Option<&mut Node> {
         let selected_layer_len = self.selected_layer.len();
         let has_parent = self.selected_layer.len() > 1;
         if has_parent {
@@ -173,7 +120,7 @@ impl Layers {
         }
     }
 
-    pub fn get_children_layer_mut(&mut self) -> Option<&mut Layer> {
+    pub fn get_children_layer_mut(&mut self) -> Option<&mut Node> {
         let layer = self.get_current_layer();
 
         if layer.selected_parent() {
@@ -202,7 +149,7 @@ mod tests {
         }
     }
 
-    fn check_layer(layer: &Layer, expected_layer: &Layer) {
+    fn check_layer(layer: &Node, expected_layer: &Node) {
         assert_eq!(layer.mailbox_owner, expected_layer.mailbox_owner);
 
         assert_eq!(layer.mailboxes.len(), expected_layer.mailboxes.len());
@@ -240,7 +187,7 @@ mod tests {
             mailboxes
         };
 
-        let layers = Layers::new(mailboxes);
+        let layers = Tree::new(mailboxes);
 
         assert_eq!(layers.layers.len(), {
             let root_layer = 1;
@@ -249,7 +196,7 @@ mod tests {
 
         check_layer(
             layers.layers.get(&None).unwrap(),
-            &Layer {
+            &Node {
                 mailbox_owner: None,
                 mailboxes: root_mailboxes.clone(),
                 ..Default::default()
@@ -258,7 +205,7 @@ mod tests {
 
         check_layer(
             layers.layers.get(&Some("0".to_string())).unwrap(),
-            &Layer {
+            &Node {
                 mailbox_owner: Some("0".to_string()),
                 mailboxes: children_of_mailbox_0.clone(),
                 ..Default::default()
@@ -267,7 +214,7 @@ mod tests {
 
         check_layer(
             layers.layers.get(&Some("1".to_string())).unwrap(),
-            &Layer {
+            &Node {
                 mailbox_owner: Some("1".to_string()),
                 mailboxes: vec![],
                 ..Default::default()
@@ -276,7 +223,7 @@ mod tests {
 
         check_layer(
             layers.layers.get(&Some("2".to_string())).unwrap(),
-            &Layer {
+            &Node {
                 mailbox_owner: Some("2".to_string()),
                 mailboxes: vec![],
                 ..Default::default()
