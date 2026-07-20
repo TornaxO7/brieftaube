@@ -203,7 +203,7 @@ impl MailsBackend {
     }
 
     pub fn request_get_thread_mails(&self, thread_id: &ThreadId) -> oneshot::Receiver<()> {
-        let (tx, rx) = tokio::sync::oneshot::channel();
+        let (done_sender, done_receiver) = tokio::sync::oneshot::channel();
 
         let client = self.client.clone();
         let cache = self.cache.clone();
@@ -264,12 +264,12 @@ impl MailsBackend {
                 let cache = guard.as_mut().expect(DATA_INITIALISED_MSG);
                 cache.insert_thread(get_thread_response, get_mail_response);
 
-                if let Err(_err) = tx.send(()) {
+                if let Err(_err) = done_sender.send(()) {
                     warn!("Couldn't notify other task about finished task.");
                 }
             }));
 
-        rx
+        done_receiver
     }
 }
 
@@ -318,13 +318,13 @@ impl MailsBackend {
             }
             Err(UnfoldError::MissingThreadMails(thread_id)) => {
                 tracing::debug!("request");
-                let rx = self.request_get_thread_mails(&thread_id);
+                let done = self.request_get_thread_mails(&thread_id);
 
                 let mailbox = mailbox.clone();
                 let mail = mail.clone();
                 let cache = self.cache.clone();
                 self.tasks.lock().unwrap().push_back(tokio::spawn(async move{
-                    if let Err(err) = rx.await {
+                    if let Err(err) = done.await {
                         warn!("Unfolding mail: Can't receive notification after fetching the thread mails anymore :(\n\
                             Can't automatically unfold thread anymore:\n{err}"
                         );
