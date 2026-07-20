@@ -401,7 +401,7 @@ impl MailsBackend {
         };
 
         match result {
-            Ok(()) => return true,
+            Ok(just_unfolded) => return just_unfolded,
             Err(UnfoldError::MailboxMailsMissing) => {
                 unreachable!("Mails should be already fetched...");
             }

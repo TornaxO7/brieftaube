@@ -229,6 +229,7 @@ impl State {
         }
     }
 
+    // return `true` if just unfolded
     fn unfold_thread(&mut self) -> bool {
         let Some(idx) = self.table_state.selected() else {
             return false;

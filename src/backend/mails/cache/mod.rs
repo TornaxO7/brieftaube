@@ -202,7 +202,7 @@ impl Cache {
         }
     }
 
-    pub fn unfold_mail(&mut self, mailbox: &MailboxId, id: &MailId) -> Result<(), UnfoldError> {
+    pub fn unfold_mail(&mut self, mailbox: &MailboxId, id: &MailId) -> Result<bool, UnfoldError> {
         let mailbox_mails = self
             .mailbox_mapping
             .get_mut(mailbox)
@@ -228,7 +228,7 @@ impl Cache {
             };
 
             if already_unfolded {
-                return Ok(());
+                return Ok(false);
             }
         }
 
@@ -248,7 +248,7 @@ impl Cache {
                 }),
         );
 
-        return Ok(());
+        return Ok(true);
     }
 }
 
