@@ -190,8 +190,14 @@ fn adjust_scrollbars(
 
     if let Some(action) = queue.take() {
         match action {
-            ScrollAction::ScrollUp => vertical.prev(),
-            ScrollAction::ScrollDown => vertical.next(),
+            ScrollAction::ScrollUp(amount) => {
+                let pos = vertical.get_position();
+                *vertical = vertical.position(pos.saturating_sub(amount));
+            }
+            ScrollAction::ScrollDown(amount) => {
+                let pos = vertical.get_position();
+                *vertical = vertical.position((pos + amount).min(text.height()));
+            }
             ScrollAction::ScrollHalfPageDown => {
                 let prev_pos = vertical.get_position();
                 let new_pos = prev_pos + area.height as usize / 2;

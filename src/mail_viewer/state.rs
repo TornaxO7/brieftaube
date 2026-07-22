@@ -8,7 +8,7 @@ use crate::{
 };
 use ratatui::widgets::ScrollbarState;
 use std::{collections::HashMap, rc::Rc};
-use tracing::debug;
+use tracing::{debug, warn};
 
 #[derive(Debug, Clone)]
 pub enum PaletteType {
@@ -28,8 +28,8 @@ pub enum ViewVariant {
 
 #[derive(Debug, Clone, Copy)]
 pub enum ScrollAction {
-    ScrollDown,
-    ScrollUp,
+    ScrollDown(usize),
+    ScrollUp(usize),
     ScrollHalfPageDown,
     ScrollHalfPageUp,
     ScrollHalfPageRight,
@@ -144,14 +144,21 @@ impl ScreenState<Action, PaletteType, InputType> for State {
 
 impl State {
     fn scroll_down(&mut self) {
-        match self.variant {
-            ViewVariant::Text | ViewVariant::Markdown => self.vertical.next(),
-            ViewVariant::Attachments => todo!(),
-        }
+        let action = match self.keybindings.flush_int_prefix() {
+            Some(num) => ScrollAction::ScrollDown(num),
+            None => ScrollAction::ScrollDown(1),
+        };
+
+        self.scroll_action = Some(action);
     }
 
     fn scroll_up(&mut self) {
-        self.scroll_action = Some(ScrollAction::ScrollUp);
+        let action = match self.keybindings.flush_int_prefix() {
+            Some(num) => ScrollAction::ScrollUp(num),
+            None => ScrollAction::ScrollUp(1),
+        };
+
+        self.scroll_action = Some(action);
     }
 
     fn scroll_left(&mut self) {

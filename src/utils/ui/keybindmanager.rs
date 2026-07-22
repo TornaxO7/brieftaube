@@ -16,6 +16,7 @@ pub enum HandleEvent<A> {
 
 #[derive(Debug)]
 pub struct KeybindManager<A> {
+    int_prefix: String,
     mapping: Vec<HashMap<KeyEvent, Entry<A>>>,
     idx: usize,
 }
@@ -45,10 +46,21 @@ impl<A: Clone + std::fmt::Debug> KeybindManager<A> {
             mapping
         };
 
-        Self { mapping, idx: 0 }
+        Self {
+            int_prefix: String::with_capacity(4),
+            mapping,
+            idx: 0,
+        }
     }
 
     pub fn handle_event(&mut self, event: KeyEvent) -> HandleEvent<A> {
+        if let KeyCode::Char(c) = event.code
+            && c.is_digit(10)
+        {
+            self.int_prefix.push(c);
+            return HandleEvent::Registered;
+        }
+
         let next_map = &self.mapping[self.idx];
 
         match next_map.get(&event) {
@@ -64,9 +76,15 @@ impl<A: Clone + std::fmt::Debug> KeybindManager<A> {
             },
             None => {
                 self.idx = 0;
+                self.int_prefix.clear();
                 HandleEvent::Cancel
             }
         }
+    }
+
+    pub fn flush_int_prefix(&mut self) -> Option<usize> {
+        let num = std::mem::take(&mut self.int_prefix);
+        num.parse::<usize>().ok()
     }
 }
 
