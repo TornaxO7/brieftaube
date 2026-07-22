@@ -57,6 +57,7 @@ impl State {
                 ("gg", Action::ScrollToTop),
                 ("ge", Action::ScrollToBottom),
                 ("<BS>", Action::Back),
+                ("<C-l>", Action::OpenLogs),
             ])),
             variant: ViewVariant::Markdown,
             vertical: ScrollbarState::default(),
@@ -85,6 +86,7 @@ impl ScreenState<Action, PaletteType, InputType> for State {
 
             Action::OpenTextTab => self.set_variant(ViewVariant::Text),
             Action::OpenMarkdownTab => self.set_variant(ViewVariant::Markdown),
+            Action::OpenLogs => self.app_actions.push(crate::Action::OpenLogViewer),
 
             Action::Back => {
                 self.app_actions.push(crate::Action::Back);
