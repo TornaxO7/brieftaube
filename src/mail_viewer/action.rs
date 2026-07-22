@@ -33,6 +33,10 @@ pub enum Action {
     ScrollLeft,
     #[strum(message = "Scroll right")]
     ScrollRight,
+    #[strum(message = "Scroll to the top.")]
+    ScrollToTop,
+    #[strum(message = "Scroll to the top.")]
+    ScrollToBottom,
 
     #[strum(message = "Display the mail as text.")]
     OpenTextTab,

@@ -54,6 +54,8 @@ impl State {
                 ("l", Action::ScrollRight),
                 ("q", Action::Quit),
                 (":", Action::OpenCommandPalette),
+                ("gg", Action::ScrollToTop),
+                ("ge", Action::ScrollToBottom),
                 ("<BS>", Action::Back),
             ])),
             variant: ViewVariant::Markdown,
@@ -78,6 +80,8 @@ impl ScreenState<Action, PaletteType, InputType> for State {
             Action::ScrollDown => self.scroll_down(),
             Action::ScrollLeft => self.scroll_left(),
             Action::ScrollRight => self.scroll_right(),
+            Action::ScrollToTop => self.scroll_to_top(),
+            Action::ScrollToBottom => self.scroll_to_bottom(),
 
             Action::OpenTextTab => self.set_variant(ViewVariant::Text),
             Action::OpenMarkdownTab => self.set_variant(ViewVariant::Markdown),
@@ -115,29 +119,43 @@ impl ScreenState<Action, PaletteType, InputType> for State {
 
 impl State {
     fn scroll_down(&mut self) {
-        match &mut self.variant {
+        match self.variant {
             ViewVariant::Text | ViewVariant::Markdown => self.vertical.next(),
             ViewVariant::Attachments => todo!(),
         }
     }
 
     fn scroll_up(&mut self) {
-        match &mut self.variant {
+        match self.variant {
             ViewVariant::Text | ViewVariant::Markdown => self.vertical.prev(),
             ViewVariant::Attachments => todo!(),
         }
     }
 
     fn scroll_left(&mut self) {
-        match &mut self.variant {
+        match self.variant {
             ViewVariant::Text | ViewVariant::Markdown => self.horizontal.prev(),
             ViewVariant::Attachments => todo!(),
         }
     }
 
     fn scroll_right(&mut self) {
-        match &mut self.variant {
+        match self.variant {
             ViewVariant::Text | ViewVariant::Markdown => self.horizontal.next(),
+            ViewVariant::Attachments => todo!(),
+        }
+    }
+
+    fn scroll_to_top(&mut self) {
+        match self.variant {
+            ViewVariant::Text | ViewVariant::Markdown => self.vertical.first(),
+            ViewVariant::Attachments => todo!(),
+        }
+    }
+
+    fn scroll_to_bottom(&mut self) {
+        match self.variant {
+            ViewVariant::Text | ViewVariant::Markdown => self.vertical.last(),
             ViewVariant::Attachments => todo!(),
         }
     }
