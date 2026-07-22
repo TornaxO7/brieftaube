@@ -26,6 +26,16 @@ pub enum ViewVariant {
     Attachments,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum ScrollAction {
+    ScrollDown,
+    ScrollUp,
+    ScrollHalfPageDown,
+    ScrollHalfPageUp,
+    SetTop,
+    SetBottom,
+}
+
 pub struct State {
     app_actions: Vec<crate::Action>,
     overlay: Option<ScreenOverlay<PaletteType, InputType>>,
@@ -36,6 +46,7 @@ pub struct State {
     variant: ViewVariant,
     vertical: ScrollbarState,
     horizontal: ScrollbarState,
+    scroll_action: Option<ScrollAction>,
 }
 
 impl State {
@@ -46,12 +57,15 @@ impl State {
             id,
             backend,
             app_actions: vec![],
+            scroll_action: None,
             overlay: None,
             keybindings: KeybindManager::new(HashMap::from([
                 ("h", Action::ScrollLeft),
                 ("j", Action::ScrollDown),
                 ("k", Action::ScrollUp),
                 ("l", Action::ScrollRight),
+                ("<C-d>", Action::ScrollHalfPageDown),
+                ("<C-u>", Action::ScrollHalfPageUp),
                 ("q", Action::Quit),
                 (":", Action::OpenCommandPalette),
                 ("gg", Action::ScrollToTop),
@@ -83,6 +97,8 @@ impl ScreenState<Action, PaletteType, InputType> for State {
             Action::ScrollRight => self.scroll_right(),
             Action::ScrollToTop => self.scroll_to_top(),
             Action::ScrollToBottom => self.scroll_to_bottom(),
+            Action::ScrollHalfPageDown => self.scroll_half_page_down(),
+            Action::ScrollHalfPageUp => self.scroll_half_page_up(),
 
             Action::OpenTextTab => self.set_variant(ViewVariant::Text),
             Action::OpenMarkdownTab => self.set_variant(ViewVariant::Markdown),
@@ -128,10 +144,7 @@ impl State {
     }
 
     fn scroll_up(&mut self) {
-        match self.variant {
-            ViewVariant::Text | ViewVariant::Markdown => self.vertical.prev(),
-            ViewVariant::Attachments => todo!(),
-        }
+        self.scroll_action = Some(ScrollAction::ScrollUp);
     }
 
     fn scroll_left(&mut self) {
@@ -149,17 +162,19 @@ impl State {
     }
 
     fn scroll_to_top(&mut self) {
-        match self.variant {
-            ViewVariant::Text | ViewVariant::Markdown => self.vertical.first(),
-            ViewVariant::Attachments => todo!(),
-        }
+        self.scroll_action = Some(ScrollAction::SetTop);
     }
 
     fn scroll_to_bottom(&mut self) {
-        match self.variant {
-            ViewVariant::Text | ViewVariant::Markdown => self.vertical.last(),
-            ViewVariant::Attachments => todo!(),
-        }
+        self.scroll_action = Some(ScrollAction::SetBottom);
+    }
+
+    fn scroll_half_page_up(&mut self) {
+        self.scroll_action = Some(ScrollAction::ScrollHalfPageUp);
+    }
+
+    fn scroll_half_page_down(&mut self) {
+        self.scroll_action = Some(ScrollAction::ScrollHalfPageDown);
     }
 
     fn set_variant(&mut self, variant: ViewVariant) {
@@ -182,6 +197,7 @@ impl State {
             mail: FullMailDisplay::from(&mail),
             horizontal: &mut self.horizontal,
             vertical: &mut self.vertical,
+            scroll_queue: &mut self.scroll_action,
         })
     }
 }

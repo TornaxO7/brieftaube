@@ -37,6 +37,10 @@ pub enum Action {
     ScrollToTop,
     #[strum(message = "Scroll to the top.")]
     ScrollToBottom,
+    #[strum(message = "Scroll half page down.")]
+    ScrollHalfPageDown,
+    #[strum(message = "Scroll half page up.")]
+    ScrollHalfPageUp,
 
     #[strum(message = "Display the mail as text.")]
     OpenTextTab,

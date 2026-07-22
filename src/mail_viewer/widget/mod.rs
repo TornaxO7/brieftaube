@@ -1,7 +1,10 @@
 mod render_data;
 
 use super::state::ViewVariant;
-use crate::utils::ui::{ScreenOverlay, ScreenState, input::Input, palette::Palette};
+use crate::{
+    mail_viewer::state::ScrollAction,
+    utils::ui::{ScreenOverlay, ScreenState, input::Input, palette::Palette},
+};
 use pulldown_cmark_mdcat::ratatui::{RenderOptions, Renderer};
 use ratatui::{
     buffer::Buffer,
@@ -69,7 +72,13 @@ fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
             let renderer = Renderer::new(RenderOptions::default().width(area.width));
             let text = renderer.text_from_str(&content).unwrap();
 
-            adjust_scrollbars(&text, area, data.vertical, data.horizontal);
+            adjust_scrollbars(
+                &text,
+                area,
+                data.vertical,
+                data.horizontal,
+                data.scroll_queue,
+            );
 
             Widget::render(
                 Paragraph::new(text).block(Block::bordered()).scroll((
@@ -92,7 +101,13 @@ fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
 
             let text = Text::from(content);
 
-            adjust_scrollbars(&text, area, data.vertical, data.horizontal);
+            adjust_scrollbars(
+                &text,
+                area,
+                data.vertical,
+                data.horizontal,
+                data.scroll_queue,
+            );
 
             Widget::render(
                 Paragraph::new(text).block(Block::bordered()).scroll((
@@ -168,12 +183,32 @@ fn adjust_scrollbars(
     area: Rect,
     vertical: &mut ScrollbarState,
     horizontal: &mut ScrollbarState,
+    queue: &mut Option<ScrollAction>,
 ) {
-    {
-        let amount_unseen_lines = text.height().saturating_sub(area.height as usize);
-        *vertical = vertical.content_length(amount_unseen_lines);
+    let amount_unseen_lines = text.height().saturating_sub(area.height as usize);
+
+    if let Some(action) = queue.take() {
+        match action {
+            ScrollAction::ScrollUp => vertical.prev(),
+            ScrollAction::ScrollDown => vertical.next(),
+            ScrollAction::ScrollHalfPageDown => {
+                let prev_pos = vertical.get_position();
+                let new_pos = prev_pos + area.height as usize / 2;
+                *vertical = vertical.position(new_pos.min(amount_unseen_lines));
+            }
+            ScrollAction::ScrollHalfPageUp => {
+                let prev_pos = vertical.get_position();
+                *vertical = vertical.position(prev_pos.saturating_sub(area.height as usize / 2));
+            }
+            ScrollAction::SetTop => vertical.first(),
+            ScrollAction::SetBottom => vertical.last(),
+        }
     }
 
+    // restrict height
+    *vertical = vertical.content_length(amount_unseen_lines);
+
+    // restrict width
     {
         let amount_unseen_columns = text.width().saturating_sub(area.width as usize);
         *horizontal = horizontal.content_length(amount_unseen_columns);
