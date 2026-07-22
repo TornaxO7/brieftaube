@@ -19,13 +19,21 @@ pub enum PaletteType {
 #[derive(Debug, Clone)]
 pub enum InputType {}
 
+#[derive(Debug, Clone, Copy)]
+pub enum ViewVariant {
+    Text,
+    Markdown,
+    Attachments,
+}
+
 pub struct State {
     app_actions: Vec<crate::Action>,
     overlay: Option<ScreenOverlay<PaletteType, InputType>>,
     keybindings: KeybindManager<Action>,
 
-    backend: Rc<MailsBackend>,
     id: MailId,
+    backend: Rc<MailsBackend>,
+    variant: ViewVariant,
     vertical: ScrollbarState,
     horizontal: ScrollbarState,
 }
@@ -48,25 +56,10 @@ impl State {
                 (":", Action::OpenCommandPalette),
                 ("<BS>", Action::Back),
             ])),
+            variant: ViewVariant::Markdown,
             vertical: ScrollbarState::default(),
             horizontal: ScrollbarState::default(),
         }
-    }
-
-    fn scroll_down(&mut self) {
-        self.vertical.next();
-    }
-
-    fn scroll_up(&mut self) {
-        self.vertical.prev();
-    }
-
-    fn scroll_left(&mut self) {
-        self.horizontal.prev();
-    }
-
-    fn scroll_right(&mut self) {
-        self.horizontal.next();
     }
 }
 
@@ -85,6 +78,9 @@ impl ScreenState<Action, PaletteType, InputType> for State {
             Action::ScrollDown => self.scroll_down(),
             Action::ScrollLeft => self.scroll_left(),
             Action::ScrollRight => self.scroll_right(),
+
+            Action::OpenTextTab => self.set_variant(ViewVariant::Text),
+            Action::OpenMarkdownTab => self.set_variant(ViewVariant::Markdown),
 
             Action::Back => {
                 self.app_actions.push(crate::Action::Back);
@@ -117,6 +113,40 @@ impl ScreenState<Action, PaletteType, InputType> for State {
     }
 }
 
+impl State {
+    fn scroll_down(&mut self) {
+        match &mut self.variant {
+            ViewVariant::Text | ViewVariant::Markdown => self.vertical.next(),
+            ViewVariant::Attachments => todo!(),
+        }
+    }
+
+    fn scroll_up(&mut self) {
+        match &mut self.variant {
+            ViewVariant::Text | ViewVariant::Markdown => self.vertical.prev(),
+            ViewVariant::Attachments => todo!(),
+        }
+    }
+
+    fn scroll_left(&mut self) {
+        match &mut self.variant {
+            ViewVariant::Text | ViewVariant::Markdown => self.horizontal.prev(),
+            ViewVariant::Attachments => todo!(),
+        }
+    }
+
+    fn scroll_right(&mut self) {
+        match &mut self.variant {
+            ViewVariant::Text | ViewVariant::Markdown => self.horizontal.next(),
+            ViewVariant::Attachments => todo!(),
+        }
+    }
+
+    fn set_variant(&mut self, variant: ViewVariant) {
+        self.variant = variant;
+    }
+}
+
 // for `widget`
 impl State {
     pub fn get_render_data<'a>(&'a mut self) -> Option<RenderData<'a>> {
@@ -128,9 +158,10 @@ impl State {
         }
 
         Some(RenderData {
+            variant: self.variant,
+            mail: FullMailDisplay::from(&mail),
             horizontal: &mut self.horizontal,
             vertical: &mut self.vertical,
-            mail: FullMailDisplay::from(&mail),
         })
     }
 }

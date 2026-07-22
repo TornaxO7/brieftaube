@@ -33,6 +33,11 @@ pub enum Action {
     ScrollLeft,
     #[strum(message = "Scroll right")]
     ScrollRight,
+
+    #[strum(message = "Display the mail as text.")]
+    OpenTextTab,
+    #[strum(message = "Display the mail of html-text as markdown.")]
+    OpenMarkdownTab,
 }
 
 pub fn palette_options() -> Vec<Entry<PaletteType>> {

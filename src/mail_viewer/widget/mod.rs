@@ -1,13 +1,19 @@
 mod render_data;
 
+use super::state::ViewVariant;
 use crate::utils::ui::{ScreenOverlay, ScreenState, input::Input, palette::Palette};
+use pulldown_cmark_mdcat::ratatui::{RenderOptions, Renderer};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Margin, Rect},
-    widgets::{Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, StatefulWidget, Widget},
+    style::{Style, palette::material::YELLOW},
+    text::Text,
+    widgets::{
+        Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget,
+        Tabs, Widget,
+    },
 };
 pub use render_data::RenderData;
-use tui_widget_list::{ListBuilder, ListView};
 
 #[derive(Default)]
 pub struct MailViewer {}
@@ -17,14 +23,12 @@ impl StatefulWidget for MailViewer {
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         if let Some(mut data) = state.get_render_data() {
-            let [top, bottom] = if data.mail.has_attachment {
-                Layout::vertical([Constraint::Percentage(80), Constraint::Fill(0)]).areas(area)
-            } else {
-                [area, Rect::default()]
-            };
+            let [main_panel, view_mode] =
+                Layout::vertical([Constraint::Fill(1), Constraint::Length(3)]).areas(area);
 
-            render_mail_content(top, buf, &mut data);
-            render_attachment_list(bottom, buf, &mut data);
+            render_view_modes(view_mode, buf, &mut data);
+            render_mail_content(main_panel, buf, &mut data);
+            // render_attachment_list(bottom, buf, &mut data);
         } else {
             // loading screen
         }
@@ -33,65 +37,107 @@ impl StatefulWidget for MailViewer {
     }
 }
 
+fn render_view_modes(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
+    Widget::render(
+        Tabs::new(["Text", "Markdown (HTML)", "Attachments"])
+            .block(Block::bordered().title("Tabs"))
+            .highlight_style(Style::new().fg(YELLOW.c500))
+            .select(Some(data.variant as usize)),
+        area,
+        buf,
+    );
+}
+
 /// Rendering implementations
 // TODO: Respect the area size before scrolling.
 //    If the whole mail can be fitted within the area rect, there's no need to add the scrollbars.
 fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
-    let text = data.mail.rest.text_body.clone().unwrap();
+    match data.variant {
+        ViewVariant::Markdown => {
+            let Some(html) = data.mail.rest.html_body.clone() else {
+                Widget::render(
+                    Paragraph::new("This mail has no html body.").block(Block::bordered()),
+                    area,
+                    buf,
+                );
 
-    {
-        let amount_unseen_lines = text.lines().count().saturating_sub(area.height as usize);
-        *data.vertical = data.vertical.content_length(amount_unseen_lines);
+                return;
+            };
+            let markdown = html_to_markdown_rs::convert(&html, None).unwrap();
+            let content = markdown.content.unwrap();
+
+            let renderer = Renderer::new(RenderOptions::default().width(area.width));
+            let text = renderer.text_from_str(&content).unwrap();
+
+            adjust_scrollbars(&text, area, data.vertical, data.horizontal);
+
+            Widget::render(
+                Paragraph::new(text).block(Block::bordered()).scroll((
+                    data.vertical.get_position() as u16,
+                    data.horizontal.get_position() as u16,
+                )),
+                area,
+                buf,
+            );
+        }
+        ViewVariant::Text => {
+            let Some(content) = data.mail.rest.text_body.clone() else {
+                Widget::render(
+                    Paragraph::new("This mail has no plain text body.").block(Block::bordered()),
+                    area,
+                    buf,
+                );
+                return;
+            };
+
+            let text = Text::from(content);
+
+            adjust_scrollbars(&text, area, data.vertical, data.horizontal);
+
+            Widget::render(
+                Paragraph::new(text).block(Block::bordered()).scroll((
+                    data.vertical.get_position() as u16,
+                    data.horizontal.get_position() as u16,
+                )),
+                area.inner(Margin {
+                    horizontal: 1,
+                    vertical: 1,
+                }),
+                buf,
+            );
+
+            StatefulWidget::render(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight),
+                area,
+                buf,
+                data.vertical,
+            );
+
+            StatefulWidget::render(
+                Scrollbar::new(ScrollbarOrientation::HorizontalBottom),
+                area,
+                buf,
+                data.horizontal,
+            );
+        }
+
+        ViewVariant::Attachments => {
+            todo!()
+        }
     }
-
-    {
-        let amount_unseen_columns = text
-            .lines()
-            .next()
-            .map(|line| line.len().saturating_sub(area.width as usize))
-            .unwrap_or(0);
-
-        *data.horizontal = data.horizontal.content_length(amount_unseen_columns);
-    }
-
-    Widget::render(
-        Paragraph::new(text).block(Block::bordered()).scroll((
-            data.vertical.get_position() as u16,
-            data.horizontal.get_position() as u16,
-        )),
-        area.inner(Margin {
-            horizontal: 1,
-            vertical: 1,
-        }),
-        buf,
-    );
-
-    StatefulWidget::render(
-        Scrollbar::new(ScrollbarOrientation::VerticalRight),
-        area,
-        buf,
-        &mut data.vertical,
-    );
-
-    StatefulWidget::render(
-        Scrollbar::new(ScrollbarOrientation::HorizontalBottom),
-        area,
-        buf,
-        &mut data.horizontal,
-    );
 }
 
-fn render_attachment_list(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
+fn render_attachment_list(_area: Rect, _buf: &mut Buffer, _data: &mut RenderData) {
     // if data.mail.has_attachment {
-    //  if let Some(attachments) = data.mail.rest.attachments {
+    //     let attachments = &data.mail.rest.attachments;
+
     //     let builder = ListBuilder::new(|context| {
     //         const HEIGHT: u16 = 1;
 
     //         let attachment = &attachments[context.index];
-
     //         let widget = AttachmentWidget {
-    //             name: attachment.name().unwrap(),
-    //             ty: attachment.content_type().unwrap(),
+    //             name: attachment.name.as_deref().unwrap_or("<unnamed>"),
+    //             ty: attachment.content_type.as_deref().unwrap_or("<unknown>"),
     //         };
 
     //         (widget, HEIGHT)
@@ -102,26 +148,6 @@ fn render_attachment_list(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
 
     //     StatefulWidget::render(list, area, buf, &mut tui_widget_list::ListState::default());
     // }
-    // }
-}
-
-#[derive(Debug)]
-struct AttachmentWidget<'a> {
-    name: &'a str,
-    ty: &'a str,
-}
-
-impl<'a> Widget for AttachmentWidget<'a> {
-    fn render(self, area: Rect, buf: &mut Buffer)
-    where
-        Self: Sized,
-    {
-        let [left, right] =
-            Layout::horizontal([Constraint::Fill(0), Constraint::Fill(0)]).areas(area);
-
-        Widget::render(Paragraph::new(self.name).left_aligned(), left, buf);
-        Widget::render(Paragraph::new(self.ty).right_aligned(), right, buf);
-    }
 }
 
 fn render_overlay(area: Rect, buf: &mut Buffer, state: &mut super::State) {
@@ -134,5 +160,22 @@ fn render_overlay(area: Rect, buf: &mut Buffer, state: &mut super::State) {
             }
             ScreenOverlay::Input(state) => StatefulWidget::render(Input::new(), a, buf, state),
         }
+    }
+}
+
+fn adjust_scrollbars(
+    text: &Text,
+    area: Rect,
+    vertical: &mut ScrollbarState,
+    horizontal: &mut ScrollbarState,
+) {
+    {
+        let amount_unseen_lines = text.height().saturating_sub(area.height as usize);
+        *vertical = vertical.content_length(amount_unseen_lines);
+    }
+
+    {
+        let amount_unseen_columns = text.width().saturating_sub(area.width as usize);
+        *horizontal = horizontal.content_length(amount_unseen_columns);
     }
 }
