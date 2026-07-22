@@ -18,9 +18,10 @@ html-to-markdown-rs = "3.0"
 jmap-client = { git = "https://github.com/TornaxO7/jmap-client", branch = "my" }
 mail-parser = "0.11"
 nucleo = "0.5"
-pulldown-cmark-mdcat = { git = "https://github.com/TornaxO7/mdcat", branch = "bump-ratatui", features = [
-  "ratatui",
-] }
+# pulldown-cmark-mdcat = { git = "https://github.com/TornaxO7/mdcat", branch = "bump-ratatui", features = [
+#   "ratatui",
+# ] }
+pulldown-cmark-mdcat = { version = "2.13", features = ["ratatui"] }
 ratatui = "0.30"
 ratatui-textarea = "0.9.2"
 thiserror = "2"
