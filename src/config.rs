@@ -7,6 +7,7 @@ pub struct Config {
     pub address: String,
     pub password: String,
     pub host: String,
+    browser: Option<String>,
     editor: Option<String>,
 }
 
@@ -22,5 +23,9 @@ impl Config {
 
     pub fn editor(&self) -> Option<String> {
         self.editor.clone().or_else(|| std::env::var("EDITOR").ok())
+    }
+
+    pub fn browser(&self) -> String {
+        self.browser.clone().unwrap_or("xdg-open".to_string())
     }
 }

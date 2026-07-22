@@ -1,6 +1,7 @@
 use super::Action;
 use crate::{
     backend::mails::{MailsBackend, types::MailId},
+    config::Config,
     mail_viewer::{types::FullMailDisplay, widget::RenderData},
     utils::ui::{
         ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager, palette,
@@ -8,7 +9,7 @@ use crate::{
 };
 use ratatui::widgets::ScrollbarState;
 use std::{collections::HashMap, rc::Rc};
-use tracing::{debug, warn};
+use tracing::{debug, error, instrument::WithSubscriber, warn};
 
 #[derive(Debug, Clone)]
 pub enum PaletteType {
@@ -42,6 +43,7 @@ pub struct State {
     app_actions: Vec<crate::Action>,
     overlay: Option<ScreenOverlay<PaletteType, InputType>>,
     keybindings: KeybindManager<Action>,
+    config: Rc<Config>,
 
     id: MailId,
     backend: Rc<MailsBackend>,
@@ -52,12 +54,13 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(id: MailId, backend: Rc<MailsBackend>) -> Self {
+    pub fn new(id: MailId, backend: Rc<MailsBackend>, config: Rc<Config>) -> Self {
         backend.request_get_mails_rest(vec![id.clone()]);
 
         Self {
             id,
             backend,
+            config,
             app_actions: vec![],
             scroll_action: None,
             overlay: None,
@@ -110,6 +113,7 @@ impl ScreenState<Action, PaletteType, InputType> for State {
             Action::OpenTextTab => self.set_variant(ViewVariant::Text),
             Action::OpenMarkdownTab => self.set_variant(ViewVariant::Markdown),
             Action::OpenLogs => self.app_actions.push(crate::Action::OpenLogViewer),
+            Action::OpenMailInBrowser => self.open_html_mail_in_browser(),
 
             Action::Back => {
                 self.app_actions.push(crate::Action::Back);
@@ -201,6 +205,41 @@ impl State {
 
     fn set_variant(&mut self, variant: ViewVariant) {
         self.variant = variant;
+    }
+
+    fn open_html_mail_in_browser(&self) {
+        let Some(mail) = self.backend.get_mail(&self.id) else {
+            warn!("Couldn't find the mail in the backend. Maybe it got deleted from the server :(");
+            return;
+        };
+
+        let Some(rest) = mail.rest.as_ref() else {
+            self.backend.request_get_mails_rest(vec![mail.id]);
+            warn!("Html mail is requested. Please wait a bit.");
+            return;
+        };
+
+        let Some(html_body) = rest.html_body.as_ref() else {
+            error!("Couldn't get html body of mail.");
+            return;
+        };
+
+        // TODO: Choose better path (like .cache?)
+        if let Err(err) = std::fs::write("/tmp/mail.html", &html_body) {
+            error!("Couldn't save mail for browser: {err}");
+            return;
+        }
+
+        match std::process::Command::new(self.config.browser())
+            .arg("/tmp/test.html")
+            .status()
+        {
+            Ok(_) => {}
+            Err(err) => {
+                error!("Couldn't start browser to open html mail: {err}");
+                return;
+            }
+        };
     }
 }
 

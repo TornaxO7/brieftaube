@@ -183,7 +183,10 @@ impl App {
                 }
                 Action::OpenMailViewer(id) => {
                     let backend = self.account.mails.clone();
-                    let next_screen = Screen::MailViewer(mail_viewer::State::new(id, backend));
+                    let config = self.account.config.clone();
+
+                    let next_screen =
+                        Screen::MailViewer(mail_viewer::State::new(id, backend, config));
 
                     self.statusbar.set_screen(&next_screen);
                     self.screens.push(next_screen);

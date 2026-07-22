@@ -54,6 +54,8 @@ pub enum Action {
     OpenMarkdownTab,
     #[strum(message = "Open log viewer")]
     OpenLogs,
+    #[strum(message = "Open html mail in browser")]
+    OpenMailInBrowser,
 }
 
 pub fn palette_options() -> Vec<Entry<PaletteType>> {
