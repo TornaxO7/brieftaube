@@ -32,6 +32,8 @@ pub enum ScrollAction {
     ScrollUp,
     ScrollHalfPageDown,
     ScrollHalfPageUp,
+    ScrollHalfPageRight,
+    ScrollHalfPageLeft,
     SetTop,
     SetBottom,
 }
@@ -60,12 +62,15 @@ impl State {
             scroll_action: None,
             overlay: None,
             keybindings: KeybindManager::new(HashMap::from([
-                ("h", Action::ScrollLeft),
                 ("j", Action::ScrollDown),
                 ("k", Action::ScrollUp),
-                ("l", Action::ScrollRight),
+                ("h", Action::Back),
                 ("<C-d>", Action::ScrollHalfPageDown),
                 ("<C-u>", Action::ScrollHalfPageUp),
+                ("zH", Action::ScrollHalfPageLeft),
+                ("zL", Action::ScrollHalfPageRight),
+                ("zh", Action::ScrollLeft),
+                ("zl", Action::ScrollRight),
                 ("q", Action::Quit),
                 (":", Action::OpenCommandPalette),
                 ("gg", Action::ScrollToTop),
@@ -99,6 +104,8 @@ impl ScreenState<Action, PaletteType, InputType> for State {
             Action::ScrollToBottom => self.scroll_to_bottom(),
             Action::ScrollHalfPageDown => self.scroll_half_page_down(),
             Action::ScrollHalfPageUp => self.scroll_half_page_up(),
+            Action::ScrollHalfPageLeft => self.scroll_half_page_left(),
+            Action::ScrollHalfPageRight => self.scroll_half_page_right(),
 
             Action::OpenTextTab => self.set_variant(ViewVariant::Text),
             Action::OpenMarkdownTab => self.set_variant(ViewVariant::Markdown),
@@ -175,6 +182,14 @@ impl State {
 
     fn scroll_half_page_down(&mut self) {
         self.scroll_action = Some(ScrollAction::ScrollHalfPageDown);
+    }
+
+    fn scroll_half_page_left(&mut self) {
+        self.scroll_action = Some(ScrollAction::ScrollHalfPageLeft);
+    }
+
+    fn scroll_half_page_right(&mut self) {
+        self.scroll_action = Some(ScrollAction::ScrollHalfPageRight);
     }
 
     fn set_variant(&mut self, variant: ViewVariant) {

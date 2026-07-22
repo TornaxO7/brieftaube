@@ -186,6 +186,7 @@ fn adjust_scrollbars(
     queue: &mut Option<ScrollAction>,
 ) {
     let amount_unseen_lines = text.height().saturating_sub(area.height as usize);
+    let amount_unseen_columns = text.width().saturating_sub(area.width as usize);
 
     if let Some(action) = queue.take() {
         match action {
@@ -202,6 +203,16 @@ fn adjust_scrollbars(
             }
             ScrollAction::SetTop => vertical.first(),
             ScrollAction::SetBottom => vertical.last(),
+            ScrollAction::ScrollHalfPageRight => {
+                let prev_pos = horizontal.get_position();
+                let new_pos = prev_pos + area.width as usize / 2;
+                *horizontal = horizontal.position(new_pos.min(amount_unseen_columns));
+            }
+
+            ScrollAction::ScrollHalfPageLeft => {
+                let prev_pos = horizontal.get_position();
+                *horizontal = horizontal.position(prev_pos.saturating_sub(area.width as usize / 2));
+            }
         }
     }
 
@@ -209,8 +220,5 @@ fn adjust_scrollbars(
     *vertical = vertical.content_length(amount_unseen_lines);
 
     // restrict width
-    {
-        let amount_unseen_columns = text.width().saturating_sub(area.width as usize);
-        *horizontal = horizontal.content_length(amount_unseen_columns);
-    }
+    *horizontal = horizontal.content_length(amount_unseen_columns);
 }
