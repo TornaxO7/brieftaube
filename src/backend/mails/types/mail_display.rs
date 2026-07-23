@@ -2,7 +2,9 @@ use super::{MailAddress, MailData};
 use crate::backend::mails::types::{MailId, MailKeyword};
 use std::collections::HashSet;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThreadMarker {
+    Single,
     Root,
     Child,
 }
@@ -20,11 +22,8 @@ pub struct MailDisplay {
     pub thread_marker: ThreadMarker,
 }
 
-impl From<(&MailData, ThreadMarker)> for MailDisplay {
-    fn from(data: (&MailData, ThreadMarker)) -> Self {
-        let mail = data.0;
-        let thread_marker = data.1;
-
+impl MailDisplay {
+    pub fn new(mail: &MailData, marker: ThreadMarker) -> Self {
         let id = mail.id.clone();
         let from = addresses_to_string(&mail.from);
         let to = addresses_to_string(&mail.to);
@@ -49,7 +48,7 @@ impl From<(&MailData, ThreadMarker)> for MailDisplay {
             received_at,
             has_attachment,
             keywords,
-            thread_marker,
+            thread_marker: marker,
         }
     }
 }

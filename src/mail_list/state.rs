@@ -301,13 +301,19 @@ impl State {
             .iter()
             .filter_map(|entry| {
                 let mail_id = &entry.id;
-                let marker = match entry.ty {
-                    MailEntryType::Root => ThreadMarker::Root,
-                    MailEntryType::Child => ThreadMarker::Child,
+                let marker = {
+                    if !self.backend.has_thread(&entry.id) {
+                        ThreadMarker::Single
+                    } else {
+                        match entry.ty {
+                            MailEntryType::Root => ThreadMarker::Root,
+                            MailEntryType::Child => ThreadMarker::Child,
+                        }
+                    }
                 };
 
                 let mail = self.backend.get_mail(mail_id)?;
-                let row = MailDisplay::from((&mail, marker));
+                let row = MailDisplay::new(&mail, marker);
                 Some(row)
             })
             .collect();

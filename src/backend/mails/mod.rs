@@ -381,6 +381,17 @@ impl MailsBackend {
         cache.get_mail(id).cloned()
     }
 
+    /// Returns `true` if there are more than 1 mail in the thread of the mail.
+    pub fn has_thread(&self, id: &MailId) -> bool {
+        let cache = self.cache.lock().unwrap();
+
+        cache
+            .get_mail(id)
+            .and_then(|mail| cache.get_thread(&mail.thread_id))
+            .map(|thread_mails| thread_mails.len() > 1)
+            .unwrap_or(false)
+    }
+
     pub fn fold_thread(&self, mailbox: &MailboxId, thread: &ThreadId) {
         let cache = self.cache.clone();
 

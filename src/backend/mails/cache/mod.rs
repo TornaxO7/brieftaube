@@ -130,6 +130,10 @@ impl Cache {
                 .or_insert(vec![mail.id.clone()]);
         }
     }
+
+    pub fn get_thread(&self, id: &ThreadId) -> Option<&[MailId]> {
+        self.thread_mapping.get(id).map(|mails| mails.as_slice())
+    }
 }
 
 // Actions
@@ -184,7 +188,12 @@ impl Cache {
             return;
         };
 
-        mailbox_mails.retain(|entry| &entry.thread != thread);
+        mailbox_mails.retain(|entry| {
+            let is_in_same_thread = &entry.thread != thread;
+            let is_child = entry.ty == MailEntryType::Child;
+
+            is_child && is_in_same_thread
+        });
     }
 
     pub fn insert_thread(

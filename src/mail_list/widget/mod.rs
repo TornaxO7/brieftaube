@@ -24,6 +24,8 @@ pub use render_data::RenderData;
 
 pub const THREAD_BRANCH: &str = "├─";
 pub const THREAD_LAST: &str = "╰─";
+pub const TRIANGLE_RIGHT: &str = "▶";
+pub const TRIANGLE_DOWN: &str = "▼";
 
 #[derive(Default)]
 pub struct RootMails {}
@@ -77,10 +79,12 @@ fn render_mail_list<'a>(area: Rect, buf: &mut Buffer, data: &mut RenderData<'a>)
         .enumerate()
         .map(|(idx, row)| {
             let subject = match row.thread_marker {
-                ThreadMarker::Root => row.subject.clone(),
+                ThreadMarker::Root | ThreadMarker::Single => row.subject.clone(),
                 ThreadMarker::Child => match data.rows.get(idx + 1) {
                     Some(next) => match next.thread_marker {
-                        ThreadMarker::Root => format!("{} {}", THREAD_LAST, row.subject),
+                        ThreadMarker::Root | ThreadMarker::Single => {
+                            format!("{} {}", THREAD_LAST, row.subject)
+                        }
                         ThreadMarker::Child => format!("{} {}", THREAD_BRANCH, row.subject),
                     },
                     None => format!("{} {}", THREAD_LAST, row.subject),
@@ -97,6 +101,21 @@ fn render_mail_list<'a>(area: Rect, buf: &mut Buffer, data: &mut RenderData<'a>)
                 UNREAD_SYMBOL
             } else {
                 ""
+            };
+
+            let collapse_symbol = match row.thread_marker {
+                ThreadMarker::Single | ThreadMarker::Child => "",
+                ThreadMarker::Root => data
+                    .rows
+                    .get(idx + 1)
+                    .map(|next| {
+                        if next.thread_marker == ThreadMarker::Child {
+                            TRIANGLE_DOWN
+                        } else {
+                            TRIANGLE_RIGHT
+                        }
+                    })
+                    .unwrap_or(""),
             };
 
             let is_selected = if data.selected.contains(&row.id) {
@@ -116,6 +135,7 @@ fn render_mail_list<'a>(area: Rect, buf: &mut Buffer, data: &mut RenderData<'a>)
             Row::new(vec![
                 Cell::from(is_selected).style(Style::default().fg(GREEN.c400)),
                 Cell::from(is_unread).style(Style::default().fg(BLUE.c400)),
+                Cell::from(collapse_symbol).style(Style::default().fg(BLUE.c400)),
                 Cell::from(subject).style(subject_style),
                 Cell::from(has_attachment).style(Style::default().fg(GRAY.c400)),
                 Cell::from(row.from.clone()).style(Style::default().fg(BLUE_GRAY.c300)),
@@ -127,6 +147,7 @@ fn render_mail_list<'a>(area: Rect, buf: &mut Buffer, data: &mut RenderData<'a>)
     let table = Table::new(
         rows,
         [
+            Constraint::Length(1),
             Constraint::Length(1),
             Constraint::Length(1),
             Constraint::Fill(1),
