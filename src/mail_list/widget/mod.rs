@@ -18,7 +18,7 @@ use ratatui::{
         palette::material::{BLUE, BLUE_GRAY, GRAY, GREEN, ORANGE},
     },
     text::Text,
-    widgets::{Block, Cell, Clear, Paragraph, StatefulWidget, Table, Widget},
+    widgets::{Block, Cell, Clear, Paragraph, Row, StatefulWidget, Table, Widget},
 };
 pub use render_data::RenderData;
 
@@ -51,7 +51,27 @@ impl StatefulWidget for RootMails {
 fn render_mail_list<'a>(area: Rect, buf: &mut Buffer, data: &mut RenderData<'a>) {
     const DATE_EXAMPLE: &str = "Mon, 15 May 2015, HH:MM:SS";
 
-    let rows: Vec<ratatui::widgets::Row<'_>> = data
+    let header_row = {
+        let is_selected = Cell::from("");
+        let is_unread = Cell::from("");
+        let collapse_symbol = Cell::from("");
+        let subject = Cell::from("Subject");
+        let attachment_symbol = Cell::from("");
+        let from = Cell::from("From");
+        let received_at = Cell::from("Received at");
+
+        [
+            is_selected,
+            is_unread,
+            collapse_symbol,
+            subject,
+            attachment_symbol,
+            from,
+            received_at,
+        ]
+    };
+
+    let rows: Vec<Row<'_>> = data
         .rows
         .iter()
         .enumerate()
@@ -93,7 +113,7 @@ fn render_mail_list<'a>(area: Rect, buf: &mut Buffer, data: &mut RenderData<'a>)
                 Style::default()
             };
 
-            ratatui::widgets::Row::new(vec![
+            Row::new(vec![
                 Cell::from(is_selected).style(Style::default().fg(GREEN.c400)),
                 Cell::from(is_unread).style(Style::default().fg(BLUE.c400)),
                 Cell::from(subject).style(subject_style),
@@ -115,10 +135,7 @@ fn render_mail_list<'a>(area: Rect, buf: &mut Buffer, data: &mut RenderData<'a>)
             Constraint::Min(DATE_EXAMPLE.len() as u16),
         ],
     )
-    .header(
-        ratatui::widgets::Row::new(["", "", "Subject", "", "From", "Received at"])
-            .style(Style::default().underlined()),
-    )
+    .header(Row::new(header_row).style(Style::default().underlined()))
     .row_highlight_style(Style::default().white().bg(BLUE.c700))
     .block(Block::bordered());
 
@@ -161,10 +178,10 @@ fn render_preview(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
 
 fn render_headers(area: Rect, buf: &mut Buffer, headers: &[(&'static str, &str)]) {
     let table = {
-        let rows: Vec<ratatui::widgets::Row<'_>> = headers
+        let rows: Vec<Row<'_>> = headers
             .iter()
             .map(|(name, value)| {
-                ratatui::widgets::Row::new([
+                Row::new([
                     Cell::new(Text::from(*name).right_aligned())
                         .style(Style::default().fg(BLUE_GRAY.c400)),
                     Cell::new(*value),
