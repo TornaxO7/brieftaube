@@ -18,12 +18,11 @@ use tokio::{sync::oneshot, task::JoinHandle};
 use tracing::{debug, error, warn};
 use types::{MailId, ThreadId};
 
-const DATA_INITIALISED_MSG: &str = "Is initialised";
 const INIT_ROOT_MAILS: usize = 10;
 
 pub struct MailsBackend {
     client: Arc<Client>,
-    cache: Arc<Mutex<Option<Cache>>>,
+    cache: Arc<Mutex<Cache>>,
     tasks: Mutex<VecDeque<JoinHandle<()>>>,
 }
 
@@ -31,18 +30,13 @@ impl MailsBackend {
     pub fn new(client: Arc<Client>) -> Self {
         Self {
             client,
-            cache: Arc::new(Mutex::new(None)),
+            cache: Arc::new(Mutex::new(Cache::default())),
             tasks: Mutex::new(VecDeque::with_capacity(8)),
         }
     }
 
     pub fn is_initialised(&self, id: &MailboxId) -> bool {
-        let guard = self.cache.lock().unwrap();
-
-        let Some(cache) = guard.as_ref() else {
-            return false;
-        };
-
+        let cache = self.cache.lock().unwrap();
         cache.is_initialised(id)
     }
 
@@ -134,7 +128,7 @@ impl MailsBackend {
                 };
 
                 let mut cache = cache.lock().unwrap();
-                *cache = Some(Cache::new(query_mail_response, get_mail_response));
+                *cache = Cache::new(query_mail_response, get_mail_response);
             }));
     }
 
@@ -161,8 +155,7 @@ impl MailsBackend {
                     }
                 };
 
-                let mut guard = cache.lock().unwrap();
-                let cache = guard.as_mut().expect(DATA_INITIALISED_MSG);
+                let mut cache = cache.lock().unwrap();
                 cache.set_mail_state(response.take_state());
 
                 for mail in response.take_list() {
@@ -178,8 +171,7 @@ impl MailsBackend {
         let non_full_mails = {
             let mut ids: Vec<MailId> = Vec::new();
 
-            let guard = self.cache.lock().unwrap();
-            let cache = guard.as_ref().expect(DATA_INITIALISED_MSG);
+            let cache = self.cache.lock().unwrap();
 
             for id in mails.into_iter() {
                 let mail = cache.get_mail(&id).unwrap();
@@ -212,8 +204,7 @@ impl MailsBackend {
                     }
                 };
 
-                let mut guard = cache.lock().unwrap();
-                let cache = guard.as_mut().expect(DATA_INITIALISED_MSG);
+                let mut cache = cache.lock().unwrap();
                 cache.set_mail_state(response.take_state());
 
                 for mut rest_mail in response.take_list() {
@@ -236,8 +227,7 @@ impl MailsBackend {
             .push_back(tokio::spawn(async move {
                 let mut response = {
                     let current_state = {
-                        let guard = cache.lock().unwrap();
-                        let cache = guard.as_ref().expect(DATA_INITIALISED_MSG);
+                        let cache = cache.lock().unwrap();
                         cache.get_mail_state()
                     };
 
@@ -269,8 +259,7 @@ impl MailsBackend {
                     }
                 };
 
-                let mut guard = cache.lock().unwrap();
-                let cache = guard.as_mut().expect(DATA_INITIALISED_MSG);
+                let mut cache = cache.lock().unwrap();
                 cache.set_mail_state(response.take_new_state());
 
                 for mail in mails {
@@ -348,8 +337,7 @@ impl MailsBackend {
                     }
                 };
 
-                let mut guard = cache.lock().unwrap();
-                let cache = guard.as_mut().expect(DATA_INITIALISED_MSG);
+                let mut cache = cache.lock().unwrap();
                 cache.insert_thread(get_thread_response, get_mail_response);
 
                 if let Err(_err) = done_sender.send(()) {
@@ -364,15 +352,13 @@ impl MailsBackend {
 // `state` methods
 impl MailsBackend {
     pub fn get_mails(&self, id: &MailboxId) -> Option<Vec<MailEntry>> {
-        let guard = self.cache.lock().unwrap();
-        guard
-            .as_ref()
-            .and_then(|cache| cache.get_mails_from_mailbox(id).map(|mails| mails.to_vec()))
+        let cache = self.cache.lock().unwrap();
+        cache.get_mails_from_mailbox(id).map(|mails| mails.to_vec())
     }
 
     pub fn get_mail(&self, id: &MailId) -> Option<MailData> {
-        let guard = self.cache.lock().unwrap();
-        guard.as_ref().and_then(|cache| cache.get_mail(id).cloned())
+        let cache = self.cache.lock().unwrap();
+        cache.get_mail(id).cloned()
     }
 
     pub fn fold_thread(&self, mailbox: &MailboxId, thread: &ThreadId) {
@@ -384,9 +370,7 @@ impl MailsBackend {
             .lock()
             .unwrap()
             .push_back(tokio::spawn(async move {
-                let mut guard = cache.lock().unwrap();
-                let cache = guard.as_mut().expect(DATA_INITIALISED_MSG);
-
+                let mut cache = cache.lock().unwrap();
                 cache.fold_thread(&mailbox, &thread);
             }));
     }
@@ -395,8 +379,7 @@ impl MailsBackend {
     // returns `true` if unfolding was successfull, otherwise `false`
     pub fn unfold_mail(&self, mailbox: &MailboxId, mail: &MailId) -> bool {
         let result = {
-            let mut guard = self.cache.lock().unwrap();
-            let cache = guard.as_mut().expect(DATA_INITIALISED_MSG);
+            let mut cache = self.cache.lock().unwrap();
 
             cache.unfold_mail(mailbox, mail)
         };
@@ -421,8 +404,7 @@ impl MailsBackend {
                         return;
                     }
 
-                    let mut guard = cache.lock().unwrap();
-                    let cache = guard.as_mut().expect(DATA_INITIALISED_MSG);
+                    let mut cache = cache.lock().unwrap();
                     cache.unfold_mail(&mailbox, &mail).expect("Thread mails should have arrived >:(");
                 }));
             }
