@@ -32,11 +32,22 @@ pub struct Cache {
 }
 
 impl Cache {
-    pub fn new(mut query_response: QueryResponse, mut get_mail_response: EmailGetResponse) -> Self {
+    pub fn init_mailbox(
+        mut query_response: QueryResponse,
+        mut get_mail_response: EmailGetResponse,
+        mut get_thread_response: ThreadGetResponse,
+    ) -> Self {
         let raw_mail_list = get_mail_response.take_list();
 
         let query_state = query_response.take_query_state();
         let email_get_state = get_mail_response.take_state();
+        let thread_get_state = get_thread_response.take_state();
+
+        let thread_mapping: HashMap<ThreadId, Vec<MailId>> = get_thread_response
+            .take_list()
+            .into_iter()
+            .map(|thread| (thread.id().to_string(), thread.email_ids().to_vec()))
+            .collect();
 
         let mails: HashMap<MailId, MailData> = raw_mail_list
             .into_iter()
@@ -68,15 +79,15 @@ impl Cache {
         Self {
             mails,
             mailbox_mapping,
-            thread_mapping: HashMap::new(),
+            thread_mapping,
 
             email_get_state,
             _query_state: query_state,
-            thread_get_state: String::new(),
+            thread_get_state,
         }
     }
 
-    pub fn is_initialised(&self, id: &MailboxId) -> bool {
+    pub fn is_mailbox_initialised(&self, id: &MailboxId) -> bool {
         self.mailbox_mapping.contains_key(id)
     }
 

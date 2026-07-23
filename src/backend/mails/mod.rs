@@ -35,9 +35,9 @@ impl MailsBackend {
         }
     }
 
-    pub fn is_initialised(&self, id: &MailboxId) -> bool {
+    pub fn is_mailbox_initialised(&self, id: &MailboxId) -> bool {
         let cache = self.cache.lock().unwrap();
-        cache.is_initialised(id)
+        cache.is_mailbox_initialised(id)
     }
 
     pub fn has_tasks_running(&self) -> bool {
@@ -58,7 +58,7 @@ impl MailsBackend {
 // methods which need to interact with the server
 impl MailsBackend {
     pub fn init(&self, id: MailboxId) {
-        if self.is_initialised(&id) {
+        if self.is_mailbox_initialised(&id) {
             // TODO: fetch changes
             return;
         }
@@ -87,10 +87,13 @@ impl MailsBackend {
                         query.result_reference()
                     };
 
-                    request
+                    let get_mail_result = request
                         .get_email()
                         .ids_ref(query_result)
-                        .properties(MailData::PROPERTIES);
+                        .properties(MailData::PROPERTIES)
+                        .result_reference(jmap_client::email::Property::ThreadId);
+
+                    let _get_thread = request.get_thread().ids_ref(get_mail_result);
 
                     match request.send().await {
                         Ok(r) => r,
@@ -101,6 +104,11 @@ impl MailsBackend {
                     }
                 };
 
+                let Some(get_thread_method) = response.pop_method_response() else {
+                    error!("Couldn't pop `Thread/get` method from request.");
+                    return;
+                };
+
                 let Some(get_mail_method) = response.pop_method_response() else {
                     error!("Couldn't pop `Email/get` method from request.");
                     return;
@@ -109,6 +117,14 @@ impl MailsBackend {
                 let Some(query_mail_method) = response.pop_method_response() else {
                     error!("Couldn't pop `Email/query` method from request.");
                     return;
+                };
+
+                let get_thread_response = match get_thread_method.unwrap_get_thread() {
+                    Ok(r) => r,
+                    Err(err) => {
+                        error!("Couldn't get response of `Thread/get` request:\n{err}");
+                        return;
+                    }
                 };
 
                 let get_mail_response = match get_mail_method.unwrap_get_email() {
@@ -128,7 +144,11 @@ impl MailsBackend {
                 };
 
                 let mut cache = cache.lock().unwrap();
-                *cache = Cache::new(query_mail_response, get_mail_response);
+                *cache = Cache::init_mailbox(
+                    query_mail_response,
+                    get_mail_response,
+                    get_thread_response,
+                );
             }));
     }
 
