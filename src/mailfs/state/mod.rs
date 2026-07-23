@@ -7,8 +7,6 @@ pub use palette_value::PaletteValue;
 use column_ctx::ColumnCtx;
 use input_type::InputType;
 
-use ratatui::widgets::TableState;
-
 use super::Action;
 use crate::{
     Screen,
@@ -22,6 +20,7 @@ use crate::{
         ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager, palette,
     },
 };
+use ratatui::widgets::TableState;
 use std::{collections::HashMap, rc::Rc, vec::Drain};
 
 pub struct State {
@@ -54,7 +53,7 @@ impl State {
     }
 }
 
-impl<'a> ScreenState<Action, PaletteValue, InputType, RenderData<'a>> for State {
+impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for State {
     fn apply_action(&mut self, action: Action) {
         match action {
             Action::Quit => self.quit(),

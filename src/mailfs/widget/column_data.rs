@@ -4,11 +4,13 @@ use crate::backend::{
 };
 use ratatui::widgets::TableState;
 
+#[derive(Debug)]
 pub struct ColumnData<'a> {
     pub entries: Vec<ColumnEntry<'a>>,
     pub state: &'a mut TableState,
 }
 
+#[derive(Debug)]
 pub struct ColumnEntry<'a> {
     pub is_selected: bool,
     pub data: ColumnEntryData<'a>,
@@ -17,12 +19,10 @@ pub struct ColumnEntry<'a> {
 #[derive(Debug)]
 pub enum ColumnEntryData<'a> {
     Mailbox {
-        id: MailboxId,
         name: &'a str,
         unread_mails: usize,
     },
     Mail {
-        id: MailId,
         thread: ThreadId,
         ty: MailEntryType,
 
@@ -30,6 +30,7 @@ pub enum ColumnEntryData<'a> {
         subject: &'a str,
         received_at: &'a str,
         has_attachment: bool,
+        is_unread: bool,
     },
 }
 
