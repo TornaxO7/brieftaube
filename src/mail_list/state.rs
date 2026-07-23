@@ -4,7 +4,7 @@ use crate::{
         mailbox::types::MailboxId,
         mails::{
             MailsBackend,
-            types::{MailDisplay, MailEntry, MailId, MailKeyword, MailUpdate, ThreadMarker},
+            types::{MailDisplay, MailEntryType, MailId, MailKeyword, MailUpdate, ThreadMarker},
         },
     },
     mail_list::widget::RenderData,
@@ -180,11 +180,7 @@ impl State {
             return;
         };
 
-        let id = match &mails[idx] {
-            MailEntry::Root(id) => id,
-            MailEntry::Child { mail, .. } => mail,
-        };
-
+        let id = &mails[idx].id.clone();
         if !self.selected.remove(id) {
             self.selected.insert(id.clone());
         }
@@ -202,11 +198,7 @@ impl State {
                 return;
             };
 
-            let id = match &mails[idx] {
-                MailEntry::Root(id) => id,
-                MailEntry::Child { mail, .. } => mail,
-            };
-
+            let id = &mails[idx].id.clone();
             let update = MailUpdate {
                 id: id.clone(),
                 patch_keywords: Some(patch),
@@ -239,9 +231,10 @@ impl State {
             return false;
         };
 
-        match &mails[idx] {
-            MailEntry::Root(id) => self.backend.unfold_mail(&self.in_mailbox, id),
-            MailEntry::Child { .. } => false,
+        let entry = &mails[idx];
+        match entry.ty {
+            MailEntryType::Root => self.backend.unfold_mail(&self.in_mailbox, &entry.id),
+            MailEntryType::Child => false,
         }
     }
 
@@ -254,24 +247,22 @@ impl State {
             return false;
         };
 
-        match &mails[idx] {
-            MailEntry::Root(_) => match mails.get(idx + 1) {
-                Some(entry) => match entry {
-                    MailEntry::Root(_) => false,
-                    MailEntry::Child { thread, .. } => {
-                        self.backend.fold_thread(&self.in_mailbox, thread);
+        let entry = &mails[idx];
+        match entry.ty {
+            MailEntryType::Root => match mails.get(idx + 1) {
+                Some(next_entry) => match next_entry.ty {
+                    MailEntryType::Root => false,
+                    MailEntryType::Child => {
+                        self.backend.fold_thread(&self.in_mailbox, &entry.thread);
                         self.table_state.select(Some(idx));
                         true
                     }
                 },
                 None => false,
             },
-            MailEntry::Child { thread, .. } => {
-                match mails.iter().position(|entry| {
-                    let is_after_thread_root =
-                        matches!(entry, MailEntry::Child{thread: other, ..} if other == thread);
-                    is_after_thread_root
-                }) {
+            MailEntryType::Child => {
+                // set the table state index
+                match mails.iter().position(|other| other.thread == entry.thread) {
                     Some(root_pos) => {
                         tracing::debug!("Root pos: {}", root_pos);
                         self.table_state.select(Some(root_pos - 1));
@@ -279,7 +270,7 @@ impl State {
                     None => self.table_state.select_first(),
                 }
 
-                self.backend.fold_thread(&self.in_mailbox, thread);
+                self.backend.fold_thread(&self.in_mailbox, &entry.thread);
 
                 true
             }
@@ -295,11 +286,7 @@ impl State {
             return;
         };
 
-        let mail_id = match &mails[idx] {
-            MailEntry::Root(id) => id,
-            MailEntry::Child { mail, .. } => mail,
-        };
-
+        let mail_id = &mails[idx].id.clone();
         self.app_actions
             .push(crate::Action::OpenMailViewer(mail_id.clone()));
     }
@@ -312,25 +299,15 @@ impl State {
 
         let rows = entries
             .iter()
-            .enumerate()
-            .filter_map(|(idx, entry)| {
-                let (id, thread_marker) = match entry {
-                    MailEntry::Root(id) => (id, ThreadMarker::Root),
-                    MailEntry::Child { mail, thread } => {
-                        match entries.get(idx + 1) {
-                            Some(MailEntry::Child {
-                                thread: next_thread,
-                                ..
-                            }) => next_thread != thread,
-                            _ => true,
-                        };
-
-                        (mail, ThreadMarker::Child)
-                    }
+            .filter_map(|entry| {
+                let mail_id = &entry.id;
+                let marker = match entry.ty {
+                    MailEntryType::Root => ThreadMarker::Root,
+                    MailEntryType::Child => ThreadMarker::Child,
                 };
 
-                let mail = self.backend.get_mail(id)?;
-                let row = MailDisplay::from((&mail, thread_marker));
+                let mail = self.backend.get_mail(mail_id)?;
+                let row = MailDisplay::from((&mail, marker));
                 Some(row)
             })
             .collect();

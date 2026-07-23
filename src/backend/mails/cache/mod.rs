@@ -6,7 +6,10 @@ use super::{
 };
 use crate::backend::{
     mailbox::types::MailboxId,
-    mails::{MailData, types::MailUpdate},
+    mails::{
+        MailData,
+        types::{MailEntryType, MailUpdate},
+    },
 };
 use error::UnfoldError;
 use jmap_client::core::{
@@ -49,17 +52,13 @@ impl Cache {
                     idx.entry(mailbox.clone())
                         .and_modify(|mailbox_mails| {
                             let idx = mailbox_mails.partition_point(|entry| {
-                                let other = match entry {
-                                    MailEntry::Root(id) => mails.get(id).unwrap(),
-                                    MailEntry::Child { mail, .. } => mails.get(mail).unwrap(),
-                                };
-
+                                let other = mails.get(&entry.id).unwrap();
                                 other.received_at > mail.received_at
                             });
 
-                            mailbox_mails.insert(idx, MailEntry::Root(mail.id.clone()));
+                            mailbox_mails.insert(idx, MailEntry::new_root(&mail));
                         })
-                        .or_insert(vec![MailEntry::Root(mail.id.clone())]);
+                        .or_insert(vec![MailEntry::new_root(&mail)]);
                 }
             }
 
@@ -125,6 +124,7 @@ impl Cache {
 // Actions
 impl Cache {
     pub fn update_mail(&mut self, new: MailUpdate) {
+        // update mail keywords
         if let Some(patch_keywords) = &new.patch_keywords {
             let mail = self.mails.get_mut(&new.id).unwrap();
             for (keyword, set) in patch_keywords {
@@ -136,42 +136,32 @@ impl Cache {
             }
         }
 
+        // update mailbox mappings
         if let Some(mailbox_ids) = &new.mailbox_ids {
-            for (new_mailbox, set) in mailbox_ids {
+            for (mailbox_id, set) in mailbox_ids {
                 if *set {
                     let mail = self.mails.get(&new.id).unwrap();
 
                     self.mailbox_mapping
-                        .entry(new_mailbox.clone())
+                        .entry(mailbox_id.clone())
                         .and_modify(|children| {
                             let idx = children.partition_point(|entry| {
-                                let id = match entry {
-                                    MailEntry::Root(id) => id,
-                                    MailEntry::Child { mail, .. } => mail,
-                                };
-
-                                let other = self.mails.get(id).unwrap();
-
+                                let other = self.mails.get(&entry.id).unwrap();
                                 other.received_at > mail.received_at
                             });
 
-                            children.insert(idx, MailEntry::Root(mail.id.clone()));
+                            children.insert(idx, MailEntry::new_root(&mail));
                         });
 
                     let mail = self.mails.get_mut(&new.id).unwrap();
-                    mail.mailbox_ids.insert(new_mailbox.clone());
+                    mail.mailbox_ids.insert(mailbox_id.clone());
                 } else {
                     self.mailbox_mapping
-                        .entry(new_mailbox.clone())
-                        .and_modify(|children| {
-                            children.retain(|entry| match entry {
-                                MailEntry::Root(other) => other == new_mailbox,
-                                MailEntry::Child { mail: other, .. } => other == new_mailbox,
-                            })
-                        });
+                        .entry(mailbox_id.clone())
+                        .and_modify(|children| children.retain(|entry| entry.id != new.id));
 
                     let mail = self.mails.get_mut(&new.id).unwrap();
-                    mail.mailbox_ids.remove(new_mailbox);
+                    mail.mailbox_ids.remove(mailbox_id);
                 }
             }
         }
@@ -183,10 +173,7 @@ impl Cache {
             return;
         };
 
-        mailbox_mails.retain(|entry| match entry {
-            MailEntry::Root(_) => true,
-            MailEntry::Child { thread: other, .. } => other != thread,
-        });
+        mailbox_mails.retain(|entry| &entry.thread != thread);
     }
 
     pub fn insert_thread(
@@ -210,7 +197,7 @@ impl Cache {
 
         let unfold_pos = mailbox_mails
             .iter()
-            .position(|entry| matches!(entry, MailEntry::Root(other) if other == id))
+            .position(|entry| &entry.id == id)
             .expect("The given mail doesn't belong to the mailbox?! Where did that come from?!")
             + 1;
 
@@ -222,7 +209,9 @@ impl Cache {
         {
             let already_unfolded = match mailbox_mails.get(unfold_pos) {
                 Some(entry) => {
-                    matches!(entry, MailEntry::Child {thread, ..} if *thread == mail.thread_id)
+                    let is_child = entry.ty == MailEntryType::Child;
+                    let is_in_same_thread = entry.thread == mail.thread_id;
+                    is_child && is_in_same_thread
                 }
                 None => false,
             };
@@ -239,13 +228,11 @@ impl Cache {
 
         mailbox_mails.splice(
             unfold_pos..unfold_pos,
-            thread_mails
-                .iter()
-                .skip(1)
-                .map(|thread_mail| MailEntry::Child {
-                    mail: thread_mail.clone(),
-                    thread: mail.thread_id.clone(),
-                }),
+            thread_mails.iter().skip(1).map(|thread_mail| MailEntry {
+                id: thread_mail.clone(),
+                thread: mail.thread_id.clone(),
+                ty: MailEntryType::Child,
+            }),
         );
 
         return Ok(true);
@@ -299,7 +286,7 @@ mod tests {
         assert_eq!(
             [
                 // all are in the same thread => Don't display all of them unless `unfold` is called
-                MailEntry::Root(mail2.id.clone()),
+                MailEntry::new_root(&mail2),
             ]
             .as_slice(),
             cache.mailbox_mapping.get("1").unwrap()
