@@ -51,7 +51,7 @@ impl State {
     }
 }
 
-impl ScreenState<Action, PaletteType, InputType> for State {
+impl<'a> ScreenState<'a, Action, PaletteType, InputType, ()> for State {
     fn apply_action(&mut self, action: Action) {
         tracing::debug!("Action: {:?}", action);
         match action {
@@ -90,5 +90,9 @@ impl ScreenState<Action, PaletteType, InputType> for State {
             },
             ScreenOverlayResult::Input { value: _, typ: _ } => unreachable!(""),
         }
+    }
+
+    fn render_data(&mut self) -> Option<()> {
+        None
     }
 }

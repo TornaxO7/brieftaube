@@ -6,7 +6,7 @@ pub mod symbol;
 use crossterm::event::{Event, KeyEvent};
 use keybindmanager::{HandleEvent, KeybindManager};
 
-pub trait ScreenState<A: Clone + std::fmt::Debug, P: Clone, I: Clone> {
+pub trait ScreenState<'a, A: Clone + std::fmt::Debug, P: Clone, I: Clone, R> {
     fn apply_action(&mut self, action: A);
 
     fn get_app_actions(&mut self) -> std::vec::Drain<'_, crate::Action>;
@@ -43,6 +43,8 @@ pub trait ScreenState<A: Clone + std::fmt::Debug, P: Clone, I: Clone> {
     fn overlay(&mut self) -> Option<&mut ScreenOverlay<P, I>>;
 
     fn handle_overlay_result(&mut self, result: ScreenOverlayResult<P, I>);
+
+    fn render_data(&'a mut self) -> Option<R>;
 }
 
 pub enum ScreenOverlay<P: Clone, I: Clone> {

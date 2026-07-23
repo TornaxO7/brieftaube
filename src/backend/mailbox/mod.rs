@@ -60,7 +60,7 @@ impl MailboxBackend {
 
 // methods which also communicate with the server
 impl MailboxBackend {
-    pub fn init(&self) {
+    pub fn request_mailboxes(&self) {
         if self.cache_is_initialised() {
             // TODO: Request `mailbox/changes`
             return;
