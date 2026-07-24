@@ -22,7 +22,6 @@ use ratatui::{
 
 const FOLDER: &str = "🗀";
 const FOLDER_OPEN: &str = "🗁";
-const ENVELOPE: &str = "🖂";
 const PLACEHOLDER: &str = "";
 const MAIL_UNREAD_SYMBOL: &str = "⏺";
 const THREAD_BRANCH: &str = "├─";
@@ -66,6 +65,7 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnData) {
         Constraint::Length(1),
         Constraint::Length(1),
         Constraint::Length(1),
+        Constraint::Length(1),
         Constraint::Fill(1),
         Constraint::Fill(1),
         Constraint::Fill(2),
@@ -81,6 +81,7 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnData) {
                 .selected()
                 .map(|hovered_idx| hovered_idx == idx)
                 .unwrap_or(false);
+
             let mut row = Vec::with_capacity(widths.len());
 
             if entry.is_selected {
@@ -94,11 +95,19 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnData) {
                     // 🗀 / 🗁
                     {
                         let s = if is_hovered { FOLDER_OPEN } else { FOLDER };
-                        row.push(Cell::from(s).style(Style::new().fg(BLUE.c800)));
+                        row.push(
+                            Cell::from(s)
+                                .style(Style::new().fg(BLUE.c800))
+                                .column_span(3),
+                        );
                     }
 
                     // name
-                    row.push(Cell::from(*name).style(Style::new().fg(BLUE.c800)));
+                    row.push(
+                        Cell::from(*name)
+                            .style(Style::new().fg(BLUE.c800))
+                            .column_span(2),
+                    );
 
                     // unread_mails
                     {
@@ -157,9 +166,6 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnData) {
                             }
                         },
                     };
-
-                    // 🖂
-                    row.push(Cell::from(ENVELOPE).style(Style::new().fg(BLUE.c800)));
 
                     // 📎
                     if *has_attachment {

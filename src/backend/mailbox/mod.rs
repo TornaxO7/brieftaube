@@ -18,8 +18,6 @@ use tokio::task::{JoinError, JoinHandle};
 use tracing::error;
 use types::{MailboxData, MailboxId, MailboxNew, MailboxUpdate, MailboxValidate, SortOrder};
 
-const DATA_INITIALISED_MSG: &str = "Is initialised";
-
 pub struct MailboxBackend {
     client: Arc<Client>,
     cache: Arc<Mutex<Option<Cache>>>,
