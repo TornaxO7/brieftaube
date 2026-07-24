@@ -1,12 +1,12 @@
 use super::types::{MailboxData, MailboxId};
-use crate::backend::mailbox::types::MailboxUpdate;
+use crate::backend::{GetState, mailbox::types::MailboxUpdate};
 use std::collections::HashMap;
 
 pub struct Cache {
     mailboxes: HashMap<MailboxId, MailboxData>,
     // Children always exist in `mailboxes`.
     children_mapping: HashMap<Option<MailboxId>, Vec<MailboxId>>,
-    get_state: String,
+    state: GetState,
 }
 
 impl Cache {
@@ -14,7 +14,7 @@ impl Cache {
         Self {
             mailboxes: HashMap::new(),
             children_mapping: HashMap::new(),
-            get_state: String::new(),
+            state: GetState::new(),
         }
     }
 
@@ -22,12 +22,12 @@ impl Cache {
         self.mailboxes.is_empty()
     }
 
-    pub fn get_state(&self) -> String {
-        self.get_state.clone()
+    pub fn get_state(&self) -> GetState {
+        self.state.clone()
     }
 
-    pub fn set_state(&mut self, new_state: String) {
-        self.get_state = new_state;
+    pub fn set_state(&mut self, new_state: GetState) {
+        self.state = new_state;
     }
 
     pub fn get_mailbox(&self, id: &MailboxId) -> Option<&MailboxData> {
@@ -76,7 +76,7 @@ impl Cache {
     pub fn flush(&mut self) {
         self.mailboxes.clear();
         self.children_mapping.clear();
-        self.get_state.clear();
+        self.state.clear();
     }
 
     pub fn add(&mut self, mailbox: MailboxData) {

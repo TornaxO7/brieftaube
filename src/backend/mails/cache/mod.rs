@@ -1,10 +1,8 @@
 pub mod error;
 
-use super::{
-    MailId,
-    types::{MailEntry, ThreadId},
-};
+use super::{MailId, types::MailEntry};
 use crate::backend::{
+    GetState,
     mailbox::types::MailboxId,
     mails::{MailData, types::MailUpdate},
 };
@@ -17,11 +15,7 @@ use tracing::warn;
 pub struct Cache {
     mails: HashMap<MailId, MailData>,
     mailbox_mapping: HashMap<MailboxId, Vec<MailId>>,
-    // note: not required to be sorted!
-    thread_mapping: HashMap<ThreadId, Vec<MailId>>,
-
-    thread_get_state: String,
-    email_get_state: String,
+    state: GetState,
 }
 
 impl Cache {
@@ -29,10 +23,8 @@ impl Cache {
         Self {
             mails: HashMap::new(),
             mailbox_mapping: HashMap::new(),
-            thread_mapping: HashMap::new(),
 
-            thread_get_state: String::new(),
-            email_get_state: String::new(),
+            state: GetState::new(),
         }
     }
 
@@ -89,11 +81,11 @@ impl Cache {
     }
 
     pub fn get_mail_state(&self) -> String {
-        self.email_get_state.clone()
+        self.get_state.clone()
     }
 
     pub fn set_mail_state(&mut self, new_state: String) {
-        self.email_get_state = new_state;
+        self.get_state = new_state;
     }
 
     pub fn get_mail(&self, id: &MailId) -> Option<&MailData> {
@@ -134,18 +126,12 @@ impl Cache {
     pub fn flush(&mut self) {
         self.mails.clear();
         self.mailbox_mapping.clear();
-        self.thread_mapping.clear();
 
-        self.thread_get_state.clear();
-        self.email_get_state.clear();
+        self.get_state.clear();
     }
 
     pub fn add_mail_data(&mut self, mail: MailData) {
         self.mails.insert(mail.id.clone(), mail);
-    }
-
-    pub fn add_thread(&mut self, id: ThreadId, thread_mails: Vec<MailId>) {
-        self.thread_mapping.insert(id, thread_mails);
     }
 
     pub fn add_mail_mailbox(&mut self, mailbox: MailboxId, mail: MailId) {
@@ -227,7 +213,7 @@ impl Cache {
         mut get_mail_response: EmailGetResponse,
     ) {
         self.thread_get_state = get_thread_response.take_state();
-        self.email_get_state = get_mail_response.take_state();
+        self.get_state = get_mail_response.take_state();
 
         for mail in get_mail_response.take_list() {
             self.add_mail_data(MailData::new(mail));

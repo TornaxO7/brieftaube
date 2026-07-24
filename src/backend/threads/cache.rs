@@ -1,16 +1,16 @@
-use crate::backend::{mails::types::MailId, threads::types::ThreadId};
+use crate::backend::{GetState, mails::types::MailId, threads::types::ThreadId};
 use std::collections::HashMap;
 
 pub struct Cache {
     threads: HashMap<ThreadId, Vec<MailId>>,
-    state: String,
+    state: GetState,
 }
 
 impl Cache {
     pub fn new() -> Self {
         Self {
             threads: HashMap::new(),
-            state: String::new(),
+            state: GetState::new(),
         }
     }
 

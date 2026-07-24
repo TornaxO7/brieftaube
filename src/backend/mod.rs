@@ -6,6 +6,8 @@ use crate::config::Config;
 use jmap_client::client::Client;
 use std::{rc::Rc, sync::Arc};
 
+type GetState = String;
+
 pub struct Backend {
     pub client: Arc<jmap_client::client::Client>,
 
