@@ -227,9 +227,7 @@ impl MailboxBackend {
 }
 
 // methods for `state.rs`
-impl MailboxBackend {
-    pub fn get
-}
+impl MailboxBackend {}
 
 // start a `Mailbox/get` request
 async fn mailbox_get(client: Arc<Client>, cache: Arc<Mutex<Cache>>) {

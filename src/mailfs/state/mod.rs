@@ -6,7 +6,7 @@ pub use palette_value::PaletteValue;
 
 use super::Action;
 use crate::{
-    backend::{mailbox::MailboxBackend, mails::MailsBackend},
+    backend::{Backend, mailbox::MailboxBackend, mails::MailsBackend},
     config::Config,
     mailfs::widget::RenderData,
     utils::ui::{
@@ -21,23 +21,17 @@ pub struct State {
     app_actions: Vec<crate::Action>,
     keybindings: KeybindManager<Action>,
     overlay: Option<ScreenOverlay<PaletteValue, InputType>>,
-    config: Rc<Config>,
 
     columns: Vec<ColumnCtx>,
     current_column: usize,
 
-    mailboxes: Rc<MailboxBackend>,
-    mails: Rc<MailsBackend>,
+    backend: Rc<Backend>,
 }
 
 impl State {
-    pub fn new(mailboxes: Rc<MailboxBackend>, mails: Rc<MailsBackend>, config: Rc<Config>) -> Self {
-        mailboxes.request_mailboxes();
-
+    pub fn new(backend: Rc<Backend>) -> Self {
         Self {
-            mailboxes,
-            mails,
-            config,
+            backend,
             overlay: None,
             columns: vec![ColumnCtx::default()],
             current_column: 0,
@@ -84,7 +78,9 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
     }
 
     fn render_data(&'a mut self) -> Option<RenderData<'a>> {
-        let current_column = self.current_column_mut();
+        let center = {
+            let current_column = self.current_column_mut();
+        };
 
         None
         // Some(RenderData {

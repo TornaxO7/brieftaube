@@ -18,7 +18,7 @@ use ratatui::{
     DefaultTerminal, Frame,
     layout::{Constraint, Layout},
 };
-use std::{fs::OpenOptions, io, path::PathBuf, sync::OnceLock};
+use std::{fs::OpenOptions, io, path::PathBuf, rc::Rc, sync::OnceLock};
 use tracing::{error, level_filters::LevelFilter};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use xdg::BaseDirectories;
@@ -61,7 +61,7 @@ pub enum Action {
 /// Stores the app state
 pub struct App {
     is_running: bool,
-    account: backend::Account,
+    backend: Rc<backend::Backend>,
     screens: Vec<Screen>,
     statusbar: statusbar::State,
 
@@ -70,18 +70,14 @@ pub struct App {
 
 impl App {
     pub async fn new(counter: statusbar::Counter) -> eyre::Result<Self> {
-        let account = backend::Account::new().await;
-        let initial_screen = Screen::Mailfs(mailfs::State::new(
-            account.mailboxes.clone(),
-            account.mails.clone(),
-            account.config.clone(),
-        ));
+        let backend = Rc::new(backend::Backend::new().await);
+        let initial_screen = Screen::Mailfs(mailfs::State::new(backend.clone()));
 
         let statusbar = statusbar::State::new(&initial_screen, counter);
 
         Ok(Self {
             is_running: true,
-            account: account,
+            backend,
             screens: vec![initial_screen],
             statusbar,
             needs_full_redraw: false,
@@ -96,12 +92,7 @@ impl App {
             tokio::select! {
                 _ = self.statusbar.has_changed() => { }
 
-                _ = self.account.mailboxes.has_changed(), if self.account.mailboxes.has_tasks_running() => {
-                    self.account.mailboxes.pop_task();
-                }
-                _ = self.account.mails.has_changed(), if self.account.mails.has_tasks_running() => {
-                    self.account.mails.pop_task();
-                }
+                _ = self.backend.has_changed(), if self.backend.has_tasks_running() => { }
 
                 maybe_event = reader.next().fuse() => match maybe_event {
                     Some(Ok(event)) => self.handle_event(event),
@@ -129,8 +120,6 @@ impl App {
         let [statusbar, screen] =
             Layout::vertical([Constraint::Length(3), Constraint::Fill(0)]).areas(area);
         frame.render_stateful_widget(Statusbar::default(), statusbar, &mut self.statusbar);
-
-        let buffer = frame.buffer_mut();
 
         match self.screens.last_mut().unwrap() {
             Screen::Mailfs(state) => {
@@ -235,10 +224,7 @@ impl App {
                 // Screen::MailList(_) => self.account.mails.has_tasks_running(),
                 // Screen::Composer(_) => todo!(),
                 // Screen::MailViewer(_) => self.account.mails.has_tasks_running(),
-                Screen::Mailfs(_) => {
-                    self.account.mailboxes.has_tasks_running()
-                        || self.account.mails.has_tasks_running()
-                }
+                Screen::Mailfs(_) => self.backend.has_tasks_running(),
                 Screen::LogViewer(_) => false,
             };
 

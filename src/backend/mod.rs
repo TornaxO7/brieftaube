@@ -5,16 +5,16 @@ use crate::config::Config;
 use jmap_client::client::Client;
 use std::{rc::Rc, sync::Arc};
 
-// TODO: Rename to `Backends`
-pub struct Account {
+pub struct Backend {
     pub client: Arc<jmap_client::client::Client>,
 
-    pub config: Rc<Config>,
-    pub mailboxes: Rc<mailbox::MailboxBackend>,
-    pub mails: Rc<mails::MailsBackend>,
+    config: Rc<Config>,
+
+    mailboxes: Rc<mailbox::MailboxBackend>,
+    mails: Rc<mails::MailsBackend>,
 }
 
-impl Account {
+impl Backend {
     pub async fn new() -> Self {
         let config = Rc::new(Config::load().unwrap());
 
@@ -46,5 +46,20 @@ impl Account {
 
     pub fn address(&self) -> String {
         self.client.session().username().to_string()
+    }
+
+    pub fn has_tasks_running(&self) -> bool {
+        self.mailboxes.has_tasks_running() || self.mails.has_tasks_running()
+    }
+
+    pub async fn has_changed(&self) {
+        tokio::select! {
+            _ = self.mailboxes.has_changed(), if self.mailboxes.has_tasks_running() => {
+                self.mailboxes.pop_task();
+            }
+            _ = self.mails.has_changed(), if self.mails.has_tasks_running() => {
+                self.mails.pop_task();
+            }
+        }
     }
 }
