@@ -1,12 +1,12 @@
 use super::types::{MailboxData, MailboxId};
-use crate::backend::{GetState, mailbox::types::MailboxUpdate};
+use crate::backend::{GetState, QueryState, mailbox::types::MailboxUpdate};
 use std::{collections::HashMap, sync::Arc};
 
 pub struct Cache {
     mailboxes: HashMap<MailboxId, Arc<MailboxData>>,
     // Children always exist in `mailboxes`.
     children_mapping: HashMap<Option<MailboxId>, Vec<MailboxId>>,
-    state: GetState,
+    states: HashMap<Option<MailboxId>, QueryState>,
 }
 
 impl Cache {
@@ -14,7 +14,7 @@ impl Cache {
         Self {
             mailboxes: HashMap::new(),
             children_mapping: HashMap::new(),
-            state: GetState::new(),
+            states: HashMap::new(),
         }
     }
 
@@ -22,23 +22,23 @@ impl Cache {
         self.mailboxes.is_empty()
     }
 
-    pub fn get_state(&self) -> GetState {
-        self.state.clone()
+    pub fn get_state(&self, parent: &Option<MailboxId>) -> Option<GetState> {
+        self.states.get(parent).cloned()
     }
 
-    pub fn set_state(&mut self, new_state: GetState) {
-        self.state = new_state;
+    pub fn set_state(&mut self, parent: Option<MailboxId>, new_state: GetState) {
+        self.states.insert(parent, new_state);
     }
 
     pub fn get_data(&self, id: &MailboxId) -> Option<Arc<MailboxData>> {
         self.mailboxes.get(id).cloned()
     }
 
-    // pub fn get_children(&self, parent_id: &Option<MailboxId>) -> Option<&[MailboxId]> {
-    //     self.children_mapping
-    //         .get(parent_id)
-    //         .map(|children| children.as_slice())
-    // }
+    pub fn get_children(&self, parent_id: &Option<MailboxId>) -> Option<&[MailboxId]> {
+        self.children_mapping
+            .get(parent_id)
+            .map(|children| children.as_slice())
+    }
 
     pub fn get_children_data(
         &self,

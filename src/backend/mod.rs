@@ -1,22 +1,28 @@
 pub mod mailbox;
 pub mod mails;
 pub mod threads;
+pub mod types;
 
 use crate::{
-    backend::mailbox::types::{MailboxData, MailboxId},
+    backend::{
+        mailbox::types::{MailboxData, MailboxId},
+        types::CollapsedMail,
+    },
     config::Config,
 };
 use jmap_client::client::Client;
 use std::{cell::RefCell, collections::VecDeque, rc::Rc, sync::Arc};
 use tokio::task::JoinHandle;
-use tracing::error;
+use tracing::{debug, error, instrument};
 
 type GetState = String;
+type QueryState = String;
 
 pub struct Backend {
     config: Rc<Config>,
 
     client: Arc<Client>,
+
     mailboxes: Arc<mailbox::MailboxBackend>,
     mails: Arc<mails::MailsBackend>,
     threads: Arc<threads::ThreadsBackend>,
@@ -75,22 +81,23 @@ impl Backend {
 
 /// Methods for states.
 impl Backend {
-    pub fn request_mailboxes(&self) {
-        let mut tasks = self.tasks.borrow_mut();
+    #[instrument(skip(self))]
+    pub fn get_child_mailboxes(&self, parent_id: Option<MailboxId>) -> Option<Vec<MailboxId>> {
         let mailboxes = self.mailboxes.clone();
 
-        tasks.push_back(tokio::spawn(async move {
-            if let Err(err) = mailboxes.request_mailboxes_get().await {
-                error!("Couldn't request all mailboxes from server:\n{err}");
-                return;
-            };
-        }));
+        self.mailboxes.get_child_mailboxes(&parent_id).or_else(|| {
+            self.tasks.borrow_mut().push_back(tokio::spawn(async move {
+                debug!("Requesting mailboxes");
+                if let Err(err) = mailboxes.request_mailboxes_query(parent_id.clone()).await {
+                    error!("Couldn't query mailboxes:\n{err}");
+                }
+            }));
+
+            None
+        })
     }
 
-    pub fn get_child_mailboxes(
-        &self,
-        parent_id: &Option<MailboxId>,
-    ) -> Option<Vec<Arc<MailboxData>>> {
-        self.mailboxes.get_child_mailboxes(parent_id)
+    pub fn get_collapsed_mails(&self, id: &MailboxId) -> Option<Vec<CollapsedMail>> {
+        todo!()
     }
 }

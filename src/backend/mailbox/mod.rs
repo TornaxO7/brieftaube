@@ -33,7 +33,43 @@ impl MailboxBackend {
 
 // methods which also communicate with the server
 impl MailboxBackend {
-    pub async fn request_mailboxes_get(&self) -> Result<(), jmap_client::Error> {
+    // pub async fn request_mailboxes_get(&self) -> Result<(), jmap_client::Error> {
+    //     if self.cache_is_initialised() {
+    //         // TODO: Request `mailbox/changes`
+    //         return Ok(());
+    //     }
+
+    //     let mut response = {
+    //         let mut request = self.client.build();
+    //         request
+    //             .get_mailbox()
+    //             .ids::<[_; 1], String>(None::<[_; 1]>)
+    //             .properties(MailboxData::PROPERTIES);
+
+    //         request.send_get_mailbox().await?
+    //     };
+
+    //     let mut cache = self.cache.lock().unwrap();
+    //     cache.flush();
+
+    //     let mailboxes: Vec<MailboxData> = response
+    //         .take_list()
+    //         .into_iter()
+    //         .map(MailboxData::from)
+    //         .collect();
+    //     for mailbox in mailboxes.clone() {
+    //         cache.add(mailbox);
+    //     }
+
+    //     cache.set_state(parent_id.clone(), response.take_state());
+
+    //     Ok(())
+    // }
+
+    pub async fn request_mailboxes_query(
+        &self,
+        parent_id: Option<MailboxId>,
+    ) -> Result<(), jmap_client::Error> {
         if self.cache_is_initialised() {
             // TODO: Request `mailbox/changes`
             return Ok(());
@@ -41,27 +77,35 @@ impl MailboxBackend {
 
         let mut response = {
             let mut request = self.client.build();
+
+            let query_result = request
+                .query_mailbox()
+                .filter(jmap_client::mailbox::query::Filter::ParentId {
+                    value: parent_id.clone(),
+                })
+                .result_reference();
+
             request
                 .get_mailbox()
-                .ids::<[_; 1], String>(None::<[_; 1]>)
+                .ids_ref(query_result)
                 .properties(MailboxData::PROPERTIES);
 
-            request.send_get_mailbox().await?
+            request.send().await?
         };
+
+        let mut mailbox_get_response = response
+            .pop_method_response()
+            .unwrap()
+            .unwrap_get_mailbox()?;
 
         let mut cache = self.cache.lock().unwrap();
         cache.flush();
 
-        let mailboxes: Vec<MailboxData> = response
-            .take_list()
-            .into_iter()
-            .map(MailboxData::from)
-            .collect();
-        for mailbox in mailboxes.clone() {
-            cache.add(mailbox);
+        for mailbox in mailbox_get_response.take_list() {
+            cache.add(MailboxData::from(mailbox));
         }
 
-        cache.set_state(response.take_state());
+        cache.set_state(parent_id.clone(), mailbox_get_response.take_state());
 
         Ok(())
     }
@@ -373,12 +417,10 @@ impl MailboxBackend {
 
 // methods for `state.rs`
 impl MailboxBackend {
-    pub fn get_child_mailboxes(
-        &self,
-        parent_id: &Option<MailboxId>,
-    ) -> Option<Vec<Arc<MailboxData>>> {
-        // TODO: If `None` => request
+    pub fn get_child_mailboxes(&self, parent_id: &Option<MailboxId>) -> Option<Vec<MailboxId>> {
         let cache = self.cache.lock().unwrap();
-        cache.get_children_data(parent_id)
+        cache
+            .get_children(parent_id)
+            .map(|children| children.to_vec())
     }
 }

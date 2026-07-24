@@ -3,11 +3,12 @@ mod input_type;
 mod palette_value;
 
 pub use palette_value::PaletteValue;
+use ratatui::widgets::TableState;
 
 use super::Action;
 use crate::{
-    backend::Backend,
-    mailfs::widget::RenderData,
+    backend::{Backend, types::CollapsedMail},
+    mailfs::{state::column_ctx::ColumnCtxEntry, widget::RenderData},
     utils::ui::{
         ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager, palette,
     },
@@ -29,8 +30,6 @@ pub struct State {
 
 impl State {
     pub fn new(backend: Rc<Backend>) -> Self {
-        backend.request_mailboxes();
-
         Self {
             backend,
             overlay: None,
@@ -79,7 +78,7 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
     }
 
     fn render_data(&'a mut self) -> RenderData<'a> {
-        self.sync_columns();
+        self.init_columns();
 
         let left = {
             todo!();
@@ -156,20 +155,61 @@ impl State {
 }
 
 impl<'a> State {
-    fn sync_columns(&mut self) {
-        let is_current_column_loaded = self.columns.get(self.current_column).is_some();
-        if !is_current_column_loaded {
-            let is_root = self.current_column == 0;
-            let mailboxes = if is_root {
-                self.backend.get_child_mailboxes(&None)
+    fn init_columns(&mut self) -> Option<()> {
+        self.init_column(self.current_column)?;
+        self.init_column(self.current_column + 1)?;
+
+        Some(())
+    }
+
+    /// Returns `None` if the column couldn't be initialised yet because the backend still needs fetch the data,
+    /// otherwise `Some(())`.
+    fn init_column(&mut self, column_idx: usize) -> Option<()> {
+        let is_column_loaded = self.columns.get(column_idx).is_some();
+        if !is_column_loaded {
+            let mut entries: Vec<ColumnCtxEntry> = Vec::new();
+
+            let parent_mailbox_id = if column_idx == 0 {
+                None
             } else {
-                todo!();
+                self.columns[column_idx - 1].mailbox.clone()
+            };
+
+            // get mailboxes
+            {
+                let mailbox_ids = self
+                    .backend
+                    .get_child_mailboxes(parent_mailbox_id.clone())?;
+                for mailbox_id in mailbox_ids {
+                    entries.push(ColumnCtxEntry::Mailbox(mailbox_id));
+                }
             }
+
+            // get mails
+            if let Some(parent_mailbox_id) = parent_mailbox_id.as_ref() {
+                let collapsed_mails = self.backend.get_collapsed_mails(parent_mailbox_id)?;
+                for collapsed_mail in collapsed_mails {
+                    match collapsed_mail {
+                        CollapsedMail::SingleMail(mail_id) => {
+                            entries.push(ColumnCtxEntry::SingleMail(mail_id))
+                        }
+                        CollapsedMail::CollapsedThread(thread_id) => {
+                            entries.push(ColumnCtxEntry::CollapsedThread(thread_id))
+                        }
+                    }
+                }
+            }
+
+            self.columns.insert(
+                column_idx,
+                ColumnCtx {
+                    mailbox: parent_mailbox_id,
+                    entries,
+                    state: TableState::new().with_selected(0),
+                },
+            );
         }
 
-        let is_right_column_loaded = self.columns.get(self.current_column + 1).is_some();
-        if !is_right_column_loaded {
-            // load column
-        }
+        Some(())
     }
 }
