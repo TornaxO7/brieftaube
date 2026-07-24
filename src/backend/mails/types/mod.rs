@@ -13,4 +13,3 @@ pub use mail_keyword::MailKeyword;
 pub use mail_update::MailUpdate;
 
 pub type MailId = String;
-pub type ThreadId = String;

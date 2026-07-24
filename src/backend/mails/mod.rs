@@ -16,7 +16,7 @@ use std::{
 };
 use tokio::{sync::oneshot, task::JoinHandle};
 use tracing::{debug, error, warn};
-use types::{MailId, ThreadId};
+use types::MailId;
 
 const DATA_INITIALISED_MSG: &str = "Is initialised";
 const INIT_ROOT_MAILS: usize = 10;

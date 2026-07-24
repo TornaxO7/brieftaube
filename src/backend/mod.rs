@@ -1,5 +1,6 @@
 pub mod mailbox;
 pub mod mails;
+pub mod threads;
 
 use crate::config::Config;
 use jmap_client::client::Client;
