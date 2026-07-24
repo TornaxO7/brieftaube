@@ -9,73 +9,80 @@ use crate::backend::{
     mails::{MailData, types::MailUpdate},
 };
 use error::UnfoldError;
-use jmap_client::core::{
-    query::QueryResponse,
-    response::{EmailGetResponse, ThreadGetResponse},
-};
+use jmap_client::core::response::{EmailGetResponse, ThreadGetResponse};
 use std::collections::HashMap;
 use tracing::warn;
 
 #[derive(Default)]
 pub struct Cache {
     mails: HashMap<MailId, MailData>,
-    // sorted by received_at
-    mailbox_mapping: HashMap<MailboxId, Vec<MailEntry>>,
+    mailbox_mapping: HashMap<MailboxId, Vec<MailId>>,
+    // note: not required to be sorted!
     thread_mapping: HashMap<ThreadId, Vec<MailId>>,
 
     thread_get_state: String,
     email_get_state: String,
-    _query_state: String,
 }
 
 impl Cache {
-    pub fn new(mut query_response: QueryResponse, mut get_mail_response: EmailGetResponse) -> Self {
-        let raw_mail_list = get_mail_response.take_list();
-
-        let query_state = query_response.take_query_state();
-        let email_get_state = get_mail_response.take_state();
-
-        let mails: HashMap<MailId, MailData> = raw_mail_list
-            .into_iter()
-            .map(MailData::new)
-            .map(|mail| (mail.id.clone(), mail))
-            .collect();
-
-        let mailbox_mapping: HashMap<MailboxId, Vec<MailEntry>> = {
-            let mut idx: HashMap<MailboxId, Vec<MailEntry>> = HashMap::with_capacity(mails.len());
-
-            for mail in mails.values() {
-                for mailbox in mail.mailbox_ids.iter() {
-                    idx.entry(mailbox.clone())
-                        .and_modify(|mailbox_mails| {
-                            let idx = mailbox_mails.partition_point(|entry| {
-                                let other = match entry {
-                                    MailEntry::Root(id) => mails.get(id).unwrap(),
-                                    MailEntry::Child { mail, .. } => mails.get(mail).unwrap(),
-                                };
-
-                                other.received_at > mail.received_at
-                            });
-
-                            mailbox_mails.insert(idx, MailEntry::Root(mail.id.clone()));
-                        })
-                        .or_insert(vec![MailEntry::Root(mail.id.clone())]);
-                }
-            }
-
-            idx
-        };
-
+    pub fn new() -> Self {
         Self {
-            mails,
-            mailbox_mapping,
+            mails: HashMap::new(),
+            mailbox_mapping: HashMap::new(),
             thread_mapping: HashMap::new(),
 
-            email_get_state,
-            _query_state: query_state,
             thread_get_state: String::new(),
+            email_get_state: String::new(),
         }
     }
+
+    // pub fn new(mut query_response: QueryResponse, mut get_mail_response: EmailGetResponse) -> Self {
+    //     let raw_mail_list = get_mail_response.take_list();
+
+    //     let query_state = query_response.take_query_state();
+    //     let email_get_state = get_mail_response.take_state();
+
+    //     let mails: HashMap<MailId, MailData> = raw_mail_list
+    //         .into_iter()
+    //         .map(MailData::new)
+    //         .map(|mail| (mail.id.clone(), mail))
+    //         .collect();
+
+    //     let mailbox_mapping: HashMap<MailboxId, Vec<MailEntry>> = {
+    //         let mut idx: HashMap<MailboxId, Vec<MailEntry>> = HashMap::with_capacity(mails.len());
+
+    //         for mail in mails.values() {
+    //             for mailbox in mail.mailbox_ids.iter() {
+    //                 idx.entry(mailbox.clone())
+    //                     .and_modify(|mailbox_mails| {
+    //                         let idx = mailbox_mails.partition_point(|entry| {
+    //                             let other = match entry {
+    //                                 MailEntry::Root(id) => mails.get(id).unwrap(),
+    //                                 MailEntry::Child { mail, .. } => mails.get(mail).unwrap(),
+    //                             };
+
+    //                             other.received_at > mail.received_at
+    //                         });
+
+    //                         mailbox_mails.insert(idx, MailEntry::Root(mail.id.clone()));
+    //                     })
+    //                     .or_insert(vec![MailEntry::Root(mail.id.clone())]);
+    //             }
+    //         }
+
+    //         idx
+    //     };
+
+    //     Self {
+    //         mails,
+    //         mailbox_mapping,
+    //         thread_mapping: HashMap::new(),
+
+    //         email_get_state,
+    //         _query_state: query_state,
+    //         thread_get_state: String::new(),
+    //     }
+    // }
 
     pub fn is_initialised(&self, id: &MailboxId) -> bool {
         self.mailbox_mapping.contains_key(id)
@@ -97,36 +104,61 @@ impl Cache {
         self.mails.get_mut(id)
     }
 
-    pub fn get_mails_from_mailbox(&self, id: &MailboxId) -> Option<&[MailEntry]> {
-        self.mailbox_mapping.get(id).map(|mails| mails.as_slice())
-    }
+    // pub fn get_mails_from_mailbox(&self, id: &MailboxId) -> Option<&[MailEntry]> {
+    //     self.mailbox_mapping.get(id).map(|mails| mails.as_slice())
+    // }
 
-    pub fn add_mail(&mut self, mail: MailData) {
-        self.mails.insert(mail.id.clone(), mail.clone());
+    // pub fn add_mail(&mut self, mail: MailData) {
+    //     self.mails.insert(mail.id.clone(), mail.clone());
 
-        // add to thread-list in correct order
-        {
-            self.thread_mapping
-                .entry(mail.thread_id.clone())
-                .and_modify(|thread_mails| {
-                    let idx = thread_mails.partition_point(|id| {
-                        let other = self.mails.get(id).unwrap();
+    //     // add to thread-list in correct order
+    //     {
+    //         self.thread_mapping
+    //             .entry(mail.thread_id.clone())
+    //             .and_modify(|thread_mails| {
+    //                 let idx = thread_mails.partition_point(|id| {
+    //                     let other = self.mails.get(id).unwrap();
 
-                        other.received_at > mail.received_at
-                    });
+    //                     other.received_at > mail.received_at
+    //                 });
 
-                    thread_mails.insert(idx, mail.id.clone());
-                })
-                .or_insert(vec![mail.id.clone()]);
-        }
-    }
+    //                 thread_mails.insert(idx, mail.id.clone());
+    //             })
+    //             .or_insert(vec![mail.id.clone()]);
+    //     }
+    // }
 }
 
-// Actions
+// Methods altering the cache
 impl Cache {
+    pub fn flush(&mut self) {
+        self.mails.clear();
+        self.mailbox_mapping.clear();
+        self.thread_mapping.clear();
+
+        self.thread_get_state.clear();
+        self.email_get_state.clear();
+    }
+
+    pub fn add_mail_data(&mut self, mail: MailData) {
+        self.mails.insert(mail.id.clone(), mail);
+    }
+
+    pub fn add_thread(&mut self, id: ThreadId, thread_mails: Vec<MailId>) {
+        self.thread_mapping.insert(id, thread_mails);
+    }
+
+    pub fn add_mail_mailbox(&mut self, mailbox: MailboxId, mail: MailId) {
+        self.mailbox_mapping
+            .entry(mailbox.clone())
+            .and_modify(|mail_ids| mail_ids.push(mail.clone()))
+            .or_insert(vec![mail]);
+    }
+
     pub fn update_mail(&mut self, new: MailUpdate) {
-        if let Some(patch_keywords) = &new.patch_keywords {
-            let mail = self.mails.get_mut(&new.id).unwrap();
+        if let (Some(patch_keywords), Some(mail)) =
+            (&new.patch_keywords, self.mails.get_mut(&new.id))
+        {
             for (keyword, set) in patch_keywords {
                 if *set {
                     mail.keywords.insert(keyword.clone());
@@ -198,7 +230,7 @@ impl Cache {
         self.email_get_state = get_mail_response.take_state();
 
         for mail in get_mail_response.take_list() {
-            self.add_mail(MailData::new(mail));
+            self.add_mail_data(MailData::new(mail));
         }
     }
 
@@ -286,9 +318,9 @@ mod tests {
             ..Default::default()
         };
 
-        cache.add_mail(mail1.clone());
-        cache.add_mail(mail2.clone());
-        cache.add_mail(mail3.clone());
+        cache.add_mail_data(mail1.clone());
+        cache.add_mail_data(mail2.clone());
+        cache.add_mail_data(mail3.clone());
 
         // check mails
         assert_eq!(&mail1, cache.mails.get(&mail1.id).unwrap());

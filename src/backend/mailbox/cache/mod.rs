@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 pub struct Cache {
     mailboxes: HashMap<MailboxId, MailboxData>,
+    // Children always exist in `mailboxes`.
     children_mapping: HashMap<Option<MailboxId>, Vec<MailboxId>>,
     get_state: String,
 }

@@ -4,23 +4,17 @@ mod palette_value;
 
 pub use palette_value::PaletteValue;
 
-use column_ctx::ColumnCtx;
-use input_type::InputType;
-
 use super::Action;
 use crate::{
-    Screen,
-    backend::{
-        mailbox::{MailboxBackend, types::MailboxId},
-        mails::MailsBackend,
-    },
+    backend::{mailbox::MailboxBackend, mails::MailsBackend},
     config::Config,
-    mailfs::widget::{ColumnData, RenderData},
+    mailfs::widget::RenderData,
     utils::ui::{
         ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager, palette,
     },
 };
-use ratatui::widgets::TableState;
+use column_ctx::ColumnCtx;
+use input_type::InputType;
 use std::{collections::HashMap, rc::Rc, vec::Drain};
 
 pub struct State {
@@ -90,6 +84,8 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
     }
 
     fn render_data(&'a mut self) -> Option<RenderData<'a>> {
+        let current_column = self.current_column_mut();
+
         None
         // Some(RenderData {
         //     left: None,

@@ -1,31 +1,18 @@
-use super::{MailAddress, MailData};
-use crate::backend::mails::types::{MailId, MailKeyword};
+use crate::backend::mails::types::{MailAddress, MailData, MailKeyword};
 use std::collections::HashSet;
 
-pub enum ThreadMarker {
-    Root,
-    Child,
-}
-
 pub struct MailPreview {
-    pub id: MailId,
     pub from: String,
     pub to: String,
     pub cc: String,
     pub subject: String,
     pub preview: String,
     pub received_at: String,
-    pub has_attachment: bool,
     pub keywords: HashSet<MailKeyword>,
-    pub thread_marker: ThreadMarker,
 }
 
-impl From<(&MailData, ThreadMarker)> for MailPreview {
-    fn from(data: (&MailData, ThreadMarker)) -> Self {
-        let mail = data.0;
-        let thread_marker = data.1;
-
-        let id = mail.id.clone();
+impl From<&MailData> for MailPreview {
+    fn from(mail: &MailData) -> Self {
         let from = addresses_to_string(&mail.from);
         let to = addresses_to_string(&mail.to);
         let cc = addresses_to_string(&mail.cc);
@@ -36,20 +23,16 @@ impl From<(&MailData, ThreadMarker)> for MailPreview {
             .received_at
             .format("%a, %e %b %Y, %H:%M:%S")
             .to_string();
-        let has_attachment = mail.has_attachment;
         let keywords = mail.keywords.clone();
 
         Self {
-            id,
             from,
             to,
             cc,
             subject,
             preview,
             received_at,
-            has_attachment,
             keywords,
-            thread_marker,
         }
     }
 }

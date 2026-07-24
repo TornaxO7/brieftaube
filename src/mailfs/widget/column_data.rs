@@ -1,5 +1,10 @@
 use ratatui::widgets::TableState;
 
+use crate::backend::{
+    mailbox::types::MailboxData,
+    mails::types::{MailAddress, MailPreview},
+};
+
 #[derive(Debug)]
 pub struct ColumnData<'a> {
     pub entries: Vec<ColumnEntry<'a>>,
@@ -21,7 +26,7 @@ pub enum ColumnEntryData<'a> {
     Mail {
         ty: MailEntryType,
 
-        from: &'a str,
+        from: String,
         subject: &'a str,
         received_at: &'a str,
         has_attachment: bool,
@@ -29,9 +34,33 @@ pub enum ColumnEntryData<'a> {
     },
 }
 
+impl<'a> From<&'a MailboxData> for ColumnEntryData<'a> {
+    fn from(mailbox: &'a MailboxData) -> Self {
+        Self::Mailbox {
+            name: &mailbox.name,
+            unread_mails: mailbox.unread_mails,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MailEntryType {
     Single,
     ThreadRoot,
     ThreadChild,
+}
+
+pub enum RightColumn<'a> {
+    ColumnData(ColumnData<'a>),
+    MailPreview(MailPreview),
+}
+
+fn addresses_to_string(addresses: &[MailAddress]) -> String {
+    let mut iterator = addresses.iter();
+    let first = iterator
+        .next()
+        .map(|addr| format!("{}", addr))
+        .unwrap_or(String::new());
+
+    iterator.fold(first, |acc, addr| format!("{acc}, {}", addr.to_string()))
 }

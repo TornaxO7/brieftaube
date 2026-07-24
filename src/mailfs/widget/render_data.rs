@@ -1,7 +1,7 @@
-use crate::mailfs::widget::ColumnData;
+use crate::mailfs::widget::{ColumnData, column_data::RightColumn};
 
 pub struct RenderData<'a> {
-    pub left: Option<ColumnData<'a>>,
+    pub left: ColumnData<'a>,
     pub center: ColumnData<'a>,
-    pub right: Option<ColumnData<'a>>,
+    pub right: RightColumn<'a>,
 }

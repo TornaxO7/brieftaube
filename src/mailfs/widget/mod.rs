@@ -1,11 +1,13 @@
 mod column_data;
+mod mail_preview;
 mod render_data;
 
 pub use column_data::ColumnData;
 pub use render_data::RenderData;
 
 use crate::{
-    mailfs::widget::column_data::{ColumnEntryData, MailEntryType},
+    backend::mails::types::MailPreview,
+    mailfs::widget::column_data::{ColumnEntryData, MailEntryType, RightColumn},
     utils::ui::ScreenState,
 };
 
@@ -15,9 +17,10 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{
         Style,
-        palette::material::{BLUE, CYAN, GRAY, ORANGE, PINK, WHITE},
+        palette::material::{BLUE, BLUE_GRAY, CYAN, GRAY, ORANGE, PINK, WHITE},
     },
-    widgets::{Block, Borders, Cell, Row, StatefulWidget, Table, Widget},
+    text::Text,
+    widgets::{Block, Borders, Cell, Paragraph, Row, StatefulWidget, Table, Widget},
 };
 
 const FOLDER: &str = "🗀";
@@ -45,15 +48,11 @@ impl StatefulWidget for Mailfs {
             ])
             .areas(area);
 
-            if let Some(left) = &mut data.left {
-                render_column(left_area, buf, left);
-            }
+            render_column(left_area, buf, &mut data.left);
             render_line(left_area, buf);
             render_column(center_area, buf, &mut data.center);
             render_line(center_area, buf);
-            if let Some(right) = &mut data.right {
-                render_column(right_area, buf, right);
-            }
+            render_right_column(right_area, buf, &mut data.right);
         } else {
             // loading screen
         }
@@ -195,7 +194,7 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnData) {
                     }
 
                     // from
-                    row.push(Cell::from(*from).style(Style::new().fg(CYAN.c800)));
+                    row.push(Cell::from(from.clone()).style(Style::new().fg(CYAN.c800)));
 
                     // received at
                     row.push(Cell::from(*received_at).style(Style::new().fg(PINK.c800)));
@@ -212,6 +211,67 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnData) {
         buf,
         data.state,
     );
+}
+
+fn render_right_column(area: Rect, buf: &mut Buffer, data: &mut RightColumn) {
+    match data {
+        RightColumn::ColumnData(data) => render_column(area, buf, data),
+        RightColumn::MailPreview(preview) => render_mail_preview(area, buf, preview),
+    }
+}
+
+fn render_mail_preview(area: Rect, buf: &mut Buffer, mail: &mut MailPreview) {
+    let headers = vec![
+        ("Received at:", mail.received_at.as_str()),
+        ("From:", mail.from.as_str()),
+        ("To:", mail.to.as_str()),
+        ("Subject:", mail.subject.as_str()),
+        ("Cc:", mail.cc.as_str()),
+    ];
+
+    let [header_area, preview_area] = Layout::vertical([
+        Constraint::Length(headers.len() as u16 + 2),
+        Constraint::Fill(1),
+    ])
+    .areas(area);
+
+    render_headers(header_area, buf, &headers);
+
+    Widget::render(
+        Paragraph::new(mail.preview.as_str()).block(Block::bordered()),
+        preview_area,
+        buf,
+    );
+}
+
+fn render_headers(area: Rect, buf: &mut Buffer, headers: &[(&'static str, &str)]) {
+    let table = {
+        let rows: Vec<ratatui::widgets::Row<'_>> = headers
+            .iter()
+            .map(|(name, value)| {
+                ratatui::widgets::Row::new([
+                    Cell::new(Text::from(*name).right_aligned())
+                        .style(Style::default().fg(BLUE_GRAY.c400)),
+                    Cell::new(*value),
+                ])
+            })
+            .collect();
+
+        let widths = [
+            Constraint::Length(
+                headers
+                    .iter()
+                    .map(|(header, _)| header.len())
+                    .max()
+                    .unwrap_or(5) as u16,
+            ),
+            Constraint::Fill(1),
+        ];
+
+        Table::new(rows, widths).block(Block::bordered())
+    };
+
+    Widget::render(table, area, buf);
 }
 
 fn render_line(area: Rect, buf: &mut Buffer) {

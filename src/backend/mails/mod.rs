@@ -23,7 +23,7 @@ const INIT_ROOT_MAILS: usize = 10;
 
 pub struct MailsBackend {
     client: Arc<Client>,
-    cache: Arc<Mutex<Option<Cache>>>,
+    cache: Arc<Mutex<Cache>>,
     tasks: Mutex<VecDeque<JoinHandle<()>>>,
 }
 
@@ -31,7 +31,7 @@ impl MailsBackend {
     pub fn new(client: Arc<Client>) -> Self {
         Self {
             client,
-            cache: Arc::new(Mutex::new(None)),
+            cache: Arc::new(Mutex::new(Cache::new())),
             tasks: Mutex::new(VecDeque::with_capacity(8)),
         }
     }
