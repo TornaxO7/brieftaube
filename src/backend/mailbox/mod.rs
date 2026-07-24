@@ -2,7 +2,7 @@ mod cache;
 mod error;
 pub mod types;
 
-use crate::backend::mailbox::types::{Children, Entry};
+use crate::backend::mailbox::types::Children;
 use cache::Cache;
 use error::MailboxValidationError;
 use jmap_client::{
@@ -20,7 +20,7 @@ use types::{MailboxData, MailboxId, MailboxNew, MailboxUpdate, MailboxValidate, 
 
 pub struct MailboxBackend {
     client: Arc<Client>,
-    cache: Arc<Mutex<Option<Cache>>>,
+    cache: Arc<Mutex<Cache>>,
     tasks: Mutex<VecDeque<JoinHandle<()>>>,
 }
 
@@ -28,7 +28,7 @@ impl MailboxBackend {
     pub fn new(client: Arc<Client>) -> Self {
         Self {
             client,
-            cache: Arc::new(Mutex::new(None)),
+            cache: Arc::new(Mutex::new(Cache::new())),
             tasks: Mutex::new(VecDeque::with_capacity(16)),
         }
     }
@@ -52,7 +52,7 @@ impl MailboxBackend {
     }
 
     pub fn cache_is_initialised(&self) -> bool {
-        self.cache.lock().unwrap().is_some()
+        !self.cache.lock().unwrap().is_empty()
     }
 }
 
@@ -87,7 +87,12 @@ impl MailboxBackend {
                     }
                 };
 
-                *cache.lock().unwrap() = Some(Cache::new(response));
+                let mut cache = cache.lock().unwrap();
+                for mailbox in response.take_list() {
+                    let data = MailboxData::from(mailbox);
+                }
+
+                cache.set_state(response.take_state());
             }));
     }
 
@@ -105,9 +110,8 @@ impl MailboxBackend {
             .push_back(tokio::spawn(async move {
                 let mut response = {
                     let current_state = {
-                        let guard = cache.lock().unwrap();
-                        let cache = guard.as_ref().expect(DATA_INITIALISED_MSG);
-                        cache.get_current_state()
+                        let cache = cache.lock().unwrap();
+                        cache.get_state()
                     };
 
                     let mut request = client.build();
@@ -124,8 +128,7 @@ impl MailboxBackend {
                     }
                 };
 
-                let mut guard = cache.lock().unwrap();
-                let cache = guard.as_mut().expect(DATA_INITIALISED_MSG);
+                let mut cache = cache.lock().unwrap();
                 cache.set_state(response.take_new_state());
 
                 for id in ids.into_iter() {

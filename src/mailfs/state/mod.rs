@@ -80,7 +80,13 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
     }
 
     fn handle_overlay_result(&mut self, result: ScreenOverlayResult<PaletteValue, InputType>) {
-        todo!()
+        match result {
+            ScreenOverlayResult::Palette(value) => match value {
+                PaletteValue::Action(action) => self.apply_action(action),
+            },
+            ScreenOverlayResult::Cancel => {}
+            ScreenOverlayResult::Input { .. } => unreachable!(),
+        }
     }
 
     fn render_data(&'a mut self) -> Option<RenderData<'a>> {
