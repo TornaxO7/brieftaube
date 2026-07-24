@@ -5,7 +5,7 @@ pub use column_data::ColumnData;
 pub use render_data::RenderData;
 
 use crate::{
-    mailfs::widget::column_data::{ColumnEntry, ColumnEntryData, MailEntryType},
+    mailfs::widget::column_data::{ColumnEntryData, MailEntryType},
     utils::ui::ScreenState,
 };
 
@@ -14,8 +14,8 @@ use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     style::{
-        Style, Styled,
-        palette::material::{BLUE, BLUE_GRAY, CYAN, GRAY, ORANGE, PINK, WHITE},
+        Style,
+        palette::material::{BLUE, CYAN, GRAY, ORANGE, PINK, WHITE},
     },
     widgets::{Block, Borders, Cell, Row, StatefulWidget, Table, Widget},
 };
