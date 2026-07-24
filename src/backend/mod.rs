@@ -9,12 +9,11 @@ use std::{rc::Rc, sync::Arc};
 type GetState = String;
 
 pub struct Backend {
-    pub client: Arc<jmap_client::client::Client>,
-
     config: Rc<Config>,
 
-    mailboxes: Rc<mailbox::MailboxBackend>,
-    mails: Rc<mails::MailsBackend>,
+    mailboxes: mailbox::MailboxBackend,
+    mails: mails::MailsBackend,
+    threads: threads::ThreadsBackend,
 }
 
 impl Backend {
@@ -40,15 +39,11 @@ impl Backend {
         );
 
         Self {
-            client: client.clone(),
-            mailboxes: Rc::new(mailbox::MailboxBackend::new(client.clone())),
-            mails: Rc::new(mails::MailsBackend::new(client.clone())),
+            mailboxes: mailbox::MailboxBackend::new(client.clone()),
+            mails: mails::MailsBackend::new(client.clone()),
+            threads: threads::ThreadsBackend::new(client.clone()),
             config,
         }
-    }
-
-    pub fn address(&self) -> String {
-        self.client.session().username().to_string()
     }
 
     pub fn has_tasks_running(&self) -> bool {
