@@ -18,7 +18,6 @@ use tokio::{sync::oneshot, task::JoinHandle};
 use tracing::{debug, error, warn};
 use types::MailId;
 
-const DATA_INITIALISED_MSG: &str = "Is initialised";
 const INIT_ROOT_MAILS: usize = 10;
 
 pub struct MailsBackend {
@@ -37,13 +36,7 @@ impl MailsBackend {
     }
 
     pub fn is_initialised(&self, id: &MailboxId) -> bool {
-        let guard = self.cache.lock().unwrap();
-
-        let Some(cache) = guard.as_ref() else {
-            return false;
-        };
-
-        cache.is_initialised(id)
+        let cache = self.cache.lock().unwrap();
     }
 
     pub fn has_tasks_running(&self) -> bool {

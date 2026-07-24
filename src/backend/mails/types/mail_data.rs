@@ -1,5 +1,5 @@
-use super::{MailAddress, MailKeyword, ThreadId};
-use crate::backend::mailbox::types::MailboxId;
+use super::{MailAddress, MailKeyword};
+use crate::backend::{mailbox::types::MailboxId, threads::types::ThreadId};
 use chrono::{DateTime, Local, Utc};
 use jmap_client::email::{Email, EmailBodyPart, Property};
 use std::collections::HashSet;

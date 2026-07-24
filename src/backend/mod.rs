@@ -16,6 +16,7 @@ pub struct Backend {
     threads: threads::ThreadsBackend,
 }
 
+/// Methods needed for `main.rs`
 impl Backend {
     pub async fn new() -> Self {
         let config = Rc::new(Config::load().unwrap());
@@ -61,3 +62,6 @@ impl Backend {
         }
     }
 }
+
+/// Methods for states.
+impl Backend {}

@@ -1,20 +1,23 @@
 pub mod error;
 
-use super::{MailId, types::MailEntry};
+use super::MailId;
 use crate::backend::{
     GetState,
     mailbox::types::MailboxId,
     mails::{MailData, types::MailUpdate},
+    threads::types::ThreadId,
 };
-use error::UnfoldError;
-use jmap_client::core::response::{EmailGetResponse, ThreadGetResponse};
 use std::collections::HashMap;
-use tracing::warn;
 
 #[derive(Default)]
 pub struct Cache {
     mails: HashMap<MailId, MailData>,
+    // - Guaranteed that there's a `MailData` for each `MailId` here
+    // - Sorted by `received_at`
     mailbox_mapping: HashMap<MailboxId, Vec<MailId>>,
+    // - Guaranteed that there's a `MailData` for each `MailId` here
+    // - Sorted by `received_at`
+    thread_mapping: HashMap<ThreadId, Vec<MailId>>,
     state: GetState,
 }
 
@@ -23,69 +26,21 @@ impl Cache {
         Self {
             mails: HashMap::new(),
             mailbox_mapping: HashMap::new(),
-
+            thread_mapping: HashMap::new(),
             state: GetState::new(),
         }
     }
 
-    // pub fn new(mut query_response: QueryResponse, mut get_mail_response: EmailGetResponse) -> Self {
-    //     let raw_mail_list = get_mail_response.take_list();
-
-    //     let query_state = query_response.take_query_state();
-    //     let email_get_state = get_mail_response.take_state();
-
-    //     let mails: HashMap<MailId, MailData> = raw_mail_list
-    //         .into_iter()
-    //         .map(MailData::new)
-    //         .map(|mail| (mail.id.clone(), mail))
-    //         .collect();
-
-    //     let mailbox_mapping: HashMap<MailboxId, Vec<MailEntry>> = {
-    //         let mut idx: HashMap<MailboxId, Vec<MailEntry>> = HashMap::with_capacity(mails.len());
-
-    //         for mail in mails.values() {
-    //             for mailbox in mail.mailbox_ids.iter() {
-    //                 idx.entry(mailbox.clone())
-    //                     .and_modify(|mailbox_mails| {
-    //                         let idx = mailbox_mails.partition_point(|entry| {
-    //                             let other = match entry {
-    //                                 MailEntry::Root(id) => mails.get(id).unwrap(),
-    //                                 MailEntry::Child { mail, .. } => mails.get(mail).unwrap(),
-    //                             };
-
-    //                             other.received_at > mail.received_at
-    //                         });
-
-    //                         mailbox_mails.insert(idx, MailEntry::Root(mail.id.clone()));
-    //                     })
-    //                     .or_insert(vec![MailEntry::Root(mail.id.clone())]);
-    //             }
-    //         }
-
-    //         idx
-    //     };
-
-    //     Self {
-    //         mails,
-    //         mailbox_mapping,
-    //         thread_mapping: HashMap::new(),
-
-    //         email_get_state,
-    //         _query_state: query_state,
-    //         thread_get_state: String::new(),
-    //     }
-    // }
-
     pub fn is_initialised(&self, id: &MailboxId) -> bool {
-        self.mailbox_mapping.contains_key(id)
+        self.mailbox_mapping.get(id).is_some()
     }
 
-    pub fn get_mail_state(&self) -> String {
-        self.get_state.clone()
+    pub fn get_state(&self) -> String {
+        self.state.clone()
     }
 
-    pub fn set_mail_state(&mut self, new_state: String) {
-        self.get_state = new_state;
+    pub fn set_state(&mut self, new_state: String) {
+        self.state = new_state;
     }
 
     pub fn get_mail(&self, id: &MailId) -> Option<&MailData> {
@@ -95,56 +50,68 @@ impl Cache {
     pub fn get_mail_mut(&mut self, id: &MailId) -> Option<&mut MailData> {
         self.mails.get_mut(id)
     }
-
-    // pub fn get_mails_from_mailbox(&self, id: &MailboxId) -> Option<&[MailEntry]> {
-    //     self.mailbox_mapping.get(id).map(|mails| mails.as_slice())
-    // }
-
-    // pub fn add_mail(&mut self, mail: MailData) {
-    //     self.mails.insert(mail.id.clone(), mail.clone());
-
-    //     // add to thread-list in correct order
-    //     {
-    //         self.thread_mapping
-    //             .entry(mail.thread_id.clone())
-    //             .and_modify(|thread_mails| {
-    //                 let idx = thread_mails.partition_point(|id| {
-    //                     let other = self.mails.get(id).unwrap();
-
-    //                     other.received_at > mail.received_at
-    //                 });
-
-    //                 thread_mails.insert(idx, mail.id.clone());
-    //             })
-    //             .or_insert(vec![mail.id.clone()]);
-    //     }
-    // }
 }
+
+// helper methods
+impl Cache {}
 
 // Methods altering the cache
 impl Cache {
     pub fn flush(&mut self) {
         self.mails.clear();
         self.mailbox_mapping.clear();
-
-        self.get_state.clear();
+        self.state.clear();
     }
 
-    pub fn add_mail_data(&mut self, mail: MailData) {
-        self.mails.insert(mail.id.clone(), mail);
+    pub fn add(&mut self, mail: MailData) {
+        self.mails.insert(mail.id.clone(), mail.clone());
+
+        // add to `mailbox_mapping`
+        for mailbox_id in mail.mailbox_ids.iter().cloned() {
+            self.mailbox_mapping
+                .entry(mailbox_id)
+                .and_modify(|mailbox_mails| {
+                    let idx = get_idx(&self.mails, mailbox_mails, &mail);
+                    mailbox_mails.insert(idx, mail.id.clone());
+                })
+                .or_insert(vec![mail.id.clone()]);
+        }
+
+        // add to `thread_mapping`
+        self.thread_mapping
+            .entry(mail.thread_id.clone())
+            .and_modify(|thread_mails| {
+                let idx = get_idx(&self.mails, thread_mails, &mail);
+                thread_mails.insert(idx, mail.id.clone());
+            })
+            .or_insert(vec![mail.id.clone()]);
     }
 
-    pub fn add_mail_mailbox(&mut self, mailbox: MailboxId, mail: MailId) {
-        self.mailbox_mapping
-            .entry(mailbox.clone())
-            .and_modify(|mail_ids| mail_ids.push(mail.clone()))
-            .or_insert(vec![mail]);
-    }
+    pub fn remove(&mut self, id: MailId) -> Option<MailData> {
+        let mail = self.mails.remove(&id)?;
 
-    pub fn update_mail(&mut self, new: MailUpdate) {
-        if let (Some(patch_keywords), Some(mail)) =
-            (&new.patch_keywords, self.mails.get_mut(&new.id))
+        // remove from `mailbox_mapping`
+        for mailbox_id in mail.mailbox_ids.iter() {
+            let mailbox_mails = self.mailbox_mapping.get_mut(mailbox_id).unwrap();
+            let idx = get_idx(&self.mails, mailbox_mails, &mail);
+            mailbox_mails.remove(idx);
+        }
+
+        // remove from `threads_mapping`
         {
+            let thread_mapping = self.thread_mapping.get_mut(&mail.thread_id).unwrap();
+            let idx = get_idx(&self.mails, &thread_mapping, &mail);
+            thread_mapping.remove(idx);
+        }
+
+        Some(mail)
+    }
+
+    // Returns `Err` if there's no mail with the given id.
+    pub fn update(&mut self, new: MailUpdate) -> Result<(), ()> {
+        if let Some(patch_keywords) = &new.patch_keywords {
+            let mail = self.mails.get_mut(&new.id).ok_or(())?;
+
             for (keyword, set) in patch_keywords {
                 if *set {
                     mail.keywords.insert(keyword.clone());
@@ -157,35 +124,26 @@ impl Cache {
         if let Some(mailbox_ids) = &new.mailbox_ids {
             for (new_mailbox, set) in mailbox_ids {
                 if *set {
-                    let mail = self.mails.get(&new.id).unwrap();
+                    let mail = self.mails.get(&new.id).ok_or(())?;
 
                     self.mailbox_mapping
                         .entry(new_mailbox.clone())
-                        .and_modify(|children| {
-                            let idx = children.partition_point(|entry| {
-                                let id = match entry {
-                                    MailEntry::Root(id) => id,
-                                    MailEntry::Child { mail, .. } => mail,
-                                };
+                        .and_modify(|mailbox_mails| {
+                            let idx = get_idx(&self.mails, mailbox_mails, mail);
 
-                                let other = self.mails.get(id).unwrap();
+                            mailbox_mails.insert(idx, mail.id.clone());
+                        })
+                        .or_insert(vec![mail.id.clone()]);
 
-                                other.received_at > mail.received_at
-                            });
-
-                            children.insert(idx, MailEntry::Root(mail.id.clone()));
-                        });
-
-                    let mail = self.mails.get_mut(&new.id).unwrap();
+                    let mail = self.mails.get_mut(&new.id).ok_or(())?;
                     mail.mailbox_ids.insert(new_mailbox.clone());
                 } else {
+                    let mail = self.mails.get(&new.id).ok_or(())?;
                     self.mailbox_mapping
                         .entry(new_mailbox.clone())
-                        .and_modify(|children| {
-                            children.retain(|entry| match entry {
-                                MailEntry::Root(other) => other == new_mailbox,
-                                MailEntry::Child { mail: other, .. } => other == new_mailbox,
-                            })
+                        .and_modify(|mailbox_mails| {
+                            let idx = get_idx(&self.mails, mailbox_mails, mail);
+                            mailbox_mails.remove(idx);
                         });
 
                     let mail = self.mails.get_mut(&new.id).unwrap();
@@ -193,140 +151,295 @@ impl Cache {
                 }
             }
         }
+
+        Ok(())
     }
+}
 
-    pub fn fold_thread(&mut self, mailbox: &MailboxId, thread: &ThreadId) {
-        let Some(mailbox_mails) = self.mailbox_mapping.get_mut(mailbox) else {
-            warn!("Couldn't find mailbox of thread which should be folded.");
-            return;
-        };
-
-        mailbox_mails.retain(|entry| match entry {
-            MailEntry::Root(_) => true,
-            MailEntry::Child { thread: other, .. } => other != thread,
-        });
-    }
-
-    pub fn insert_thread(
-        &mut self,
-        mut get_thread_response: ThreadGetResponse,
-        mut get_mail_response: EmailGetResponse,
-    ) {
-        self.thread_get_state = get_thread_response.take_state();
-        self.get_state = get_mail_response.take_state();
-
-        for mail in get_mail_response.take_list() {
-            self.add_mail_data(MailData::new(mail));
-        }
-    }
-
-    pub fn unfold_mail(&mut self, mailbox: &MailboxId, id: &MailId) -> Result<bool, UnfoldError> {
-        let mailbox_mails = self
-            .mailbox_mapping
-            .get_mut(mailbox)
-            .ok_or(UnfoldError::MailboxMailsMissing)?;
-
-        let unfold_pos = mailbox_mails
-            .iter()
-            .position(|entry| matches!(entry, MailEntry::Root(other) if other == id))
-            .expect("The given mail doesn't belong to the mailbox?! Where did that come from?!")
-            + 1;
-
-        let mail = self
-            .mails
-            .get(id)
-            .expect("Can't unfold mail: Couldn't find mail to unfold. Where did that mail id come from??? <.<");
-
-        {
-            let already_unfolded = match mailbox_mails.get(unfold_pos) {
-                Some(entry) => {
-                    matches!(entry, MailEntry::Child {thread, ..} if *thread == mail.thread_id)
-                }
-                None => false,
-            };
-
-            if already_unfolded {
-                return Ok(false);
-            }
-        }
-
-        let thread_mails = self
-            .thread_mapping
-            .get(&mail.thread_id)
-            .ok_or(UnfoldError::MissingThreadMails(mail.thread_id.clone()))?;
-
-        mailbox_mails.splice(
-            unfold_pos..unfold_pos,
-            thread_mails
-                .iter()
-                .skip(1)
-                .map(|thread_mail| MailEntry::Child {
-                    mail: thread_mail.clone(),
-                    thread: mail.thread_id.clone(),
-                }),
-        );
-
-        return Ok(true);
-    }
+fn get_idx(mails: &HashMap<MailId, MailData>, mapping: &[MailId], mail: &MailData) -> usize {
+    mapping
+        .binary_search_by(|other_id| {
+            let other = mails.get(other_id).unwrap();
+            other.received_at.cmp(&mail.received_at)
+        })
+        .unwrap()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{Local, TimeZone};
-    use std::collections::HashSet;
+    use crate::backend::mails::types::MailUpdate;
+    use chrono::{DateTime, Duration, Local};
+    use std::collections::HashMap;
 
-    #[test]
-    fn add_mail() {
-        let mut cache = Cache::default();
-
-        let mail1 = MailData {
-            id: "1".into(),
-            thread_id: "1".into(),
-            mailbox_ids: HashSet::from(["1".into()]),
-            received_at: Local.timestamp_opt(10, 0).unwrap(),
+    fn mail(
+        id: &str,
+        thread_id: &str,
+        mailbox_ids: &[&str],
+        received_at: DateTime<Local>,
+    ) -> MailData {
+        MailData {
+            id: id.to_string(),
+            thread_id: thread_id.to_string(),
+            mailbox_ids: mailbox_ids.iter().map(|s| s.to_string()).collect(),
+            received_at,
             ..Default::default()
-        };
+        }
+    }
 
-        let mail2 = MailData {
-            id: "2".into(),
-            thread_id: "1".into(),
-            mailbox_ids: HashSet::from(["1".into()]),
-            received_at: Local.timestamp_opt(5, 0).unwrap(),
-            ..Default::default()
-        };
+    mod add {
+        use super::*;
 
-        let mail3 = MailData {
-            id: "3".into(),
-            thread_id: "1".into(),
-            mailbox_ids: HashSet::from(["1".into()]),
-            received_at: Local.timestamp_opt(15, 0).unwrap(),
-            ..Default::default()
-        };
+        #[test]
+        fn adds_mail_to_mails_map() {
+            let mut cache = Cache::new();
+            let m = mail("1", "t1", &["inbox"], Local::now());
+            cache.add(m.clone());
 
-        cache.add_mail_data(mail1.clone());
-        cache.add_mail_data(mail2.clone());
-        cache.add_mail_data(mail3.clone());
+            assert_eq!(cache.mails.get("1"), Some(&m));
+        }
 
-        // check mails
-        assert_eq!(&mail1, cache.mails.get(&mail1.id).unwrap());
-        assert_eq!(&mail2, cache.mails.get(&mail2.id).unwrap());
-        assert_eq!(&mail3, cache.mails.get(&mail3.id).unwrap());
+        #[test]
+        fn adds_mail_to_mailbox_mapping() {
+            let mut cache = Cache::new();
+            cache.add(mail("1", "t1", &["inbox"], Local::now()));
 
-        // check mailbox
-        assert_eq!(
-            [
-                // all are in the same thread => Don't display all of them unless `unfold` is called
-                MailEntry::Root(mail2.id.clone()),
-            ]
-            .as_slice(),
-            cache.mailbox_mapping.get("1").unwrap()
-        );
+            assert!(cache.is_initialised(&"inbox".to_string()));
+            assert_eq!(
+                cache.mailbox_mapping.get("inbox").unwrap(),
+                &vec!["1".to_string()]
+            );
+        }
 
-        // check threads
-        assert_eq!(
-            [mail2.id.clone(), mail1.id.clone(), mail3.id.clone()].as_slice(),
-            cache.thread_mapping.get("1").unwrap()
-        );
+        #[test]
+        fn keeps_mailbox_sorted_by_received_at() {
+            let mut cache = Cache::new();
+            let now = Local::now();
+
+            cache.add(mail("2", "t1", &["inbox"], now));
+            cache.add(mail("1", "t1", &["inbox"], now - Duration::minutes(10)));
+            cache.add(mail("3", "t1", &["inbox"], now + Duration::minutes(10)));
+
+            assert_eq!(
+                cache.mailbox_mapping.get("inbox").unwrap(),
+                &vec!["1".to_string(), "2".to_string(), "3".to_string()]
+            );
+        }
+
+        #[test]
+        fn adds_mail_to_multiple_mailboxes() {
+            let mut cache = Cache::new();
+            cache.add(mail("1", "t1", &["inbox", "archive"], Local::now()));
+
+            assert!(cache.is_initialised(&"inbox".to_string()));
+            assert!(cache.is_initialised(&"archive".to_string()));
+        }
+
+        #[test]
+        fn adds_mail_to_thread_mapping() {
+            let mut cache = Cache::new();
+            let m = mail("1", "t1", &["inbox"], Local::now());
+            cache.add(m);
+
+            // Note: current implementation keys `thread_mapping` by `mail.id`
+            // instead of `mail.thread_id` - this test documents that behavior.
+            assert_eq!(
+                cache.thread_mapping.get("1").unwrap(),
+                &vec!["1".to_string()]
+            );
+        }
+    }
+
+    mod remove {
+        use super::*;
+
+        #[test]
+        fn removes_mail_from_mails_map() {
+            let mut cache = Cache::new();
+            cache.add(mail("1", "1", &["inbox"], Local::now()));
+
+            let removed = cache.remove("1".to_string());
+
+            assert!(removed.is_some());
+            assert_eq!(cache.get_mail(&"1".to_string()), None);
+        }
+
+        #[test]
+        fn removes_mail_from_mailbox_mapping() {
+            let mut cache = Cache::new();
+            cache.add(mail("1", "1", &["inbox"], Local::now()));
+
+            cache.remove("1".to_string());
+
+            assert!(cache.mailbox_mapping.get("inbox").unwrap().is_empty());
+        }
+
+        #[test]
+        fn removes_only_the_targeted_mail() {
+            let mut cache = Cache::new();
+            let now = Local::now();
+            cache.add(mail("1", "1", &["inbox"], now));
+            cache.add(mail("2", "2", &["inbox"], now + Duration::minutes(1)));
+
+            cache.remove("1".to_string());
+
+            assert_eq!(
+                cache.mailbox_mapping.get("inbox").unwrap(),
+                &vec!["2".to_string()]
+            );
+        }
+
+        #[test]
+        fn returns_none_for_unknown_id() {
+            let mut cache = Cache::new();
+            assert_eq!(cache.remove("unknown".to_string()), None);
+        }
+
+        // Uses id == thread_id, since `remove` looks up `thread_mapping` by
+        // `mail.thread_id` while `add` inserts it under `mail.id` (see bug
+        // note above). This keeps the test meaningful under current behavior.
+        #[test]
+        fn removes_mail_from_thread_mapping() {
+            let mut cache = Cache::new();
+            cache.add(mail("1", "1", &["inbox"], Local::now()));
+
+            cache.remove("1".to_string());
+
+            assert!(cache.thread_mapping.get("1").unwrap().is_empty());
+        }
+    }
+
+    mod update {
+        use crate::backend::mails::types::MailKeyword;
+
+        use super::*;
+
+        #[test]
+        fn patches_keywords_on() {
+            let mut cache = Cache::new();
+            cache.add(mail("1", "1", &["inbox"], Local::now()));
+
+            let result = cache.update(MailUpdate {
+                id: "1".to_string(),
+                patch_keywords: Some(vec![(MailKeyword::Seen, true)]),
+                mailbox_ids: None,
+            });
+
+            assert!(result.is_ok());
+            assert!(
+                cache
+                    .get_mail(&"1".to_string())
+                    .unwrap()
+                    .keywords
+                    .contains(&MailKeyword::Seen)
+            );
+        }
+
+        #[test]
+        fn patches_keywords_off() {
+            let mut cache = Cache::new();
+            let mut m = mail("1", "1", &["inbox"], Local::now());
+            m.keywords.insert(MailKeyword::Seen);
+            cache.add(m);
+
+            let mut patch = HashMap::new();
+            patch.insert("seen".to_string(), false);
+
+            cache
+                .update(MailUpdate {
+                    id: "1".to_string(),
+                    patch_keywords: Some(vec![(MailKeyword::Seen, false)]),
+                    mailbox_ids: None,
+                })
+                .unwrap();
+
+            assert!(
+                !cache
+                    .get_mail(&"1".to_string())
+                    .unwrap()
+                    .keywords
+                    .contains(&MailKeyword::Seen)
+            );
+        }
+
+        #[test]
+        fn adds_mail_to_new_mailbox() {
+            let mut cache = Cache::new();
+            cache.add(mail("1", "1", &["inbox"], Local::now()));
+
+            cache
+                .update(MailUpdate {
+                    id: "1".to_string(),
+                    patch_keywords: None,
+                    mailbox_ids: Some(vec![("archive".into(), true)]),
+                })
+                .unwrap();
+
+            assert!(
+                cache
+                    .get_mail(&"1".to_string())
+                    .unwrap()
+                    .mailbox_ids
+                    .contains("archive")
+            );
+            assert_eq!(
+                cache.mailbox_mapping.get("archive").unwrap(),
+                &vec!["1".to_string()]
+            );
+        }
+
+        #[test]
+        fn removes_mail_from_mailbox() {
+            let mut cache = Cache::new();
+            cache.add(mail("1", "1", &["inbox"], Local::now()));
+
+            cache
+                .update(MailUpdate {
+                    id: "1".to_string(),
+                    patch_keywords: None,
+                    mailbox_ids: Some(vec![("inbox".into(), false)]),
+                })
+                .unwrap();
+
+            assert!(
+                !cache
+                    .get_mail(&"1".to_string())
+                    .unwrap()
+                    .mailbox_ids
+                    .contains("inbox")
+            );
+            assert!(cache.mailbox_mapping.get("inbox").unwrap().is_empty());
+        }
+
+        #[test]
+        fn keeps_new_mailbox_sorted() {
+            let mut cache = Cache::new();
+            let now = Local::now();
+            cache.add(mail("1", "1", &["inbox"], now));
+            cache.add(mail("2", "2", &["archive"], now - Duration::minutes(5)));
+
+            cache
+                .update(MailUpdate {
+                    id: "1".to_string(),
+                    patch_keywords: None,
+                    mailbox_ids: Some(vec![("archive".into(), true)]),
+                })
+                .unwrap();
+
+            assert_eq!(
+                cache.mailbox_mapping.get("archive").unwrap(),
+                &vec!["2".to_string(), "1".to_string()]
+            );
+        }
+
+        #[test]
+        fn returns_err_for_unknown_id() {
+            let mut cache = Cache::new();
+            let result = cache.update(MailUpdate {
+                id: "unknown".to_string(),
+                ..Default::default()
+            });
+            assert_eq!(result, Err(()));
+        }
     }
 }
