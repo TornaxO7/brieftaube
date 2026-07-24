@@ -121,7 +121,6 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnData) {
                     }
                 }
                 ColumnEntryData::Mail {
-                    thread,
                     ty,
                     from,
                     subject,
@@ -146,15 +145,8 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnData) {
                                 ColumnEntryData::Mailbox { .. } => {
                                     row.push(Cell::from(PLACEHOLDER))
                                 }
-                                ColumnEntryData::Mail {
-                                    thread: other_thread,
-                                    ty: other_ty,
-                                    ..
-                                } => {
-                                    let is_child = *other_ty == MailEntryType::ThreadChild;
-                                    let in_same_thread = other_thread == thread;
-
-                                    if is_child && in_same_thread {
+                                ColumnEntryData::Mail { ty: other_ty, .. } => {
+                                    if *other_ty == MailEntryType::ThreadChild {
                                         row.push(Cell::from(THREAD_UNFOLDED));
                                     } else {
                                         row.push(Cell::from(THREAD_FOLDED));

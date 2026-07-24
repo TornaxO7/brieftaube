@@ -1,7 +1,3 @@
-use crate::backend::{
-    mailbox::types::MailboxId,
-    mails::types::{MailId, ThreadId},
-};
 use ratatui::widgets::TableState;
 
 #[derive(Debug)]
@@ -23,7 +19,6 @@ pub enum ColumnEntryData<'a> {
         unread_mails: usize,
     },
     Mail {
-        thread: ThreadId,
         ty: MailEntryType,
 
         from: &'a str,
