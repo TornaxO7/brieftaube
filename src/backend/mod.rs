@@ -2,18 +2,26 @@ pub mod mailbox;
 pub mod mails;
 pub mod threads;
 
-use crate::config::Config;
+use crate::{
+    backend::mailbox::types::{MailboxData, MailboxId},
+    config::Config,
+};
 use jmap_client::client::Client;
-use std::{rc::Rc, sync::Arc};
+use std::{cell::RefCell, collections::VecDeque, rc::Rc, sync::Arc};
+use tokio::task::JoinHandle;
+use tracing::error;
 
 type GetState = String;
 
 pub struct Backend {
     config: Rc<Config>,
 
-    mailboxes: mailbox::MailboxBackend,
-    mails: mails::MailsBackend,
-    threads: threads::ThreadsBackend,
+    client: Arc<Client>,
+    mailboxes: Arc<mailbox::MailboxBackend>,
+    mails: Arc<mails::MailsBackend>,
+    threads: Arc<threads::ThreadsBackend>,
+
+    tasks: RefCell<VecDeque<JoinHandle<()>>>,
 }
 
 /// Methods needed for `main.rs`
@@ -40,28 +48,49 @@ impl Backend {
         );
 
         Self {
-            mailboxes: mailbox::MailboxBackend::new(client.clone()),
-            mails: mails::MailsBackend::new(client.clone()),
-            threads: threads::ThreadsBackend::new(client.clone()),
+            client: client.clone(),
+            mailboxes: Arc::new(mailbox::MailboxBackend::new(client.clone())),
+            mails: Arc::new(mails::MailsBackend::new(client.clone())),
+            threads: Arc::new(threads::ThreadsBackend::new(client.clone())),
+            tasks: RefCell::new(VecDeque::with_capacity(8)),
             config,
         }
     }
 
     pub fn has_tasks_running(&self) -> bool {
-        self.mailboxes.has_tasks_running() || self.mails.has_tasks_running()
+        !self.tasks.borrow().is_empty()
     }
 
-    pub async fn has_changed(&self) {
-        tokio::select! {
-            _ = self.mailboxes.has_changed(), if self.mailboxes.has_tasks_running() => {
-                self.mailboxes.pop_task();
+    pub async fn finish_next_task(&self) {
+        let _done = {
+            let mut tasks = self.tasks.borrow_mut();
+            match tasks.front_mut() {
+                Some(task) => task.await,
+                None => std::future::pending().await,
             }
-            _ = self.mails.has_changed(), if self.mails.has_tasks_running() => {
-                self.mails.pop_task();
-            }
-        }
+        };
+        self.tasks.borrow_mut().pop_front();
     }
 }
 
 /// Methods for states.
-impl Backend {}
+impl Backend {
+    pub fn request_mailboxes(&self) {
+        let mut tasks = self.tasks.borrow_mut();
+        let mailboxes = self.mailboxes.clone();
+
+        tasks.push_back(tokio::spawn(async move {
+            if let Err(err) = mailboxes.request_mailboxes_get().await {
+                error!("Couldn't request all mailboxes from server:\n{err}");
+                return;
+            };
+        }));
+    }
+
+    pub fn get_child_mailboxes(
+        &self,
+        parent_id: &Option<MailboxId>,
+    ) -> Option<Vec<Arc<MailboxData>>> {
+        self.mailboxes.get_child_mailboxes(parent_id)
+    }
+}

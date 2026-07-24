@@ -40,26 +40,28 @@ impl StatefulWidget for Mailfs {
     type State = State;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        if let Some(mut data) = state.render_data() {
-            let [left_area, center_area, right_area] = Layout::horizontal([
-                Constraint::Percentage(25),
-                Constraint::Percentage(50),
-                Constraint::Percentage(25),
-            ])
-            .areas(area);
+        let mut data = state.render_data();
 
-            render_column(left_area, buf, &mut data.left);
-            render_line(left_area, buf);
-            render_column(center_area, buf, &mut data.center);
-            render_line(center_area, buf);
-            render_right_column(right_area, buf, &mut data.right);
-        } else {
-            // loading screen
-        }
+        let [left_area, center_area, right_area] = Layout::horizontal([
+            Constraint::Percentage(25),
+            Constraint::Percentage(50),
+            Constraint::Percentage(25),
+        ])
+        .areas(area);
+
+        render_column(left_area, buf, data.left.as_mut());
+        render_line(left_area, buf);
+        render_column(center_area, buf, data.center.as_mut());
+        render_line(center_area, buf);
+        render_right_column(right_area, buf, &mut data.right);
     }
 }
 
-fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnData) {
+fn render_column(area: Rect, buf: &mut Buffer, data: Option<&mut ColumnData>) {
+    let Some(data) = data else {
+        todo!("Render loading screen");
+    };
+
     let widths = [
         Constraint::Length(1),
         Constraint::Length(1),
@@ -215,12 +217,16 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnData) {
 
 fn render_right_column(area: Rect, buf: &mut Buffer, data: &mut RightColumn) {
     match data {
-        RightColumn::ColumnData(data) => render_column(area, buf, data),
-        RightColumn::MailPreview(preview) => render_mail_preview(area, buf, preview),
+        RightColumn::ColumnData(data) => render_column(area, buf, data.as_mut()),
+        RightColumn::MailPreview(preview) => render_mail_preview(area, buf, preview.as_mut()),
     }
 }
 
-fn render_mail_preview(area: Rect, buf: &mut Buffer, mail: &mut MailPreview) {
+fn render_mail_preview(area: Rect, buf: &mut Buffer, mail: Option<&mut MailPreview>) {
+    let Some(mail) = mail else {
+        todo!("Render loading screen");
+    };
+
     let headers = vec![
         ("Received at:", mail.received_at.as_str()),
         ("From:", mail.from.as_str()),

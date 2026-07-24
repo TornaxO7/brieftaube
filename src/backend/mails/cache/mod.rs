@@ -31,8 +31,8 @@ impl Cache {
         }
     }
 
-    pub fn is_initialised(&self, id: &MailboxId) -> bool {
-        self.mailbox_mapping.get(id).is_some()
+    pub fn is_empty(&self) -> bool {
+        self.mails.is_empty()
     }
 
     pub fn get_state(&self) -> String {
@@ -204,7 +204,7 @@ mod tests {
             let mut cache = Cache::new();
             cache.add(mail("1", "t1", &["inbox"], Local::now()));
 
-            assert!(cache.is_initialised(&"inbox".to_string()));
+            assert!(cache.is_empty(&"inbox".to_string()));
             assert_eq!(
                 cache.mailbox_mapping.get("inbox").unwrap(),
                 &vec!["1".to_string()]
@@ -231,8 +231,8 @@ mod tests {
             let mut cache = Cache::new();
             cache.add(mail("1", "t1", &["inbox", "archive"], Local::now()));
 
-            assert!(cache.is_initialised(&"inbox".to_string()));
-            assert!(cache.is_initialised(&"archive".to_string()));
+            assert!(cache.is_empty(&"inbox".to_string()));
+            assert!(cache.is_empty(&"archive".to_string()));
         }
 
         #[test]

@@ -51,8 +51,8 @@ pub enum MailEntryType {
 }
 
 pub enum RightColumn<'a> {
-    ColumnData(ColumnData<'a>),
-    MailPreview(MailPreview),
+    ColumnData(Option<ColumnData<'a>>),
+    MailPreview(Option<MailPreview>),
 }
 
 fn addresses_to_string(addresses: &[MailAddress]) -> String {

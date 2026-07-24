@@ -44,7 +44,7 @@ pub trait ScreenState<'a, A: Clone + std::fmt::Debug, P: Clone, I: Clone, R> {
 
     fn handle_overlay_result(&mut self, result: ScreenOverlayResult<P, I>);
 
-    fn render_data(&'a mut self) -> Option<R>;
+    fn render_data(&'a mut self) -> R;
 }
 
 pub enum ScreenOverlay<P: Clone, I: Clone> {

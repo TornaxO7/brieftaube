@@ -92,7 +92,5 @@ impl<'a> ScreenState<'a, Action, PaletteType, InputType, ()> for State {
         }
     }
 
-    fn render_data(&mut self) -> Option<()> {
-        None
-    }
+    fn render_data(&mut self) {}
 }

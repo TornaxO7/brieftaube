@@ -86,14 +86,12 @@ impl App {
 
     pub async fn run(mut self, terminal: &mut DefaultTerminal) -> eyre::Result<()> {
         let mut reader = crossterm::event::EventStream::new();
+        self.statusbar.tick();
 
         while self.is_running {
-            self.sync_throbber();
             tokio::select! {
                 _ = self.statusbar.has_changed() => { }
-
-                _ = self.backend.has_changed(), if self.backend.has_tasks_running() => { }
-
+                _ = self.backend.finish_next_task() => { }
                 maybe_event = reader.next().fuse() => match maybe_event {
                     Some(Ok(event)) => self.handle_event(event),
                     Some(Err(e)) => error!("{}", e),

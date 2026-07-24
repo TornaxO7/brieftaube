@@ -35,8 +35,9 @@ impl MailsBackend {
         }
     }
 
-    pub fn is_initialised(&self, id: &MailboxId) -> bool {
+    pub fn is_initialised(&self) -> bool {
         let cache = self.cache.lock().unwrap();
+        !cache.is_empty()
     }
 
     pub fn has_tasks_running(&self) -> bool {
@@ -56,80 +57,80 @@ impl MailsBackend {
 
 // methods which need to interact with the server
 impl MailsBackend {
-    pub fn init(&self, id: MailboxId) {
-        if self.is_initialised(&id) {
-            // TODO: fetch changes
-            return;
-        }
+    // pub fn init(&self, id: MailboxId) {
+    //     if self.is_initialised(&id) {
+    //         // TODO: fetch changes
+    //         return;
+    //     }
 
-        let client = self.client.clone();
-        let cache = self.cache.clone();
+    //     let client = self.client.clone();
+    //     let cache = self.cache.clone();
 
-        self.tasks
-            .lock()
-            .unwrap()
-            .push_back(tokio::spawn(async move {
-                let mut response = {
-                    let mut request = client.build();
+    //     self.tasks
+    //         .lock()
+    //         .unwrap()
+    //         .push_back(tokio::spawn(async move {
+    //             let mut response = {
+    //                 let mut request = client.build();
 
-                    let query_result = {
-                        let query =
-                            request
-                                .query_email()
-                                .filter(jmap_client::email::query::Filter::InMailbox {
-                                    value: id.clone(),
-                                })
-                                .sort([jmap_client::email::query::Comparator::received_at()
-                                    .ascending()])
-                                .limit(INIT_ROOT_MAILS);
-                        query.arguments().collapse_threads(true);
-                        query.result_reference()
-                    };
+    //                 let query_result = {
+    //                     let query =
+    //                         request
+    //                             .query_email()
+    //                             .filter(jmap_client::email::query::Filter::InMailbox {
+    //                                 value: id.clone(),
+    //                             })
+    //                             .sort([jmap_client::email::query::Comparator::received_at()
+    //                                 .ascending()])
+    //                             .limit(INIT_ROOT_MAILS);
+    //                     query.arguments().collapse_threads(true);
+    //                     query.result_reference()
+    //                 };
 
-                    request
-                        .get_email()
-                        .ids_ref(query_result)
-                        .properties(MailData::PROPERTIES);
+    //                 request
+    //                     .get_email()
+    //                     .ids_ref(query_result)
+    //                     .properties(MailData::PROPERTIES);
 
-                    match request.send().await {
-                        Ok(r) => r,
-                        Err(err) => {
-                            error!("Couldn't send request to fetch root mails:\n{err}");
-                            return;
-                        }
-                    }
-                };
+    //                 match request.send().await {
+    //                     Ok(r) => r,
+    //                     Err(err) => {
+    //                         error!("Couldn't send request to fetch root mails:\n{err}");
+    //                         return;
+    //                     }
+    //                 }
+    //             };
 
-                let Some(get_mail_method) = response.pop_method_response() else {
-                    error!("Couldn't pop `Email/get` method from request.");
-                    return;
-                };
+    //             let Some(get_mail_method) = response.pop_method_response() else {
+    //                 error!("Couldn't pop `Email/get` method from request.");
+    //                 return;
+    //             };
 
-                let Some(query_mail_method) = response.pop_method_response() else {
-                    error!("Couldn't pop `Email/query` method from request.");
-                    return;
-                };
+    //             let Some(query_mail_method) = response.pop_method_response() else {
+    //                 error!("Couldn't pop `Email/query` method from request.");
+    //                 return;
+    //             };
 
-                let get_mail_response = match get_mail_method.unwrap_get_email() {
-                    Ok(r) => r,
-                    Err(err) => {
-                        error!("Couldn't get response of `Email/get` request:\n{err}");
-                        return;
-                    }
-                };
+    //             let get_mail_response = match get_mail_method.unwrap_get_email() {
+    //                 Ok(r) => r,
+    //                 Err(err) => {
+    //                     error!("Couldn't get response of `Email/get` request:\n{err}");
+    //                     return;
+    //                 }
+    //             };
 
-                let query_mail_response = match query_mail_method.unwrap_query_email() {
-                    Ok(r) => r,
-                    Err(err) => {
-                        error!("Couldn't get response of `Email/query` request:\n{err}");
-                        return;
-                    }
-                };
+    //             let query_mail_response = match query_mail_method.unwrap_query_email() {
+    //                 Ok(r) => r,
+    //                 Err(err) => {
+    //                     error!("Couldn't get response of `Email/query` request:\n{err}");
+    //                     return;
+    //                 }
+    //             };
 
-                let mut cache = cache.lock().unwrap();
-                *cache = Some(Cache::new(query_mail_response, get_mail_response));
-            }));
-    }
+    //             let mut cache = cache.lock().unwrap();
+    //             *cache = Some(Cache::new(query_mail_response, get_mail_response));
+    //         }));
+    // }
 
     pub fn request_get_mails(&self, mails: Vec<MailId>) {
         let cache = self.cache.clone();

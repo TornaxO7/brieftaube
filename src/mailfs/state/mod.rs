@@ -6,8 +6,7 @@ pub use palette_value::PaletteValue;
 
 use super::Action;
 use crate::{
-    backend::{Backend, mailbox::MailboxBackend, mails::MailsBackend},
-    config::Config,
+    backend::Backend,
     mailfs::widget::RenderData,
     utils::ui::{
         ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager, palette,
@@ -30,10 +29,12 @@ pub struct State {
 
 impl State {
     pub fn new(backend: Rc<Backend>) -> Self {
+        backend.request_mailboxes();
+
         Self {
             backend,
             overlay: None,
-            columns: vec![ColumnCtx::default()],
+            columns: vec![],
             current_column: 0,
             app_actions: Vec::with_capacity(2),
             keybindings: KeybindManager::new(HashMap::from([("q", Action::Quit)])),
@@ -77,29 +78,35 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
         }
     }
 
-    fn render_data(&'a mut self) -> Option<RenderData<'a>> {
-        let center = {
-            let current_column = self.current_column_mut();
+    fn render_data(&'a mut self) -> RenderData<'a> {
+        self.sync_columns();
+
+        let left = {
+            todo!();
         };
 
-        None
-        // Some(RenderData {
-        //     left: None,
-        //     center: ColumnData {
-        //         entries: vec![],
-        //         state: &mut self.current_column_mut().state,
-        //     },
-        //     right: None,
-        // })
+        let center = {
+            // TODO: Update column entries first, before preparing data
+            let column = self.columns.get(self.current_column).unwrap();
+            todo!()
+        };
+
+        let right = {
+            todo!();
+        };
+
+        RenderData {
+            left,
+            center,
+            right,
+        }
     }
 }
 
 /// Helper functions
 impl State {
-    fn current_column_mut(&mut self) -> &mut ColumnCtx {
-        self.columns
-            .get_mut(self.current_column)
-            .expect("Column exists")
+    fn current_column_mut(&mut self) -> Option<&mut ColumnCtx> {
+        self.columns.get_mut(self.current_column)
     }
 }
 
@@ -116,19 +123,27 @@ impl State {
     }
 
     fn navigate_down(&mut self) {
-        self.current_column_mut().state.select_next();
+        if let Some(column) = self.current_column_mut() {
+            column.state.select_next();
+        }
     }
 
     fn navigate_up(&mut self) {
-        self.current_column_mut().state.select_previous();
+        if let Some(column) = self.current_column_mut() {
+            column.state.select_previous();
+        }
     }
 
     fn navigate_to_top(&mut self) {
-        self.current_column_mut().state.select_first();
+        if let Some(column) = self.current_column_mut() {
+            column.state.select_first();
+        }
     }
 
     fn navigate_to_bottom(&mut self) {
-        self.current_column_mut().state.select_last();
+        if let Some(column) = self.current_column_mut() {
+            column.state.select_last();
+        }
     }
 
     fn activate_selected_entry(&mut self) {
@@ -137,5 +152,24 @@ impl State {
 
     fn open_logs(&mut self) {
         self.app_actions.push(crate::Action::OpenLogViewer);
+    }
+}
+
+impl<'a> State {
+    fn sync_columns(&mut self) {
+        let is_current_column_loaded = self.columns.get(self.current_column).is_some();
+        if !is_current_column_loaded {
+            let is_root = self.current_column == 0;
+            let mailboxes = if is_root {
+                self.backend.get_child_mailboxes(&None)
+            } else {
+                todo!();
+            }
+        }
+
+        let is_right_column_loaded = self.columns.get(self.current_column + 1).is_some();
+        if !is_right_column_loaded {
+            // load column
+        }
     }
 }
