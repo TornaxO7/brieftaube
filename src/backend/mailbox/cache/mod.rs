@@ -37,21 +37,37 @@ impl Cache {
         self.children_mapping.get(parent_id).unwrap()
     }
 
-    // /// Depth of the given parent (root = 0, its children = 1, ...).
-    // pub fn depth_of(&self, parent_id: &Option<MailboxId>) -> usize {
-    //     let mut depth = 0;
-    //     let mut current = parent_id.clone();
+    pub fn contains_mailbox_name(&self, parent_id: &Option<MailboxId>, name: &str) -> bool {
+        let Some(children) = self.children_mapping.get(parent_id) else {
+            return false;
+        };
 
-    //     while let Some(id) = current {
-    //         depth += 1;
-    //         current = self
-    //             .mailboxes
-    //             .get(&id)
-    //             .and_then(|mailbox| mailbox.parent_id.clone());
-    //     }
+        for child_id in children {
+            let child = self.mailboxes.get(child_id).unwrap();
 
-    //     depth
-    // }
+            if child.name == name {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// Depth of the given parent (root = 0, its children = 1, ...).
+    pub fn depth_of(&self, parent_id: &Option<MailboxId>) -> usize {
+        let mut depth = 0;
+        let mut current = parent_id.clone();
+
+        while let Some(id) = current {
+            depth += 1;
+            current = self
+                .mailboxes
+                .get(&id)
+                .and_then(|mailbox| mailbox.parent_id.clone());
+        }
+
+        depth
+    }
 }
 
 // Methods altering the cache

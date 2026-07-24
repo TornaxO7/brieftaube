@@ -2,13 +2,12 @@ mod cache;
 mod error;
 pub mod types;
 
-use crate::backend::mailbox::types::Children;
 use cache::Cache;
 use error::MailboxValidationError;
 use jmap_client::{
     URI,
     client::Client,
-    core::{session::Capabilities, set::SetObject},
+    core::{error::MethodErrorType, session::Capabilities, set::SetObject},
 };
 use std::{
     collections::VecDeque,
@@ -16,7 +15,7 @@ use std::{
 };
 use tokio::task::{JoinError, JoinHandle};
 use tracing::error;
-use types::{MailboxData, MailboxId, MailboxNew, MailboxUpdate, MailboxValidate, SortOrder};
+use types::{MailboxData, MailboxId, MailboxNew, MailboxUpdate, MailboxValidate};
 
 pub struct MailboxBackend {
     client: Arc<Client>,
@@ -88,6 +87,7 @@ impl MailboxBackend {
                 };
 
                 let mut cache = cache.lock().unwrap();
+                cache.flush();
                 for mailbox in response.take_list() {
                     let data = MailboxData::from(mailbox);
                     cache.add(data);
@@ -97,7 +97,7 @@ impl MailboxBackend {
             }));
     }
 
-    pub fn destroy_mailboxes(&self, ids: Vec<MailboxId>) {
+    pub fn remove_mailboxes(&self, ids: Vec<MailboxId>) {
         if !self.cache_is_initialised() || ids.is_empty() {
             return;
         }
@@ -124,6 +124,16 @@ impl MailboxBackend {
                         Ok(r) => r,
                         Err(err) => {
                             error!("Couldn't request server to destroy mailboxes: {err}");
+
+                            match err {
+                                jmap_client::Error::Method(method) => match method.p_type {
+                                    MethodErrorType::StateMismatch => {
+                                        todo!();
+                                    }
+                                    _ => {}
+                                },
+                                _ => {}
+                            }
                             return;
                         }
                     }
@@ -131,11 +141,10 @@ impl MailboxBackend {
 
                 let mut cache = cache.lock().unwrap();
                 cache.set_state(response.take_new_state());
-
                 for id in ids.into_iter() {
                     match response.destroyed(&id) {
                         Ok(()) => {
-                            cache.remove_mailbox(&id);
+                            cache.remove(id);
                         }
                         Err(err) => match cache.get_mailbox(&id) {
                             Some(mailbox) => {
@@ -172,11 +181,8 @@ impl MailboxBackend {
             .push_back(tokio::spawn(async move {
                 let mut response = {
                     let current_state = {
-                        let guard = cache.lock().unwrap();
-                        guard
-                            .as_ref()
-                            .expect(DATA_INITIALISED_MSG)
-                            .get_current_state()
+                        let cache = cache.lock().unwrap();
+                        cache.get_state()
                     };
 
                     let mut request = client.build();
@@ -205,19 +211,29 @@ impl MailboxBackend {
                         Ok(r) => r,
                         Err(err) => {
                             error!("Couldn't request server to update the mailboxes:\n{err}");
+
+                            match err {
+                                jmap_client::Error::Method(method) => match method.p_type {
+                                    MethodErrorType::StateMismatch => {
+                                        todo!();
+                                    }
+                                    _ => {}
+                                },
+                                _ => {}
+                            }
+
                             return;
                         }
                     }
                 };
 
-                let mut guard = cache.lock().unwrap();
-                let cache = guard.as_mut().expect(DATA_INITIALISED_MSG);
+                let mut cache = cache.lock().unwrap();
                 cache.set_state(response.take_new_state());
 
                 for mailbox in mailboxes {
                     match response.updated(&mailbox.id) {
                         Ok(_) => {
-                            cache.update_mailbox(mailbox);
+                            cache.update(mailbox);
                         }
                         Err(err) => match cache.get_mailbox(&mailbox.id) {
                             Some(mailbox) => {
@@ -256,11 +272,8 @@ impl MailboxBackend {
             .push_back(tokio::spawn(async move {
                 let (mut response, tmp_ids) = {
                     let current_state = {
-                        let guard = cache.lock().unwrap();
-                        guard
-                            .as_ref()
-                            .expect(DATA_INITIALISED_MSG)
-                            .get_current_state()
+                        let cache = cache.lock().unwrap();
+                        cache.get_state()
                     };
 
                     let mut tmp_ids = Vec::with_capacity(mailboxes.len());
@@ -286,14 +299,24 @@ impl MailboxBackend {
                     match request.send_set_mailbox().await {
                         Ok(r) => (r, tmp_ids),
                         Err(err) => {
-                            error!("Couldn't send request to server to create mailbox: {err}");
+                            error!("Couldn't request server to update the mailboxes:\n{err}");
+
+                            match err {
+                                jmap_client::Error::Method(method) => match method.p_type {
+                                    MethodErrorType::StateMismatch => {
+                                        todo!();
+                                    }
+                                    _ => {}
+                                },
+                                _ => {}
+                            }
+
                             return;
                         }
                     }
                 };
 
-                let mut guard = cache.lock().unwrap();
-                let cache = guard.as_mut().expect(DATA_INITIALISED_MSG);
+                let mut cache = cache.lock().unwrap();
                 cache.set_state(response.take_new_state());
 
                 for (mailbox, tmp_id) in mailboxes.into_iter().zip(tmp_ids.into_iter()) {
@@ -318,7 +341,7 @@ impl MailboxBackend {
                                 unread_mails,
                             };
 
-                            cache.add_new_mailbox(mailbox);
+                            cache.add(mailbox);
                         }
                         Err(err) => {
                             error!("Couldn't create mailbox '{}': {err}", mailbox.name);
@@ -328,226 +351,6 @@ impl MailboxBackend {
                 }
             }));
     }
-
-    // pub fn rename_mailboxes(&self, mapping: Vec<(MailboxId, String)>) {
-    //     if !self.is_cache_initialised() {
-    //         return;
-    //     }
-
-    //     // TODO: add check if that's even possible
-
-    //     let cache = self.cache.clone();
-    //     let client = self.client.clone();
-
-    //     self.tasks.lock().unwrap().push_back(tokio::spawn(async move {
-    //         let mut response = {
-    //             let current_state = {
-    //                 let guard = cache.lock().unwrap();
-    //                 guard.as_ref().expect(DATA_INITIALISED_MSG).get_current_state()
-    //             };
-
-    //             let mut request = client.build();
-    //             {
-    //                 let set_mailbox = request.set_mailbox().if_in_state(current_state);
-    //                 for map in mapping.iter() {
-    //                     set_mailbox.update(&map.0).name(&map.1);
-    //                 }
-    //             }
-
-    //             match request.send_set_mailbox().await {
-    //                 Ok(r) => r,
-    //                 Err(err) => {
-    //                     error!("Couldn't request server to rename mailboxes: {err}");
-    //                     return;
-    //                 }
-    //             }
-    //         };
-
-    //         let mut guard = cache.lock().unwrap();
-    //         let cache = guard.as_mut().expect(DATA_INITIALISED_MSG);
-    //         for (id, new_name) in mapping.into_iter() {
-    //             let mailbox = cache.get_mailbox_mut(&id).expect("Mailbox exists");
-
-    //             match response.updated(&id) {
-    //                 Ok(server) => {
-    //                     if let Some(server) = server {
-    //                         warn!("Server requested other changes: {:#?}", server);
-    //                     }
-    //                     mailbox.name = new_name;
-    //                 }
-    //                 Err(err) => {
-    //                     let old_name = &mailbox.name;
-    //                     let new_name = &new_name;
-    //                     warn!("Couldn't rename mailbox '{old_name}' to '{new_name}': {err}\nSkipping this mailbox.");
-    //                     continue;
-    //                 }
-    //             }
-
-    //         }
-
-    //     }));
-    // }
-
-    // pub fn move_mailbox_down(&self, id: MailboxId) {
-    //     if !self.is_cache_initialised() {
-    //         return;
-    //     }
-
-    //     let new_order = {
-    //         let guard = self.cache.lock().unwrap();
-    //         let data = guard.as_ref().expect(DATA_INITIALISED_MSG);
-
-    //         // validate
-    //         let layer = data.tree.get_layer_containing_mailbox(&id);
-    //         let idx = layer
-    //             .mailboxes
-    //             .iter()
-    //             .enumerate()
-    //             .find_map(|(idx, mailbox)| (mailbox.id == id).then_some(idx))
-    //             .unwrap();
-    //         let is_at_bottom = idx == layer.mailboxes.len() - 1;
-    //         if is_at_bottom {
-    //             return;
-    //         }
-
-    //         let below1 = layer.mailboxes[idx + 1].sort_order;
-    //         match layer.mailboxes.get(idx + 2) {
-    //             Some(below2_mailbox) => {
-    //                 let below2 = below2_mailbox.sort_order;
-    //                 below1 + (below2 - below1) / 2
-    //             }
-    //             None => (below1 + 1).next_multiple_of(NEW_SORT_ORDER_SIZE),
-    //         }
-    //     };
-
-    //     self.set_new_order(id, new_order);
-    // }
-
-    // pub fn move_mailboxes_to(&self, ids: Vec<MailboxId>, new_parent: Option<MailboxId>) {
-    //     if !self.is_cache_initialised() {
-    //         return;
-    //     }
-
-    //     struct MailboxToMove {
-    //         id: MailboxId,
-    //         old_name: String,
-    //         new_name: Option<String>,
-    //     }
-
-    //     let filtered_ids: Vec<MailboxToMove> = {
-    //         let guard = self.cache.lock().unwrap();
-    //         let data = guard.as_ref().expect(DATA_INITIALISED_MSG);
-
-    //         let mut filtered_ids = Vec::with_capacity(ids.len());
-    //         let new_parent_layer = data.tree.get_layer(&new_parent);
-    //         for id in ids.into_iter() {
-    //             let mailbox = data.tree.get_mailbox(&id).unwrap();
-    //             let old_name = mailbox.name.clone();
-
-    //             if new_parent_layer.contains_mailbox(&id) {
-    //                 continue;
-    //             }
-
-    //             let new_name = if new_parent_layer.contains_mailbox_name(&mailbox.name) {
-    //                 Some(format!("{}-1", &mailbox.name))
-    //             } else {
-    //                 None
-    //             };
-
-    //             filtered_ids.push(MailboxToMove {
-    //                 id,
-    //                 old_name,
-    //                 new_name,
-    //             });
-    //         }
-
-    //         filtered_ids
-    //     };
-
-    //     let cache = self.cache.clone();
-    //     let client = self.client.clone();
-
-    //     self.tasks
-    //         .lock()
-    //         .unwrap()
-    //         .push_back(tokio::spawn(async move {
-    //             let mut response = {
-    //                 let mut request = client.build();
-    //                 let set_mailbox = request.set_mailbox();
-    //                 for MailboxToMove { id, new_name, .. } in filtered_ids.iter() {
-    //                     match new_name {
-    //                         Some(name) => set_mailbox
-    //                             .update(id)
-    //                             .parent_id(new_parent.clone())
-    //                             .name(name),
-    //                         None => set_mailbox.update(id).parent_id(new_parent.clone()),
-    //                     };
-    //                 }
-    //                 match request.send_set_mailbox().await {
-    //                     Ok(r) => r,
-    //                     Err(err) => {
-    //                         error!("Couldn't send request to server for moving mailboxes: {err}");
-    //                         return;
-    //                     }
-    //                 }
-    //             };
-
-    //             let mut guard = cache.lock().unwrap();
-    //             let cache = guard.as_mut().expect(DATA_INITIALISED_MSG);
-    //             cache.set_state(response.take_new_state());
-    //             for MailboxToMove {
-    //                 id,
-    //                 old_name,
-    //                 new_name,
-    //             } in filtered_ids.into_iter()
-    //             {
-    //                 match response.updated(&id) {
-    //                     Ok(server_changes) => {
-    //                         let old = cache.tree.get_mailbox(&id).unwrap().clone();
-    //                         let mut new = old.clone();
-    //                         new.parent_id = new_parent.clone();
-    //                         if let Some(name) = new_name {
-    //                             new.name = name;
-    //                         }
-
-    //                         if let Some(server) = server_changes {
-    //                             if let Some(name) = server.name() {
-    //                                 new.name = name.to_string()
-    //                             }
-
-    //                             if let Some(parent_id) = server.parent_id() {
-    //                                 new.parent_id = Some(parent_id.to_string());
-    //                             }
-    //                         }
-
-    //                         // update its layer
-    //                         {
-    //                             let mut layer = cache.tree.remove_layer(&Some(old.id.clone()));
-    //                             layer.mailbox_owner = Some(new.id.clone());
-    //                             cache.tree.insert_layer(Some(new.id.clone()), layer);
-    //                         }
-
-    //                         // update its old and new parent layer
-    //                         if old.parent_id != new.parent_id {
-    //                             let prev_layer = cache.tree.get_layer_mut(&old.parent_id);
-    //                             prev_layer
-    //                                 .mailboxes
-    //                                 .extract_if(.., |mailbox| mailbox.id == old.id)
-    //                                 .for_each(drop);
-
-    //                             let new_layer = cache.tree.get_layer_mut(&new.parent_id);
-    //                             new_layer.mailboxes.push(new);
-    //                             new_layer.sort_mailboxes();
-    //                         }
-    //                     }
-    //                     Err(err) => {
-    //                         error!("Couldn't update '{old_name}': {err}");
-    //                         continue;
-    //                     }
-    //                 }
-    //             }
-    //         }));
-    // }
 
     pub fn mail_capability(&self) -> jmap_client::email::MailCapabilities {
         let id = self.client.default_account_id();
@@ -576,8 +379,7 @@ impl MailboxBackend {
     where
         &'a M: Into<MailboxValidate>,
     {
-        let guard = self.cache.lock().unwrap();
-        let cache = guard.as_ref().expect(DATA_INITIALISED_MSG);
+        let cache = self.cache.lock().unwrap();
         let caps = self.mail_capability();
         let mut errors = Vec::with_capacity(mailboxes.len());
 
@@ -626,79 +428,77 @@ impl MailboxBackend {
 
 // methods for `state.rs`
 impl MailboxBackend {
-    pub fn get_children_ids(&self, parent_id: &Option<MailboxId>) -> Option<Vec<Entry>> {
-        let guard = self.cache.lock().unwrap();
-        guard
-            .as_ref()
-            .map(|cache| cache.get_children(parent_id).to_vec())
-    }
+    // pub fn get_children_ids(&self, parent_id: &Option<MailboxId>) -> Vec<Entry>> {
+    //     let cache = self.cache.lock().unwrap();
+    //     cache.get_children(parent_id).to_vec()
+    // }
 
-    pub fn get_children_sort_order(
-        &self,
-        parent_id: &Option<MailboxId>,
-    ) -> Option<Vec<Children<SortOrder>>> {
-        let guard = self.cache.lock().unwrap();
-        guard.as_ref().map(|cache| {
-            cache
-                .get_children(parent_id)
-                .iter()
-                .map(|entry| match entry {
-                    Entry::This => Children::This,
-                    Entry::Child(id) => {
-                        let mailbox = cache.get_mailbox(id).unwrap();
-                        Children::Child(id.clone(), mailbox.sort_order)
-                    }
-                })
-                .collect()
-        })
-    }
+    // pub fn get_children_sort_order(
+    //     &self,
+    //     parent_id: &Option<MailboxId>,
+    // ) -> Option<Vec<Children<SortOrder>>> {
+    //     let guard = self.cache.lock().unwrap();
+    //     guard.as_ref().map(|cache| {
+    //         cache
+    //             .get_children(parent_id)
+    //             .iter()
+    //             .map(|entry| match entry {
+    //                 Entry::This => Children::This,
+    //                 Entry::Child(id) => {
+    //                     let mailbox = cache.get_mailbox(id).unwrap();
+    //                     Children::Child(id.clone(), mailbox.sort_order)
+    //                 }
+    //             })
+    //             .collect()
+    //     })
+    // }
 
-    pub fn get_children_names(
-        &self,
-        parent_id: &Option<MailboxId>,
-    ) -> Option<Vec<Children<String>>> {
-        let guard = self.cache.lock().unwrap();
-        guard.as_ref().map(|cache| {
-            cache
-                .get_children(parent_id)
-                .iter()
-                .map(|entry| match entry {
-                    Entry::This => Children::This,
-                    Entry::Child(id) => {
-                        let mailbox = cache.get_mailbox(id).unwrap();
+    // pub fn get_children_names(
+    //     &self,
+    //     parent_id: &Option<MailboxId>,
+    // ) -> Option<Vec<Children<String>>> {
+    //     let guard = self.cache.lock().unwrap();
+    //     guard.as_ref().map(|cache| {
+    //         cache
+    //             .get_children(parent_id)
+    //             .iter()
+    //             .map(|entry| match entry {
+    //                 Entry::This => Children::This,
+    //                 Entry::Child(id) => {
+    //                     let mailbox = cache.get_mailbox(id).unwrap();
 
-                        Children::Child(id.clone(), mailbox.name.clone())
-                    }
-                })
-                .collect()
-        })
-    }
+    //                     Children::Child(id.clone(), mailbox.name.clone())
+    //                 }
+    //             })
+    //             .collect()
+    //     })
+    // }
 
-    pub fn get_mailbox_name(&self, id: &MailboxId) -> Option<String> {
-        let guard = self.cache.lock().unwrap();
-        guard
-            .as_ref()
-            .and_then(|cache| cache.get_mailbox(id).map(|mailbox| mailbox.name.clone()))
-    }
+    // pub fn get_mailbox_name(&self, id: &MailboxId) -> Option<String> {
+    //     let guard = self.cache.lock().unwrap();
+    //     guard
+    //         .as_ref()
+    //         .and_then(|cache| cache.get_mailbox(id).map(|mailbox| mailbox.name.clone()))
+    // }
 
-    pub fn get_children(
-        &self,
-        parent_id: &Option<MailboxId>,
-    ) -> Option<Vec<Children<MailboxData>>> {
-        let guard = self.cache.lock().unwrap();
-        guard.as_ref().map(|cache| {
-            cache
-                .get_children(parent_id)
-                .iter()
-                .map(|entry| match entry {
-                    Entry::This => Children::This,
-                    Entry::Child(id) => {
-                        let mailbox = cache.get_mailbox(id).unwrap();
+    // pub fn get_children(
+    //     &self,
+    //     parent_id: &Option<MailboxId>,
+    // ) -> Option<Vec<Children<MailboxData>>> {
+    //     let guard = self.cache.lock().unwrap();
+    //     guard.as_ref().map(|cache| {
+    //         cache
+    //             .get_children(parent_id)
+    //             .iter()
+    //             .map(|entry| match entry {
+    //                 Entry::This => Children::This,
+    //                 Entry::Child(id) => {
+    //                     let mailbox = cache.get_mailbox(id).unwrap();
 
-                        Children::Child(id.clone(), mailbox.clone())
-                    }
-                })
-                .collect()
-        })
-    }
+    //                     Children::Child(id.clone(), mailbox.clone())
+    //                 }
+    //             })
+    //             .collect()
+    //     })
+    // }
 }
