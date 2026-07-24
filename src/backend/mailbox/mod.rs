@@ -71,7 +71,7 @@ impl MailboxBackend {
             .lock()
             .unwrap()
             .push_back(tokio::spawn(async move {
-                let response = {
+                let mut response = {
                     let mut request = client.build();
                     request
                         .get_mailbox()
@@ -90,6 +90,7 @@ impl MailboxBackend {
                 let mut cache = cache.lock().unwrap();
                 for mailbox in response.take_list() {
                     let data = MailboxData::from(mailbox);
+                    cache.add(data);
                 }
 
                 cache.set_state(response.take_state());

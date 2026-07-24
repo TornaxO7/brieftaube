@@ -56,6 +56,12 @@ impl Cache {
 
 // Methods altering the cache
 impl Cache {
+    pub fn flush(&mut self) {
+        self.mailboxes.clear();
+        self.children_mapping.clear();
+        self.get_state.clear();
+    }
+
     pub fn add(&mut self, mailbox: MailboxData) {
         let id = mailbox.id.clone();
 
