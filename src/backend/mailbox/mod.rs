@@ -21,8 +21,11 @@ impl MailboxBackend {
             cache: Arc::new(Mutex::new(Cache::new())),
         }
     }
+}
 
-    pub fn cache_is_initialised(&self, parent: &ParentMailboxId) -> bool {
+/// Helper functions
+impl MailboxBackend {
+    fn cache_is_initialised(&self, parent: &ParentMailboxId) -> bool {
         !self.cache.lock().unwrap().is_initialised(parent)
     }
 }
