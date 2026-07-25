@@ -4,6 +4,7 @@ mod input_type;
 mod palette_value;
 
 pub use palette_value::PaletteValue;
+use tracing::{debug, instrument};
 
 use super::Action;
 use crate::{
@@ -39,13 +40,21 @@ impl State {
             columns: vec![],
             current_column: 0,
             app_actions: Vec::with_capacity(2),
-            keybindings: KeybindManager::new(HashMap::from([("q", Action::Quit)])),
+            keybindings: KeybindManager::new(HashMap::from([
+                ("q", Action::Quit),
+                ("j", Action::NavigateDown),
+                ("k", Action::NavigateUp),
+                ("gg", Action::NavigateToTop),
+                ("ge", Action::NavigateToBottom),
+            ])),
         }
     }
 }
 
 impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for State {
+    #[instrument(skip(self))]
     fn apply_action(&mut self, action: Action) {
+        debug!("{:?}", action);
         match action {
             Action::Quit => self.quit(),
             Action::OpenCommandPalette => self.open_command_palette(),
@@ -138,7 +147,12 @@ impl State {
         if let Some(column) = self.current_column_mut() {
             match column {
                 ColumnState::Loading { .. } => {}
-                ColumnState::Loaded { state, .. } => state.select_next(),
+                ColumnState::Loaded { state, entries, .. } => {
+                    if let Some(pos) = state.selected() {
+                        let next_pos = (entries.len() - 1).min(pos + 1);
+                        state.select(Some(next_pos));
+                    }
+                }
             }
         }
     }
@@ -165,7 +179,9 @@ impl State {
         if let Some(column) = self.current_column_mut() {
             match column {
                 ColumnState::Loading { .. } => {}
-                ColumnState::Loaded { state, .. } => state.select_last(),
+                ColumnState::Loaded { state, entries, .. } => {
+                    state.select(Some(entries.len() - 1));
+                }
             }
         }
     }

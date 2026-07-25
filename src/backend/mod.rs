@@ -16,7 +16,7 @@ use crate::{
 };
 use jmap_client::client::Client;
 use std::{rc::Rc, sync::Arc};
-use tracing::{error, instrument};
+use tracing::{debug, error, instrument, trace};
 
 type GetState = String;
 type QueryState = String;
@@ -82,6 +82,7 @@ impl Backend {
         let mailbox_backend = self.mailboxes.clone();
 
         self.mailboxes.get_child_mailboxes(&parent).or_else(|| {
+            debug!("No child mailboxes available of '{:?}'", parent.clone());
             self.task_manager
                 .spawn(TaskId::QueryChildMailboxes(parent.clone()), async move {
                     if let Err(err) = mailbox_backend
@@ -90,6 +91,7 @@ impl Backend {
                     {
                         error!("Couldn't query mailboxes:\n{err}");
                     }
+                    debug!("Received child mailboxes of '{:?}'", parent.clone());
                 });
             None
         })
@@ -172,6 +174,8 @@ impl Backend {
 
                         threads.handle_response(thread_get);
                         mails.handle_response(mail_get);
+
+                        debug!("Received collapsed mails of '{:?}'.", id.clone());
                     });
             }
         }

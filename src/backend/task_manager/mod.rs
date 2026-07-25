@@ -1,6 +1,7 @@
 use crate::backend::mailbox::types::{MailboxId, ParentMailboxId};
 use std::{cell::RefCell, collections::VecDeque};
 use tokio::task::JoinHandle;
+use tracing::{debug, instrument};
 
 #[derive(Debug, PartialEq)]
 pub enum TaskId {
@@ -23,6 +24,7 @@ impl TaskManager {
         !self.tasks.borrow_mut().is_empty()
     }
 
+    #[instrument(skip(self))]
     pub async fn finish_next_task(&self) {
         let _done = {
             let mut tasks = self.tasks.borrow_mut();
@@ -31,7 +33,9 @@ impl TaskManager {
                 None => std::future::pending().await,
             }
         };
-        self.tasks.borrow_mut().pop_front();
+        if let Some(finished_task) = self.tasks.borrow_mut().pop_front() {
+            debug!("{:?} finished.", finished_task.id);
+        }
     }
 }
 
@@ -48,13 +52,16 @@ impl TaskManager {
 
 /// starting tasks
 impl TaskManager {
+    #[instrument(skip(self, future))]
     pub fn spawn<F>(&self, id: TaskId, future: F)
     where
         F: Future<Output = ()> + Send + 'static,
     {
         if self.is_already_running(&id) {
+            debug!("'{id:?}' is already running. Abort.");
             return;
         }
+        debug!("Spawning '{id:?}'");
 
         let new_task = Task {
             id,

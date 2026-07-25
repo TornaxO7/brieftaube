@@ -5,7 +5,7 @@ pub mod types;
 use cache::Cache;
 use jmap_client::client::Client;
 use std::sync::{Arc, Mutex};
-use tracing::{instrument, trace};
+use tracing::{debug, instrument, trace};
 use types::{MailboxData, MailboxId};
 
 use crate::backend::mailbox::types::ParentMailboxId;
@@ -38,7 +38,9 @@ impl MailboxBackend {
         &self,
         parent: ParentMailboxId,
     ) -> Result<(), jmap_client::Error> {
+        // debug!("Requesting child mailboxes of '{:?}'", &parent);
         if self.cache_is_initialised(&parent) {
+            // debug!("Cache already contains child mailboxes of '{:?}'", &parent);
             // TODO: Request `mailbox/changes`
             return Ok(());
         }
@@ -58,10 +60,9 @@ impl MailboxBackend {
                 .ids_ref(query_result)
                 .properties(MailboxData::PROPERTIES);
 
+            debug!("Send request.");
             request.send().await?
         };
-
-        trace!("Response: {:#?}", response);
 
         let mut mailbox_get_response = response
             .pop_method_response()
@@ -69,14 +70,16 @@ impl MailboxBackend {
             .unwrap_get_mailbox()?;
 
         let mut cache = self.cache.lock().unwrap();
-        cache.flush();
-
-        for mailbox in mailbox_get_response.take_list() {
+        let child_mailboxes = mailbox_get_response.take_list();
+        debug!(
+            "Child mailboxes of '{:?}':\n{:#?}",
+            &parent, &child_mailboxes
+        );
+        for mailbox in child_mailboxes {
             cache.add(MailboxData::from(mailbox));
         }
 
         cache.set_state(parent.clone(), mailbox_get_response.take_state());
-
         Ok(())
     }
 
@@ -387,14 +390,13 @@ impl MailboxBackend {
 
 // methods for `state.rs`
 impl MailboxBackend {
-    pub fn get_child_mailboxes(&self, parent_id: &Option<MailboxId>) -> Option<Vec<MailboxId>> {
+    pub fn get_child_mailboxes(&self, parent: &ParentMailboxId) -> Option<Vec<MailboxId>> {
         let cache = self.cache.lock().unwrap();
-        cache
-            .get_children(parent_id)
-            .map(|children| children.to_vec())
+        cache.get_children(parent).map(|children| children.to_vec())
     }
 
     pub fn get_mailbox_data(&self, id: &MailboxId) -> Option<Arc<MailboxData>> {
+        debug!("Try getting mailbox data of {id:?} from cache.");
         let cache = self.cache.lock().unwrap();
         cache.get_data(id)
     }

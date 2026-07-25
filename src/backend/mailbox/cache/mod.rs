@@ -1,3 +1,5 @@
+use tracing::{debug, instrument};
+
 use super::types::{MailboxData, MailboxId};
 use crate::backend::{
     GetState, QueryState,
@@ -37,10 +39,16 @@ impl Cache {
         self.mailboxes.get(id).cloned()
     }
 
-    pub fn get_children(&self, parent_id: &ParentMailboxId) -> Option<&[MailboxId]> {
-        self.children_mapping
-            .get(parent_id)
-            .map(|children| children.as_slice())
+    #[instrument(skip(self))]
+    pub fn get_children(&self, parent: &ParentMailboxId) -> Option<&[MailboxId]> {
+        let children = self
+            .children_mapping
+            .get(parent)
+            .map(|children| children.as_slice());
+
+        // debug!("Children of '{parent:?}':\n{children:?}");
+
+        children
     }
 
     pub fn get_children_data(
@@ -90,15 +98,19 @@ impl Cache {
 
 // Methods altering the cache
 impl Cache {
+    #[instrument(skip(self))]
     pub fn flush(&mut self) {
+        debug!("Flushing cache.");
         self.mailboxes.clear();
         self.children_mapping.clear();
         self.states.clear();
     }
 
+    #[instrument(skip(self))]
     pub fn add(&mut self, mailbox: MailboxData) {
         let id = mailbox.id.clone();
 
+        debug!("Adding mailbox: {mailbox:?}");
         self.mailboxes.insert(id.clone(), Arc::new(mailbox.clone()));
 
         self.children_mapping
