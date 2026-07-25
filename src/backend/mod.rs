@@ -16,7 +16,7 @@ use crate::{
 };
 use jmap_client::client::Client;
 use std::{rc::Rc, sync::Arc};
-use tracing::{debug, error, instrument, trace};
+use tracing::{debug, error, instrument};
 
 type GetState = String;
 type QueryState = String;

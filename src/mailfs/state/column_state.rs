@@ -37,7 +37,7 @@ impl ColumnState {
         let state = if entries.is_empty() {
             TableState::new()
         } else {
-            TableState::new().with_selected(1)
+            TableState::new().with_selected(0)
         };
 
         Self::Loaded {
