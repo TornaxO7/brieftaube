@@ -22,7 +22,7 @@ impl Cache {
     }
 
     pub fn is_initialised(&self, parent: &ParentMailboxId) -> bool {
-        self.children_mapping.get(parent).is_some()
+        self.get_state(parent).is_some()
     }
 
     pub fn get_state(&self, parent: &ParentMailboxId) -> Option<GetState> {

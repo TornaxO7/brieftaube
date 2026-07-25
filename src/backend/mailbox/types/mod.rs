@@ -12,5 +12,7 @@ pub use mailbox_validate::MailboxValidate;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct MailboxId(pub String);
+
 pub type SortOrder = u32;
 pub type ParentMailboxId = Option<MailboxId>;
+pub const TOP_PARENT_MAILBOX_ID: ParentMailboxId = None;

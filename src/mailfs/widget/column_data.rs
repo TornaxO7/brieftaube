@@ -1,88 +1,98 @@
-use std::rc::Rc;
-
 use crate::{
     backend::{
         Backend,
         mailbox::types::MailboxData,
-        mails::types::{MailAddress, MailData, MailKeyword, MailPreview},
+        mails::types::{MailAddress, MailData, MailKeyword},
     },
-    mailfs::state::{ColumnCtx, ColumnCtxEntry},
+    mailfs::{
+        state::{ColumnState, ColumnStateEntry},
+        widget::mail_preview::MailPreview,
+    },
 };
 use ratatui::widgets::TableState;
+use std::rc::Rc;
+use throbber_widgets_tui::ThrobberState;
 
 #[derive(Debug)]
-pub struct ColumnData<'a> {
-    pub entries: Vec<ColumnEntry>,
-    pub state: &'a mut TableState,
+pub enum ColumnDisplay<'a> {
+    Loading {
+        state: &'a mut ThrobberState,
+    },
+    Loaded {
+        entries: Vec<ColumnEntry>,
+        state: &'a mut TableState,
+    },
 }
 
-impl<'a> ColumnData<'a> {
-    pub fn new(ctx: &'a mut ColumnCtx, backend: Rc<Backend>) -> Self {
-        let entries = {
-            let mut entries = Vec::new();
+impl<'a> ColumnDisplay<'a> {
+    pub fn new(column: &'a mut ColumnState, backend: Rc<Backend>) -> Self {
+        match column {
+            ColumnState::Loading { state } => Self::Loading { state },
+            ColumnState::Loaded { entries, state, .. } => {
+                let entries = {
+                    let mut display_entries = Vec::new();
 
-            for entry in ctx.entries.iter() {
-                match entry {
-                    ColumnCtxEntry::Mailbox(mailboxid) => {
-                        let mailbox = backend.get_mailbox_data(mailboxid).unwrap();
+                    for entry in entries.iter() {
+                        match entry {
+                            ColumnStateEntry::Mailbox(mailboxid) => {
+                                let mailbox = backend.get_mailbox_data(mailboxid).unwrap();
 
-                        let data = ColumnEntryData::from(mailbox.as_ref());
-                        entries.push(ColumnEntry {
-                            is_selected: false,
-                            data,
-                        });
+                                let data = ColumnEntryData::from(mailbox.as_ref());
+                                display_entries.push(ColumnEntry {
+                                    is_selected: false,
+                                    data,
+                                });
+                            }
+                            ColumnStateEntry::SingleMail(mail_id) => {
+                                let mail = backend.get_mail_data(mail_id).unwrap();
+                                let data = ColumnEntryData::single(&mail);
+                                display_entries.push(ColumnEntry {
+                                    is_selected: false,
+                                    data,
+                                });
+                            }
+                            ColumnStateEntry::CollapsedThread(thread_id) => {
+                                let thread = backend.get_thread_mail_ids(thread_id).unwrap();
+                                let mail = backend.get_mail_data(&thread[0]).unwrap();
+                                let data = ColumnEntryData::collapsed_thread(&mail);
+                                display_entries.push(ColumnEntry {
+                                    is_selected: false,
+                                    data,
+                                });
+                            }
+                            ColumnStateEntry::UncollapsedThread(thread_id) => {
+                                let thread = backend.get_thread_mail_ids(thread_id).unwrap();
+                                let thread_len = thread.len();
+
+                                let mails: Vec<MailData> = thread
+                                    .into_iter()
+                                    .map(|id| backend.get_mail_data(&id).unwrap())
+                                    .collect();
+
+                                display_entries.push(ColumnEntry {
+                                    is_selected: false,
+                                    data: ColumnEntryData::thread_start(&mails[0]),
+                                });
+
+                                for mail in &mails[1..(thread_len - 1)] {
+                                    display_entries.push(ColumnEntry {
+                                        is_selected: false,
+                                        data: ColumnEntryData::thread_child(&mail),
+                                    });
+                                }
+
+                                display_entries.push(ColumnEntry {
+                                    is_selected: false,
+                                    data: ColumnEntryData::thread_end(&mails[thread_len - 1]),
+                                });
+                            }
+                        };
                     }
-                    ColumnCtxEntry::SingleMail(mail_id) => {
-                        let mail = backend.get_mail_data(mail_id).unwrap();
-                        let data = ColumnEntryData::single(&mail);
-                        entries.push(ColumnEntry {
-                            is_selected: false,
-                            data,
-                        });
-                    }
-                    ColumnCtxEntry::CollapsedThread(thread_id) => {
-                        let thread = backend.get_thread_mail_ids(thread_id).unwrap();
-                        let mail = backend.get_mail_data(&thread[0]).unwrap();
-                        let data = ColumnEntryData::collapsed_thread(&mail);
-                        entries.push(ColumnEntry {
-                            is_selected: false,
-                            data,
-                        });
-                    }
-                    ColumnCtxEntry::UncollapsedThread(thread_id) => {
-                        let thread = backend.get_thread_mail_ids(thread_id).unwrap();
-                        let thread_len = thread.len();
-
-                        let mails: Vec<MailData> = thread
-                            .into_iter()
-                            .map(|id| backend.get_mail_data(&id).unwrap())
-                            .collect();
-
-                        entries.push(ColumnEntry {
-                            is_selected: false,
-                            data: ColumnEntryData::thread_start(&mails[0]),
-                        });
-
-                        for mail in &mails[1..(thread_len - 1)] {
-                            entries.push(ColumnEntry {
-                                is_selected: false,
-                                data: ColumnEntryData::thread_child(&mail),
-                            });
-                        }
-
-                        entries.push(ColumnEntry {
-                            is_selected: false,
-                            data: ColumnEntryData::thread_end(&mails[thread_len - 1]),
-                        });
-                    }
+                    display_entries
                 };
-            }
-            entries
-        };
 
-        Self {
-            entries,
-            state: &mut ctx.state,
+                Self::Loaded { entries, state }
+            }
         }
     }
 }
@@ -165,14 +175,8 @@ pub enum MailEntryType {
 }
 
 pub enum RightColumn<'a> {
-    ColumnData(Option<ColumnData<'a>>),
-    MailPreview(Option<MailPreview>),
-}
-
-impl<'a> RightColumn<'a> {
-    pub fn new(ctx: Option<&'a mut ColumnCtx>) -> Self {
-        todo!()
-    }
+    ColumnData(ColumnDisplay<'a>),
+    MailPreview(MailPreview<'a>),
 }
 
 fn addresses_to_string(addresses: &[MailAddress]) -> String {

@@ -1,19 +1,22 @@
-mod column_ctx;
+mod column_state;
+mod error;
 mod input_type;
 mod palette_value;
 
 pub use palette_value::PaletteValue;
-use ratatui::widgets::TableState;
 
 use super::Action;
 use crate::{
-    backend::{Backend, types::CollapsedMail},
-    mailfs::widget::{ColumnData, RenderData, RightColumn},
+    backend::{
+        Backend,
+        mailbox::types::{ParentMailboxId, TOP_PARENT_MAILBOX_ID},
+    },
+    mailfs::widget::{ColumnDisplay, RenderData, RightColumn},
     utils::ui::{
         ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager, palette,
     },
 };
-pub use column_ctx::{ColumnCtx, ColumnCtxEntry};
+pub use column_state::{ColumnState, ColumnStateEntry};
 use input_type::InputType;
 use std::{collections::HashMap, rc::Rc, vec::Drain};
 
@@ -22,7 +25,7 @@ pub struct State {
     keybindings: KeybindManager<Action>,
     overlay: Option<ScreenOverlay<PaletteValue, InputType>>,
 
-    columns: Vec<ColumnCtx>,
+    columns: Vec<ColumnState>,
     current_column: usize,
 
     backend: Rc<Backend>,
@@ -78,20 +81,31 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
     }
 
     fn render_data(&'a mut self) -> RenderData<'a> {
-        self.init_columns();
+        let _ = self.load_current_and_next_column();
 
         let (left_part, rest) = self.columns.split_at_mut(self.current_column);
         let (center_part, right_part) = rest.split_at_mut(1.min(rest.len()));
 
-        let left = left_part
-            .last_mut()
-            .map(|column| ColumnData::new(column, self.backend.clone()));
+        let left_column = left_part.as_mut().last_mut();
+        let center_column = center_part.first_mut().unwrap();
+        let right_column = right_part.first_mut();
 
-        let center = center_part
-            .first_mut()
-            .map(|column| ColumnData::new(column, self.backend.clone()));
-
-        let right = RightColumn::new(right_part.first_mut());
+        let left = left_column.map(|column| ColumnDisplay::new(column, self.backend.clone()));
+        let right = match &center_column {
+            ColumnState::Loading { .. } => None,
+            ColumnState::Loaded { entries, state, .. } => match state.selected() {
+                None => None,
+                Some(idx) => match &entries[idx] {
+                    ColumnStateEntry::Mailbox(_) => right_column.map(|column| {
+                        RightColumn::ColumnData(ColumnDisplay::new(column, self.backend.clone()))
+                    }),
+                    ColumnStateEntry::SingleMail(_)
+                    | ColumnStateEntry::CollapsedThread(_)
+                    | ColumnStateEntry::UncollapsedThread(_) => None,
+                },
+            },
+        };
+        let center = ColumnDisplay::new(center_column, self.backend.clone());
 
         RenderData {
             left,
@@ -103,7 +117,7 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
 
 /// Helper functions
 impl State {
-    fn current_column_mut(&mut self) -> Option<&mut ColumnCtx> {
+    fn current_column_mut(&mut self) -> Option<&mut ColumnState> {
         self.columns.get_mut(self.current_column)
     }
 }
@@ -122,25 +136,28 @@ impl State {
 
     fn navigate_down(&mut self) {
         if let Some(column) = self.current_column_mut() {
-            column.state.select_next();
+            match column {
+                ColumnState::Loading { .. } => {}
+                ColumnState::Loaded { state, .. } => state.select_next(),
+            }
         }
     }
 
     fn navigate_up(&mut self) {
         if let Some(column) = self.current_column_mut() {
-            column.state.select_previous();
+            // column.state.select_previous();
         }
     }
 
     fn navigate_to_top(&mut self) {
         if let Some(column) = self.current_column_mut() {
-            column.state.select_first();
+            // column.state.select_first();
         }
     }
 
     fn navigate_to_bottom(&mut self) {
         if let Some(column) = self.current_column_mut() {
-            column.state.select_last();
+            // column.state.select_last();
         }
     }
 
@@ -153,68 +170,54 @@ impl State {
     }
 }
 
+/// Methods for loading the columns
 impl<'a> State {
-    fn init_columns(&mut self) -> Option<()> {
-        self.init_column(self.current_column)?;
-        self.init_column(self.current_column + 1)?;
-
-        Some(())
-    }
-
-    /// Returns `None` if the column couldn't be initialised yet because the backend still needs fetch the data,
-    /// otherwise `Some(())`.
-    fn init_column(&mut self, column_idx: usize) -> Option<()> {
-        let is_column_loaded = self.columns.get(column_idx).is_some();
-        if !is_column_loaded {
-            let mut entries: Vec<ColumnCtxEntry> = Vec::new();
-
-            let parent_mailbox_id = if column_idx == 0 {
-                None
-            } else {
-                self.columns[column_idx - 1].mailbox.clone()
-            };
-
-            // get mailboxes
-            {
-                let mailbox_ids = self
-                    .backend
-                    .get_child_mailboxes(parent_mailbox_id.clone())?;
-                for mailbox_id in mailbox_ids {
-                    entries.push(ColumnCtxEntry::Mailbox(mailbox_id));
-                }
-            }
-
-            // get mails
-            if let Some(parent_mailbox_id) = parent_mailbox_id.as_ref() {
-                let collapsed_mails = self.backend.get_collapsed_mails(parent_mailbox_id)?;
-                for collapsed_mail in collapsed_mails {
-                    match collapsed_mail {
-                        CollapsedMail::SingleMail(mail_id) => {
-                            entries.push(ColumnCtxEntry::SingleMail(mail_id))
-                        }
-                        CollapsedMail::CollapsedThread(thread_id) => {
-                            entries.push(ColumnCtxEntry::CollapsedThread(thread_id))
-                        }
-                    }
-                }
-            }
-
-            let state = if entries.is_empty() {
-                TableState::new()
-            } else {
-                TableState::new().with_selected(1)
-            };
-
-            self.columns.insert(
-                column_idx,
-                ColumnCtx {
-                    mailbox: parent_mailbox_id,
-                    entries,
-                    state,
-                },
-            );
+    fn load_current_and_next_column(&mut self) -> Result<(), error::BackendNotReady> {
+        if self.columns.len() <= self.current_column + 1 {
+            self.columns
+                .resize_with(self.current_column + 2, || ColumnState::loading());
         }
 
-        Some(())
+        self.load_column(self.current_column)?;
+        self.load_column(self.current_column + 1)?;
+        Ok(())
+    }
+
+    fn load_column(&mut self, column_idx: usize) -> Result<(), error::BackendNotReady> {
+        let mailbox = self.get_mailbox_id(column_idx);
+
+        let column = &mut self.columns[column_idx];
+        match column {
+            ColumnState::Loaded { .. } => Ok(()),
+            ColumnState::Loading { state } => {
+                if let Some(mailbox) = mailbox {
+                    let column_entries =
+                        ColumnStateEntry::create_entries(mailbox.clone(), self.backend.clone())?;
+                    *column = ColumnState::loaded(mailbox.clone(), column_entries);
+                    return Ok(());
+                }
+                state.calc_next();
+                Err(error::BackendNotReady)
+            }
+        }
+    }
+
+    /// Returns the mailbox-id which the given column should represent
+    fn get_mailbox_id(&self, column_idx: usize) -> Option<ParentMailboxId> {
+        let is_in_root_mailbox = column_idx == 0;
+
+        if is_in_root_mailbox {
+            Some(TOP_PARENT_MAILBOX_ID)
+        } else {
+            match self.columns.get(column_idx - 1).unwrap() {
+                ColumnState::Loading { .. } => None,
+                ColumnState::Loaded { entries, state, .. } => {
+                    state.selected().and_then(|idx| match &entries[idx] {
+                        ColumnStateEntry::Mailbox(id) => Some(Some(id.clone())),
+                        _ => Some(None),
+                    })
+                }
+            }
+        }
     }
 }

@@ -121,7 +121,7 @@ impl App {
 
         match self.screens.last_mut().unwrap() {
             Screen::Mailfs(state) => {
-                frame.render_stateful_widget(mailfs::Mailfs::default(), area, state);
+                frame.render_stateful_widget(mailfs::Mailfs::default(), screen, state);
             }
             // Screen::Mailboxes(state) => {
             //     frame.render_stateful_widget(mailboxes::Mailboxes::default(), screen, state);

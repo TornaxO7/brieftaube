@@ -5,6 +5,7 @@ pub mod types;
 use cache::Cache;
 use jmap_client::client::Client;
 use std::sync::{Arc, Mutex};
+use tracing::{instrument, trace};
 use types::{MailboxData, MailboxId};
 
 use crate::backend::mailbox::types::ParentMailboxId;
@@ -26,12 +27,13 @@ impl MailboxBackend {
 /// Helper functions
 impl MailboxBackend {
     fn cache_is_initialised(&self, parent: &ParentMailboxId) -> bool {
-        !self.cache.lock().unwrap().is_initialised(parent)
+        self.cache.lock().unwrap().is_initialised(parent)
     }
 }
 
 // methods which also communicate with the server
 impl MailboxBackend {
+    #[instrument(skip(self))]
     pub async fn request_mailboxes_query(
         &self,
         parent: ParentMailboxId,
@@ -58,6 +60,8 @@ impl MailboxBackend {
 
             request.send().await?
         };
+
+        trace!("Response: {:#?}", response);
 
         let mut mailbox_get_response = response
             .pop_method_response()
