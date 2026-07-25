@@ -14,7 +14,7 @@ use ratatui::widgets::TableState;
 use throbber_widgets_tui::ThrobberState;
 
 /// Internal representation of a column
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ColumnState {
     /// The state for loading columns
     Loading { state: ThrobberState },
@@ -51,7 +51,7 @@ impl ColumnState {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ColumnStateEntry {
     Mailbox(MailboxId),
     /// Mails which are the only mail in a thread

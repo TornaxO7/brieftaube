@@ -1,12 +1,7 @@
-use crate::backend::mails::types::{MailAddress, MailData, MailId, MailKeyword};
-use std::collections::HashSet;
+use crate::backend::mails::types::MailAddress;
 use throbber_widgets_tui::ThrobberState;
 
-pub enum ThreadMarker {
-    Root,
-    Child,
-}
-
+#[derive(Debug)]
 pub enum MailPreview<'a> {
     Loading(&'a mut ThrobberState),
     Loaded {

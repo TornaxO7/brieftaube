@@ -124,6 +124,7 @@ pub enum MailEntryType {
     ThreadEnd,
 }
 
+#[derive(Debug)]
 pub enum RightColumn<'a> {
     ColumnData(ColumnDisplay<'a>),
     MailPreview(MailPreview<'a>),

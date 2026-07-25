@@ -92,31 +92,53 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
     fn render_data(&'a mut self) -> RenderData<'a> {
         let _ = self.load_current_and_next_column();
 
-        let (left_part, rest) = self.columns.split_at_mut(self.current_column);
-        let (center_part, right_part) = rest.split_at_mut(1.min(rest.len()));
+        let (left, center, right) = {
+            if self.current_column == 0 {
+                let [center_column, right_column] = self
+                    .columns
+                    .get_disjoint_mut([self.current_column, self.current_column + 1])
+                    .unwrap();
 
-        let left_column = left_part.as_mut().last_mut();
-        let center_column = center_part.first_mut().unwrap();
-        let right_column = right_part.first_mut();
+                let right = match &center_column {
+                    ColumnState::Loading { .. } => None,
+                    ColumnState::Loaded { entries, state, .. } => match state.selected() {
+                        None => None,
+                        Some(idx) => match &entries[idx] {
+                            ColumnStateEntry::Mailbox(_) => Some(RightColumn::ColumnData(
+                                ColumnDisplay::new(right_column, self.backend.clone()),
+                            )),
 
-        let left = left_column.map(|column| ColumnDisplay::new(column, self.backend.clone()));
-        let right = match &center_column {
-            ColumnState::Loading { .. } => None,
-            ColumnState::Loaded { entries, state, .. } => match state.selected() {
-                None => None,
-                Some(idx) => match &entries[idx] {
-                    ColumnStateEntry::Mailbox(_) => right_column.map(|column| {
-                        RightColumn::ColumnData(ColumnDisplay::new(column, self.backend.clone()))
-                    }),
-                    ColumnStateEntry::SingleMail(_mail_id)
-                    | ColumnStateEntry::CollapsedThread(_mail_id, _)
-                    | ColumnStateEntry::ThreadStart(_mail_id, _)
-                    | ColumnStateEntry::ThreadChild(_mail_id, _)
-                    | ColumnStateEntry::ThreadEnd(_mail_id, _) => todo!(),
-                },
-            },
+                            ColumnStateEntry::SingleMail(_mail_id)
+                            | ColumnStateEntry::CollapsedThread(_mail_id, _)
+                            | ColumnStateEntry::ThreadStart(_mail_id, _)
+                            | ColumnStateEntry::ThreadChild(_mail_id, _)
+                            | ColumnStateEntry::ThreadEnd(_mail_id, _) => todo!(),
+                        },
+                    },
+                };
+
+                (
+                    None,
+                    ColumnDisplay::new(center_column, self.backend.clone()),
+                    right,
+                )
+            } else {
+                let [left_column, center_column, _right_column] = self
+                    .columns
+                    .get_disjoint_mut([
+                        self.current_column - 1,
+                        self.current_column,
+                        self.current_column + 1,
+                    ])
+                    .unwrap();
+
+                (
+                    Some(ColumnDisplay::new(left_column, self.backend.clone())),
+                    ColumnDisplay::new(center_column, self.backend.clone()),
+                    None,
+                )
+            }
         };
-        let center = ColumnDisplay::new(center_column, self.backend.clone());
 
         RenderData {
             left,
@@ -218,20 +240,26 @@ impl<'a> State {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     fn load_column(&mut self, column_idx: usize) -> Result<(), error::BackendNotReady> {
         let mailbox = self.get_mailbox_id(column_idx);
+        debug!("Loading column '{column_idx}' with id: {mailbox:?}");
 
         let column = &mut self.columns[column_idx];
         match column {
             ColumnState::Loaded { .. } => Ok(()),
             ColumnState::Loading { state } => {
+                state.calc_next();
+
                 if let Some(mailbox) = mailbox {
                     let column_entries =
-                        ColumnStateEntry::create_entries(mailbox.clone(), self.backend.clone())?;
+                        ColumnStateEntry::create_entries(mailbox.clone(), self.backend.clone())
+                            .inspect_err(|_err| debug!("ha!"))?;
                     *column = ColumnState::loaded(mailbox.clone(), column_entries);
+                    debug!("'{column_idx}' successfully loaded!");
                     return Ok(());
                 }
-                state.calc_next();
+
                 Err(error::BackendNotReady)
             }
         }
