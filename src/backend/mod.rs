@@ -7,8 +7,9 @@ pub mod types;
 use crate::{
     backend::{
         mailbox::types::{MailboxData, MailboxId, ParentMailboxId},
-        mails::types::MailData,
+        mails::types::{MailData, MailId},
         task_manager::{TaskId, TaskManager},
+        threads::types::ThreadId,
         types::CollapsedMail,
     },
     config::Config,
@@ -180,5 +181,13 @@ impl Backend {
 
     pub fn get_mailbox_data(&self, id: &MailboxId) -> Option<Arc<MailboxData>> {
         self.mailboxes.get_mailbox_data(id)
+    }
+
+    pub fn get_mail_data(&self, id: &MailId) -> Option<MailData> {
+        self.mails.get_mail(id)
+    }
+
+    pub fn get_thread_mail_ids(&self, id: &ThreadId) -> Option<Vec<MailId>> {
+        self.threads.get_thread(id)
     }
 }

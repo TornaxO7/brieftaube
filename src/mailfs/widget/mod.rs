@@ -101,7 +101,7 @@ fn render_column(area: Rect, buf: &mut Buffer, data: Option<&mut ColumnData>) {
 
                     // name
                     row.push(
-                        Cell::from(*name)
+                        Cell::from(name.clone())
                             .style(Style::new().fg(BLUE.c800))
                             .column_span(2),
                     );
@@ -134,26 +134,13 @@ fn render_column(area: Rect, buf: &mut Buffer, data: Option<&mut ColumnData>) {
 
                     // ▸/▾
                     match ty {
-                        MailEntryType::Single | MailEntryType::ThreadChild => {
+                        MailEntryType::Single
+                        | MailEntryType::ThreadChild
+                        | MailEntryType::ThreadEnd => {
                             row.push(Cell::from(PLACEHOLDER));
                         }
-                        MailEntryType::ThreadRoot => match data.entries.get(idx + 1) {
-                            Some(next_entry) => match &next_entry.data {
-                                ColumnEntryData::Mailbox { .. } => {
-                                    row.push(Cell::from(PLACEHOLDER))
-                                }
-                                ColumnEntryData::Mail { ty: other_ty, .. } => {
-                                    if *other_ty == MailEntryType::ThreadChild {
-                                        row.push(Cell::from(THREAD_UNFOLDED));
-                                    } else {
-                                        row.push(Cell::from(THREAD_FOLDED));
-                                    }
-                                }
-                            },
-                            None => {
-                                row.push(Cell::from(PLACEHOLDER));
-                            }
-                        },
+                        MailEntryType::ThreadCollapsed => row.push(Cell::from(THREAD_FOLDED)),
+                        MailEntryType::ThreadStart => row.push(Cell::from(THREAD_UNFOLDED)),
                     };
 
                     // 📎
@@ -166,26 +153,11 @@ fn render_column(area: Rect, buf: &mut Buffer, data: Option<&mut ColumnData>) {
                     // Subject
                     {
                         let s = match ty {
-                            MailEntryType::Single | MailEntryType::ThreadRoot => {
-                                subject.to_string()
-                            }
-                            MailEntryType::ThreadChild => match data.entries.get(idx + 1) {
-                                Some(next_entry) => match next_entry.data {
-                                    ColumnEntryData::Mail { ty, .. } => {
-                                        if ty == MailEntryType::ThreadChild {
-                                            format!("{} {}", THREAD_BRANCH, subject)
-                                        } else {
-                                            format!("{} {}", THREAD_LAST, subject)
-                                        }
-                                    }
-                                    ColumnEntryData::Mailbox { .. } => {
-                                        format!("{} {}", THREAD_LAST, subject)
-                                    }
-                                },
-                                None => {
-                                    format!("{} {}", THREAD_LAST, subject)
-                                }
-                            },
+                            MailEntryType::Single
+                            | MailEntryType::ThreadCollapsed
+                            | MailEntryType::ThreadStart => subject.to_string(),
+                            MailEntryType::ThreadChild => format!("{} {}", THREAD_BRANCH, subject),
+                            MailEntryType::ThreadEnd => format!("{} {}", THREAD_LAST, subject),
                         };
 
                         row.push(Cell::from(s).style(Style::new().fg(WHITE)));
@@ -195,7 +167,7 @@ fn render_column(area: Rect, buf: &mut Buffer, data: Option<&mut ColumnData>) {
                     row.push(Cell::from(from.clone()).style(Style::new().fg(CYAN.c800)));
 
                     // received at
-                    row.push(Cell::from(*received_at).style(Style::new().fg(PINK.c800)));
+                    row.push(Cell::from(received_at.clone()).style(Style::new().fg(PINK.c800)));
                 }
             };
 
