@@ -7,6 +7,8 @@ use jmap_client::client::Client;
 use std::sync::{Arc, Mutex};
 use types::{MailboxData, MailboxId};
 
+use crate::backend::mailbox::types::ParentMailboxId;
+
 pub struct MailboxBackend {
     client: Arc<Client>,
     cache: Arc<Mutex<Cache>>,
@@ -20,8 +22,8 @@ impl MailboxBackend {
         }
     }
 
-    pub fn cache_is_initialised(&self) -> bool {
-        !self.cache.lock().unwrap().is_empty()
+    pub fn cache_is_initialised(&self, parent: &ParentMailboxId) -> bool {
+        !self.cache.lock().unwrap().is_initialised(parent)
     }
 }
 
@@ -29,9 +31,9 @@ impl MailboxBackend {
 impl MailboxBackend {
     pub async fn request_mailboxes_query(
         &self,
-        parent_id: Option<MailboxId>,
+        parent: ParentMailboxId,
     ) -> Result<(), jmap_client::Error> {
-        if self.cache_is_initialised() {
+        if self.cache_is_initialised(&parent) {
             // TODO: Request `mailbox/changes`
             return Ok(());
         }
@@ -42,7 +44,7 @@ impl MailboxBackend {
             let query_result = request
                 .query_mailbox()
                 .filter(jmap_client::mailbox::query::Filter::ParentId {
-                    value: parent_id.clone(),
+                    value: parent.clone().map(|id| id.0),
                 })
                 .result_reference();
 
@@ -66,7 +68,7 @@ impl MailboxBackend {
             cache.add(MailboxData::from(mailbox));
         }
 
-        cache.set_state(parent_id.clone(), mailbox_get_response.take_state());
+        cache.set_state(parent.clone(), mailbox_get_response.take_state());
 
         Ok(())
     }
