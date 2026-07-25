@@ -8,12 +8,12 @@ use ratatui::widgets::TableState;
 use super::Action;
 use crate::{
     backend::{Backend, types::CollapsedMail},
-    mailfs::{state::column_ctx::ColumnCtxEntry, widget::RenderData},
+    mailfs::widget::{ColumnData, RenderData, RightColumn},
     utils::ui::{
         ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager, palette,
     },
 };
-use column_ctx::ColumnCtx;
+pub use column_ctx::{ColumnCtx, ColumnCtxEntry};
 use input_type::InputType;
 use std::{collections::HashMap, rc::Rc, vec::Drain};
 
@@ -80,19 +80,18 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
     fn render_data(&'a mut self) -> RenderData<'a> {
         self.init_columns();
 
-        let left = {
-            todo!();
-        };
+        let (left_part, rest) = self.columns.split_at_mut(self.current_column);
+        let (center_part, right_part) = rest.split_at_mut(1.min(rest.len()));
 
-        let center = {
-            // TODO: Update column entries first, before preparing data
-            let column = self.columns.get(self.current_column).unwrap();
-            todo!()
-        };
+        let left = left_part
+            .last_mut()
+            .map(|column| ColumnData::new(column, self.backend.clone()));
 
-        let right = {
-            todo!();
-        };
+        let center = center_part
+            .first_mut()
+            .map(|column| ColumnData::new(column, self.backend.clone()));
+
+        let right = RightColumn::new(right_part.first_mut());
 
         RenderData {
             left,

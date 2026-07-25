@@ -2,14 +2,10 @@ mod column_data;
 mod mail_preview;
 mod render_data;
 
-pub use column_data::ColumnData;
+pub use column_data::{ColumnData, ColumnEntryData, MailEntryType, RightColumn};
 pub use render_data::RenderData;
 
-use crate::{
-    backend::mails::types::MailPreview,
-    mailfs::widget::column_data::{ColumnEntryData, MailEntryType, RightColumn},
-    utils::ui::ScreenState,
-};
+use crate::{backend::mails::types::MailPreview, utils::ui::ScreenState};
 
 use super::State;
 use ratatui::{

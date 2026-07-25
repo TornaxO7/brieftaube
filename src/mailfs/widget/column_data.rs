@@ -1,14 +1,50 @@
-use ratatui::widgets::TableState;
+use std::rc::Rc;
 
-use crate::backend::{
-    mailbox::types::MailboxData,
-    mails::types::{MailAddress, MailPreview},
+use crate::{
+    backend::{
+        Backend,
+        mailbox::types::MailboxData,
+        mails::types::{MailAddress, MailPreview},
+    },
+    mailfs::state::{ColumnCtx, ColumnCtxEntry},
 };
+use ratatui::widgets::TableState;
 
 #[derive(Debug)]
 pub struct ColumnData<'a> {
     pub entries: Vec<ColumnEntry<'a>>,
     pub state: &'a mut TableState,
+}
+
+impl<'a> ColumnData<'a> {
+    pub fn new(ctx: &'a mut ColumnCtx, backend: Rc<Backend>) -> Self {
+        let entries = ctx
+            .entries
+            .iter()
+            .map(|entry| {
+                // TODO: HERE
+                let data = match entry {
+                    ColumnCtxEntry::Mailbox(mailboxid) => {
+                        let mailbox = backend.get_mailbox_data(mailboxid).unwrap();
+                        todo!();
+                    }
+                    ColumnCtxEntry::SingleMail(mail_id) => todo!(),
+                    ColumnCtxEntry::CollapsedThread(thread_id) => todo!(),
+                    ColumnCtxEntry::UncollapsedThread(thread_id) => todo!(),
+                };
+
+                ColumnEntry {
+                    is_selected: false,
+                    data,
+                }
+            })
+            .collect();
+
+        Self {
+            entries,
+            state: &mut ctx.state,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -53,6 +89,12 @@ pub enum MailEntryType {
 pub enum RightColumn<'a> {
     ColumnData(Option<ColumnData<'a>>),
     MailPreview(Option<MailPreview>),
+}
+
+impl<'a> RightColumn<'a> {
+    pub fn new(ctx: Option<&'a mut ColumnCtx>) -> Self {
+        todo!()
+    }
 }
 
 fn addresses_to_string(addresses: &[MailAddress]) -> String {

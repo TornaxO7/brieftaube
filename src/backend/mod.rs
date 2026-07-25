@@ -100,6 +100,7 @@ impl Backend {
         })
     }
 
+    #[instrument(skip(self))]
     pub fn get_collapsed_mails(&self, id: &MailboxId) -> Option<Vec<CollapsedMail>> {
         let mut collapsed_mails: Vec<CollapsedMail> =
             Vec::with_capacity(self.mailboxes.get_total_threads(id).unwrap());
@@ -133,5 +134,9 @@ impl Backend {
         }
 
         Some(collapsed_mails)
+    }
+
+    pub fn get_mailbox_data(&self, id: &MailboxId) -> Option<MailboxData> {
+        todo!();
     }
 }

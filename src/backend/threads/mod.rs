@@ -22,11 +22,6 @@ impl ThreadsBackend {
         }
     }
 
-    pub fn only_has_one_mail(&self, id: &ThreadId) -> Option<bool> {
-        let cache = self.cache.lock().unwrap();
-        cache.only_has_one_mail(id)
-    }
-
     pub fn get_thread(&self, id: &ThreadId) -> Option<Vec<MailId>> {
         let cache = self.cache.lock().unwrap();
         cache
