@@ -94,7 +94,7 @@ impl Backend {
                 for root_mail_id in root_mails_ids {
                     let root_mail = self.mail_get_data(&root_mail_id).expect("Requested");
                     let root_mail_thread =
-                        self.threads_get(&root_mail.thread_id).expect("Requested");
+                        self.thread_get(&root_mail.thread_id).expect("Requested");
 
                     let thread_has_only_one_mail = root_mail_thread.len() == 1;
                     let entry = if thread_has_only_one_mail {

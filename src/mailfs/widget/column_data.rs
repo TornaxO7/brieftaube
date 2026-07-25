@@ -19,7 +19,7 @@ pub enum ColumnDisplay<'a> {
         state: &'a mut ThrobberState,
     },
     Loaded {
-        entries: Vec<ColumnEntry>,
+        entries: Vec<ColumnDisplayEntry>,
         state: &'a mut TableState,
     },
 }
@@ -29,67 +29,39 @@ impl<'a> ColumnDisplay<'a> {
         match column {
             ColumnState::Loading { state } => Self::Loading { state },
             ColumnState::Loaded { entries, state, .. } => {
-                let entries = {
-                    let mut display_entries = Vec::new();
-
-                    for entry in entries.iter() {
-                        match entry {
-                            ColumnStateEntry::Mailbox(mailboxid) => {
-                                let mailbox = backend.get_mailbox_data(mailboxid).unwrap();
-
-                                let data = ColumnEntryData::from(mailbox.as_ref());
-                                display_entries.push(ColumnEntry {
-                                    is_selected: false,
-                                    data,
-                                });
-                            }
-                            ColumnStateEntry::SingleMail(mail_id) => {
-                                let mail = backend.get_mail_data(mail_id).unwrap();
-                                let data = ColumnEntryData::single(&mail);
-                                display_entries.push(ColumnEntry {
-                                    is_selected: false,
-                                    data,
-                                });
-                            }
-                            ColumnStateEntry::CollapsedThread(thread_id) => {
-                                let thread = backend.get_thread_mail_ids(thread_id).unwrap();
-                                let mail = backend.get_mail_data(&thread[0]).unwrap();
-                                let data = ColumnEntryData::collapsed_thread(&mail);
-                                display_entries.push(ColumnEntry {
-                                    is_selected: false,
-                                    data,
-                                });
-                            }
-                            ColumnStateEntry::UncollapsedThread(thread_id) => {
-                                let thread = backend.get_thread_mail_ids(thread_id).unwrap();
-                                let thread_len = thread.len();
-
-                                let mails: Vec<MailData> = thread
-                                    .into_iter()
-                                    .map(|id| backend.get_mail_data(&id).unwrap())
-                                    .collect();
-
-                                display_entries.push(ColumnEntry {
-                                    is_selected: false,
-                                    data: ColumnEntryData::thread_start(&mails[0]),
-                                });
-
-                                for mail in &mails[1..(thread_len - 1)] {
-                                    display_entries.push(ColumnEntry {
-                                        is_selected: false,
-                                        data: ColumnEntryData::thread_child(&mail),
-                                    });
-                                }
-
-                                display_entries.push(ColumnEntry {
-                                    is_selected: false,
-                                    data: ColumnEntryData::thread_end(&mails[thread_len - 1]),
-                                });
-                            }
-                        };
-                    }
-                    display_entries
-                };
+                let entries = entries
+                    .into_iter()
+                    .map(|entry| match entry {
+                        ColumnStateEntry::Mailbox(id) => {
+                            let mailbox = backend.mailbox_get_data(id).unwrap();
+                            ColumnDisplayEntryData::mailbox(&mailbox)
+                        }
+                        ColumnStateEntry::SingleMail(id) => {
+                            let mail = backend.mail_get_data(&id).unwrap();
+                            ColumnDisplayEntryData::mail(MailEntryType::Single, &mail)
+                        }
+                        ColumnStateEntry::CollapsedThread(mail_id, _) => {
+                            let mail = backend.mail_get_data(&mail_id).unwrap();
+                            ColumnDisplayEntryData::mail(MailEntryType::ThreadCollapsed, &mail)
+                        }
+                        ColumnStateEntry::ThreadStart(mail_id, _) => {
+                            let mail = backend.mail_get_data(&mail_id).unwrap();
+                            ColumnDisplayEntryData::mail(MailEntryType::ThreadStart, &mail)
+                        }
+                        ColumnStateEntry::ThreadChild(mail_id, _) => {
+                            let mail = backend.mail_get_data(&mail_id).unwrap();
+                            ColumnDisplayEntryData::mail(MailEntryType::ThreadChild, &mail)
+                        }
+                        ColumnStateEntry::ThreadEnd(mail_id, _) => {
+                            let mail = backend.mail_get_data(&mail_id).unwrap();
+                            ColumnDisplayEntryData::mail(MailEntryType::ThreadEnd, &mail)
+                        }
+                    })
+                    .map(|data| ColumnDisplayEntry {
+                        is_selected: false,
+                        data,
+                    })
+                    .collect();
 
                 Self::Loaded { entries, state }
             }
@@ -98,13 +70,13 @@ impl<'a> ColumnDisplay<'a> {
 }
 
 #[derive(Debug)]
-pub struct ColumnEntry {
+pub struct ColumnDisplayEntry {
     pub is_selected: bool,
-    pub data: ColumnEntryData,
+    pub data: ColumnDisplayEntryData,
 }
 
 #[derive(Debug)]
-pub enum ColumnEntryData {
+pub enum ColumnDisplayEntryData {
     Mailbox {
         name: String,
         unread_mails: usize,
@@ -120,28 +92,8 @@ pub enum ColumnEntryData {
     },
 }
 
-impl ColumnEntryData {
-    pub fn single(mail: &MailData) -> Self {
-        Self::new(MailEntryType::Single, mail)
-    }
-
-    pub fn collapsed_thread(mail: &MailData) -> Self {
-        Self::new(MailEntryType::ThreadCollapsed, mail)
-    }
-
-    pub fn thread_start(mail: &MailData) -> Self {
-        Self::new(MailEntryType::ThreadStart, mail)
-    }
-
-    pub fn thread_child(mail: &MailData) -> Self {
-        Self::new(MailEntryType::ThreadChild, mail)
-    }
-
-    pub fn thread_end(mail: &MailData) -> Self {
-        Self::new(MailEntryType::ThreadEnd, mail)
-    }
-
-    fn new(ty: MailEntryType, mail: &MailData) -> Self {
+impl ColumnDisplayEntryData {
+    pub fn mail(ty: MailEntryType, mail: &MailData) -> Self {
         Self::Mail {
             ty,
             from: addresses_to_string(&mail.from),
@@ -154,10 +106,8 @@ impl ColumnEntryData {
             is_unread: !mail.keywords.contains(&MailKeyword::Seen),
         }
     }
-}
 
-impl From<&MailboxData> for ColumnEntryData {
-    fn from(mailbox: &MailboxData) -> Self {
+    pub fn mailbox(mailbox: &MailboxData) -> Self {
         Self::Mailbox {
             name: mailbox.name.clone(),
             unread_mails: mailbox.unread_mails,

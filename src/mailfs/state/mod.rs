@@ -108,9 +108,11 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
                     ColumnStateEntry::Mailbox(_) => right_column.map(|column| {
                         RightColumn::ColumnData(ColumnDisplay::new(column, self.backend.clone()))
                     }),
-                    ColumnStateEntry::SingleMail(_)
-                    | ColumnStateEntry::CollapsedThread(_)
-                    | ColumnStateEntry::UncollapsedThread(_) => None,
+                    ColumnStateEntry::SingleMail(_mail_id)
+                    | ColumnStateEntry::CollapsedThread(_mail_id, _)
+                    | ColumnStateEntry::ThreadStart(_mail_id, _)
+                    | ColumnStateEntry::ThreadChild(_mail_id, _)
+                    | ColumnStateEntry::ThreadEnd(_mail_id, _) => todo!(),
                 },
             },
         };

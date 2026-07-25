@@ -2,7 +2,7 @@ mod column_data;
 mod mail_preview;
 mod render_data;
 
-pub use column_data::{ColumnDisplay, ColumnEntryData, MailEntryType, RightColumn};
+pub use column_data::{ColumnDisplay, ColumnDisplayEntryData, MailEntryType, RightColumn};
 pub use render_data::RenderData;
 
 use super::State;
@@ -102,7 +102,7 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnDisplay) {
                     };
 
                     match &entry.data {
-                        ColumnEntryData::Mailbox { name, unread_mails } => {
+                        ColumnDisplayEntryData::Mailbox { name, unread_mails } => {
                             // 🗀 / 🗁
                             {
                                 let s = if is_hovered { FOLDER_OPEN } else { FOLDER };
@@ -131,7 +131,7 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnDisplay) {
                                 row.push(Cell::from(format!("{}", unread_mails)).style(style));
                             }
                         }
-                        ColumnEntryData::Mail {
+                        ColumnDisplayEntryData::Mail {
                             ty,
                             from,
                             subject,

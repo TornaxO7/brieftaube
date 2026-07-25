@@ -80,14 +80,14 @@ impl ThreadsBackend {
 }
 
 impl Backend {
-    pub fn threads_get(&self, id: &ThreadId) -> Option<Vec<MailId>> {
+    pub fn thread_get(&self, id: &ThreadId) -> Option<Vec<MailId>> {
         self.threads.get(&id)
     }
 
     pub fn threads_get_or_request(&self, id: ThreadId) -> Option<Vec<MailId>> {
         let threads = self.threads.clone();
 
-        self.threads_get(&id).or_else(|| {
+        self.thread_get(&id).or_else(|| {
             self.task_manager
                 .spawn(TaskId::ThreadGet(id.clone()), async move {
                     match threads.request_get(&id).await {
