@@ -11,61 +11,56 @@ use crate::{
 };
 use ratatui::widgets::TableState;
 use std::rc::Rc;
-use throbber_widgets_tui::ThrobberState;
 
 #[derive(Debug)]
-pub enum ColumnDisplay<'a> {
-    Loading {
-        state: &'a mut ThrobberState,
-    },
-    Loaded {
-        entries: Vec<ColumnDisplayEntry>,
-        state: &'a mut TableState,
-    },
+pub struct ColumnDisplay<'a> {
+    pub entries: Vec<ColumnDisplayEntry>,
+    pub state: &'a mut TableState,
 }
 
 impl<'a> ColumnDisplay<'a> {
-    pub fn new(column: &'a mut ColumnState, backend: Rc<Backend>) -> Self {
-        match column {
-            ColumnState::Loading { state } => Self::Loading { state },
-            ColumnState::Loaded { entries, state, .. } => {
-                let entries = entries
-                    .into_iter()
-                    .map(|entry| match entry {
-                        ColumnStateEntry::Mailbox(id) => {
-                            let mailbox = backend.mailbox_get_data(id).unwrap();
-                            ColumnDisplayEntryData::mailbox(&mailbox)
-                        }
-                        ColumnStateEntry::SingleMail(id) => {
-                            let mail = backend.mail_get_data(&id).unwrap();
-                            ColumnDisplayEntryData::mail(MailEntryType::Single, &mail)
-                        }
-                        ColumnStateEntry::CollapsedThread(mail_id, _) => {
-                            let mail = backend.mail_get_data(&mail_id).unwrap();
-                            ColumnDisplayEntryData::mail(MailEntryType::ThreadCollapsed, &mail)
-                        }
-                        ColumnStateEntry::ThreadStart(mail_id, _) => {
-                            let mail = backend.mail_get_data(&mail_id).unwrap();
-                            ColumnDisplayEntryData::mail(MailEntryType::ThreadStart, &mail)
-                        }
-                        ColumnStateEntry::ThreadChild(mail_id, _) => {
-                            let mail = backend.mail_get_data(&mail_id).unwrap();
-                            ColumnDisplayEntryData::mail(MailEntryType::ThreadChild, &mail)
-                        }
-                        ColumnStateEntry::ThreadEnd(mail_id, _) => {
-                            let mail = backend.mail_get_data(&mail_id).unwrap();
-                            ColumnDisplayEntryData::mail(MailEntryType::ThreadEnd, &mail)
-                        }
-                    })
-                    .map(|data| ColumnDisplayEntry {
-                        is_selected: false,
-                        data,
-                    })
-                    .collect();
+    pub fn new(column: Option<&'a mut ColumnState>, backend: Rc<Backend>) -> Option<Self> {
+        let column = column?;
 
-                Self::Loaded { entries, state }
-            }
-        }
+        let entries = column
+            .entries()
+            .iter()
+            .map(|entry| match entry {
+                ColumnStateEntry::Mailbox(id) => {
+                    let mailbox = backend.mailbox_get_data(id).unwrap();
+                    ColumnDisplayEntryData::mailbox(&mailbox)
+                }
+                ColumnStateEntry::SingleMail(id) => {
+                    let mail = backend.mail_get_data(&id).unwrap();
+                    ColumnDisplayEntryData::mail(MailEntryType::Single, &mail)
+                }
+                ColumnStateEntry::CollapsedThread(mail_id, _) => {
+                    let mail = backend.mail_get_data(&mail_id).unwrap();
+                    ColumnDisplayEntryData::mail(MailEntryType::ThreadCollapsed, &mail)
+                }
+                ColumnStateEntry::ThreadStart(mail_id, _) => {
+                    let mail = backend.mail_get_data(&mail_id).unwrap();
+                    ColumnDisplayEntryData::mail(MailEntryType::ThreadStart, &mail)
+                }
+                ColumnStateEntry::ThreadChild(mail_id, _) => {
+                    let mail = backend.mail_get_data(&mail_id).unwrap();
+                    ColumnDisplayEntryData::mail(MailEntryType::ThreadChild, &mail)
+                }
+                ColumnStateEntry::ThreadEnd(mail_id, _) => {
+                    let mail = backend.mail_get_data(&mail_id).unwrap();
+                    ColumnDisplayEntryData::mail(MailEntryType::ThreadEnd, &mail)
+                }
+            })
+            .map(|data| ColumnDisplayEntry {
+                is_selected: false,
+                data,
+            })
+            .collect();
+
+        Some(Self {
+            entries,
+            state: &mut column.state,
+        })
     }
 }
 
@@ -127,7 +122,7 @@ pub enum MailEntryType {
 #[derive(Debug)]
 pub enum RightColumn<'a> {
     ColumnData(ColumnDisplay<'a>),
-    MailPreview(MailPreview<'a>),
+    MailPreview(MailPreview),
 }
 
 fn addresses_to_string(addresses: &[MailAddress]) -> String {

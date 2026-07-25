@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::{
     backend::{
         Backend,
@@ -11,43 +9,40 @@ use crate::{
     mailfs::state::error,
 };
 use ratatui::widgets::TableState;
-use throbber_widgets_tui::ThrobberState;
+use std::rc::Rc;
 
 /// Internal representation of a column
 #[derive(Clone, Debug)]
-pub enum ColumnState {
-    /// The state for loading columns
-    Loading { state: ThrobberState },
-    /// The state for columns with available data
-    Loaded {
-        /// The mailbox it represents
-        mailbox: Option<MailboxId>,
-        /// The entries within the column
-        entries: Vec<ColumnStateEntry>,
-        /// The table state
-        state: TableState,
-    },
+pub struct ColumnState {
+    /// The mailbox it represents
+    mailbox: Option<MailboxId>,
+    /// The entries within the column
+    entries: Vec<ColumnStateEntry>,
+    /// The table state
+    pub state: TableState,
 }
 
 impl ColumnState {
-    pub fn loading() -> Self {
-        Self::Loading {
-            state: ThrobberState::default(),
-        }
-    }
-
-    pub fn loaded(parent: ParentMailboxId, entries: Vec<ColumnStateEntry>) -> Self {
+    pub fn new(mailbox: ParentMailboxId, entries: Vec<ColumnStateEntry>) -> Self {
         let state = if entries.is_empty() {
             TableState::new()
         } else {
             TableState::new().with_selected(0)
         };
 
-        Self::Loaded {
-            mailbox: parent,
+        Self {
+            mailbox,
             entries,
             state,
         }
+    }
+
+    pub fn selected_entry(&self) -> Option<&ColumnStateEntry> {
+        self.state.selected().and_then(|idx| self.entries.get(idx))
+    }
+
+    pub fn entries(&self) -> &[ColumnStateEntry] {
+        &self.entries
     }
 }
 
@@ -75,7 +70,7 @@ impl ColumnStateEntry {
         // get mailboxes
         {
             let mailbox_ids = backend
-                .mailboxes_get_children(mailbox.clone())
+                .mailboxes_get_or_request_children(mailbox.clone())
                 .ok_or(error::BackendNotReady)?;
 
             for mailbox_id in mailbox_ids {

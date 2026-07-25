@@ -12,7 +12,7 @@ use crate::{
         Backend,
         mailbox::types::{ParentMailboxId, TOP_PARENT_MAILBOX_ID},
     },
-    mailfs::widget::{ColumnDisplay, RenderData, RightColumn},
+    mailfs::widget::{ColumnDisplay, MailPreview, RenderData, RightColumn},
     utils::ui::{
         ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager, palette,
     },
@@ -26,8 +26,8 @@ pub struct State {
     keybindings: KeybindManager<Action>,
     overlay: Option<ScreenOverlay<PaletteValue, InputType>>,
 
-    columns: Vec<ColumnState>,
-    current_column: usize,
+    columns: HashMap<ParentMailboxId, ColumnState>,
+    selection_stack: Vec<ParentMailboxId>,
 
     backend: Rc<Backend>,
 }
@@ -37,8 +37,8 @@ impl State {
         Self {
             backend,
             overlay: None,
-            columns: vec![],
-            current_column: 0,
+            columns: HashMap::new(),
+            selection_stack: vec![TOP_PARENT_MAILBOX_ID],
             app_actions: Vec::with_capacity(2),
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", Action::Quit),
@@ -90,55 +90,75 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
     }
 
     fn render_data(&'a mut self) -> RenderData<'a> {
-        let _ = self.load_current_and_next_column();
+        self.update_columns();
+        let backend = self.backend.clone();
 
-        let (left, center, right) = {
-            if self.current_column == 0 {
-                let [center_column, right_column] = self
-                    .columns
-                    .get_disjoint_mut([self.current_column, self.current_column + 1])
-                    .unwrap();
+        let right_preview = self
+            .get_center_column()
+            .and_then(|center_column| center_column.selected_entry())
+            .and_then(|selected_entry| match selected_entry {
+                ColumnStateEntry::Mailbox(_) => None,
+                ColumnStateEntry::SingleMail(id)
+                | ColumnStateEntry::CollapsedThread(id, _)
+                | ColumnStateEntry::ThreadStart(id, _)
+                | ColumnStateEntry::ThreadChild(id, _)
+                | ColumnStateEntry::ThreadEnd(id, _) => Some(id),
+            })
+            .and_then(|mail_id| backend.mail_get_data(mail_id))
+            .map(MailPreview::from)
+            .map(RightColumn::MailPreview);
 
-                let right = match &center_column {
-                    ColumnState::Loading { .. } => None,
-                    ColumnState::Loaded { entries, state, .. } => match state.selected() {
-                        None => None,
-                        Some(idx) => match &entries[idx] {
-                            ColumnStateEntry::Mailbox(_) => Some(RightColumn::ColumnData(
-                                ColumnDisplay::new(right_column, self.backend.clone()),
-                            )),
+        let (left, center, right_column) = {
+            let backend = self.backend.clone();
+            let center_mailbox = self.get_center_column_mailbox();
+            match (
+                self.get_left_column_mailbox(),
+                self.get_right_column_mailbox(),
+            ) {
+                (Some(left_mailbox), Some(right_mailbox)) => {
+                    let [left, center, right] = self.columns.get_disjoint_mut([
+                        &left_mailbox,
+                        &center_mailbox,
+                        &right_mailbox,
+                    ]);
 
-                            ColumnStateEntry::SingleMail(_mail_id)
-                            | ColumnStateEntry::CollapsedThread(_mail_id, _)
-                            | ColumnStateEntry::ThreadStart(_mail_id, _)
-                            | ColumnStateEntry::ThreadChild(_mail_id, _)
-                            | ColumnStateEntry::ThreadEnd(_mail_id, _) => todo!(),
-                        },
-                    },
-                };
+                    (
+                        ColumnDisplay::new(left, backend.clone()),
+                        ColumnDisplay::new(center, backend.clone()),
+                        ColumnDisplay::new(right, backend.clone()),
+                    )
+                }
+                (Some(left_mailbox), None) => {
+                    let [left, center] = self
+                        .columns
+                        .get_disjoint_mut([&left_mailbox, &center_mailbox]);
 
-                (
+                    (
+                        ColumnDisplay::new(left, backend.clone()),
+                        ColumnDisplay::new(center, backend.clone()),
+                        None,
+                    )
+                }
+                (None, Some(right_mailbox)) => {
+                    let [center, right] = self
+                        .columns
+                        .get_disjoint_mut([&center_mailbox, &right_mailbox]);
+
+                    (
+                        None,
+                        ColumnDisplay::new(center, backend.clone()),
+                        ColumnDisplay::new(right, backend.clone()),
+                    )
+                }
+                (None, None) => (
                     None,
-                    ColumnDisplay::new(center_column, self.backend.clone()),
-                    right,
-                )
-            } else {
-                let [left_column, center_column, _right_column] = self
-                    .columns
-                    .get_disjoint_mut([
-                        self.current_column - 1,
-                        self.current_column,
-                        self.current_column + 1,
-                    ])
-                    .unwrap();
-
-                (
-                    Some(ColumnDisplay::new(left_column, self.backend.clone())),
-                    ColumnDisplay::new(center_column, self.backend.clone()),
+                    ColumnDisplay::new(self.get_center_column_mut(), backend.clone()),
                     None,
-                )
+                ),
             }
         };
+
+        let right = right_preview.or(right_column.map(|column| RightColumn::ColumnData(column)));
 
         RenderData {
             left,
@@ -150,8 +170,35 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
 
 /// Helper functions
 impl State {
-    fn current_column_mut(&mut self) -> Option<&mut ColumnState> {
-        self.columns.get_mut(self.current_column)
+    fn get_left_column_mailbox(&self) -> Option<ParentMailboxId> {
+        (self.selection_stack.len().checked_sub(2))
+            .map(|idx| &self.selection_stack[idx])
+            .cloned()
+    }
+
+    fn get_center_column_mailbox(&self) -> ParentMailboxId {
+        self.selection_stack.last().cloned().unwrap()
+    }
+
+    fn get_right_column_mailbox(&self) -> Option<ParentMailboxId> {
+        self.get_center_column()
+            .and_then(|center| center.selected_entry())
+            .cloned()
+            .map(|selected| {
+                if let ColumnStateEntry::Mailbox(id) = selected {
+                    Some(id)
+                } else {
+                    None
+                }
+            })
+    }
+
+    fn get_center_column(&self) -> Option<&ColumnState> {
+        self.columns.get(self.selection_stack.last().unwrap())
+    }
+
+    fn get_center_column_mut(&mut self) -> Option<&mut ColumnState> {
+        self.columns.get_mut(self.selection_stack.last().unwrap())
     }
 }
 
@@ -168,53 +215,26 @@ impl State {
     }
 
     fn navigate_down(&mut self) {
-        let backend = self.backend.clone();
-        if let Some(column) = self.current_column_mut() {
-            match column {
-                ColumnState::Loading { .. } => {}
-                ColumnState::Loaded { state, entries, .. } => {
-                    if let Some(pos) = state.selected() {
-                        let next_pos = (entries.len() - 1).min(pos + 1);
-                        state.select(Some(next_pos));
-
-                        match &entries[next_pos] {
-                            ColumnStateEntry::Mailbox(id) => {
-                                backend.mailboxes_get_children(Some(id.clone()));
-                            }
-                            _ => {}
-                        };
-                    }
-                }
-            }
+        if let Some(column) = self.get_center_column_mut() {
+            column.state.select_next();
         }
     }
 
     fn navigate_up(&mut self) {
-        if let Some(column) = self.current_column_mut() {
-            match column {
-                ColumnState::Loading { .. } => {}
-                ColumnState::Loaded { state, .. } => state.select_previous(),
-            }
+        if let Some(column) = self.get_center_column_mut() {
+            column.state.select_previous();
         }
     }
 
     fn navigate_to_top(&mut self) {
-        if let Some(column) = self.current_column_mut() {
-            match column {
-                ColumnState::Loading { .. } => {}
-                ColumnState::Loaded { state, .. } => state.select_first(),
-            }
+        if let Some(column) = self.get_center_column_mut() {
+            column.state.select_first();
         }
     }
 
     fn navigate_to_bottom(&mut self) {
-        if let Some(column) = self.current_column_mut() {
-            match column {
-                ColumnState::Loading { .. } => {}
-                ColumnState::Loaded { state, entries, .. } => {
-                    state.select(Some(entries.len() - 1));
-                }
-            }
+        if let Some(column) = self.get_center_column_mut() {
+            column.state.select_last();
         }
     }
 
@@ -229,56 +249,27 @@ impl State {
 
 /// Methods for loading the columns
 impl<'a> State {
-    fn load_current_and_next_column(&mut self) -> Result<(), error::BackendNotReady> {
-        if self.columns.len() <= self.current_column + 1 {
-            self.columns
-                .resize_with(self.current_column + 2, || ColumnState::loading());
-        }
+    fn update_columns(&mut self) {
+        if self.get_center_column().is_none() {
+            let current_mailbox = self.selection_stack.last().unwrap();
 
-        self.load_column(self.current_column)?;
-        self.load_column(self.current_column + 1)?;
-        Ok(())
-    }
-
-    #[instrument(skip(self))]
-    fn load_column(&mut self, column_idx: usize) -> Result<(), error::BackendNotReady> {
-        let mailbox = self.get_mailbox_id(column_idx);
-        debug!("Loading column '{column_idx}' with id: {mailbox:?}");
-
-        let column = &mut self.columns[column_idx];
-        match column {
-            ColumnState::Loaded { .. } => Ok(()),
-            ColumnState::Loading { state } => {
-                state.calc_next();
-
-                if let Some(mailbox) = mailbox {
-                    let column_entries =
-                        ColumnStateEntry::create_entries(mailbox.clone(), self.backend.clone())
-                            .inspect_err(|_err| debug!("ha!"))?;
-                    *column = ColumnState::loaded(mailbox.clone(), column_entries);
-                    debug!("'{column_idx}' successfully loaded!");
-                    return Ok(());
-                }
-
-                Err(error::BackendNotReady)
+            if let Ok(entries) =
+                ColumnStateEntry::create_entries(current_mailbox.clone(), self.backend.clone())
+            {
+                let state = ColumnState::new(current_mailbox.clone(), entries);
+                self.columns.insert(current_mailbox.clone(), state);
             }
         }
-    }
 
-    /// Returns the mailbox-id which the given column should represent
-    fn get_mailbox_id(&self, column_idx: usize) -> Option<ParentMailboxId> {
-        let is_in_root_mailbox = column_idx == 0;
-
-        if is_in_root_mailbox {
-            Some(TOP_PARENT_MAILBOX_ID)
-        } else {
-            match self.columns.get(column_idx - 1).unwrap() {
-                ColumnState::Loading { .. } => None,
-                ColumnState::Loaded { entries, state, .. } => {
-                    state.selected().and_then(|idx| match &entries[idx] {
-                        ColumnStateEntry::Mailbox(id) => Some(Some(id.clone())),
-                        _ => Some(None),
-                    })
+        if let Some(current) = self.get_center_column() {
+            if let Some(entry) = current.selected_entry() {
+                if let ColumnStateEntry::Mailbox(id) = entry {
+                    if let Ok(entries) =
+                        ColumnStateEntry::create_entries(Some(id.clone()), self.backend.clone())
+                    {
+                        let state = ColumnState::new(Some(id.clone()), entries);
+                        self.columns.insert(Some(id.clone()), state);
+                    }
                 }
             }
         }

@@ -3,10 +3,11 @@ mod mail_preview;
 mod render_data;
 
 pub use column_data::{ColumnDisplay, ColumnDisplayEntryData, MailEntryType, RightColumn};
+pub use mail_preview::MailPreview;
 pub use render_data::RenderData;
 
 use super::State;
-use crate::{mailfs::widget::mail_preview::MailPreview, utils::ui::ScreenState};
+use crate::utils::ui::ScreenState;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
@@ -17,7 +18,6 @@ use ratatui::{
     text::Text,
     widgets::{Block, Borders, Cell, Paragraph, Row, StatefulWidget, Table, Widget},
 };
-use throbber_widgets_tui::Throbber;
 
 const FOLDER: &str = "🗀";
 const FOLDER_OPEN: &str = "🗁";
@@ -50,7 +50,10 @@ impl StatefulWidget for Mailfs {
         }
 
         render_line(left_area, buf);
-        render_column(center_area, buf, &mut data.center);
+
+        if let Some(center) = data.center.as_mut() {
+            render_column(center_area, buf, center);
+        }
         render_line(center_area, buf);
 
         if let Some(right) = data.right.as_mut() {
@@ -60,154 +63,133 @@ impl StatefulWidget for Mailfs {
 }
 
 fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnDisplay) {
-    match data {
-        ColumnDisplay::Loading { state } => {
-            StatefulWidget::render(
-                Throbber::default()
-                    .label("Fetching data from server...")
-                    .throbber_set(throbber_widgets_tui::BRAILLE_EIGHT_DOUBLE)
-                    .use_type(throbber_widgets_tui::WhichUse::Spin),
-                area,
-                buf,
-                state,
-            );
-        }
+    let widths = [
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Fill(1),
+        Constraint::Fill(1),
+        Constraint::Fill(2),
+    ];
 
-        ColumnDisplay::Loaded { entries, state } => {
-            let widths = [
-                Constraint::Length(1),
-                Constraint::Length(1),
-                Constraint::Length(1),
-                Constraint::Length(1),
-                Constraint::Fill(1),
-                Constraint::Fill(1),
-                Constraint::Fill(2),
-            ];
+    let rows: Vec<Row<'_>> = data
+        .entries
+        .iter()
+        .enumerate()
+        .map(|(idx, entry)| {
+            let is_hovered = data
+                .state
+                .selected()
+                .map(|hovered_idx| hovered_idx == idx)
+                .unwrap_or(false);
 
-            let rows: Vec<Row<'_>> = entries
-                .iter()
-                .enumerate()
-                .map(|(idx, entry)| {
-                    let is_hovered = state
-                        .selected()
-                        .map(|hovered_idx| hovered_idx == idx)
-                        .unwrap_or(false);
+            let mut row = Vec::with_capacity(widths.len());
 
-                    let mut row = Vec::with_capacity(widths.len());
+            if entry.is_selected {
+                row.push(Cell::from(PLACEHOLDER).style(Style::new().bg(ORANGE.c800)));
+            } else {
+                row.push(PLACEHOLDER.into());
+            };
 
-                    if entry.is_selected {
-                        row.push(Cell::from(PLACEHOLDER).style(Style::new().bg(ORANGE.c800)));
+            match &entry.data {
+                ColumnDisplayEntryData::Mailbox { name, unread_mails } => {
+                    // 🗀 / 🗁
+                    {
+                        let s = if is_hovered { FOLDER_OPEN } else { FOLDER };
+                        row.push(
+                            Cell::from(s)
+                                .style(Style::new().fg(BLUE.c800))
+                                .column_span(3),
+                        );
+                    }
+
+                    // name
+                    row.push(
+                        Cell::from(name.clone())
+                            .style(Style::new().fg(BLUE.c800))
+                            .column_span(2),
+                    );
+
+                    // unread_mails
+                    {
+                        let style = if *unread_mails == 0 {
+                            Style::new().fg(GRAY.c800)
+                        } else {
+                            Style::new().fg(BLUE.c800)
+                        };
+
+                        row.push(Cell::from(format!("{}", unread_mails)).style(style));
+                    }
+                }
+                ColumnDisplayEntryData::Mail {
+                    ty,
+                    from,
+                    subject,
+                    received_at,
+                    has_attachment,
+                    is_unread,
+                } => {
+                    // ⏺
+                    if *is_unread {
+                        row.push(Cell::from(MAIL_UNREAD_SYMBOL).style(Style::new().fg(BLUE.c800)));
                     } else {
                         row.push(PLACEHOLDER.into());
                     };
 
-                    match &entry.data {
-                        ColumnDisplayEntryData::Mailbox { name, unread_mails } => {
-                            // 🗀 / 🗁
-                            {
-                                let s = if is_hovered { FOLDER_OPEN } else { FOLDER };
-                                row.push(
-                                    Cell::from(s)
-                                        .style(Style::new().fg(BLUE.c800))
-                                        .column_span(3),
-                                );
-                            }
-
-                            // name
-                            row.push(
-                                Cell::from(name.clone())
-                                    .style(Style::new().fg(BLUE.c800))
-                                    .column_span(2),
-                            );
-
-                            // unread_mails
-                            {
-                                let style = if *unread_mails == 0 {
-                                    Style::new().fg(GRAY.c800)
-                                } else {
-                                    Style::new().fg(BLUE.c800)
-                                };
-
-                                row.push(Cell::from(format!("{}", unread_mails)).style(style));
-                            }
+                    // ▸/▾
+                    match ty {
+                        MailEntryType::Single
+                        | MailEntryType::ThreadChild
+                        | MailEntryType::ThreadEnd => {
+                            row.push(Cell::from(PLACEHOLDER));
                         }
-                        ColumnDisplayEntryData::Mail {
-                            ty,
-                            from,
-                            subject,
-                            received_at,
-                            has_attachment,
-                            is_unread,
-                        } => {
-                            // ⏺
-                            if *is_unread {
-                                row.push(
-                                    Cell::from(MAIL_UNREAD_SYMBOL)
-                                        .style(Style::new().fg(BLUE.c800)),
-                                );
-                            } else {
-                                row.push(PLACEHOLDER.into());
-                            };
-
-                            // ▸/▾
-                            match ty {
-                                MailEntryType::Single
-                                | MailEntryType::ThreadChild
-                                | MailEntryType::ThreadEnd => {
-                                    row.push(Cell::from(PLACEHOLDER));
-                                }
-                                MailEntryType::ThreadCollapsed => {
-                                    row.push(Cell::from(THREAD_FOLDED))
-                                }
-                                MailEntryType::ThreadStart => row.push(Cell::from(THREAD_UNFOLDED)),
-                            };
-
-                            // 📎
-                            if *has_attachment {
-                                row.push(Cell::from(ATTACHMENT));
-                            } else {
-                                row.push(Cell::from(PLACEHOLDER));
-                            }
-
-                            // Subject
-                            {
-                                let s = match ty {
-                                    MailEntryType::Single
-                                    | MailEntryType::ThreadCollapsed
-                                    | MailEntryType::ThreadStart => subject.to_string(),
-                                    MailEntryType::ThreadChild => {
-                                        format!("{} {}", THREAD_BRANCH, subject)
-                                    }
-                                    MailEntryType::ThreadEnd => {
-                                        format!("{} {}", THREAD_LAST, subject)
-                                    }
-                                };
-
-                                row.push(Cell::from(s).style(Style::new().fg(WHITE)));
-                            }
-
-                            // from
-                            row.push(Cell::from(from.clone()).style(Style::new().fg(CYAN.c800)));
-
-                            // received at
-                            row.push(
-                                Cell::from(received_at.clone()).style(Style::new().fg(PINK.c800)),
-                            );
-                        }
+                        MailEntryType::ThreadCollapsed => row.push(Cell::from(THREAD_FOLDED)),
+                        MailEntryType::ThreadStart => row.push(Cell::from(THREAD_UNFOLDED)),
                     };
 
-                    Row::new(row)
-                })
-                .collect();
+                    // 📎
+                    if *has_attachment {
+                        row.push(Cell::from(ATTACHMENT));
+                    } else {
+                        row.push(Cell::from(PLACEHOLDER));
+                    }
 
-            StatefulWidget::render(
-                Table::new(rows, widths).row_highlight_style(Style::new().bg(BLUE.c600)),
-                area,
-                buf,
-                state,
-            );
-        }
-    }
+                    // Subject
+                    {
+                        let s = match ty {
+                            MailEntryType::Single
+                            | MailEntryType::ThreadCollapsed
+                            | MailEntryType::ThreadStart => subject.to_string(),
+                            MailEntryType::ThreadChild => {
+                                format!("{} {}", THREAD_BRANCH, subject)
+                            }
+                            MailEntryType::ThreadEnd => {
+                                format!("{} {}", THREAD_LAST, subject)
+                            }
+                        };
+
+                        row.push(Cell::from(s).style(Style::new().fg(WHITE)));
+                    }
+
+                    // from
+                    row.push(Cell::from(from.clone()).style(Style::new().fg(CYAN.c800)));
+
+                    // received at
+                    row.push(Cell::from(received_at.clone()).style(Style::new().fg(PINK.c800)));
+                }
+            };
+
+            Row::new(row)
+        })
+        .collect();
+
+    StatefulWidget::render(
+        Table::new(rows, widths).row_highlight_style(Style::new().bg(BLUE.c600)),
+        area,
+        buf,
+        data.state,
+    );
 }
 
 fn render_right_column(area: Rect, buf: &mut Buffer, data: &mut RightColumn) {
@@ -226,55 +208,34 @@ fn render_mail_preview(area: Rect, buf: &mut Buffer, mail: &mut MailPreview) {
     ])
     .areas(area);
 
-    match mail {
-        MailPreview::Loading(state) => {
-            StatefulWidget::render(
-                Throbber::default()
-                    .throbber_set(throbber_widgets_tui::BRAILLE_DOUBLE)
-                    .use_type(throbber_widgets_tui::WhichUse::Spin),
-                header_area,
-                buf,
-                state,
-            );
+    let MailPreview {
+        from,
+        to,
+        cc,
+        subject,
+        preview,
+        received_at,
+    } = mail;
 
-            StatefulWidget::render(
-                Throbber::default()
-                    .throbber_set(throbber_widgets_tui::BRAILLE_DOUBLE)
-                    .use_type(throbber_widgets_tui::WhichUse::Spin),
-                preview_area,
-                buf,
-                state,
-            );
-        }
-        MailPreview::Loaded {
-            from,
-            to,
-            cc,
-            subject,
-            preview,
-            received_at,
-        } => {
-            let headers: Vec<(&str, &str)> = HEADERS
-                .iter()
-                .zip([
-                    received_at.as_str(),
-                    from.as_str(),
-                    to.as_str(),
-                    subject.as_str(),
-                    cc.as_str(),
-                ])
-                .map(|(&header_name, value)| (header_name, value))
-                .collect();
+    let headers: Vec<(&str, &str)> = HEADERS
+        .iter()
+        .zip([
+            received_at.as_str(),
+            from.as_str(),
+            to.as_str(),
+            subject.as_str(),
+            cc.as_str(),
+        ])
+        .map(|(&header_name, value)| (header_name, value))
+        .collect();
 
-            render_headers(header_area, buf, &headers);
+    render_headers(header_area, buf, &headers);
 
-            Widget::render(
-                Paragraph::new(preview.as_str()).block(Block::bordered()),
-                preview_area,
-                buf,
-            );
-        }
-    }
+    Widget::render(
+        Paragraph::new(preview.as_str()).block(Block::bordered()),
+        preview_area,
+        buf,
+    );
 }
 
 fn render_headers(area: Rect, buf: &mut Buffer, headers: &[(&'static str, &str)]) {

@@ -405,7 +405,10 @@ impl Backend {
     }
 
     #[instrument(skip(self))]
-    pub fn mailboxes_get_children(&self, parent: ParentMailboxId) -> Option<Vec<MailboxId>> {
+    pub fn mailboxes_get_or_request_children(
+        &self,
+        parent: ParentMailboxId,
+    ) -> Option<Vec<MailboxId>> {
         let mailbox_backend = self.mailboxes.clone();
 
         self.mailboxes.get_child_mailboxes(&parent).or_else(|| {
