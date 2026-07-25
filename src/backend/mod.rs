@@ -7,6 +7,7 @@ pub mod types;
 use crate::{
     backend::{
         mailbox::types::{MailboxData, MailboxId, ParentMailboxId},
+        mails::types::MailData,
         task_manager::{TaskId, TaskManager},
         types::CollapsedMail,
     },
@@ -96,20 +97,13 @@ impl Backend {
     #[instrument(skip(self))]
     pub fn get_collapsed_mails(&self, id: &MailboxId) -> Option<Vec<CollapsedMail>> {
         let mut collapsed_mails: Vec<CollapsedMail> =
-            Vec::with_capacity(self.mailboxes.get_total_threads(id).unwrap());
+            Vec::with_capacity(self.mailboxes.get_mailbox_data(id)?.total_threads);
 
         match self.mails.get_root_mails(id) {
             Some(root_mails_ids) => {
                 for root_mail_id in root_mails_ids {
-                    let Some(root_mail) = self.mails.get_mail(&root_mail_id) else {
-                        todo!("Request mail in batch");
-                    };
-
-                    let Some(root_mail_thread) = self.threads.get_thread(&root_mail.thread_id)
-                    else {
-                        todo!("Request thread in batch");
-                        return None;
-                    };
+                    let root_mail = self.mails.get_mail(&root_mail_id).unwrap();
+                    let root_mail_thread = self.threads.get_thread(&root_mail.thread_id).unwrap();
 
                     let root_mail_thread_has_only_one_mail = root_mail_thread.len() == 1;
                     let entry = if root_mail_thread_has_only_one_mail {
@@ -122,14 +116,69 @@ impl Backend {
                 }
             }
             None => {
-                todo!("Request root mails")
+                let id = id.clone();
+                let threads = self.threads.clone();
+                let mails = self.mails.clone();
+                let client = self.client.clone();
+
+                self.task_manager
+                    .spawn(TaskId::QueryRootMails(id.clone()), async move {
+                        let mut response = {
+                            let mut request = client.build();
+
+                            let mail_query_result = {
+                                let query_mail = request
+                                    .query_email()
+                                    .filter(jmap_client::email::query::Filter::InMailbox {
+                                        value: id.clone().0,
+                                    })
+                                    .sort([jmap_client::email::query::Comparator::received_at()
+                                        .ascending()])
+                                    .position(0)
+                                    .limit(10);
+                                query_mail.arguments().collapse_threads(true);
+                                query_mail.result_reference()
+                            };
+
+                            let mail_get_result = request
+                                .get_email()
+                                .ids_ref(mail_query_result)
+                                .properties(MailData::PROPERTIES)
+                                .result_reference(jmap_client::email::Property::ThreadId);
+
+                            request.get_thread().ids_ref(mail_get_result);
+
+                            match request.send().await {
+                                Ok(r) => r,
+                                Err(err) => {
+                                    error!("Couldn't send request to server:\n{err}");
+                                    return;
+                                }
+                            }
+                        };
+
+                        let thread_get = response
+                            .pop_method_response()
+                            .unwrap()
+                            .unwrap_get_thread()
+                            .unwrap();
+
+                        let mail_get = response
+                            .pop_method_response()
+                            .unwrap()
+                            .unwrap_get_email()
+                            .unwrap();
+
+                        threads.handle_response(thread_get);
+                        mails.handle_response(mail_get);
+                    });
             }
         }
 
         Some(collapsed_mails)
     }
 
-    pub fn get_mailbox_data(&self, id: &MailboxId) -> Option<MailboxData> {
-        todo!();
+    pub fn get_mailbox_data(&self, id: &MailboxId) -> Option<Arc<MailboxData>> {
+        self.mailboxes.get_mailbox_data(id)
     }
 }

@@ -390,8 +390,8 @@ impl MailboxBackend {
             .map(|children| children.to_vec())
     }
 
-    pub fn get_total_threads(&self, id: &MailboxId) -> Option<usize> {
+    pub fn get_mailbox_data(&self, id: &MailboxId) -> Option<Arc<MailboxData>> {
         let cache = self.cache.lock().unwrap();
-        cache.get_data(id).map(|data| data.total_threads)
+        cache.get_data(id)
     }
 }

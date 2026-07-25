@@ -33,12 +33,12 @@ impl From<jmap_client::mailbox::Mailbox> for MailboxData {
 impl From<&jmap_client::mailbox::Mailbox> for MailboxData {
     fn from(mailbox: &jmap_client::mailbox::Mailbox) -> Self {
         Self {
-            id: mailbox.id().unwrap().to_owned(),
+            id: MailboxId(mailbox.id().unwrap().to_owned()),
             name: mailbox.name().unwrap().to_owned(),
             role: mailbox.role(),
             sort_order: mailbox.sort_order(),
             unread_mails: mailbox.unread_emails(),
-            parent_id: mailbox.parent_id().map(|id| id.to_string()),
+            parent_id: mailbox.parent_id().map(|id| MailboxId(id.to_string())),
             total_threads: mailbox.total_threads(),
         }
     }

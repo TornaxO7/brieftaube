@@ -2,7 +2,7 @@ use crate::backend::{
     mails::types::MailId,
     threads::{cache::Cache, types::ThreadId},
 };
-use jmap_client::client::Client;
+use jmap_client::{client::Client, core::response::ThreadGetResponse};
 use std::sync::{Arc, Mutex};
 
 mod cache;
@@ -27,5 +27,22 @@ impl ThreadsBackend {
         cache
             .get_thread_mails(id)
             .map(|thread_mails| thread_mails.to_vec())
+    }
+
+    pub fn handle_response(&self, mut response: ThreadGetResponse) {
+        let mut cache = self.cache.lock().unwrap();
+
+        for thread in response.take_list() {
+            let id = ThreadId(thread.id().to_owned());
+            let mail_ids = thread
+                .email_ids()
+                .into_iter()
+                .map(|id| MailId(id.clone()))
+                .collect();
+
+            cache.insert(id, mail_ids);
+        }
+
+        cache.set_state(response.take_state());
     }
 }

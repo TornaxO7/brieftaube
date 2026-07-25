@@ -1,12 +1,12 @@
 use super::{MailAddress, MailKeyword};
-use crate::backend::{mailbox::types::MailboxId, threads::types::ThreadId};
+use crate::backend::{mailbox::types::MailboxId, mails::types::MailId, threads::types::ThreadId};
 use chrono::{DateTime, Local, Utc};
 use jmap_client::email::{Email, EmailBodyPart, Property};
 use std::collections::HashSet;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MailData {
-    pub id: String,
+    pub id: MailId,
     pub thread_id: ThreadId,
     pub keywords: HashSet<MailKeyword>,
     pub from: Vec<MailAddress>,
@@ -38,8 +38,8 @@ impl MailData {
 
     pub fn new(mut mail: Email) -> Self {
         Self {
-            id: mail.take_id(),
-            thread_id: mail.take_thread_id().unwrap(),
+            id: MailId(mail.take_id()),
+            thread_id: ThreadId(mail.take_thread_id().unwrap()),
             keywords: mail.keywords().into_iter().map(MailKeyword::from).collect(),
             from: mail
                 .take_from()
@@ -62,7 +62,7 @@ impl MailData {
             mailbox_ids: mail
                 .mailbox_ids()
                 .into_iter()
-                .map(|id| id.to_owned())
+                .map(|id| MailboxId(id.to_owned()))
                 .collect(),
             rest: None,
         }

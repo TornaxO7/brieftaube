@@ -1,10 +1,11 @@
-use crate::backend::mailbox::types::ParentMailboxId;
+use crate::backend::mailbox::types::{MailboxId, ParentMailboxId};
 use std::{cell::RefCell, collections::VecDeque};
 use tokio::task::JoinHandle;
 
 #[derive(PartialEq)]
 pub enum TaskId {
     QueryChildMailboxes(ParentMailboxId),
+    QueryRootMails(MailboxId),
 }
 
 pub struct TaskManager {
