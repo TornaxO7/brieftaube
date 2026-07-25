@@ -145,19 +145,28 @@ impl State {
 
     fn navigate_up(&mut self) {
         if let Some(column) = self.current_column_mut() {
-            // column.state.select_previous();
+            match column {
+                ColumnState::Loading { .. } => {}
+                ColumnState::Loaded { state, .. } => state.select_previous(),
+            }
         }
     }
 
     fn navigate_to_top(&mut self) {
         if let Some(column) = self.current_column_mut() {
-            // column.state.select_first();
+            match column {
+                ColumnState::Loading { .. } => {}
+                ColumnState::Loaded { state, .. } => state.select_first(),
+            }
         }
     }
 
     fn navigate_to_bottom(&mut self) {
         if let Some(column) = self.current_column_mut() {
-            // column.state.select_last();
+            match column {
+                ColumnState::Loading { .. } => {}
+                ColumnState::Loaded { state, .. } => state.select_last(),
+            }
         }
     }
 
