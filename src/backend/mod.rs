@@ -1,19 +1,20 @@
 pub mod mailbox;
 pub mod mails;
+pub mod task_manager;
 pub mod threads;
 pub mod types;
 
 use crate::{
     backend::{
-        mailbox::types::{MailboxData, MailboxId},
+        mailbox::types::{MailboxData, MailboxId, ParentMailboxId},
+        task_manager::{TaskId, TaskManager},
         types::CollapsedMail,
     },
     config::Config,
 };
 use jmap_client::client::Client;
-use std::{cell::RefCell, collections::VecDeque, rc::Rc, sync::Arc};
-use tokio::task::JoinHandle;
-use tracing::{debug, error, instrument};
+use std::{rc::Rc, sync::Arc};
+use tracing::{error, instrument};
 
 type GetState = String;
 type QueryState = String;
@@ -27,7 +28,7 @@ pub struct Backend {
     mails: Arc<mails::MailsBackend>,
     threads: Arc<threads::ThreadsBackend>,
 
-    tasks: RefCell<VecDeque<JoinHandle<()>>>,
+    task_manager: TaskManager,
 }
 
 /// Methods needed for `main.rs`
@@ -58,44 +59,36 @@ impl Backend {
             mailboxes: Arc::new(mailbox::MailboxBackend::new(client.clone())),
             mails: Arc::new(mails::MailsBackend::new(client.clone())),
             threads: Arc::new(threads::ThreadsBackend::new(client.clone())),
-            tasks: RefCell::new(VecDeque::with_capacity(8)),
+            task_manager: TaskManager::new(),
             config,
         }
     }
 
     pub fn has_tasks_running(&self) -> bool {
-        !self.tasks.borrow().is_empty()
+        self.task_manager.has_tasks_running()
     }
 
     pub async fn finish_next_task(&self) {
-        let _done = {
-            let mut tasks = self.tasks.borrow_mut();
-            match tasks.front_mut() {
-                Some(task) => task.await,
-                None => std::future::pending().await,
-            }
-        };
-        self.tasks.borrow_mut().pop_front();
+        self.task_manager.finish_next_task().await;
     }
 }
 
 /// Methods for states.
 impl Backend {
     #[instrument(skip(self))]
-    pub fn get_child_mailboxes(&self, parent_id: Option<MailboxId>) -> Option<Vec<MailboxId>> {
+    pub fn get_child_mailboxes(&self, parent: ParentMailboxId) -> Option<Vec<MailboxId>> {
         let mailbox_backend = self.mailboxes.clone();
 
-        self.mailboxes.get_child_mailboxes(&parent_id).or_else(|| {
-            self.tasks.borrow_mut().push_back(tokio::spawn(async move {
-                debug!("Requesting mailboxes");
-                if let Err(err) = mailbox_backend
-                    .request_mailboxes_query(parent_id.clone())
-                    .await
-                {
-                    error!("Couldn't query mailboxes:\n{err}");
-                }
-            }));
-
+        self.mailboxes.get_child_mailboxes(&parent).or_else(|| {
+            self.task_manager
+                .spawn(TaskId::QueryChildMailboxes(parent.clone()), async move {
+                    if let Err(err) = mailbox_backend
+                        .request_mailboxes_query(parent.clone())
+                        .await
+                    {
+                        error!("Couldn't query mailboxes:\n{err}");
+                    }
+                });
             None
         })
     }
