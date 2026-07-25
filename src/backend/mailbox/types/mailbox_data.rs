@@ -9,16 +9,18 @@ pub struct MailboxData {
     pub sort_order: SortOrder,
     pub unread_mails: usize,
     pub parent_id: Option<MailboxId>,
+    pub total_threads: usize,
 }
 
 impl MailboxData {
-    pub const PROPERTIES: [Property; 6] = [
+    pub const PROPERTIES: [Property; 7] = [
         Property::Id,
         Property::Name,
         Property::Role,
         Property::SortOrder,
         Property::UnreadEmails,
         Property::ParentId,
+        Property::TotalThreads,
     ];
 }
 
@@ -37,6 +39,7 @@ impl From<&jmap_client::mailbox::Mailbox> for MailboxData {
             sort_order: mailbox.sort_order(),
             unread_mails: mailbox.unread_emails(),
             parent_id: mailbox.parent_id().map(|id| id.to_string()),
+            total_threads: mailbox.total_threads(),
         }
     }
 }

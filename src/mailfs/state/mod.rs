@@ -200,12 +200,18 @@ impl<'a> State {
                 }
             }
 
+            let state = if entries.is_empty() {
+                TableState::new()
+            } else {
+                TableState::new().with_selected(1)
+            };
+
             self.columns.insert(
                 column_idx,
                 ColumnCtx {
                     mailbox: parent_mailbox_id,
                     entries,
-                    state: TableState::new().with_selected(0),
+                    state,
                 },
             );
         }

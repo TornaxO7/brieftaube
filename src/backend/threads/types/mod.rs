@@ -1,1 +1,2 @@
-pub type ThreadId = String;
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub struct ThreadId(pub String);

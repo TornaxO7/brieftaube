@@ -83,12 +83,15 @@ impl Backend {
 impl Backend {
     #[instrument(skip(self))]
     pub fn get_child_mailboxes(&self, parent_id: Option<MailboxId>) -> Option<Vec<MailboxId>> {
-        let mailboxes = self.mailboxes.clone();
+        let mailbox_backend = self.mailboxes.clone();
 
         self.mailboxes.get_child_mailboxes(&parent_id).or_else(|| {
             self.tasks.borrow_mut().push_back(tokio::spawn(async move {
                 debug!("Requesting mailboxes");
-                if let Err(err) = mailboxes.request_mailboxes_query(parent_id.clone()).await {
+                if let Err(err) = mailbox_backend
+                    .request_mailboxes_query(parent_id.clone())
+                    .await
+                {
                     error!("Couldn't query mailboxes:\n{err}");
                 }
             }));
@@ -98,6 +101,37 @@ impl Backend {
     }
 
     pub fn get_collapsed_mails(&self, id: &MailboxId) -> Option<Vec<CollapsedMail>> {
-        todo!()
+        let mut collapsed_mails: Vec<CollapsedMail> =
+            Vec::with_capacity(self.mailboxes.get_total_threads(id).unwrap());
+
+        match self.mails.get_root_mails(id) {
+            Some(root_mails_ids) => {
+                for root_mail_id in root_mails_ids {
+                    let Some(root_mail) = self.mails.get_mail(&root_mail_id) else {
+                        todo!("Request mail in batch");
+                    };
+
+                    let Some(root_mail_thread) = self.threads.get_thread(&root_mail.thread_id)
+                    else {
+                        todo!("Request thread in batch");
+                        return None;
+                    };
+
+                    let root_mail_thread_has_only_one_mail = root_mail_thread.len() == 1;
+                    let entry = if root_mail_thread_has_only_one_mail {
+                        CollapsedMail::SingleMail(root_mail_id)
+                    } else {
+                        CollapsedMail::CollapsedThread(root_mail.thread_id.clone())
+                    };
+
+                    collapsed_mails.push(entry);
+                }
+            }
+            None => {
+                todo!("Request root mails")
+            }
+        }
+
+        Some(collapsed_mails)
     }
 }

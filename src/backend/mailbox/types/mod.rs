@@ -10,5 +10,6 @@ pub use mailbox_new::MailboxNew;
 pub use mailbox_update::MailboxUpdate;
 pub use mailbox_validate::MailboxValidate;
 
-pub type MailboxId = String;
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub struct MailboxId(pub String);
 pub type SortOrder = u32;

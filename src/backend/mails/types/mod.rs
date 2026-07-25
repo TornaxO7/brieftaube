@@ -12,4 +12,5 @@ pub use mail_entry::MailEntry;
 pub use mail_keyword::MailKeyword;
 pub use mail_update::MailUpdate;
 
-pub type MailId = String;
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub struct MailId(pub String);

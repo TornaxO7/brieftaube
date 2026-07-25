@@ -1,10 +1,9 @@
-use crate::backend::threads::cache::Cache;
-use jmap_client::client::Client;
-use std::{
-    collections::VecDeque,
-    sync::{Arc, Mutex},
+use crate::backend::{
+    mails::types::MailId,
+    threads::{cache::Cache, types::ThreadId},
 };
-use tokio::task::{JoinError, JoinHandle};
+use jmap_client::client::Client;
+use std::sync::{Arc, Mutex};
 
 mod cache;
 pub mod types;
@@ -12,37 +11,26 @@ pub mod types;
 pub struct ThreadsBackend {
     client: Arc<Client>,
     cache: Arc<Mutex<Cache>>,
-    tasks: Mutex<VecDeque<JoinHandle<()>>>,
 }
 
+/// Methods which are used in the backend
 impl ThreadsBackend {
     pub fn new(client: Arc<Client>) -> Self {
         Self {
             client,
             cache: Arc::new(Mutex::new(Cache::new())),
-            tasks: Mutex::new(VecDeque::with_capacity(16)),
         }
     }
 
-    pub fn has_tasks_running(&self) -> bool {
-        !self.tasks.lock().unwrap().is_empty()
+    pub fn only_has_one_mail(&self, id: &ThreadId) -> Option<bool> {
+        let cache = self.cache.lock().unwrap();
+        cache.only_has_one_mail(id)
     }
 
-    pub async fn has_changed(&self) -> Option<Result<(), JoinError>> {
-        let mut guard = self.tasks.lock().unwrap();
-        let task = guard.front_mut().unwrap();
-        Some(task.await)
-    }
-
-    pub fn pop_task(&self) {
-        self.tasks
-            .lock()
-            .unwrap()
-            .pop_front()
-            .expect("There are tasks.");
-    }
-
-    pub fn cache_is_initialised(&self) -> bool {
-        !self.cache.lock().unwrap().is_empty()
+    pub fn get_thread(&self, id: &ThreadId) -> Option<Vec<MailId>> {
+        let cache = self.cache.lock().unwrap();
+        cache
+            .get_thread_mails(id)
+            .map(|thread_mails| thread_mails.to_vec())
     }
 }
