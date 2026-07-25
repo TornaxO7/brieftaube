@@ -13,6 +13,7 @@ use crate::{
 use ratatui::widgets::TableState;
 use throbber_widgets_tui::ThrobberState;
 
+/// Internal representation of a column
 #[derive(Clone)]
 pub enum ColumnState {
     /// The state for loading columns
@@ -21,7 +22,9 @@ pub enum ColumnState {
     Loaded {
         /// The mailbox it represents
         mailbox: Option<MailboxId>,
+        /// The entries within the column
         entries: Vec<ColumnStateEntry>,
+        /// The table state
         state: TableState,
     },
 }
@@ -51,14 +54,20 @@ impl ColumnState {
 #[derive(Clone)]
 pub enum ColumnStateEntry {
     Mailbox(MailboxId),
+    /// Mails which are the only mail in a thread
     SingleMail(MailId),
-    CollapsedThread(ThreadId),
-    UncollapsedThread(ThreadId),
+    /// Root mail of a thread
+    CollapsedThread(MailId, ThreadId),
+
+    ThreadStart(MailId, ThreadId),
+    ThreadChild(MailId, ThreadId),
+    ThreadEnd(MailId, ThreadId),
 }
 
 impl ColumnStateEntry {
+    /// get the entries of the given mailbox
     pub fn create_entries(
-        parent: ParentMailboxId,
+        mailbox: ParentMailboxId,
         backend: Rc<Backend>,
     ) -> Result<Vec<Self>, error::BackendNotReady> {
         let mut entries: Vec<ColumnStateEntry> = Vec::new();
@@ -66,17 +75,18 @@ impl ColumnStateEntry {
         // get mailboxes
         {
             let mailbox_ids = backend
-                .get_child_mailboxes(parent.clone())
+                .mailboxes_get_children(mailbox.clone())
                 .ok_or(error::BackendNotReady)?;
+
             for mailbox_id in mailbox_ids {
                 entries.push(ColumnStateEntry::Mailbox(mailbox_id));
             }
         }
 
         // get mails
-        if let Some(parent_mailbox_id) = parent.as_ref() {
+        if let Some(parent_mailbox_id) = mailbox.as_ref() {
             let collapsed_mails = backend
-                .get_collapsed_mails(parent_mailbox_id)
+                .mails_get_or_request_collapsed(parent_mailbox_id)
                 .ok_or(error::BackendNotReady)?;
 
             for collapsed_mail in collapsed_mails {
@@ -85,7 +95,12 @@ impl ColumnStateEntry {
                         entries.push(ColumnStateEntry::SingleMail(mail_id))
                     }
                     CollapsedMail::CollapsedThread(thread_id) => {
-                        entries.push(ColumnStateEntry::CollapsedThread(thread_id))
+                        let thread_mails = backend
+                            .threads_get_or_request(thread_id.clone())
+                            .ok_or(error::BackendNotReady)?;
+                        let mail_id = thread_mails[0].clone();
+
+                        entries.push(ColumnStateEntry::CollapsedThread(mail_id, thread_id))
                     }
                 }
             }

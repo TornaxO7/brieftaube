@@ -1,9 +1,12 @@
 use crate::backend::{
+    Backend,
     mails::types::MailId,
+    task_manager::TaskId,
     threads::{cache::Cache, types::ThreadId},
 };
 use jmap_client::{client::Client, core::response::ThreadGetResponse};
 use std::sync::{Arc, Mutex};
+use tracing::{debug, error, instrument};
 
 mod cache;
 pub mod types;
@@ -22,14 +25,16 @@ impl ThreadsBackend {
         }
     }
 
-    pub fn get_thread(&self, id: &ThreadId) -> Option<Vec<MailId>> {
+    fn get(&self, id: &ThreadId) -> Option<Vec<MailId>> {
         let cache = self.cache.lock().unwrap();
         cache
             .get_thread_mails(id)
             .map(|thread_mails| thread_mails.to_vec())
     }
 
-    pub fn handle_response(&self, mut response: ThreadGetResponse) {
+    #[instrument(skip(self))]
+    pub fn handle_get_response(&self, mut response: ThreadGetResponse) {
+        debug!("Load response: {:?}", response);
         let mut cache = self.cache.lock().unwrap();
 
         for thread in response.take_list() {
@@ -44,5 +49,53 @@ impl ThreadsBackend {
         }
 
         cache.set_state(response.take_state());
+    }
+}
+
+/// Methods which also communicate with the server
+impl ThreadsBackend {
+    async fn request_get(&self, id: &ThreadId) -> Result<(), jmap_client::Error> {
+        let mut response = {
+            let mut request = self.client.build();
+            request.get_thread().ids(Some([&id.0]));
+            request.send_get_thread().await?
+        };
+
+        let mut cache = self.cache.lock().unwrap();
+        for thread in response.take_list() {
+            let thread_id = ThreadId(thread.id().to_owned());
+            let mail_ids = thread
+                .email_ids()
+                .into_iter()
+                .cloned()
+                .map(|id| MailId(id))
+                .collect();
+
+            cache.insert(thread_id, mail_ids);
+        }
+        cache.set_state(response.take_state());
+
+        Ok(())
+    }
+}
+
+impl Backend {
+    pub fn threads_get(&self, id: &ThreadId) -> Option<Vec<MailId>> {
+        self.threads.get(&id)
+    }
+
+    pub fn threads_get_or_request(&self, id: ThreadId) -> Option<Vec<MailId>> {
+        let threads = self.threads.clone();
+
+        self.threads_get(&id).or_else(|| {
+            self.task_manager
+                .spawn(TaskId::ThreadGet(id.clone()), async move {
+                    match threads.request_get(&id).await {
+                        Ok(()) => debug!("Retrieved thread ids"),
+                        Err(err) => error!("Couldn't request mails of thread '{id:?}':\n{err}"),
+                    }
+                });
+            None
+        })
     }
 }

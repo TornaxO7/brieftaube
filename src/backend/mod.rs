@@ -6,10 +6,9 @@ pub mod types;
 
 use crate::{
     backend::{
-        mailbox::types::{MailboxData, MailboxId, ParentMailboxId},
-        mails::types::{MailData, MailId},
+        mailbox::types::MailboxId,
+        mails::types::MailData,
         task_manager::{TaskId, TaskManager},
-        threads::types::ThreadId,
         types::CollapsedMail,
     },
     config::Config,
@@ -76,40 +75,29 @@ impl Backend {
 }
 
 /// Methods for states.
+///
+/// Method name convention:
+/// - `<object>_get_<bla>`: if it's only trying to fetch the data locally
+/// - `<object>_get_or_request_<bla>`: if it's trying to fetch the data locally, otherwise creates a request to the server
+/// For combined requests
 impl Backend {
     #[instrument(skip(self))]
-    pub fn get_child_mailboxes(&self, parent: ParentMailboxId) -> Option<Vec<MailboxId>> {
-        let mailbox_backend = self.mailboxes.clone();
+    pub fn mails_get_or_request_collapsed(&self, id: &MailboxId) -> Option<Vec<CollapsedMail>> {
+        let mut collapsed_mails: Vec<CollapsedMail> = Vec::with_capacity(
+            self.mailbox_get_data(id)
+                .map(|mailbox| mailbox.total_threads)
+                .unwrap_or(16),
+        );
 
-        self.mailboxes.get_child_mailboxes(&parent).or_else(|| {
-            debug!("No child mailboxes available of '{:?}'", parent.clone());
-            self.task_manager
-                .spawn(TaskId::QueryChildMailboxes(parent.clone()), async move {
-                    if let Err(err) = mailbox_backend
-                        .request_mailboxes_query(parent.clone())
-                        .await
-                    {
-                        error!("Couldn't query mailboxes:\n{err}");
-                    }
-                    debug!("Received child mailboxes of '{:?}'", parent.clone());
-                });
-            None
-        })
-    }
-
-    #[instrument(skip(self))]
-    pub fn get_collapsed_mails(&self, id: &MailboxId) -> Option<Vec<CollapsedMail>> {
-        let mut collapsed_mails: Vec<CollapsedMail> =
-            Vec::with_capacity(self.mailboxes.get_mailbox_data(id)?.total_threads);
-
-        match self.mails.get_root_mails(id) {
+        match self.mails_get_root_mails(id) {
             Some(root_mails_ids) => {
                 for root_mail_id in root_mails_ids {
-                    let root_mail = self.mails.get_mail(&root_mail_id).unwrap();
-                    let root_mail_thread = self.threads.get_thread(&root_mail.thread_id).unwrap();
+                    let root_mail = self.mail_get_data(&root_mail_id).expect("Requested");
+                    let root_mail_thread =
+                        self.threads_get(&root_mail.thread_id).expect("Requested");
 
-                    let root_mail_thread_has_only_one_mail = root_mail_thread.len() == 1;
-                    let entry = if root_mail_thread_has_only_one_mail {
+                    let thread_has_only_one_mail = root_mail_thread.len() == 1;
+                    let entry = if thread_has_only_one_mail {
                         CollapsedMail::SingleMail(root_mail_id)
                     } else {
                         CollapsedMail::CollapsedThread(root_mail.thread_id.clone())
@@ -172,8 +160,8 @@ impl Backend {
                             .unwrap_get_email()
                             .unwrap();
 
-                        threads.handle_response(thread_get);
-                        mails.handle_response(mail_get);
+                        threads.handle_get_response(thread_get);
+                        mails.handle_get_response(mail_get);
 
                         debug!("Received collapsed mails of '{:?}'.", id.clone());
                     });
@@ -181,17 +169,5 @@ impl Backend {
         }
 
         Some(collapsed_mails)
-    }
-
-    pub fn get_mailbox_data(&self, id: &MailboxId) -> Option<Arc<MailboxData>> {
-        self.mailboxes.get_mailbox_data(id)
-    }
-
-    pub fn get_mail_data(&self, id: &MailId) -> Option<MailData> {
-        self.mails.get_mail(id)
-    }
-
-    pub fn get_thread_mail_ids(&self, id: &ThreadId) -> Option<Vec<MailId>> {
-        self.threads.get_thread(id)
     }
 }

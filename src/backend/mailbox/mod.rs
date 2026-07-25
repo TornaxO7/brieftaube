@@ -2,13 +2,12 @@ mod cache;
 mod error;
 pub mod types;
 
+use crate::backend::{Backend, mailbox::types::ParentMailboxId, task_manager::TaskId};
 use cache::Cache;
 use jmap_client::client::Client;
 use std::sync::{Arc, Mutex};
-use tracing::{debug, instrument, trace};
+use tracing::{debug, error, instrument};
 use types::{MailboxData, MailboxId};
-
-use crate::backend::mailbox::types::ParentMailboxId;
 
 pub struct MailboxBackend {
     client: Arc<Client>,
@@ -34,7 +33,7 @@ impl MailboxBackend {
 // methods which also communicate with the server
 impl MailboxBackend {
     #[instrument(skip(self))]
-    pub async fn request_mailboxes_query(
+    async fn request_mailboxes_query(
         &self,
         parent: ParentMailboxId,
     ) -> Result<(), jmap_client::Error> {
@@ -388,16 +387,40 @@ impl MailboxBackend {
 //     }
 // }
 
-// methods for `state.rs`
 impl MailboxBackend {
-    pub fn get_child_mailboxes(&self, parent: &ParentMailboxId) -> Option<Vec<MailboxId>> {
+    fn get_child_mailboxes(&self, parent: &ParentMailboxId) -> Option<Vec<MailboxId>> {
         let cache = self.cache.lock().unwrap();
         cache.get_children(parent).map(|children| children.to_vec())
     }
 
-    pub fn get_mailbox_data(&self, id: &MailboxId) -> Option<Arc<MailboxData>> {
-        debug!("Try getting mailbox data of {id:?} from cache.");
+    fn get_mailbox_data(&self, id: &MailboxId) -> Option<Arc<MailboxData>> {
         let cache = self.cache.lock().unwrap();
         cache.get_data(id)
+    }
+}
+
+impl Backend {
+    pub fn mailbox_get_data(&self, id: &MailboxId) -> Option<Arc<MailboxData>> {
+        self.mailboxes.get_mailbox_data(id)
+    }
+
+    #[instrument(skip(self))]
+    pub fn mailboxes_get_children(&self, parent: ParentMailboxId) -> Option<Vec<MailboxId>> {
+        let mailbox_backend = self.mailboxes.clone();
+
+        self.mailboxes.get_child_mailboxes(&parent).or_else(|| {
+            debug!("No child mailboxes available of '{:?}'", parent.clone());
+            self.task_manager
+                .spawn(TaskId::QueryChildMailboxes(parent.clone()), async move {
+                    if let Err(err) = mailbox_backend
+                        .request_mailboxes_query(parent.clone())
+                        .await
+                    {
+                        error!("Couldn't query mailboxes:\n{err}");
+                    }
+                    debug!("Received child mailboxes of '{:?}'", parent.clone());
+                });
+            None
+        })
     }
 }

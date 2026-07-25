@@ -144,6 +144,7 @@ impl State {
     }
 
     fn navigate_down(&mut self) {
+        let backend = self.backend.clone();
         if let Some(column) = self.current_column_mut() {
             match column {
                 ColumnState::Loading { .. } => {}
@@ -151,6 +152,13 @@ impl State {
                     if let Some(pos) = state.selected() {
                         let next_pos = (entries.len() - 1).min(pos + 1);
                         state.select(Some(next_pos));
+
+                        match &entries[next_pos] {
+                            ColumnStateEntry::Mailbox(id) => {
+                                backend.mailboxes_get_children(Some(id.clone()));
+                            }
+                            _ => {}
+                        };
                     }
                 }
             }
