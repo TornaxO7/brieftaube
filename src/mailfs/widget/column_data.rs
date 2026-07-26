@@ -27,35 +27,49 @@ impl<'a> ColumnDisplay<'a> {
             .iter()
             .map(|entry| match entry {
                 ColumnStateEntry::Mailbox(id) => {
-                    let mailbox = backend.mailbox_get_data(id).unwrap();
-                    ColumnDisplayEntryData::mailbox(&mailbox)
+                    let mailbox = backend.mailbox_get_data(id)?;
+                    Some(ColumnDisplayEntryData::mailbox(&mailbox))
                 }
-                ColumnStateEntry::SingleMail(id) => {
-                    let mail = backend.mail_get_data(&id).unwrap();
-                    ColumnDisplayEntryData::mail(MailEntryType::Single, &mail)
+                ColumnStateEntry::SingleMail(mail_id) => {
+                    let mail = backend.mail_get_data(mail_id)?;
+                    Some(ColumnDisplayEntryData::mail(MailEntryType::Single, &mail))
                 }
                 ColumnStateEntry::CollapsedThread(mail_id, _) => {
-                    let mail = backend.mail_get_data(&mail_id).unwrap();
-                    ColumnDisplayEntryData::mail(MailEntryType::ThreadCollapsed, &mail)
+                    let mail = backend.mail_get_data(mail_id)?;
+                    Some(ColumnDisplayEntryData::mail(
+                        MailEntryType::ThreadCollapsed,
+                        &mail,
+                    ))
                 }
                 ColumnStateEntry::ThreadStart(mail_id, _) => {
-                    let mail = backend.mail_get_data(&mail_id).unwrap();
-                    ColumnDisplayEntryData::mail(MailEntryType::ThreadStart, &mail)
+                    let mail = backend.mail_get_data(mail_id)?;
+                    Some(ColumnDisplayEntryData::mail(
+                        MailEntryType::ThreadStart,
+                        &mail,
+                    ))
                 }
                 ColumnStateEntry::ThreadChild(mail_id, _) => {
-                    let mail = backend.mail_get_data(&mail_id).unwrap();
-                    ColumnDisplayEntryData::mail(MailEntryType::ThreadChild, &mail)
+                    let mail = backend.mail_get_data(mail_id)?;
+                    Some(ColumnDisplayEntryData::mail(
+                        MailEntryType::ThreadChild,
+                        &mail,
+                    ))
                 }
                 ColumnStateEntry::ThreadEnd(mail_id, _) => {
-                    let mail = backend.mail_get_data(&mail_id).unwrap();
-                    ColumnDisplayEntryData::mail(MailEntryType::ThreadEnd, &mail)
+                    let mail = backend.mail_get_data(mail_id)?;
+                    Some(ColumnDisplayEntryData::mail(
+                        MailEntryType::ThreadEnd,
+                        &mail,
+                    ))
                 }
             })
-            .map(|data| ColumnDisplayEntry {
-                is_selected: false,
-                data,
+            .map(|data| {
+                data.map(|data| ColumnDisplayEntry {
+                    is_selected: false,
+                    data,
+                })
             })
-            .collect();
+            .collect::<Option<Vec<ColumnDisplayEntry>>>()?;
 
         Some(Self {
             entries,

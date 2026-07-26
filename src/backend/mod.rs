@@ -165,6 +165,8 @@ impl Backend {
 
                         debug!("Received collapsed mails of '{:?}'.", id.clone());
                     });
+
+                return None;
             }
         }
 

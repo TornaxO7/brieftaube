@@ -4,7 +4,7 @@ pub mod types;
 
 use crate::backend::{Backend, mailbox::types::ParentMailboxId, task_manager::TaskId};
 use cache::Cache;
-use jmap_client::client::Client;
+use jmap_client::{client::Client, core::response::MailboxGetResponse};
 use std::sync::{Arc, Mutex};
 use tracing::{debug, error, instrument};
 use types::{MailboxData, MailboxId};
@@ -38,11 +38,11 @@ impl MailboxBackend {
         parent: ParentMailboxId,
     ) -> Result<(), jmap_client::Error> {
         // debug!("Requesting child mailboxes of '{:?}'", &parent);
-        if self.cache_is_initialised(&parent) {
-            // debug!("Cache already contains child mailboxes of '{:?}'", &parent);
-            // TODO: Request `mailbox/changes`
-            return Ok(());
-        }
+        // if self.cache_is_initialised(&parent) {
+        //     debug!("Cache already contains child mailboxes of '{:?}'", &parent);
+        //     // TODO: Request `mailbox/changes`
+        //     return Ok(());
+        // }
 
         let mut response = {
             let mut request = self.client.build();
@@ -66,19 +66,19 @@ impl MailboxBackend {
         let mut mailbox_get_response = response
             .pop_method_response()
             .unwrap()
-            .unwrap_get_mailbox()?;
+            .unwrap_get_mailbox()
+            .unwrap();
 
         let mut cache = self.cache.lock().unwrap();
-        let child_mailboxes = mailbox_get_response.take_list();
-        debug!(
-            "Child mailboxes of '{:?}':\n{:#?}",
-            &parent, &child_mailboxes
-        );
-        for mailbox in child_mailboxes {
-            cache.add(MailboxData::from(mailbox));
-        }
-
         cache.set_state(parent.clone(), mailbox_get_response.take_state());
+
+        let child_mailboxes: Vec<MailboxData> = mailbox_get_response
+            .take_list()
+            .into_iter()
+            .map(MailboxData::from)
+            .collect();
+
+        cache.add_children(parent.clone(), &child_mailboxes);
         Ok(())
     }
 

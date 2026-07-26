@@ -90,7 +90,9 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
     }
 
     fn render_data(&'a mut self) -> RenderData<'a> {
+        debug!("BEFORE");
         self.update_columns();
+        debug!("AFTER");
         let backend = self.backend.clone();
 
         let right_preview = self
@@ -109,7 +111,6 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
             .map(RightColumn::MailPreview);
 
         let (left, center, right_column) = {
-            let backend = self.backend.clone();
             let center_mailbox = self.get_center_column_mailbox();
             match (
                 self.get_left_column_mailbox(),
@@ -193,6 +194,19 @@ impl State {
             })
     }
 
+    // fn get_right_column(&self) -> Option<&ColumnState> {
+    //     self.get_center_column()
+    //         .and_then(|center| center.selected_entry())
+    //         .cloned()
+    //         .and_then(|selected| {
+    //             if let ColumnStateEntry::Mailbox(id) = selected {
+    //                 self.columns.get(&Some(id))
+    //             } else {
+    //                 None
+    //             }
+    //         })
+    // }
+
     fn get_center_column(&self) -> Option<&ColumnState> {
         self.columns.get(self.selection_stack.last().unwrap())
     }
@@ -250,26 +264,38 @@ impl State {
 /// Methods for loading the columns
 impl<'a> State {
     fn update_columns(&mut self) {
-        if self.get_center_column().is_none() {
-            let current_mailbox = self.selection_stack.last().unwrap();
+        match self.get_center_column_mut() {
+            None => {
+                // TODO: Move to function?
+                let center_mailbox = self.get_center_column_mailbox();
 
-            if let Ok(entries) =
-                ColumnStateEntry::create_entries(current_mailbox.clone(), self.backend.clone())
-            {
-                let state = ColumnState::new(current_mailbox.clone(), entries);
-                self.columns.insert(current_mailbox.clone(), state);
+                if let Ok(entries) =
+                    ColumnStateEntry::create_entries(center_mailbox.clone(), self.backend.clone())
+                {
+                    debug!("Center entries: {entries:?}");
+                    let state = ColumnState::new(center_mailbox.clone(), entries);
+                    self.columns.insert(center_mailbox.clone(), state);
+                }
+            }
+            Some(_column) => {
+                // TODO: Update column
             }
         }
 
-        if let Some(current) = self.get_center_column() {
-            if let Some(entry) = current.selected_entry() {
-                if let ColumnStateEntry::Mailbox(id) = entry {
-                    if let Ok(entries) =
-                        ColumnStateEntry::create_entries(Some(id.clone()), self.backend.clone())
-                    {
-                        let state = ColumnState::new(Some(id.clone()), entries);
-                        self.columns.insert(Some(id.clone()), state);
+        if let Some(right_mailbox) = self.get_right_column_mailbox() {
+            match self.columns.get_mut(&right_mailbox) {
+                None => {
+                    if let Ok(entries) = ColumnStateEntry::create_entries(
+                        right_mailbox.clone(),
+                        self.backend.clone(),
+                    ) {
+                        debug!("Right entries: {entries:?}");
+                        let state = ColumnState::new(right_mailbox.clone(), entries);
+                        self.columns.insert(right_mailbox.clone(), state);
                     }
+                }
+                Some(_column) => {
+                    // TODO: update the column
                 }
             }
         }

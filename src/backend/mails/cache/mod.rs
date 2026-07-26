@@ -58,8 +58,8 @@ impl Cache {
 
 // helper methods
 impl Cache {
-    fn add_to_mailbox(&mut self, mail_id: &MailId, mailbox_id: MailboxId) -> Result<(), ()> {
-        let mail = self.mails.get(mail_id).ok_or(())?;
+    fn add_to_root_mails(&mut self, mail_id: &MailId, mailbox_id: MailboxId) {
+        let mail = self.mails.get(mail_id).ok_or(()).unwrap();
 
         self.root_mails
             .entry(mailbox_id)
@@ -81,14 +81,16 @@ impl Cache {
                         }
                     }
                     None => {
-                        let idx = get_idx_by_received_at(&self.mails, mailbox_mails, &mail);
+                        let idx = match get_idx_by_received_at(&self.mails, mailbox_mails, &mail) {
+                            Ok(idx) => idx,
+                            Err(idx) => idx,
+                        };
+
                         mailbox_mails.insert(idx, mail.id.clone());
                     }
                 }
             })
             .or_insert(vec![mail.id.clone()]);
-
-        Ok(())
     }
 }
 
@@ -105,15 +107,17 @@ impl Cache {
 
         // add to `root_mails`
         for mailbox_id in mail.mailbox_ids.iter().cloned() {
-            self.add_to_mailbox(&mail.id, mailbox_id)
-                .expect("The give mail-id is already added to the `mails`-collection.");
+            self.add_to_root_mails(&mail.id, mailbox_id);
         }
 
         // add to `thread_mapping`
         self.thread_mapping
             .entry(mail.thread_id.clone())
             .and_modify(|thread_mails| {
-                let idx = get_idx_by_received_at(&self.mails, thread_mails, &mail);
+                let idx = match get_idx_by_received_at(&self.mails, thread_mails, &mail) {
+                    Ok(idx) => idx,
+                    Err(idx) => idx,
+                };
                 thread_mails.insert(idx, mail.id.clone());
             })
             .or_insert(vec![mail.id.clone()]);
@@ -158,8 +162,7 @@ impl Cache {
         if let Some(mailbox_ids) = new.mailbox_ids {
             for (new_mailbox, set) in mailbox_ids {
                 if set {
-                    self.add_to_mailbox(&new.id, new_mailbox.clone())
-                        .expect("Mail-ID is already in `mails` collection.");
+                    self.add_to_root_mails(&new.id, new_mailbox.clone());
 
                     let mail = self.mails.get_mut(&new.id).ok_or(())?;
                     mail.mailbox_ids.insert(new_mailbox.clone());
@@ -186,11 +189,9 @@ fn get_idx_by_received_at(
     mails: &HashMap<MailId, MailData>,
     mapping: &[MailId],
     mail: &MailData,
-) -> usize {
-    mapping
-        .binary_search_by(|other_id| {
-            let other = mails.get(other_id).unwrap();
-            other.received_at.cmp(&mail.received_at)
-        })
-        .unwrap()
+) -> Result<usize, usize> {
+    mapping.binary_search_by(|other_id| {
+        let other = mails.get(other_id).unwrap();
+        other.received_at.cmp(&mail.received_at)
+    })
 }
