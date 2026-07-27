@@ -3,8 +3,8 @@ mod error;
 mod input_type;
 mod palette_value;
 
+pub use column_state::{ColumnState, ColumnStateEntry};
 pub use palette_value::PaletteValue;
-use tracing::{debug, instrument};
 
 use super::Action;
 use crate::{
@@ -17,9 +17,9 @@ use crate::{
         ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager, palette,
     },
 };
-pub use column_state::{ColumnState, ColumnStateEntry};
 use input_type::InputType;
 use std::{collections::HashMap, rc::Rc, vec::Drain};
+use tracing::{debug, instrument};
 
 pub struct State {
     app_actions: Vec<crate::Action>,
@@ -279,6 +279,15 @@ impl<'a> State {
             }
             Some(_column) => {
                 // TODO: Update column
+                //
+                // Steps:
+                // 1. Add new mailboxes
+                // 2. Update mailboxes
+                // 3. Remove removed mailboxes
+                //
+                // 4. Add new mails
+                // 5. Update mails
+                // 6. Remove removed mails from backend
             }
         }
 
