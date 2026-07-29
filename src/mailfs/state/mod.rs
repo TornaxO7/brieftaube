@@ -90,9 +90,7 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
     }
 
     fn render_data(&'a mut self) -> RenderData<'a> {
-        debug!("BEFORE");
         self.update_columns();
-        debug!("AFTER");
         let backend = self.backend.clone();
 
         let right_preview = self

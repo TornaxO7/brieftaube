@@ -19,8 +19,7 @@ use ratatui::{
     widgets::{Block, Borders, Cell, Paragraph, Row, StatefulWidget, Table, Widget},
 };
 
-const FOLDER: &str = "🗀";
-const FOLDER_OPEN: &str = "🗁";
+const FOLDER: &str = "🖿";
 const PLACEHOLDER: &str = "";
 const MAIL_UNREAD_SYMBOL: &str = "⏺";
 const THREAD_BRANCH: &str = "├─";
@@ -76,14 +75,7 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnDisplay) {
     let rows: Vec<Row<'_>> = data
         .entries
         .iter()
-        .enumerate()
-        .map(|(idx, entry)| {
-            let is_hovered = data
-                .state
-                .selected()
-                .map(|hovered_idx| hovered_idx == idx)
-                .unwrap_or(false);
-
+        .map(|entry| {
             let mut row = Vec::with_capacity(widths.len());
 
             if entry.is_selected {
@@ -94,15 +86,12 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnDisplay) {
 
             match &entry.data {
                 ColumnDisplayEntryData::Mailbox { name, unread_mails } => {
-                    // 🗀 / 🗁
-                    {
-                        let s = if is_hovered { FOLDER_OPEN } else { FOLDER };
-                        row.push(
-                            Cell::from(s)
-                                .style(Style::new().fg(BLUE.c800))
-                                .column_span(3),
-                        );
-                    }
+                    // 🖿
+                    row.push(
+                        Cell::from(FOLDER)
+                            .style(Style::new().fg(BLUE.c800))
+                            .column_span(3),
+                    );
 
                     // name
                     row.push(
