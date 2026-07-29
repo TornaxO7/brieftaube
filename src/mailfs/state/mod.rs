@@ -291,9 +291,12 @@ impl State {
                     ColumnStateEntry::ThreadStart(_, _)
                     | ColumnStateEntry::ThreadChild(_, _)
                     | ColumnStateEntry::ThreadEnd(_, _) => todo!("Collapsed thread"),
-                }
+                };
+                return;
             }
         }
+
+        self.navigate_to_parent();
     }
 
     fn navigate_to_parent(&mut self) {
