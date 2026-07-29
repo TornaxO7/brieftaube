@@ -73,7 +73,6 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnDisplay) {
     let widths = [
         Constraint::Length(1),
         Constraint::Length(1),
-        Constraint::Length(1),
         Constraint::Fill(1),
         Constraint::Fill(1),
         Constraint::Fill(1),
@@ -101,7 +100,7 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnDisplay) {
                     row.push(
                         Cell::from(name.clone())
                             .style(Style::new().fg(LIGHT_BLUE.c600))
-                            .column_span(3),
+                            .column_span(2),
                     );
 
                     // unread_mails
@@ -141,16 +140,9 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnDisplay) {
                         MailEntryType::ThreadStart => row.push(Cell::from(THREAD_UNFOLDED)),
                     };
 
-                    // 📎
-                    if *has_attachment {
-                        row.push(Cell::from(ATTACHMENT));
-                    } else {
-                        row.push(Cell::from(PLACEHOLDER));
-                    }
-
                     // Subject
                     {
-                        let s = match ty {
+                        let subject = match ty {
                             MailEntryType::Single
                             | MailEntryType::ThreadCollapsed
                             | MailEntryType::ThreadStart => subject.to_string(),
@@ -162,7 +154,14 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnDisplay) {
                             }
                         };
 
-                        row.push(Cell::from(s).style(Style::new().fg(WHITE)));
+                        // 📎
+                        let subject = if *has_attachment {
+                            format!("{} {}", ATTACHMENT, subject)
+                        } else {
+                            subject
+                        };
+
+                        row.push(Cell::from(subject).style(Style::new().fg(WHITE)));
                     }
 
                     // from
