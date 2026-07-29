@@ -1,9 +1,7 @@
 mod cache;
 pub mod types;
 
-use crate::backend::{
-    Backend, mailbox::types::MailboxId, mails::types::MailData, task_manager::TaskId,
-};
+use crate::backend::{Backend, mails::types::MailData, task_manager::TaskId};
 use cache::Cache;
 use jmap_client::{client::Client, core::response::EmailGetResponse};
 use std::sync::{Arc, Mutex};
@@ -26,23 +24,8 @@ impl MailsBackend {
     }
 }
 
-// /// helper functions
-// impl MailsBackend {
-//     fn is_initialised(&self) -> bool {
-//         let cache = self.cache.lock().unwrap();
-//         !cache.is_empty()
-//     }
-// }
-
 /// local getter and setter
 impl MailsBackend {
-    fn get_root_mails(&self, id: &MailboxId) -> Option<Vec<MailId>> {
-        let cache = self.cache.lock().unwrap();
-        cache
-            .get_root_mails(id)
-            .map(|root_mails| root_mails.to_vec())
-    }
-
     fn get_mail_data(&self, id: &MailId) -> Option<MailData> {
         let cache = self.cache.lock().unwrap();
         cache.get_mail(id).cloned()
@@ -75,25 +58,21 @@ impl MailsBackend {
 }
 
 impl Backend {
-    pub fn mails_get_root_mails(&self, id: &MailboxId) -> Option<Vec<MailId>> {
-        self.mails.get_root_mails(id)
-    }
-
     pub fn mail_get_data(&self, id: &MailId) -> Option<MailData> {
         self.mails.get_mail_data(id)
     }
 
-    pub fn mail_get_or_request_data(&self, id: MailId) -> Option<MailData> {
-        let mails = self.mails.clone();
+    // pub fn mail_get_or_request_data(&self, id: MailId) -> Option<MailData> {
+    //     let mails = self.mails.clone();
 
-        self.mail_get_data(&id).or_else(|| {
-            self.task_manager
-                .spawn(TaskId::MailGet(id.clone()), async move {
-                    if let Err(err) = mails.request_mail(id.clone()).await {
-                        error!("Couldn't get email:\n{err}");
-                    }
-                });
-            None
-        })
-    }
+    //     self.mail_get_data(&id).or_else(|| {
+    //         self.task_manager
+    //             .spawn(TaskId::MailGet(id.clone()), async move {
+    //                 if let Err(err) = mails.request_mail(id.clone()).await {
+    //                     error!("Couldn't get email:\n{err}");
+    //                 }
+    //             });
+    //         None
+    //     })
+    // }
 }

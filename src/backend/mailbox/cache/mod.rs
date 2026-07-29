@@ -1,17 +1,39 @@
+use jmap_client::core::query::QueryResponse;
 use tracing::{debug, instrument};
 
 use super::types::{MailboxData, MailboxId};
 use crate::backend::{
     GetState, QueryState,
     mailbox::types::{MailboxUpdate, ParentMailboxId},
+    mails::types::MailId,
 };
 use std::{collections::HashMap, sync::Arc};
 
+#[derive(Debug, Clone)]
+pub struct RootMails {
+    pub ids: Vec<MailId>,
+    pub state: QueryState,
+}
+
+impl RootMails {
+    pub fn new(mut response: QueryResponse) -> Self {
+        let state = response.take_query_state();
+        let ids = response.take_ids().into_iter().map(MailId).collect();
+
+        Self { ids, state }
+    }
+}
+
+// IDEA: Use `Arc` insead of the actual data for cheap clones out of the cache
 pub struct Cache {
     mailboxes: HashMap<MailboxId, Arc<MailboxData>>,
     // Children always exist in `mailboxes`.
     children_mapping: HashMap<ParentMailboxId, Vec<MailboxId>>,
-    states: HashMap<ParentMailboxId, QueryState>,
+
+    /// stores the query state of the child-mailboxes of the given parent-mailbox
+    children_query_state: HashMap<ParentMailboxId, QueryState>,
+    /// stores the query state for querying the root mails of a mailbox
+    root_mails_state: HashMap<MailboxId, RootMails>,
 }
 
 impl Cache {
@@ -19,20 +41,29 @@ impl Cache {
         Self {
             mailboxes: HashMap::new(),
             children_mapping: HashMap::new(),
-            states: HashMap::new(),
+            children_query_state: HashMap::new(),
+            root_mails_state: HashMap::new(),
         }
     }
 
     pub fn is_initialised(&self, parent: &ParentMailboxId) -> bool {
-        self.get_state(parent).is_some()
+        self.get_children_query_state(parent).is_some()
     }
 
-    pub fn get_state(&self, parent: &ParentMailboxId) -> Option<GetState> {
-        self.states.get(parent).cloned()
+    pub fn get_children_query_state(&self, parent: &ParentMailboxId) -> Option<GetState> {
+        self.children_query_state.get(parent).cloned()
     }
 
-    pub fn set_state(&mut self, parent: ParentMailboxId, new_state: GetState) {
-        self.states.insert(parent, new_state);
+    pub fn set_children_query_state(&mut self, parent: ParentMailboxId, new_state: GetState) {
+        self.children_query_state.insert(parent, new_state);
+    }
+
+    pub fn get_root_mails(&self, parent: &MailboxId) -> Option<&RootMails> {
+        self.root_mails_state.get(parent)
+    }
+
+    pub fn set_root_mails(&mut self, parent: MailboxId, root_mails: RootMails) {
+        self.root_mails_state.insert(parent, root_mails);
     }
 
     pub fn get_data(&self, id: &MailboxId) -> Option<Arc<MailboxData>> {
@@ -103,7 +134,7 @@ impl Cache {
         debug!("Flushing cache.");
         self.mailboxes.clear();
         self.children_mapping.clear();
-        self.states.clear();
+        self.children_query_state.clear();
     }
 
     #[instrument(skip(self))]

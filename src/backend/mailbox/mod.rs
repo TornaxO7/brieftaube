@@ -2,9 +2,13 @@ mod cache;
 mod error;
 pub mod types;
 
-use crate::backend::{Backend, mailbox::types::ParentMailboxId, task_manager::TaskId};
+use crate::backend::{
+    Backend,
+    mailbox::{cache::RootMails, types::ParentMailboxId},
+    task_manager::TaskId,
+};
 use cache::Cache;
-use jmap_client::{client::Client, core::response::MailboxGetResponse};
+use jmap_client::{client::Client, core::query::QueryResponse};
 use std::sync::{Arc, Mutex};
 use tracing::{debug, error, instrument};
 use types::{MailboxData, MailboxId};
@@ -21,6 +25,16 @@ impl MailboxBackend {
             cache: Arc::new(Mutex::new(Cache::new())),
         }
     }
+
+    pub fn get_root_mails(&self, id: &MailboxId) -> Option<RootMails> {
+        let cache = self.cache.lock().unwrap();
+        cache.get_root_mails(id).cloned()
+    }
+
+    pub fn handle_query_root_mails_response(&self, parent: MailboxId, response: QueryResponse) {
+        let mut cache = self.cache.lock().unwrap();
+        cache.set_root_mails(parent, RootMails::new(response));
+    }
 }
 
 /// Helper functions
@@ -33,7 +47,7 @@ impl MailboxBackend {
 // methods which also communicate with the server
 impl MailboxBackend {
     #[instrument(skip(self))]
-    async fn request_mailboxes_query(
+    async fn request_children_mailboxes(
         &self,
         parent: ParentMailboxId,
     ) -> Result<(), jmap_client::Error> {
@@ -70,7 +84,7 @@ impl MailboxBackend {
             .unwrap();
 
         let mut cache = self.cache.lock().unwrap();
-        cache.set_state(parent.clone(), mailbox_get_response.take_state());
+        cache.set_children_query_state(parent.clone(), mailbox_get_response.take_state());
 
         let child_mailboxes: Vec<MailboxData> = mailbox_get_response
             .take_list()
@@ -416,7 +430,7 @@ impl Backend {
             self.task_manager
                 .spawn(TaskId::QueryChildMailboxes(parent.clone()), async move {
                     if let Err(err) = mailbox_backend
-                        .request_mailboxes_query(parent.clone())
+                        .request_children_mailboxes(parent.clone())
                         .await
                     {
                         error!("Couldn't query mailboxes:\n{err}");

@@ -21,7 +21,7 @@ type GetState = String;
 type QueryState = String;
 
 pub struct Backend {
-    config: Rc<Config>,
+    _config: Rc<Config>,
 
     client: Arc<Client>,
 
@@ -61,7 +61,7 @@ impl Backend {
             mails: Arc::new(mails::MailsBackend::new(client.clone())),
             threads: Arc::new(threads::ThreadsBackend::new(client.clone())),
             task_manager: TaskManager::new(),
-            config,
+            _config: config,
         }
     }
 
@@ -82,16 +82,16 @@ impl Backend {
 /// For combined requests
 impl Backend {
     #[instrument(skip(self))]
-    pub fn mails_get_or_request_collapsed(&self, id: &MailboxId) -> Option<Vec<CollapsedMail>> {
+    pub fn mailbox_get_or_request_root_mails(&self, id: &MailboxId) -> Option<Vec<CollapsedMail>> {
         let mut collapsed_mails: Vec<CollapsedMail> = Vec::with_capacity(
             self.mailbox_get_data(id)
                 .map(|mailbox| mailbox.total_threads)
                 .unwrap_or(16),
         );
 
-        match self.mails_get_root_mails(id) {
-            Some(root_mails_ids) => {
-                for root_mail_id in root_mails_ids {
+        match self.mailboxes.get_root_mails(id) {
+            Some(root_mails) => {
+                for root_mail_id in root_mails.ids {
                     let root_mail = self.mail_get_data(&root_mail_id).expect("Requested");
                     let root_mail_thread =
                         self.thread_get(&root_mail.thread_id).expect("Requested");
@@ -100,7 +100,7 @@ impl Backend {
                     let entry = if thread_has_only_one_mail {
                         CollapsedMail::SingleMail(root_mail_id)
                     } else {
-                        CollapsedMail::CollapsedThread(root_mail.thread_id.clone())
+                        CollapsedMail::CollapsedThread(root_mail_id, root_mail.thread_id.clone())
                     };
 
                     collapsed_mails.push(entry);
@@ -110,6 +110,7 @@ impl Backend {
                 let id = id.clone();
                 let threads = self.threads.clone();
                 let mails = self.mails.clone();
+                let mailboxes = self.mailboxes.clone();
                 let client = self.client.clone();
 
                 self.task_manager
@@ -124,7 +125,7 @@ impl Backend {
                                         value: id.clone().0,
                                     })
                                     .sort([jmap_client::email::query::Comparator::received_at()
-                                        .ascending()])
+                                        .descending()])
                                     .position(0)
                                     .limit(10);
                                 query_mail.arguments().collapse_threads(true);
@@ -160,10 +161,15 @@ impl Backend {
                             .unwrap_get_email()
                             .unwrap();
 
+                        let root_mail_query = response
+                            .pop_method_response()
+                            .unwrap()
+                            .unwrap_query_email()
+                            .unwrap();
+
                         threads.handle_get_response(thread_get);
                         mails.handle_get_response(mail_get);
-
-                        debug!("Received collapsed mails of '{:?}'.", id.clone());
+                        mailboxes.handle_query_root_mails_response(id.clone(), root_mail_query);
                     });
 
                 return None;

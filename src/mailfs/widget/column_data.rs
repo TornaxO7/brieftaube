@@ -22,12 +22,13 @@ impl<'a> ColumnDisplay<'a> {
     pub fn new(column: Option<&'a mut ColumnState>, backend: Rc<Backend>) -> Option<Self> {
         let column = column?;
 
+        // TODO: Collect missign mails and create request-batch to get mail-data
         let entries = column
             .entries()
             .iter()
             .map(|entry| match entry {
                 ColumnStateEntry::Mailbox(id) => {
-                    let mailbox = backend.mailbox_get_data(id)?;
+                    let mailbox = backend.mailbox_get_data(id).unwrap();
                     Some(ColumnDisplayEntryData::mailbox(&mailbox))
                 }
                 ColumnStateEntry::SingleMail(mail_id) => {

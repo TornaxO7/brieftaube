@@ -81,7 +81,7 @@ impl ColumnStateEntry {
         // get mails
         if let Some(parent_mailbox_id) = mailbox.as_ref() {
             let collapsed_mails = backend
-                .mails_get_or_request_collapsed(parent_mailbox_id)
+                .mailbox_get_or_request_root_mails(parent_mailbox_id)
                 .ok_or(error::BackendNotReady)?;
 
             for collapsed_mail in collapsed_mails {
@@ -89,12 +89,7 @@ impl ColumnStateEntry {
                     CollapsedMail::SingleMail(mail_id) => {
                         entries.push(ColumnStateEntry::SingleMail(mail_id))
                     }
-                    CollapsedMail::CollapsedThread(thread_id) => {
-                        let thread_mails = backend
-                            .threads_get_or_request(thread_id.clone())
-                            .ok_or(error::BackendNotReady)?;
-                        let mail_id = thread_mails[0].clone();
-
+                    CollapsedMail::CollapsedThread(mail_id, thread_id) => {
                         entries.push(ColumnStateEntry::CollapsedThread(mail_id, thread_id))
                     }
                 }

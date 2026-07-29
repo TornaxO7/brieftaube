@@ -34,7 +34,6 @@ impl ThreadsBackend {
 
     #[instrument(skip(self))]
     pub fn handle_get_response(&self, mut response: ThreadGetResponse) {
-        debug!("Load response: {:?}", response);
         let mut cache = self.cache.lock().unwrap();
 
         for thread in response.take_list() {
