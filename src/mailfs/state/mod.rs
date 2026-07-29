@@ -283,7 +283,7 @@ impl<'a> State {
                 }
             }
             Some(_column) => {
-                // TODO: Update column
+                // TODO: Update column by comparing current entries with entries from cache/backend.
                 //
                 // Steps:
                 // 1. Add new mailboxes
