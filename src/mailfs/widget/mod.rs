@@ -142,23 +142,23 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnDisplay) {
 
                     // Subject
                     {
+                        // 📎
+                        let subject = if *has_attachment {
+                            format!("{} {}", ATTACHMENT, subject)
+                        } else {
+                            subject.to_string()
+                        };
+
                         let subject = match ty {
                             MailEntryType::Single
                             | MailEntryType::ThreadCollapsed
-                            | MailEntryType::ThreadStart => subject.to_string(),
+                            | MailEntryType::ThreadStart => subject,
                             MailEntryType::ThreadChild => {
                                 format!("{} {}", THREAD_BRANCH, subject)
                             }
                             MailEntryType::ThreadEnd => {
                                 format!("{} {}", THREAD_LAST, subject)
                             }
-                        };
-
-                        // 📎
-                        let subject = if *has_attachment {
-                            format!("{} {}", ATTACHMENT, subject)
-                        } else {
-                            subject
                         };
 
                         row.push(Cell::from(subject).style(Style::new().fg(WHITE)));
