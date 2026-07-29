@@ -13,7 +13,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{
         Style,
-        palette::material::{BLUE, BLUE_GRAY, CYAN, GRAY, ORANGE, PINK, WHITE},
+        palette::material::{BLUE, BLUE_GRAY, CYAN, GRAY, GREEN, LIGHT_BLUE, ORANGE, PINK, WHITE},
     },
     text::Text,
     widgets::{Block, Borders, Cell, Paragraph, Row, StatefulWidget, Table, Widget},
@@ -89,23 +89,23 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnDisplay) {
                     // 🖿
                     row.push(
                         Cell::from(FOLDER)
-                            .style(Style::new().fg(BLUE.c800))
+                            .style(Style::new().fg(BLUE.c500))
                             .column_span(3),
                     );
 
                     // name
                     row.push(
                         Cell::from(name.clone())
-                            .style(Style::new().fg(BLUE.c800))
+                            .style(Style::new().fg(LIGHT_BLUE.c600))
                             .column_span(2),
                     );
 
                     // unread_mails
                     {
                         let style = if *unread_mails == 0 {
-                            Style::new().fg(GRAY.c800)
+                            Style::new().fg(GRAY.c600)
                         } else {
-                            Style::new().fg(BLUE.c800)
+                            Style::new().fg(GREEN.c500)
                         };
 
                         row.push(Cell::from(format!("{}", unread_mails)).style(style));
@@ -174,7 +174,8 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnDisplay) {
         .collect();
 
     StatefulWidget::render(
-        Table::new(rows, widths).row_highlight_style(Style::new().bg(BLUE.c600)),
+        Table::new(rows, widths)
+            .row_highlight_style(Style::new().bg(LIGHT_BLUE.c500).fg(GRAY.c900)),
         area,
         buf,
         data.state,
