@@ -15,8 +15,9 @@ use ratatui::{
         Style,
         palette::material::{BLUE, BLUE_GRAY, CYAN, GRAY, GREEN, LIGHT_BLUE, ORANGE, PINK, WHITE},
     },
+    symbols::line::VERTICAL,
     text::Text,
-    widgets::{Block, Borders, Cell, Paragraph, Row, StatefulWidget, Table, Widget},
+    widgets::{Block, Cell, List, ListItem, Paragraph, Row, StatefulWidget, Table, Widget},
 };
 
 const FOLDER: &str = "🖿";
@@ -37,10 +38,18 @@ impl StatefulWidget for Mailfs {
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let mut data = state.render_data();
 
-        let [left_area, center_area, right_area] = Layout::horizontal([
-            Constraint::Percentage(25),
-            Constraint::Percentage(50),
-            Constraint::Percentage(25),
+        let [
+            left_area,
+            border_line1,
+            center_area,
+            border_line2,
+            right_area,
+        ] = Layout::horizontal([
+            Constraint::Fill(1),
+            Constraint::Length(1),
+            Constraint::Fill(2),
+            Constraint::Length(1),
+            Constraint::Fill(2),
         ])
         .areas(area);
 
@@ -48,16 +57,15 @@ impl StatefulWidget for Mailfs {
             render_column(left_area, buf, left);
         }
 
-        render_line(left_area, buf);
-
         if let Some(center) = data.center.as_mut() {
             render_column(center_area, buf, center);
         }
-        render_line(center_area, buf);
+        render_left_border_line(border_line1, buf, data.center.as_ref());
 
         if let Some(right) = data.right.as_mut() {
             render_right_column(right_area, buf, right);
         }
+        render_left_border_line(border_line2, buf, None);
     }
 }
 
@@ -66,10 +74,9 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnDisplay) {
         Constraint::Length(1),
         Constraint::Length(1),
         Constraint::Length(1),
-        Constraint::Length(1),
         Constraint::Fill(1),
         Constraint::Fill(1),
-        Constraint::Fill(2),
+        Constraint::Fill(1),
     ];
 
     let rows: Vec<Row<'_>> = data
@@ -78,26 +85,23 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnDisplay) {
         .map(|entry| {
             let mut row = Vec::with_capacity(widths.len());
 
-            if entry.is_selected {
-                row.push(Cell::from(PLACEHOLDER).style(Style::new().bg(ORANGE.c800)));
-            } else {
-                row.push(PLACEHOLDER.into());
-            };
-
             match &entry.data {
                 ColumnDisplayEntryData::Mailbox { name, unread_mails } => {
+                    // ⏺
+                    if *unread_mails > 0 {
+                        row.push(Cell::from(MAIL_UNREAD_SYMBOL).style(Style::new().fg(BLUE.c800)));
+                    } else {
+                        row.push(PLACEHOLDER.into());
+                    };
+
                     // 🖿
-                    row.push(
-                        Cell::from(FOLDER)
-                            .style(Style::new().fg(BLUE.c500))
-                            .column_span(3),
-                    );
+                    row.push(Cell::from(FOLDER).style(Style::new().fg(BLUE.c500)));
 
                     // name
                     row.push(
                         Cell::from(name.clone())
                             .style(Style::new().fg(LIGHT_BLUE.c600))
-                            .column_span(2),
+                            .column_span(3),
                     );
 
                     // unread_mails
@@ -258,6 +262,25 @@ fn render_headers(area: Rect, buf: &mut Buffer, headers: &[(&'static str, &str)]
     Widget::render(table, area, buf);
 }
 
-fn render_line(area: Rect, buf: &mut Buffer) {
-    Block::new().borders(Borders::RIGHT).render(area, buf);
+fn render_left_border_line(area: Rect, buf: &mut Buffer, column: Option<&ColumnDisplay>) {
+    match column {
+        None => Widget::render(List::new(vec![VERTICAL; area.height as usize]), area, buf),
+        Some(column) => {
+            let mut lines: Vec<ListItem> = column
+                .entries
+                .iter()
+                .map(|entry| {
+                    if entry.is_selected {
+                        ListItem::new(VERTICAL).style(Style::new().bg(ORANGE.c500))
+                    } else {
+                        ListItem::new(VERTICAL)
+                    }
+                })
+                .collect();
+
+            lines.resize(area.height as usize, ListItem::new(VERTICAL));
+
+            Widget::render(List::new(lines), area, buf)
+        }
+    }
 }
