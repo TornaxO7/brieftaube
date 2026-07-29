@@ -2,9 +2,7 @@ mod backend;
 // mod composer;
 mod config;
 mod log_viewer;
-// mod mail_list;
 // mod mail_viewer;
-// mod mailboxes;
 mod statusbar;
 mod utils;
 
