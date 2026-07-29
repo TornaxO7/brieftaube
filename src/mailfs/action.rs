@@ -33,6 +33,9 @@ pub enum Action {
     #[strum(message = "Open the selected mailbox.")]
     NavigateLeft,
 
+    #[strum(message = "Open the parent mailbox.")]
+    NavigateToParent,
+
     // #[strum(message = "Create a new mailbox")]
     // CreateMailbox,
     #[strum(message = "Open logs")]

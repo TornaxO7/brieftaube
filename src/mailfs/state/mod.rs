@@ -66,6 +66,7 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
             Action::NavigateToBottom => self.navigate_to_bottom(),
             Action::NavigateRight => self.navigate_right(),
             Action::NavigateLeft => self.navigate_left(),
+            Action::NavigateToParent => self.navigate_to_parent(),
             Action::OpenLogs => self.open_logs(),
         }
     }
@@ -285,17 +286,19 @@ impl State {
                     ColumnStateEntry::Mailbox(_)
                     | ColumnStateEntry::SingleMail(_)
                     | ColumnStateEntry::CollapsedThread(_, _) => {
-                        self.selection_stack.pop();
-                        debug_assert!(
-                            self.selection_stack.len() >= 1,
-                            "The selection stack can't be empty: The root maildir must be displayable!"
-                        );
+                        self.navigate_to_parent();
                     }
                     ColumnStateEntry::ThreadStart(_, _)
                     | ColumnStateEntry::ThreadChild(_, _)
                     | ColumnStateEntry::ThreadEnd(_, _) => todo!("Collapsed thread"),
                 }
             }
+        }
+    }
+
+    fn navigate_to_parent(&mut self) {
+        if self.selection_stack.len() > 1 {
+            self.selection_stack.pop();
         }
     }
 
