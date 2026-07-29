@@ -228,7 +228,9 @@ impl State {
 
     fn navigate_down(&mut self) {
         if let Some(column) = self.get_center_column_mut() {
-            column.state.select_next();
+            let pos = column.state.selected();
+            let new_pos = pos.map(|old_pos| (old_pos + 1).min(column.entries().len() - 1));
+            column.state.select(new_pos);
         }
     }
 
@@ -246,7 +248,12 @@ impl State {
 
     fn navigate_to_bottom(&mut self) {
         if let Some(column) = self.get_center_column_mut() {
-            column.state.select_last();
+            if column.entries().is_empty() {
+                column.state.select(None);
+            } else {
+                let len = column.entries().len();
+                column.state.select(Some(len - 1));
+            }
         }
     }
 
