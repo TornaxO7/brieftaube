@@ -43,6 +43,8 @@ impl State {
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", Action::Quit),
                 ("j", Action::NavigateDown),
+                ("l", Action::NavigateRight),
+                ("h", Action::NavigateLeft),
                 ("k", Action::NavigateUp),
                 ("gg", Action::NavigateToTop),
                 ("ge", Action::NavigateToBottom),
@@ -62,7 +64,8 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
             Action::NavigateUp => self.navigate_up(),
             Action::NavigateToTop => self.navigate_to_top(),
             Action::NavigateToBottom => self.navigate_to_bottom(),
-            Action::ActivateSelectedEntry => self.activate_selected_entry(),
+            Action::NavigateRight => self.navigate_right(),
+            Action::NavigateLeft => self.navigate_left(),
             Action::OpenLogs => self.open_logs(),
         }
     }
@@ -115,6 +118,7 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
                 self.get_right_column_mailbox(),
             ) {
                 (Some(left_mailbox), Some(right_mailbox)) => {
+                    debug!("{:?}, {:?}", left_mailbox, right_mailbox);
                     let [left, center, right] = self.columns.get_disjoint_mut([
                         &left_mailbox,
                         &center_mailbox,
@@ -183,9 +187,9 @@ impl State {
         self.get_center_column()
             .and_then(|center| center.selected_entry())
             .cloned()
-            .map(|selected| {
+            .and_then(|selected| {
                 if let ColumnStateEntry::Mailbox(id) = selected {
-                    Some(id)
+                    Some(Some(id))
                 } else {
                     None
                 }
@@ -257,8 +261,42 @@ impl State {
         }
     }
 
-    fn activate_selected_entry(&mut self) {
-        todo!()
+    fn navigate_right(&mut self) {
+        if let Some(column) = self.get_center_column() {
+            if let Some(entry) = column.selected_entry() {
+                match entry {
+                    ColumnStateEntry::Mailbox(id) => {
+                        self.selection_stack.push(Some(id.clone()));
+                    }
+                    ColumnStateEntry::SingleMail(mail_id) => todo!(),
+                    ColumnStateEntry::CollapsedThread(mail_id, thread_id) => todo!(),
+                    ColumnStateEntry::ThreadStart(mail_id, thread_id) => todo!(),
+                    ColumnStateEntry::ThreadChild(mail_id, thread_id) => todo!(),
+                    ColumnStateEntry::ThreadEnd(mail_id, thread_id) => todo!(),
+                }
+            }
+        }
+    }
+
+    fn navigate_left(&mut self) {
+        if let Some(column) = self.get_center_column() {
+            if let Some(entry) = column.selected_entry() {
+                match entry {
+                    ColumnStateEntry::Mailbox(_)
+                    | ColumnStateEntry::SingleMail(_)
+                    | ColumnStateEntry::CollapsedThread(_, _) => {
+                        self.selection_stack.pop();
+                        debug_assert!(
+                            self.selection_stack.len() >= 1,
+                            "The selection stack can't be empty: The root maildir must be displayable!"
+                        );
+                    }
+                    ColumnStateEntry::ThreadStart(_, _)
+                    | ColumnStateEntry::ThreadChild(_, _)
+                    | ColumnStateEntry::ThreadEnd(_, _) => todo!("Collapsed thread"),
+                }
+            }
+        }
     }
 
     fn open_logs(&mut self) {

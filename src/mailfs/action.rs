@@ -29,7 +29,9 @@ pub enum Action {
     NavigateToBottom,
 
     #[strum(message = "Open the selected mailbox.")]
-    ActivateSelectedEntry,
+    NavigateRight,
+    #[strum(message = "Open the selected mailbox.")]
+    NavigateLeft,
 
     // #[strum(message = "Create a new mailbox")]
     // CreateMailbox,
