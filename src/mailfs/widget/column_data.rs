@@ -42,7 +42,7 @@ impl<'a> ColumnDisplay<'a> {
                         &mail,
                     ))
                 }
-                ColumnStateEntry::ThreadStart(mail_id, _) => {
+                ColumnStateEntry::ThreadStart { mail_id, .. } => {
                     let mail = backend.mail_get_data(mail_id)?;
                     Some(ColumnDisplayEntryData::mail(
                         MailEntryType::ThreadStart,

@@ -62,7 +62,13 @@ pub enum ColumnStateEntry {
     /// Root mail of a thread
     CollapsedThread(MailId, ThreadId),
 
-    ThreadStart(MailId, ThreadId),
+    ThreadStart {
+        mail_id: MailId,
+        thread_id: ThreadId,
+        // not all mails within a thread are in the given mailbox (a response for example)
+        // this attribute should store the original mail in the collapsed-state.
+        collapsed_mail_id: MailId,
+    },
     ThreadChild(MailId, ThreadId),
     ThreadEnd(MailId, ThreadId),
 }

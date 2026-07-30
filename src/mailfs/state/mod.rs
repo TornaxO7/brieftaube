@@ -11,6 +11,7 @@ use crate::{
     backend::{
         Backend,
         mailbox::types::{ParentMailboxId, TOP_PARENT_MAILBOX_ID},
+        mails::types::MailId,
         threads::types::ThreadId,
     },
     mailfs::widget::{ColumnDisplay, MailPreview, RenderData, RightColumn},
@@ -36,7 +37,7 @@ pub struct State {
 
     /// stores which threads needs to be uncollapsed
     // if there needs to be more "task": Move it to an extra struct
-    threads_to_uncollapse: HashMap<ParentMailboxId, HashSet<ThreadId>>,
+    threads_to_uncollapse: HashMap<ParentMailboxId, HashSet<(MailId, ThreadId)>>,
     backend: Rc<Backend>,
 }
 
@@ -113,7 +114,7 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
                 ColumnStateEntry::Mailbox(_) => None,
                 ColumnStateEntry::SingleMail(id)
                 | ColumnStateEntry::CollapsedThread(id, _)
-                | ColumnStateEntry::ThreadStart(id, _)
+                | ColumnStateEntry::ThreadStart { mail_id: id, .. }
                 | ColumnStateEntry::ThreadChild(id, _)
                 | ColumnStateEntry::ThreadEnd(id, _) => Some(id),
             })
@@ -280,19 +281,19 @@ impl State {
                     ColumnStateEntry::Mailbox(id) => {
                         self.selection_stack.push(Some(id));
                     }
-                    ColumnStateEntry::ThreadStart(mail_id, _)
+                    ColumnStateEntry::ThreadStart { mail_id, .. }
                     | ColumnStateEntry::ThreadChild(mail_id, _)
                     | ColumnStateEntry::ThreadEnd(mail_id, _)
                     | ColumnStateEntry::SingleMail(mail_id) => {
                         todo!("open {mail_id:?} in mail viewer")
                     }
-                    ColumnStateEntry::CollapsedThread(_, thread_id) => {
+                    ColumnStateEntry::CollapsedThread(mail_id, thread_id) => {
                         // we need to create a "task" because we may need to wait for the server...
                         let list = self
                             .threads_to_uncollapse
                             .get_mut(column.mailbox())
                             .unwrap();
-                        list.insert(thread_id);
+                        list.insert((mail_id, thread_id));
                     }
                 }
             }
@@ -308,7 +309,7 @@ impl State {
                     | ColumnStateEntry::CollapsedThread(_, _) => {
                         self.navigate_to_parent();
                     }
-                    ColumnStateEntry::ThreadStart(_, thread_id)
+                    ColumnStateEntry::ThreadStart { thread_id, .. }
                     | ColumnStateEntry::ThreadChild(_, thread_id)
                     | ColumnStateEntry::ThreadEnd(_, thread_id) => {
                         let (start_pos, new_entry) = column
@@ -317,15 +318,16 @@ impl State {
                             .cloned()
                             .enumerate()
                             .find_map(|(idx, entry)| {
-                                if let ColumnStateEntry::ThreadStart(
-                                    entry_mail_id,
-                                    entry_thread_id,
-                                ) = entry
+                                if let ColumnStateEntry::ThreadStart {
+                                    thread_id: entry_thread_id,
+                                    collapsed_mail_id,
+                                    ..
+                                } = entry
                                 {
                                     Some((
                                         idx,
                                         ColumnStateEntry::CollapsedThread(
-                                            entry_mail_id,
+                                            collapsed_mail_id,
                                             entry_thread_id,
                                         ),
                                     ))
@@ -388,7 +390,9 @@ impl<'a> State {
                 }
             }
             Some(column) => {
-                for thread_id in self.threads_to_uncollapse.get(id).cloned().unwrap() {
+                for (collapsed_mail_id, thread_id) in
+                    self.threads_to_uncollapse.get(id).cloned().unwrap()
+                {
                     if let Some(thread_mails) =
                         self.backend.mail_get_or_request_thread_mails(&thread_id)
                     {
@@ -401,10 +405,11 @@ impl<'a> State {
                             let (first, rest) = thread_mails.split_first().unwrap();
                             let (last, inner) = rest.split_last().unwrap();
 
-                            let mut new_entries = vec![ColumnStateEntry::ThreadStart(
-                                first.id.clone(),
-                                thread_id.clone(),
-                            )];
+                            let mut new_entries = vec![ColumnStateEntry::ThreadStart {
+                                mail_id: first.id.clone(),
+                                thread_id: thread_id.clone(),
+                                collapsed_mail_id: collapsed_mail_id.clone(),
+                            }];
 
                             new_entries.extend(inner.iter().map(|mail| {
                                 ColumnStateEntry::ThreadChild(mail.id.clone(), thread_id.clone())
@@ -434,7 +439,7 @@ impl<'a> State {
                         };
 
                         let threads_to_uncollapse = self.threads_to_uncollapse.get_mut(id).unwrap();
-                        threads_to_uncollapse.remove(&thread_id);
+                        threads_to_uncollapse.remove(&(collapsed_mail_id, thread_id));
                     }
                 }
 
