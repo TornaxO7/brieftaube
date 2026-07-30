@@ -11,6 +11,7 @@ use crate::{
     backend::{
         Backend,
         mailbox::types::{ParentMailboxId, TOP_PARENT_MAILBOX_ID},
+        threads::types::ThreadId,
     },
     mailfs::widget::{ColumnDisplay, MailPreview, RenderData, RightColumn},
     utils::ui::{
@@ -18,8 +19,17 @@ use crate::{
     },
 };
 use input_type::InputType;
-use std::{collections::HashMap, rc::Rc, vec::Drain};
-use tracing::{debug, instrument};
+use std::{
+    collections::{HashMap, HashSet},
+    rc::Rc,
+    vec::Drain,
+};
+use tracing::{debug, instrument, warn};
+
+#[derive(Default)]
+struct Tasks {
+    mails_to_uncollapse: HashSet<ThreadId>,
+}
 
 pub struct State {
     app_actions: Vec<crate::Action>,
@@ -29,6 +39,9 @@ pub struct State {
     columns: HashMap<ParentMailboxId, ColumnState>,
     selection_stack: Vec<ParentMailboxId>,
 
+    /// stores which threads needs to be uncollapsed
+    // if there needs to be more "task": Move it to an extra struct
+    threads_to_uncollapse: HashMap<ParentMailboxId, HashSet<ThreadId>>,
     backend: Rc<Backend>,
 }
 
@@ -40,6 +53,7 @@ impl State {
             columns: HashMap::new(),
             selection_stack: vec![TOP_PARENT_MAILBOX_ID],
             app_actions: Vec::with_capacity(2),
+            threads_to_uncollapse: HashMap::new(),
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", Action::Quit),
                 ("j", Action::NavigateDown),
@@ -263,17 +277,27 @@ impl State {
     }
 
     fn navigate_right(&mut self) {
-        if let Some(column) = self.get_center_column() {
-            if let Some(entry) = column.selected_entry() {
+        let center_column = self.columns.get(self.selection_stack.last().unwrap());
+
+        if let Some(column) = center_column {
+            if let Some(entry) = column.selected_entry().cloned() {
                 match entry {
                     ColumnStateEntry::Mailbox(id) => {
-                        self.selection_stack.push(Some(id.clone()));
+                        self.selection_stack.push(Some(id));
                     }
-                    ColumnStateEntry::SingleMail(mail_id) => todo!(),
-                    ColumnStateEntry::CollapsedThread(mail_id, thread_id) => todo!(),
-                    ColumnStateEntry::ThreadStart(mail_id, thread_id) => todo!(),
-                    ColumnStateEntry::ThreadChild(mail_id, thread_id) => todo!(),
-                    ColumnStateEntry::ThreadEnd(mail_id, thread_id) => todo!(),
+                    ColumnStateEntry::ThreadStart(mail_id, _)
+                    | ColumnStateEntry::ThreadChild(mail_id, _)
+                    | ColumnStateEntry::ThreadEnd(mail_id, _)
+                    | ColumnStateEntry::SingleMail(mail_id) => {
+                        todo!("open {mail_id:?} in mail viewer")
+                    }
+                    ColumnStateEntry::CollapsedThread(_, thread_id) => {
+                        let list = self
+                            .threads_to_uncollapse
+                            .get_mut(column.mailbox())
+                            .unwrap();
+                        list.insert(thread_id);
+                    }
                 }
             }
         }
@@ -313,20 +337,77 @@ impl State {
 /// Methods for loading the columns
 impl<'a> State {
     fn update_columns(&mut self) {
-        match self.get_center_column_mut() {
-            None => {
-                // TODO: Move to function?
-                let center_mailbox = self.get_center_column_mailbox();
+        let current_column = self.selection_stack.last().cloned().unwrap();
+        self.update_column(&current_column);
 
+        if let Some(right_mailbox) = self.get_right_column_mailbox() {
+            self.update_column(&right_mailbox);
+        }
+    }
+
+    fn update_column(&mut self, id: &ParentMailboxId) {
+        match self.columns.get_mut(id) {
+            None => {
                 if let Ok(entries) =
-                    ColumnStateEntry::create_entries(center_mailbox.clone(), self.backend.clone())
+                    ColumnStateEntry::create_entries(id.clone(), self.backend.clone())
                 {
-                    debug!("Center entries: {entries:?}");
-                    let state = ColumnState::new(center_mailbox.clone(), entries);
-                    self.columns.insert(center_mailbox.clone(), state);
+                    let state = ColumnState::new(id.clone(), entries);
+                    self.columns.insert(id.clone(), state);
+                    self.threads_to_uncollapse
+                        .insert(id.clone(), HashSet::new());
                 }
             }
-            Some(_column) => {
+            Some(column) => {
+                for thread_id in self.threads_to_uncollapse.get(id).cloned().unwrap() {
+                    if let Some(thread_mails) =
+                        self.backend.mail_get_or_request_thread_mails(&thread_id)
+                    {
+                        debug_assert!(
+                            thread_mails.len() >= 2,
+                            "Uncollapseable threads must have at least 2 mails <.<"
+                        );
+
+                        let new_entries = {
+                            let (first, rest) = thread_mails.split_first().unwrap();
+                            let (last, inner) = rest.split_last().unwrap();
+
+                            let mut new_entries = vec![ColumnStateEntry::ThreadStart(
+                                first.id.clone(),
+                                thread_id.clone(),
+                            )];
+
+                            new_entries.extend(inner.iter().map(|mail| {
+                                ColumnStateEntry::ThreadChild(mail.id.clone(), thread_id.clone())
+                            }));
+
+                            new_entries.push(ColumnStateEntry::ThreadEnd(
+                                last.id.clone(),
+                                thread_id.clone(),
+                            ));
+
+                            new_entries
+                        };
+
+                        match column
+                            .entries()
+                            .iter()
+                            .position(|entry| matches!(entry, ColumnStateEntry::CollapsedThread(_, entry_thread_id) if entry_thread_id == &thread_id))
+                        {
+                            Some(thread_idx) => {
+                                column
+                                    .entries_mut()
+                                    .splice(thread_idx..(thread_idx + 1), new_entries);
+                            },
+                            None => {
+                                warn!("Eh, the thread with the id '{}' seems to be disappeared so it can't be uncollapsed now.... weird. Welp, it won't get uncollapsed then.", thread_id.0);
+                            }
+                        };
+
+                        let threads_to_uncollapse = self.threads_to_uncollapse.get_mut(id).unwrap();
+                        threads_to_uncollapse.remove(&thread_id);
+                    }
+                }
+
                 // TODO: Update column by comparing current entries with entries from cache/backend.
                 //
                 // Steps:
@@ -337,24 +418,6 @@ impl<'a> State {
                 // 4. Add new mails
                 // 5. Update mails
                 // 6. Remove removed mails from backend
-            }
-        }
-
-        if let Some(right_mailbox) = self.get_right_column_mailbox() {
-            match self.columns.get_mut(&right_mailbox) {
-                None => {
-                    if let Ok(entries) = ColumnStateEntry::create_entries(
-                        right_mailbox.clone(),
-                        self.backend.clone(),
-                    ) {
-                        debug!("Right entries: {entries:?}");
-                        let state = ColumnState::new(right_mailbox.clone(), entries);
-                        self.columns.insert(right_mailbox.clone(), state);
-                    }
-                }
-                Some(_column) => {
-                    // TODO: update the column
-                }
             }
         }
     }

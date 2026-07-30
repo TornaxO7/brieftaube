@@ -10,7 +10,7 @@ use tracing::{debug, instrument};
 pub enum TaskId {
     QueryChildMailboxes(ParentMailboxId),
     QueryRootMails(MailboxId),
-    ThreadGet(ThreadId),
+    GetThreadMails,
 }
 
 /// Add waiting-time for each task to avoid too many requests.

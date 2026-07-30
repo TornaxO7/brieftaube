@@ -5,7 +5,9 @@ pub mod types;
 use crate::backend::{
     Backend,
     mailbox::{cache::RootMails, types::ParentMailboxId},
+    mails::types::MailData,
     task_manager::TaskId,
+    types::CollapsedMail,
 };
 use cache::Cache;
 use jmap_client::{client::Client, core::query::QueryResponse};
@@ -439,5 +441,103 @@ impl Backend {
                 });
             None
         })
+    }
+
+    #[instrument(skip(self))]
+    pub fn mailbox_get_or_request_root_mails(&self, id: &MailboxId) -> Option<Vec<CollapsedMail>> {
+        let mut collapsed_mails: Vec<CollapsedMail> = Vec::with_capacity(
+            self.mailbox_get_data(id)
+                .map(|mailbox| mailbox.total_threads)
+                .unwrap_or(16),
+        );
+
+        match self.mailboxes.get_root_mails(id) {
+            Some(root_mails) => {
+                for root_mail_id in root_mails.ids {
+                    let root_mail = self.mails.get_data(&root_mail_id).expect("Requested");
+                    let root_mail_thread =
+                        self.threads.get(&root_mail.thread_id).expect("Requested");
+
+                    let thread_has_only_one_mail = root_mail_thread.len() == 1;
+                    let entry = if thread_has_only_one_mail {
+                        CollapsedMail::SingleMail(root_mail_id)
+                    } else {
+                        CollapsedMail::CollapsedThread(root_mail_id, root_mail.thread_id.clone())
+                    };
+
+                    collapsed_mails.push(entry);
+                }
+            }
+            None => {
+                let id = id.clone();
+                let mails = self.mails.clone();
+                let mailboxes = self.mailboxes.clone();
+                let threads = self.threads.clone();
+                let client = self.client.clone();
+
+                self.task_manager
+                    .spawn(TaskId::QueryRootMails(id.clone()), async move {
+                        let mut response = {
+                            let mut request = client.build();
+
+                            let mail_query_result = {
+                                let query_mail = request
+                                    .query_email()
+                                    .filter(jmap_client::email::query::Filter::InMailbox {
+                                        value: id.clone().0,
+                                    })
+                                    .sort([jmap_client::email::query::Comparator::received_at()
+                                        .descending()])
+                                    .position(0)
+                                    .limit(10);
+                                query_mail.arguments().collapse_threads(true);
+                                query_mail.result_reference()
+                            };
+
+                            let thread_ids = request
+                                .get_email()
+                                .ids_ref(mail_query_result)
+                                .properties(MailData::PROPERTIES)
+                                .result_reference(jmap_client::email::Property::ThreadId);
+
+                            request.get_thread().ids_ref(thread_ids);
+
+                            match request.send().await {
+                                Ok(r) => r,
+                                Err(err) => {
+                                    error!("Couldn't send root-mails request to server:\n{err}");
+                                    return;
+                                }
+                            }
+                        };
+
+                        let thread_get = response
+                            .pop_method_response()
+                            .unwrap()
+                            .unwrap_get_thread()
+                            .unwrap();
+
+                        let mail_get = response
+                            .pop_method_response()
+                            .unwrap()
+                            .unwrap_get_email()
+                            .unwrap();
+
+                        let root_mail_query = response
+                            .pop_method_response()
+                            .unwrap()
+                            .unwrap_query_email()
+                            .unwrap();
+
+                        threads.handle_get_response(thread_get);
+                        mails.handle_get_response(mail_get);
+                        mailboxes.handle_query_root_mails_response(id.clone(), root_mail_query);
+                    });
+
+                return None;
+            }
+        }
+
+        Some(collapsed_mails)
     }
 }

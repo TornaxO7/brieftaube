@@ -44,6 +44,14 @@ impl ColumnState {
     pub fn entries(&self) -> &[ColumnStateEntry] {
         &self.entries
     }
+
+    pub fn entries_mut(&mut self) -> &mut Vec<ColumnStateEntry> {
+        &mut self.entries
+    }
+
+    pub fn mailbox(&self) -> &ParentMailboxId {
+        &self.mailbox
+    }
 }
 
 #[derive(Clone, Debug)]
