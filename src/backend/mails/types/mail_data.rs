@@ -67,10 +67,6 @@ impl MailData {
             rest: None,
         }
     }
-
-    pub fn extend(&mut self, mail: &Email) {
-        self.rest = Some(MailDataRest::new(mail));
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -81,8 +77,7 @@ pub struct MailDataRest {
 }
 
 impl MailDataRest {
-    pub const PROPERTIES: [Property; 5] = [
-        Property::Id,
+    pub const PROPERTIES: [Property; 4] = [
         Property::TextBody,
         Property::HtmlBody,
         Property::BodyValues,

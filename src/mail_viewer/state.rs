@@ -1,7 +1,6 @@
 use super::Action;
 use crate::{
-    backend::mails::{MailsBackend, types::MailId},
-    config::Config,
+    backend::{Backend, mails::types::MailId},
     mail_viewer::{types::FullMailDisplay, widget::RenderData},
     utils::ui::{
         ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager, palette,
@@ -9,7 +8,7 @@ use crate::{
 };
 use ratatui::widgets::ScrollbarState;
 use std::{collections::HashMap, rc::Rc};
-use tracing::{debug, error, instrument::WithSubscriber, warn};
+use tracing::{debug, error, warn};
 
 #[derive(Debug, Clone)]
 pub enum PaletteType {
@@ -43,10 +42,9 @@ pub struct State {
     app_actions: Vec<crate::Action>,
     overlay: Option<ScreenOverlay<PaletteType, InputType>>,
     keybindings: KeybindManager<Action>,
-    config: Rc<Config>,
 
     id: MailId,
-    backend: Rc<MailsBackend>,
+    backend: Rc<Backend>,
     variant: ViewVariant,
     vertical: ScrollbarState,
     horizontal: ScrollbarState,
@@ -54,13 +52,12 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(id: MailId, backend: Rc<MailsBackend>, config: Rc<Config>) -> Self {
-        backend.request_get_mails_rest(vec![id.clone()]);
+    pub fn new(id: MailId, backend: Rc<Backend>) -> Self {
+        backend.mail_request_rest(&id);
 
         Self {
             id,
             backend,
-            config,
             app_actions: vec![],
             scroll_action: None,
             overlay: None,
@@ -88,7 +85,7 @@ impl State {
     }
 }
 
-impl ScreenState<Action, PaletteType, InputType> for State {
+impl<'a> ScreenState<'a, Action, PaletteType, InputType, RenderData<'a>> for State {
     fn apply_action(&mut self, action: Action) {
         debug!("Action: {}", action);
         match action {
@@ -143,6 +140,10 @@ impl ScreenState<Action, PaletteType, InputType> for State {
             },
             ScreenOverlayResult::Input { value: _, typ: _ } => unreachable!(),
         }
+    }
+
+    fn render_data(&'a mut self) -> RenderData<'a> {
+        todo!()
     }
 }
 
@@ -208,13 +209,13 @@ impl State {
     }
 
     fn open_html_mail_in_browser(&self) {
-        let Some(mail) = self.backend.get_mail(&self.id) else {
+        let Some(mail) = self.backend.mail_get_data(&self.id) else {
             warn!("Couldn't find the mail in the backend. Maybe it got deleted from the server :(");
             return;
         };
 
         let Some(rest) = mail.rest.as_ref() else {
-            self.backend.request_get_mails_rest(vec![mail.id]);
+            self.backend.mail_request_rest(&mail.id);
             warn!("Html mail is requested. Please wait a bit.");
             return;
         };
@@ -230,7 +231,7 @@ impl State {
             return;
         }
 
-        match std::process::Command::new(self.config.browser())
+        match std::process::Command::new(self.backend.config().browser())
             .arg("/tmp/test.html")
             .status()
         {
@@ -246,10 +247,8 @@ impl State {
 // for `widget`
 impl State {
     pub fn get_render_data<'a>(&'a mut self) -> Option<RenderData<'a>> {
-        let mail = self.backend.get_mail(&self.id)?;
-
+        let mail = self.backend.mail_get_data(&self.id)?;
         if mail.rest.is_none() {
-            self.backend.request_get_mails_rest(vec![mail.id]);
             return None;
         }
 

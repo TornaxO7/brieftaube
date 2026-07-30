@@ -3,7 +3,10 @@ pub mod error;
 use super::MailId;
 use crate::backend::{
     GetState,
-    mails::{MailData, types::MailUpdate},
+    mails::{
+        MailData,
+        types::{MailDataRest, MailUpdate},
+    },
     threads::types::ThreadId,
 };
 use std::collections::HashMap;
@@ -38,9 +41,13 @@ impl Cache {
     pub fn get_mail(&self, id: &MailId) -> Option<&MailData> {
         self.mails.get(id)
     }
+
+    pub fn set_mail_rest(&mut self, id: &MailId, rest: MailDataRest) {
+        let mail = self.mails.get_mut(id).expect("Mail already exists");
+        mail.rest = Some(rest);
+    }
 }
 
-// Methods altering the cache
 impl Cache {
     pub fn flush(&mut self) {
         self.mails.clear();

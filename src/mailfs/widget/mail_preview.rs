@@ -1,4 +1,4 @@
-use crate::backend::mails::types::{MailAddress, MailData};
+use crate::backend::mails::types::{MailData, addresses_to_string};
 
 #[derive(Debug)]
 pub struct MailPreview {
@@ -34,14 +34,4 @@ impl From<MailData> for MailPreview {
             received_at,
         }
     }
-}
-
-pub fn addresses_to_string(addresses: &[MailAddress]) -> String {
-    let mut iterator = addresses.iter();
-    let first = iterator
-        .next()
-        .map(|addr| format!("{}", addr))
-        .unwrap_or(String::new());
-
-    iterator.fold(first, |acc, addr| format!("{acc}, {}", addr.to_string()))
 }

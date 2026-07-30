@@ -2,13 +2,13 @@ mod backend;
 // mod composer;
 mod config;
 mod log_viewer;
-// mod mail_viewer;
+mod mail_viewer;
 mod statusbar;
 mod utils;
 
 mod mailfs;
 
-use crate::{statusbar::Statusbar, utils::ui::ScreenState};
+use crate::{backend::mails::types::MailId, statusbar::Statusbar, utils::ui::ScreenState};
 use color_eyre::eyre;
 use crossterm::event::Event;
 use futures::{FutureExt, StreamExt};
@@ -37,18 +37,15 @@ async fn main() -> eyre::Result<()> {
 }
 
 enum Screen {
-    // Mailboxes(mailboxes::State),
-    // MailList(mail_list::State),
     // Composer(composer::ui::State),
-    // MailViewer(mail_viewer::State),
+    MailViewer(mail_viewer::State),
     LogViewer(log_viewer::ui::State),
     Mailfs(mailfs::State),
 }
 
 #[derive(Debug)]
 pub enum Action {
-    // OpenRootMails(MailboxId),
-    // OpenMailViewer(MailId),
+    OpenMailViewer(MailId),
     OpenLogViewer,
     // OpenComposer,
     Redraw,
@@ -121,18 +118,12 @@ impl App {
             Screen::Mailfs(state) => {
                 frame.render_stateful_widget(mailfs::Mailfs::default(), screen, state);
             }
-            // Screen::Mailboxes(state) => {
-            //     frame.render_stateful_widget(mailboxes::Mailboxes::default(), screen, state);
-            // }
-            // Screen::MailList(state) => {
-            //     frame.render_stateful_widget(mail_list::RootMails::default(), screen, state);
-            // }
             // Screen::Composer(state) => {
             //     frame.render_stateful_widget(composer::ui::Composer::default(), screen, state);
             // }
-            // Screen::MailViewer(state) => {
-            //     frame.render_stateful_widget(mail_viewer::MailViewer::default(), screen, state);
-            // }
+            Screen::MailViewer(state) => {
+                frame.render_stateful_widget(mail_viewer::MailViewer::default(), screen, state);
+            }
             Screen::LogViewer(state) => {
                 frame.render_stateful_widget(log_viewer::ui::LogViewer::default(), screen, state);
             }
@@ -144,7 +135,7 @@ impl App {
             // Screen::Mailboxes(state) => state.handle_event(event, &mut self.statusbar),
             // Screen::MailList(state) => state.handle_event(event, &mut self.statusbar),
             // Screen::Composer(state) => state.handle_event(event, &mut self.statusbar),
-            // Screen::MailViewer(state) => state.handle_event(event, &mut self.statusbar),
+            Screen::MailViewer(state) => state.handle_event(event, &mut self.statusbar),
             Screen::Mailfs(state) => state.handle_event(event, &mut self.statusbar),
             Screen::LogViewer(state) => state.handle_event(event, &mut self.statusbar),
         };
@@ -156,7 +147,7 @@ impl App {
                 // Screen::Mailboxes(state) => state.get_app_actions(),
                 // Screen::MailList(state) => state.get_app_actions(),
                 // Screen::Composer(state) => state.get_app_actions(),
-                // Screen::MailViewer(state) => state.get_app_actions(),
+                Screen::MailViewer(state) => state.get_app_actions(),
                 Screen::Mailfs(state) => state.get_app_actions(),
                 Screen::LogViewer(state) => state.get_app_actions(),
             };
@@ -166,23 +157,13 @@ impl App {
 
         for action in actions {
             match action {
-                // Action::OpenRootMails(id) => {
-                //     let backend = self.account.mails.clone();
-                //     let next_screen = Screen::MailList(mail_list::State::new(id, backend));
+                Action::OpenMailViewer(id) => {
+                    let backend = self.backend.clone();
+                    let next_screen = Screen::MailViewer(mail_viewer::State::new(id, backend));
 
-                //     self.statusbar.set_screen(&next_screen);
-                //     self.screens.push(next_screen);
-                // }
-                // Action::OpenMailViewer(id) => {
-                //     let backend = self.account.mails.clone();
-                //     let config = self.account.config.clone();
-
-                //     let next_screen =
-                //         Screen::MailViewer(mail_viewer::State::new(id, backend, config));
-
-                //     self.statusbar.set_screen(&next_screen);
-                //     self.screens.push(next_screen);
-                // }
+                    self.statusbar.set_screen(&next_screen);
+                    self.screens.push(next_screen);
+                }
                 Action::OpenLogViewer => {
                     let next_screen = Screen::LogViewer(log_viewer::ui::State::new());
 
@@ -219,8 +200,7 @@ impl App {
                 // Screen::Mailboxes(_) => self.account.mailboxes.has_tasks_running(),
                 // Screen::MailList(_) => self.account.mails.has_tasks_running(),
                 // Screen::Composer(_) => todo!(),
-                // Screen::MailViewer(_) => self.account.mails.has_tasks_running(),
-                Screen::Mailfs(_) => self.backend.has_tasks_running(),
+                Screen::MailViewer(_) | Screen::Mailfs(_) => self.backend.has_tasks_running(),
                 Screen::LogViewer(_) => false,
             };
 

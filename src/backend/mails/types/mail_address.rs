@@ -38,3 +38,14 @@ impl From<&jmap_client::email::EmailAddress> for MailAddress {
         }
     }
 }
+
+pub fn addresses_to_string(addresses: &[MailAddress]) -> String {
+    addresses
+        .split_first()
+        .map(|(first, rest)| {
+            rest.iter().fold(format!("{}", first), |acc, addr| {
+                format!("{acc}, {}", addr.to_string())
+            })
+        })
+        .unwrap_or(String::new())
+}

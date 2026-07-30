@@ -2,7 +2,10 @@ mod cache;
 pub mod types;
 
 use crate::backend::{
-    Backend, mails::types::MailData, task_manager::TaskId, threads::types::ThreadId,
+    Backend,
+    mails::types::{MailData, MailDataRest},
+    task_manager::TaskId,
+    threads::types::ThreadId,
 };
 use cache::Cache;
 use jmap_client::{client::Client, core::response::EmailGetResponse};
@@ -45,6 +48,19 @@ impl MailsBackend {
         for mail in response.take_list() {
             cache.add(MailData::new(mail));
         }
+    }
+
+    pub fn handle_rest_get_response(&self, id: &MailId, mut response: EmailGetResponse) {
+        let mut cache = self.cache.lock().unwrap();
+        cache.set_state(response.take_state());
+
+        let mails = response.take_list();
+        debug_assert!(
+            mails.len() == 1,
+            "Eh... this function should be only called for _one_ mail. ._."
+        );
+
+        cache.set_mail_rest(id, MailDataRest::new(&mails[0]));
     }
 }
 
@@ -102,5 +118,43 @@ impl Backend {
             });
             None
         })
+    }
+
+    pub fn mail_request_rest(&self, id: &MailId) {
+        let mail_is_not_fully_fetched = {
+            let mail = self.mails.get_data(id).unwrap();
+            mail.rest.is_none()
+        };
+
+        if mail_is_not_fully_fetched {
+            let id = id.clone();
+            let client = self.client.clone();
+            let mails = self.mails.clone();
+
+            self.task_manager.spawn(TaskId::FetchMailRest, async move {
+                let response = {
+                    let mut request = client.build();
+
+                    request
+                        .get_email()
+                        .ids(Some([&id.0]))
+                        .properties(MailDataRest::PROPERTIES)
+                        .arguments()
+                        .fetch_all_body_values(true);
+
+                    match request.send_get_email().await {
+                        Ok(r) => r,
+                        Err(err) => {
+                            error!(
+                                "Couldn't send request to fetch full mail data to server:\n{err}"
+                            );
+                            return;
+                        }
+                    }
+                };
+
+                mails.handle_rest_get_response(&id, response);
+            });
+        }
     }
 }

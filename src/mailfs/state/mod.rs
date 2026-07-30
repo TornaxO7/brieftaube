@@ -286,7 +286,8 @@ impl State {
                     | ColumnStateEntry::ThreadChild(mail_id, _)
                     | ColumnStateEntry::ThreadEnd(mail_id, _)
                     | ColumnStateEntry::SingleMail(mail_id) => {
-                        todo!("open {mail_id:?} in mail viewer")
+                        self.app_actions
+                            .push(crate::Action::OpenMailViewer(mail_id));
                     }
                     ColumnStateEntry::CollapsedThread(mail_id, thread_id) => {
                         // we need to create a "task" because we may need to wait for the server...

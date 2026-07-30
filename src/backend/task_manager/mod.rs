@@ -1,7 +1,4 @@
-use crate::backend::{
-    mailbox::types::{MailboxId, ParentMailboxId},
-    threads::types::ThreadId,
-};
+use crate::backend::mailbox::types::{MailboxId, ParentMailboxId};
 use std::{cell::RefCell, collections::VecDeque};
 use tokio::task::JoinHandle;
 use tracing::{debug, instrument};
@@ -11,6 +8,7 @@ pub enum TaskId {
     QueryChildMailboxes(ParentMailboxId),
     QueryRootMails(MailboxId),
     GetThreadMails,
+    FetchMailRest,
 }
 
 /// Add waiting-time for each task to avoid too many requests.

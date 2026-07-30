@@ -4,18 +4,9 @@ pub mod task_manager;
 pub mod threads;
 pub mod types;
 
-use crate::{
-    backend::{
-        mailbox::types::MailboxId,
-        mails::types::MailData,
-        task_manager::{TaskId, TaskManager},
-        types::CollapsedMail,
-    },
-    config::Config,
-};
+use crate::{backend::task_manager::TaskManager, config::Config};
 use jmap_client::client::Client;
 use std::{rc::Rc, sync::Arc};
-use tracing::{error, instrument};
 
 type GetState = String;
 type QueryState = String;
@@ -27,7 +18,7 @@ type QueryState = String;
 /// - `<object>_get_or_request_<bla>`: if it's trying to fetch the data locally, otherwise creates a request to the server
 /// For combined requests
 pub struct Backend {
-    _config: Rc<Config>,
+    config: Config,
 
     client: Arc<Client>,
 
@@ -41,7 +32,7 @@ pub struct Backend {
 /// Methods needed for `main.rs`
 impl Backend {
     pub async fn new() -> Self {
-        let config = Rc::new(Config::load().unwrap());
+        let config = Config::load().unwrap();
 
         let client = Client::new()
             .credentials((config.address.trim(), config.password.trim()))
@@ -67,7 +58,7 @@ impl Backend {
             mails: Arc::new(mails::MailsBackend::new(client.clone())),
             threads: Arc::new(threads::ThreadsBackend::new(client.clone())),
             task_manager: TaskManager::new(),
-            _config: config,
+            config,
         }
     }
 
@@ -77,5 +68,9 @@ impl Backend {
 
     pub async fn finish_next_task(&self) {
         self.task_manager.finish_next_task().await;
+    }
+
+    pub fn config(&self) -> &Config {
+        &self.config
     }
 }
