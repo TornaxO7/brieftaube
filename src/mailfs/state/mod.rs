@@ -396,16 +396,21 @@ impl<'a> State {
                 }
             }
             Some(column) => {
+                // uncollapse threads if needed
                 for (collapsed_mail_id, thread_id) in
                     self.threads_to_uncollapse.get(id).cloned().unwrap()
                 {
-                    if let Some(thread_mails) =
+                    if let Some(mut thread_mails) =
                         self.backend.mail_get_or_request_thread_mails(&thread_id)
                     {
                         debug_assert!(
                             thread_mails.len() >= 2,
                             "Uncollapseable threads must have at least 2 mails <.<"
                         );
+
+                        // according to the jmap specs: The thread saves the mails from oldest to latest,
+                        // but we want the newest mail to be first: So reverse it
+                        thread_mails.reverse();
 
                         let new_entries = {
                             let (first, rest) = thread_mails.split_first().unwrap();
