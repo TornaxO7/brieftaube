@@ -326,13 +326,17 @@ impl State {
                                     ..
                                 } = entry
                                 {
-                                    Some((
-                                        idx,
-                                        ColumnStateEntry::CollapsedThread(
-                                            collapsed_mail_id,
-                                            entry_thread_id,
-                                        ),
-                                    ))
+                                    if &entry_thread_id == thread_id {
+                                        Some((
+                                            idx,
+                                            ColumnStateEntry::CollapsedThread(
+                                                collapsed_mail_id,
+                                                entry_thread_id,
+                                            ),
+                                        ))
+                                    } else {
+                                        None
+                                    }
                                 } else {
                                     None
                                 }
