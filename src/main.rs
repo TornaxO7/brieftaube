@@ -39,7 +39,7 @@ async fn main() -> eyre::Result<()> {
 enum Screen {
     // Composer(composer::ui::State),
     MailViewer(mail_viewer::State),
-    LogViewer(log_viewer::ui::State),
+    LogViewer(log_viewer::State),
     Mailfs(mailfs::State),
 }
 
@@ -125,7 +125,7 @@ impl App {
                 frame.render_stateful_widget(mail_viewer::MailViewer::default(), screen, state);
             }
             Screen::LogViewer(state) => {
-                frame.render_stateful_widget(log_viewer::ui::LogViewer::default(), screen, state);
+                frame.render_stateful_widget(log_viewer::LogViewer::default(), screen, state);
             }
         };
     }
@@ -165,7 +165,7 @@ impl App {
                     self.screens.push(next_screen);
                 }
                 Action::OpenLogViewer => {
-                    let next_screen = Screen::LogViewer(log_viewer::ui::State::new());
+                    let next_screen = Screen::LogViewer(log_viewer::State::new());
 
                     self.statusbar.set_screen(&next_screen);
                     self.screens.push(next_screen);
