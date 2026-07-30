@@ -108,6 +108,18 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
         self.update_columns();
         let backend = self.backend.clone();
 
+        let mailbox_path = self
+            .selection_stack
+            .iter()
+            .map(|id| match id {
+                Some(id) => {
+                    let mailbox = backend.mailbox_get_data(id).unwrap();
+                    format!("{}/", mailbox.name)
+                }
+                None => String::from("/"),
+            })
+            .collect::<String>();
+
         let right_preview = self
             .get_center_column()
             .and_then(|center_column| center_column.selected_entry())
@@ -176,6 +188,7 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
         let right = right_preview.or(right_column.map(|column| RightColumn::ColumnData(column)));
 
         RenderData {
+            mailbox_path,
             left,
             center,
             right,

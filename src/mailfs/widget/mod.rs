@@ -13,10 +13,12 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{
         Style,
-        palette::material::{BLUE, BLUE_GRAY, CYAN, GRAY, GREEN, LIGHT_BLUE, ORANGE, PINK, WHITE},
+        palette::material::{
+            BLUE, BLUE_GRAY, CYAN, GRAY, GREEN, LIGHT_BLUE, ORANGE, PINK, TEAL, WHITE,
+        },
     },
     symbols::line::VERTICAL,
-    text::Text,
+    text::{Line, Text},
     widgets::{Block, Cell, List, ListItem, Paragraph, Row, StatefulWidget, Table, Widget},
 };
 
@@ -38,6 +40,11 @@ impl StatefulWidget for Mailfs {
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let mut data = state.render_data();
 
+        let [path_area, filesystem_area] =
+            Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]).areas(area);
+
+        render_path(path_area, buf, &data.mailbox_path);
+
         let [
             left_area,
             border_line1,
@@ -51,7 +58,7 @@ impl StatefulWidget for Mailfs {
             Constraint::Length(1),
             Constraint::Fill(2),
         ])
-        .areas(area);
+        .areas(filesystem_area);
 
         if let Some(left) = data.left.as_mut() {
             render_column(left_area, buf, left);
@@ -282,4 +289,8 @@ fn render_left_border_line(area: Rect, buf: &mut Buffer, column: Option<&ColumnD
             Widget::render(List::new(lines), area, buf)
         }
     }
+}
+
+fn render_path(area: Rect, buf: &mut Buffer, path: &str) {
+    Widget::render(Line::raw(path).style(Style::new().fg(TEAL.c400)), area, buf);
 }

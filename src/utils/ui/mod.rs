@@ -1,7 +1,6 @@
 pub mod input;
 pub mod keybindmanager;
 pub mod palette;
-pub mod symbol;
 
 use crossterm::event::{Event, KeyEvent};
 use keybindmanager::{HandleEvent, KeybindManager};
