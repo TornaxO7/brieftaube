@@ -26,11 +26,6 @@ use std::{
 };
 use tracing::{debug, instrument, warn};
 
-#[derive(Default)]
-struct Tasks {
-    mails_to_uncollapse: HashSet<ThreadId>,
-}
-
 pub struct State {
     app_actions: Vec<crate::Action>,
     keybindings: KeybindManager<Action>,
@@ -292,6 +287,7 @@ impl State {
                         todo!("open {mail_id:?} in mail viewer")
                     }
                     ColumnStateEntry::CollapsedThread(_, thread_id) => {
+                        // we need to create a "task" because we may need to wait for the server...
                         let list = self
                             .threads_to_uncollapse
                             .get_mut(column.mailbox())
@@ -304,7 +300,7 @@ impl State {
     }
 
     fn navigate_left(&mut self) {
-        if let Some(column) = self.get_center_column() {
+        if let Some(column) = self.get_center_column_mut() {
             if let Some(entry) = column.selected_entry() {
                 match entry {
                     ColumnStateEntry::Mailbox(_)
@@ -312,14 +308,48 @@ impl State {
                     | ColumnStateEntry::CollapsedThread(_, _) => {
                         self.navigate_to_parent();
                     }
-                    ColumnStateEntry::ThreadStart(_, _)
-                    | ColumnStateEntry::ThreadChild(_, _)
-                    | ColumnStateEntry::ThreadEnd(_, _) => todo!("Collapsed thread"),
+                    ColumnStateEntry::ThreadStart(_, thread_id)
+                    | ColumnStateEntry::ThreadChild(_, thread_id)
+                    | ColumnStateEntry::ThreadEnd(_, thread_id) => {
+                        let (start_pos, new_entry) = column
+                            .entries()
+                            .iter()
+                            .cloned()
+                            .enumerate()
+                            .find_map(|(idx, entry)| {
+                                if let ColumnStateEntry::ThreadStart(
+                                    entry_mail_id,
+                                    entry_thread_id,
+                                ) = entry
+                                {
+                                    Some((
+                                        idx,
+                                        ColumnStateEntry::CollapsedThread(
+                                            entry_mail_id,
+                                            entry_thread_id,
+                                        ),
+                                    ))
+                                } else {
+                                    None
+                                }
+                            })
+                            .expect(
+                                "Well... we are looking for the entry. It can't just disappear o.O",
+                            );
+
+                        let end_pos = column.entries().iter().position(|entry| matches!(entry, ColumnStateEntry::ThreadEnd(_, entry_thread_id) if entry_thread_id == thread_id))
+                            .expect("Same as in the previous `.expect`.");
+
+                        column
+                            .entries_mut()
+                            .splice(start_pos..=end_pos, [new_entry]);
+                    }
                 };
                 return;
             }
         }
 
+        // fallback
         self.navigate_to_parent();
     }
 
