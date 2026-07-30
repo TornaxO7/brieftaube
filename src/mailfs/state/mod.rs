@@ -54,6 +54,7 @@ impl State {
                 ("q", Action::Quit),
                 ("j", Action::NavigateDown),
                 ("l", Action::NavigateRight),
+                ("<C-l>", Action::OpenLogs),
                 ("h", Action::NavigateLeft),
                 ("k", Action::NavigateUp),
                 ("gg", Action::NavigateToTop),
