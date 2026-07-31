@@ -22,7 +22,7 @@ impl From<&ColumnStateEntry> for EntryId {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectionType {
     Selected,
     Cut,

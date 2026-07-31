@@ -57,11 +57,11 @@ pub struct State {
 impl State {
     pub fn new(id: MailId, backend: Rc<Backend>) -> Self {
         backend.mail_request_rest(&id);
-        backend.mail_update(MailUpdate {
+        backend.mails_update(vec![MailUpdate {
             id: id.clone(),
             patch_keywords: Some(vec![(MailKeyword::Seen, true)]),
             ..Default::default()
-        });
+        }]);
 
         Self {
             id,

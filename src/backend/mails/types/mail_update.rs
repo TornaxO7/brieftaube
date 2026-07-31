@@ -10,7 +10,8 @@ pub struct MailUpdate {
 }
 
 impl MailUpdate {
-    pub fn has_no_updates(&self) -> bool {
+    /// Returns true if there are no updates
+    pub fn is_empty(&self) -> bool {
         self.patch_keywords.is_none() && self.mailbox_ids.is_none()
     }
 }

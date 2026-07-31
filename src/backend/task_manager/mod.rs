@@ -12,7 +12,7 @@ pub enum TaskId {
     QueryRootMails(MailboxId),
     GetThreadMails,
     FetchMailRest,
-    SetMailSeen(MailId),
+    SetMailSeen,
 }
 
 /// Add waiting-time for each task to avoid too many requests.

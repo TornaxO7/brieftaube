@@ -80,7 +80,10 @@ impl MailsBackend {
         Ok(())
     }
 
-    async fn request_update_mail(&self, update: MailUpdate) -> Result<(), jmap_client::Error> {
+    async fn request_update_mails(
+        &self,
+        updates: Vec<MailUpdate>,
+    ) -> Result<(), jmap_client::Error> {
         let mut response = {
             let current_state = {
                 let cache = self.cache.lock().unwrap();
@@ -88,36 +91,42 @@ impl MailsBackend {
             };
 
             let mut request = self.client.build();
-            let set_mail = request
-                .set_email()
-                .if_in_state(current_state)
-                .update(&update.id.0);
+            let set_mail_request = request.set_email().if_in_state(current_state);
 
-            if let Some(keywords) = update.patch_keywords.as_ref() {
-                for (keyword, set) in keywords {
-                    set_mail.keyword(keyword.to_string().as_str(), *set);
-                }
-            }
+            for update in updates.iter() {
+                if !update.is_empty() {
+                    let mail_to_update = set_mail_request.update(&update.id.0);
 
-            if let Some(new_mailboxes) = update.mailbox_ids.as_ref() {
-                for (mailbox_id, set) in new_mailboxes {
-                    set_mail.mailbox_id(&mailbox_id.0, *set);
+                    if let Some(keywords) = update.patch_keywords.as_ref() {
+                        for (keyword, set) in keywords {
+                            mail_to_update.keyword(keyword.to_string().as_str(), *set);
+                        }
+                    }
+
+                    if let Some(new_mailboxes) = update.mailbox_ids.as_ref() {
+                        for (mailbox_id, set) in new_mailboxes {
+                            mail_to_update.mailbox_id(&mailbox_id.0, *set);
+                        }
+                    }
                 }
             }
 
             request.send_set_email().await?
         };
 
-        match response.updated(&update.id.0)? {
-            None => {}
-            Some(huh) => warn!(
-                "The server sent an unexpected response mail:\n{huh:?}\nCould you please create an issue? :>"
-            ),
-        }
-
         let mut cache = self.cache.lock().unwrap();
         cache.set_state(response.take_new_state());
-        cache.update(update);
+
+        for update in updates {
+            match response.updated(&update.id.0)? {
+                None => {}
+                Some(huh) => warn!(
+                    "The server sent an unexpected response mail:\n{huh:?}\nCould you please create an issue? :>"
+                ),
+            }
+            cache.update(update);
+        }
+
         Ok(())
     }
 }
@@ -199,18 +208,13 @@ impl Backend {
         }
     }
 
-    pub fn mail_update(&self, update: MailUpdate) {
-        if update.has_no_updates() {
-            return;
-        }
-
+    pub fn mails_update(&self, updates: Vec<MailUpdate>) {
         let mails = self.mails.clone();
 
-        self.task_manager
-            .spawn(TaskId::SetMailSeen(update.id.clone()), async move {
-                if let Err(err) = mails.request_update_mail(update).await {
-                    error!("Couldn't send request to update mail to server:\n{err}");
-                }
-            });
+        self.task_manager.spawn(TaskId::SetMailSeen, async move {
+            if let Err(err) = mails.request_update_mails(updates).await {
+                error!("Couldn't send request to update mails to server:\n{err}");
+            }
+        });
     }
 }

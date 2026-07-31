@@ -403,6 +403,27 @@ impl State {
     }
 
     fn mail_patch_keywords(&mut self, patch: &[(MailKeyword, bool)]) {
+        if !self.selection.is_empty() {
+            let mut updates = Vec::with_capacity(self.selection.len());
+
+            for (id, ty) in self.selection.drain() {
+                if ty == SelectionType::Selected {
+                    match id {
+                        EntryId::Mail(id) => updates.push(MailUpdate {
+                            id,
+                            patch_keywords: Some(patch.to_vec()),
+                            ..Default::default()
+                        }),
+                        EntryId::Mailbox(_) => {}
+                    }
+                }
+            }
+
+            self.backend.mails_update(updates);
+            return;
+        }
+
+        // use current selected entry
         if let Some(column) = self.get_center_column() {
             if let Some(entry) = column.selected_entry() {
                 match &entry {
@@ -412,11 +433,11 @@ impl State {
                     | ColumnStateEntry::ThreadStart { mail_id, .. }
                     | ColumnStateEntry::ThreadChild(mail_id, _)
                     | ColumnStateEntry::ThreadEnd(mail_id, _) => {
-                        self.backend.mail_update(MailUpdate {
+                        self.backend.mails_update(vec![MailUpdate {
                             id: mail_id.clone(),
                             patch_keywords: Some(patch.to_vec()),
                             ..Default::default()
-                        })
+                        }])
                     }
                 }
             }
