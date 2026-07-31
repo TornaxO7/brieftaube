@@ -3,14 +3,17 @@ pub mod types;
 
 use crate::backend::{
     Backend,
-    mails::types::{MailData, MailDataRest},
+    mails::types::{MailData, MailDataRest, MailKeyword, MailUpdate},
     task_manager::TaskId,
     threads::types::ThreadId,
 };
 use cache::Cache;
 use jmap_client::{client::Client, core::response::EmailGetResponse};
-use std::sync::{Arc, Mutex};
-use tracing::error;
+use std::{
+    collections::HashSet,
+    sync::{Arc, Mutex},
+};
+use tracing::{error, warn};
 use types::MailId;
 
 const INIT_ROOT_MAILS: usize = 10;
@@ -77,6 +80,46 @@ impl MailsBackend {
         };
 
         self.handle_get_response(response);
+        Ok(())
+    }
+
+    async fn request_update_mail(&self, update: MailUpdate) -> Result<(), jmap_client::Error> {
+        let mut response = {
+            let current_state = {
+                let cache = self.cache.lock().unwrap();
+                cache.get_state()
+            };
+
+            let mut request = self.client.build();
+            let set_mail = request
+                .set_email()
+                .if_in_state(current_state)
+                .update(&update.id.0);
+
+            if let Some(keywords) = update.patch_keywords.as_ref() {
+                for (keyword, set) in keywords {
+                    set_mail.keyword(keyword.to_string().as_str(), *set);
+                }
+            }
+
+            if let Some(new_mailboxes) = update.mailbox_ids.as_ref() {
+                for (mailbox_id, set) in new_mailboxes {
+                    set_mail.mailbox_id(&mailbox_id.0, *set);
+                }
+            }
+
+            request.send_set_email().await?
+        };
+
+        match response.updated(&update.id.0)? {
+            None => {}
+            Some(huh) => warn!(
+                "The server sent an unexpected response mail:\n{huh:?}\nCould you please create an issue? :>"
+            ),
+        }
+
+        let mut cache = self.cache.lock().unwrap();
+        cache.update(update);
         Ok(())
     }
 }
@@ -156,5 +199,20 @@ impl Backend {
                 mails.handle_rest_get_response(&id, response);
             });
         }
+    }
+
+    pub fn mail_update(&self, update: MailUpdate) {
+        if update.has_no_updates() {
+            return;
+        }
+
+        let mails = self.mails.clone();
+
+        self.task_manager
+            .spawn(TaskId::SetMailSeen(update.id.clone()), async move {
+                if let Err(err) = mails.request_update_mail(update).await {
+                    error!("Couldn't send request to update mail to server:\n{err}");
+                }
+            });
     }
 }

@@ -62,10 +62,9 @@ impl Cache {
         self.mails.remove(&id)
     }
 
-    // Returns `Err` if there's no mail with the given id.
-    pub fn update(&mut self, new: MailUpdate) -> Result<(), ()> {
+    pub fn update(&mut self, new: MailUpdate) {
         if let Some(patch_keywords) = new.patch_keywords {
-            let mail = self.mails.get_mut(&new.id).ok_or(())?;
+            let mail = self.mails.get_mut(&new.id).unwrap();
 
             for (keyword, set) in patch_keywords {
                 if set {
@@ -77,7 +76,7 @@ impl Cache {
         }
 
         if let Some(mailbox_ids) = new.mailbox_ids {
-            let mail = self.mails.get_mut(&new.id).ok_or(())?;
+            let mail = self.mails.get_mut(&new.id).unwrap();
 
             for (new_mailbox, set) in mailbox_ids {
                 if set {
@@ -87,8 +86,6 @@ impl Cache {
                 }
             }
         }
-
-        Ok(())
     }
 }
 

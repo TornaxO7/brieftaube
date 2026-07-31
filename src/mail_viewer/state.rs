@@ -1,6 +1,9 @@
 use super::Action;
 use crate::{
-    backend::{Backend, mails::types::MailId},
+    backend::{
+        Backend,
+        mails::types::{MailId, MailKeyword, MailUpdate},
+    },
     mail_viewer::{types::FullMailDisplay, widget::RenderData},
     utils::ui::{
         ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager, palette,
@@ -54,6 +57,11 @@ pub struct State {
 impl State {
     pub fn new(id: MailId, backend: Rc<Backend>) -> Self {
         backend.mail_request_rest(&id);
+        backend.mail_update(MailUpdate {
+            id: id.clone(),
+            patch_keywords: Some(vec![(MailKeyword::Seen, true)]),
+            ..Default::default()
+        });
 
         Self {
             id,
