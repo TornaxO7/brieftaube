@@ -8,7 +8,7 @@ use crate::{
 use pulldown_cmark_mdcat::ratatui::{RenderOptions, Renderer};
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Layout, Margin, Rect},
+    layout::{Constraint, Layout, Rect},
     style::{Style, palette::material::YELLOW},
     text::Text,
     widgets::{

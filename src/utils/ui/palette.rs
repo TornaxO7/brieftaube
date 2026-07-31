@@ -54,8 +54,14 @@ impl<E: Clone> State<E> {
             );
         }
 
+        let input = {
+            let mut input = TextArea::default();
+            input.set_cursor_line_style(Style::new());
+            input
+        };
+
         Self {
-            input: TextArea::default(),
+            input,
             nucleo,
             list_state: ListState::default().with_selected(Some(0)),
             entries: new_entries,
