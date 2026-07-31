@@ -55,6 +55,12 @@ fn render_view_modes(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
 // TODO: Respect the area size before scrolling.
 //    If the whole mail can be fitted within the area rect, there's no need to add the scrollbars.
 fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
+    let [rest, vertical_scrollbar_area] =
+        Layout::horizontal([Constraint::Fill(1), Constraint::Length(1)]).areas(area);
+
+    let [content_area, horizontal_scrollbar_area] =
+        Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(rest);
+
     match data.variant {
         ViewVariant::Markdown => {
             let Some(html) = data.mail.rest.html_body.clone() else {
@@ -85,8 +91,22 @@ fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
                     data.vertical.get_position() as u16,
                     data.horizontal.get_position() as u16,
                 )),
-                area,
+                content_area,
                 buf,
+            );
+
+            StatefulWidget::render(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight),
+                vertical_scrollbar_area,
+                buf,
+                data.vertical,
+            );
+
+            StatefulWidget::render(
+                Scrollbar::new(ScrollbarOrientation::HorizontalBottom),
+                horizontal_scrollbar_area,
+                buf,
+                data.horizontal,
             );
         }
         ViewVariant::Text => {
@@ -114,23 +134,20 @@ fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
                     data.vertical.get_position() as u16,
                     data.horizontal.get_position() as u16,
                 )),
-                area.inner(Margin {
-                    horizontal: 1,
-                    vertical: 1,
-                }),
+                content_area,
                 buf,
             );
 
             StatefulWidget::render(
                 Scrollbar::new(ScrollbarOrientation::VerticalRight),
-                area,
+                vertical_scrollbar_area,
                 buf,
                 data.vertical,
             );
 
             StatefulWidget::render(
                 Scrollbar::new(ScrollbarOrientation::HorizontalBottom),
-                area,
+                horizontal_scrollbar_area,
                 buf,
                 data.horizontal,
             );
