@@ -48,12 +48,14 @@ impl StatefulWidget for Mailfs {
         render_path(path_area, buf, &data.mailbox_path);
 
         let [
-            left_area,
             border_line1,
-            center_area,
+            left_area,
             border_line2,
+            center_area,
+            border_line3,
             right_area,
         ] = Layout::horizontal([
+            Constraint::Length(1),
             Constraint::Fill(1),
             Constraint::Length(1),
             Constraint::Fill(2),
@@ -62,19 +64,26 @@ impl StatefulWidget for Mailfs {
         ])
         .areas(filesystem_area);
 
+        render_border_line(border_line1, buf, data.left.as_ref());
         if let Some(left) = data.left.as_mut() {
             render_column(left_area, buf, left);
         }
-
         if let Some(center) = data.center.as_mut() {
             render_column(center_area, buf, center);
         }
-        render_left_border_line(border_line1, buf, data.center.as_ref());
+        render_border_line(border_line2, buf, data.center.as_ref());
 
         if let Some(right) = data.right.as_mut() {
             render_right_column(right_area, buf, right);
         }
-        render_left_border_line(border_line2, buf, None);
+        render_border_line(
+            border_line3,
+            buf,
+            data.right.as_ref().and_then(|right| match right {
+                RightColumn::ColumnData(column) => Some(column),
+                RightColumn::MailPreview(_) => None,
+            }),
+        );
     }
 }
 
@@ -270,7 +279,7 @@ fn render_headers(area: Rect, buf: &mut Buffer, headers: &[(&'static str, &str)]
     Widget::render(table, area, buf);
 }
 
-fn render_left_border_line(area: Rect, buf: &mut Buffer, column: Option<&ColumnDisplay>) {
+fn render_border_line(area: Rect, buf: &mut Buffer, column: Option<&ColumnDisplay>) {
     match column {
         None => Widget::render(List::new(vec![VERTICAL; area.height as usize]), area, buf),
         Some(column) => {
