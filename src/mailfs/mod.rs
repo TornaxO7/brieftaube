@@ -5,7 +5,3 @@ mod widget;
 pub use action::Action;
 pub use state::State;
 pub use widget::Mailfs;
-
-use action::*;
-use state::*;
-use widget::*;
