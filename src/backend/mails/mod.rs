@@ -3,7 +3,7 @@ pub mod types;
 
 use crate::backend::{
     Backend,
-    mails::types::{MailData, MailDataRest, MailUpdate},
+    mails::types::{MailBodyType, MailData, MailDataRest, MailUpdate},
     task_manager::TaskId,
     threads::types::ThreadId,
 };
@@ -170,10 +170,15 @@ impl Backend {
         })
     }
 
-    pub fn mail_request_rest(&self, id: &MailId) {
+    pub fn mail_request_body_type(&self, id: &MailId, body_type: MailBodyType) {
         let mail_is_not_fully_fetched = {
             let mail = self.mails.get_data(id).unwrap();
-            mail.rest.is_none()
+
+            match body_type {
+                MailBodyType::Text => mail.rest.text_body.is_none(),
+                MailBodyType::Html => mail.rest.html_body.is_none(),
+                MailBodyType::All => mail.rest.text_body.is_none() && mail.rest.html_body.is_none(),
+            }
         };
 
         if mail_is_not_fully_fetched {
@@ -185,12 +190,16 @@ impl Backend {
                 let response = {
                     let mut request = client.build();
 
-                    request
+                    let get_mail = request
                         .get_email()
                         .ids(Some([&id.0]))
-                        .properties(MailDataRest::PROPERTIES)
-                        .arguments()
-                        .fetch_all_body_values(true);
+                        .properties(MailDataRest::PROPERTIES);
+
+                    match body_type {
+                        MailBodyType::Text => get_mail.arguments().fetch_text_body_values(true),
+                        MailBodyType::Html => get_mail.arguments().fetch_html_body_values(true),
+                        MailBodyType::All => get_mail.arguments().fetch_all_body_values(true),
+                    };
 
                     match request.send_get_email().await {
                         Ok(r) => r,

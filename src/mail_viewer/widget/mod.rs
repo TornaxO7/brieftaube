@@ -25,16 +25,13 @@ impl StatefulWidget for MailViewer {
     type State = super::State;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        if let Some(mut data) = state.get_render_data() {
-            let [main_panel, view_mode] =
-                Layout::vertical([Constraint::Fill(1), Constraint::Length(3)]).areas(area);
+        let mut data = state.render_data();
+        let [main_panel, view_mode] =
+            Layout::vertical([Constraint::Fill(1), Constraint::Length(3)]).areas(area);
 
-            render_view_modes(view_mode, buf, &mut data);
-            render_mail_content(main_panel, buf, &mut data);
-            // render_attachment_list(bottom, buf, &mut data);
-        } else {
-            // loading screen
-        }
+        render_view_modes(view_mode, buf, &mut data);
+        render_mail_content(main_panel, buf, &mut data);
+        // render_attachment_list(bottom, buf, &mut data);
 
         render_overlay(area, buf, state);
     }
@@ -59,7 +56,7 @@ fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
         ViewVariant::Markdown => {
             let Some(html) = data.mail.rest.html_body.clone() else {
                 Widget::render(
-                    Paragraph::new("This mail has no html body.").block(Block::bordered()),
+                    Paragraph::new("Fetching html body...").block(Block::bordered()),
                     area,
                     buf,
                 );
@@ -111,7 +108,7 @@ fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
         ViewVariant::Text => {
             let Some(content) = data.mail.rest.text_body.clone() else {
                 Widget::render(
-                    Paragraph::new("This mail has no plain text body.").block(Block::bordered()),
+                    Paragraph::new("Fetching text body part of mail...").block(Block::bordered()),
                     area,
                     buf,
                 );

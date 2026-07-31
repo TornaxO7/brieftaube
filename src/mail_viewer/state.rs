@@ -2,7 +2,7 @@ use super::Action;
 use crate::{
     backend::{
         Backend,
-        mails::types::{MailId, MailKeyword, MailUpdate},
+        mails::types::{MailBodyType, MailId, MailKeyword, MailUpdate},
     },
     mail_viewer::{types::FullMailDisplay, widget::RenderData},
     utils::ui::{
@@ -56,7 +56,21 @@ pub struct State {
 
 impl State {
     pub fn new(id: MailId, backend: Rc<Backend>) -> Self {
-        backend.mail_request_rest(&id);
+        let variant = match backend.config().mail_viewer.default_tab {
+            crate::config::DefaultTab::Headers => {
+                todo!()
+            }
+            crate::config::DefaultTab::Attachments => ViewVariant::Attachments,
+            crate::config::DefaultTab::Text => {
+                backend.mail_request_body_type(&id, MailBodyType::Text);
+                ViewVariant::Text
+            }
+            crate::config::DefaultTab::Markdown => {
+                backend.mail_request_body_type(&id, MailBodyType::Html);
+                ViewVariant::Markdown
+            }
+        };
+
         backend.mails_update(vec![MailUpdate {
             id: id.clone(),
             patch_keywords: Some(vec![(MailKeyword::Seen, true)]),
@@ -86,7 +100,7 @@ impl State {
                 ("<BS>", Action::Back),
                 ("<C-l>", Action::OpenLogs),
             ])),
-            variant: ViewVariant::Markdown,
+            variant,
             vertical: ScrollbarState::default(),
             horizontal: ScrollbarState::default(),
         }
@@ -151,7 +165,33 @@ impl<'a> ScreenState<'a, Action, PaletteType, InputType, RenderData<'a>> for Sta
     }
 
     fn render_data(&'a mut self) -> RenderData<'a> {
-        todo!()
+        let mail = self.backend.mail_get_data(&self.id).unwrap();
+
+        match self.variant {
+            ViewVariant::Text => {
+                if mail.rest.text_body.is_none() {
+                    self.backend
+                        .mail_request_body_type(&mail.id, MailBodyType::Text);
+                }
+            }
+            ViewVariant::Markdown => {
+                if mail.rest.html_body.is_none() {
+                    self.backend
+                        .mail_request_body_type(&mail.id, MailBodyType::Html);
+                }
+            }
+            ViewVariant::Attachments => {
+                todo!()
+            }
+        }
+
+        RenderData {
+            variant: self.variant,
+            mail: FullMailDisplay::from(&mail),
+            horizontal: &mut self.horizontal,
+            vertical: &mut self.vertical,
+            scroll_queue: &mut self.scroll_action,
+        }
     }
 }
 
@@ -217,55 +257,6 @@ impl State {
     }
 
     fn open_html_mail_in_browser(&self) {
-        let Some(mail) = self.backend.mail_get_data(&self.id) else {
-            warn!("Couldn't find the mail in the backend. Maybe it got deleted from the server :(");
-            return;
-        };
-
-        let Some(rest) = mail.rest.as_ref() else {
-            self.backend.mail_request_rest(&mail.id);
-            warn!("Html mail is requested. Please wait a bit.");
-            return;
-        };
-
-        let Some(html_body) = rest.html_body.as_ref() else {
-            error!("Couldn't get html body of mail.");
-            return;
-        };
-
-        // TODO: Choose better path (like .cache?)
-        if let Err(err) = std::fs::write("/tmp/mail.html", &html_body) {
-            error!("Couldn't save mail for browser: {err}");
-            return;
-        }
-
-        match std::process::Command::new(self.backend.config().browser())
-            .arg("/tmp/test.html")
-            .status()
-        {
-            Ok(_) => {}
-            Err(err) => {
-                error!("Couldn't start browser to open html mail: {err}");
-                return;
-            }
-        };
-    }
-}
-
-// for `widget`
-impl State {
-    pub fn get_render_data<'a>(&'a mut self) -> Option<RenderData<'a>> {
-        let mail = self.backend.mail_get_data(&self.id)?;
-        if mail.rest.is_none() {
-            return None;
-        }
-
-        Some(RenderData {
-            variant: self.variant,
-            mail: FullMailDisplay::from(&mail),
-            horizontal: &mut self.horizontal,
-            vertical: &mut self.vertical,
-            scroll_queue: &mut self.scroll_action,
-        })
+        todo!()
     }
 }

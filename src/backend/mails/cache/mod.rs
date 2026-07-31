@@ -44,7 +44,7 @@ impl Cache {
 
     pub fn set_mail_rest(&mut self, id: &MailId, rest: MailDataRest) {
         let mail = self.mails.get_mut(id).expect("Mail already exists");
-        mail.rest = Some(rest);
+        mail.rest = rest;
     }
 }
 

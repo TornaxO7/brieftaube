@@ -18,7 +18,7 @@ pub struct MailData {
     pub has_attachment: bool,
     pub mailbox_ids: HashSet<MailboxId>,
 
-    pub rest: Option<MailDataRest>,
+    pub rest: MailDataRest,
 }
 
 impl MailData {
@@ -64,7 +64,7 @@ impl MailData {
                 .into_iter()
                 .map(|id| MailboxId(id.to_owned()))
                 .collect(),
-            rest: None,
+            rest: MailDataRest::default(),
         }
     }
 }
@@ -73,7 +73,7 @@ impl MailData {
 pub struct MailDataRest {
     pub text_body: Option<String>,
     pub html_body: Option<String>,
-    pub attachments: Vec<MailDataAttachment>,
+    pub attachments: Option<Vec<MailDataAttachment>>,
 }
 
 impl MailDataRest {
@@ -95,8 +95,7 @@ impl MailDataRest {
 
         let attachments = mail
             .attachments()
-            .map(|parts| parts.iter().map(MailDataAttachment::from).collect())
-            .unwrap_or_default();
+            .map(|parts| parts.iter().map(MailDataAttachment::from).collect());
 
         Self {
             text_body,

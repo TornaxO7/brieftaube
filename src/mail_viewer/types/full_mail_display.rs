@@ -13,7 +13,7 @@ pub struct FullMailDisplay {
 
 impl From<&MailData> for FullMailDisplay {
     fn from(mail: &MailData) -> Self {
-        let rest = mail.rest.clone().unwrap();
+        let rest = mail.rest.clone();
 
         Self {
             id: mail.id.clone(),
