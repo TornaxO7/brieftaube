@@ -86,7 +86,8 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
 
             Action::SelectEntryToggle => self.select_entry(),
 
-            Action::MarkMailAsUnseen => self.mark_mail_as_unseen(),
+            Action::MarkMailAsUnseen => self.mail_patch_keywords(&[(MailKeyword::Seen, false)]),
+            Action::MarkMailAsSeen => self.mail_patch_keywords(&[(MailKeyword::Seen, true)]),
         }
     }
 
@@ -410,7 +411,7 @@ impl State {
         }
     }
 
-    fn mark_mail_as_unseen(&mut self) {
+    fn mail_patch_keywords(&mut self, patch: &[(MailKeyword, bool)]) {
         if let Some(column) = self.get_center_column() {
             if let Some(entry) = column.selected_entry() {
                 match &entry.entry_type {
@@ -422,7 +423,7 @@ impl State {
                     | ColumnStateEntryType::ThreadEnd(mail_id, _) => {
                         self.backend.mail_update(MailUpdate {
                             id: mail_id.clone(),
-                            patch_keywords: Some(vec![(MailKeyword::Seen, false)]),
+                            patch_keywords: Some(patch.to_vec()),
                             ..Default::default()
                         })
                     }

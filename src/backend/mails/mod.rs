@@ -3,16 +3,13 @@ pub mod types;
 
 use crate::backend::{
     Backend,
-    mails::types::{MailData, MailDataRest, MailKeyword, MailUpdate},
+    mails::types::{MailData, MailDataRest, MailUpdate},
     task_manager::TaskId,
     threads::types::ThreadId,
 };
 use cache::Cache;
 use jmap_client::{client::Client, core::response::EmailGetResponse};
-use std::{
-    collections::HashSet,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 use tracing::{error, warn};
 use types::MailId;
 
@@ -119,6 +116,7 @@ impl MailsBackend {
         }
 
         let mut cache = self.cache.lock().unwrap();
+        cache.set_state(response.take_new_state());
         cache.update(update);
         Ok(())
     }
