@@ -36,6 +36,9 @@ pub enum Action {
     #[strum(message = "Open the parent mailbox.")]
     NavigateToParent,
 
+    #[strum(message = "Toggle entry selection")]
+    SelectEntryToggle,
+
     // #[strum(message = "Create a new mailbox")]
     // CreateMailbox,
     #[strum(message = "Open logs")]

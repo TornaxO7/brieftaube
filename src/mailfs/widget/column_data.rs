@@ -5,8 +5,8 @@ use crate::{
         mails::types::{MailAddress, MailData, MailKeyword},
     },
     mailfs::{
-        state::{ColumnState, ColumnStateEntry},
-        widget::mail_preview::MailPreview,
+        state::{ColumnState, ColumnStateEntry, ColumnStateEntryType},
+        widget::{error, mail_preview::MailPreview, selection_type::SelectionType},
     },
 };
 use ratatui::widgets::TableState;
@@ -19,60 +19,19 @@ pub struct ColumnDisplay<'a> {
 }
 
 impl<'a> ColumnDisplay<'a> {
-    pub fn new(column: Option<&'a mut ColumnState>, backend: Rc<Backend>) -> Option<Self> {
-        let column = column?;
+    pub fn new(
+        column: Option<&'a mut ColumnState>,
+        backend: Rc<Backend>,
+    ) -> Result<Self, error::DataNotAvaiableYet> {
+        let column = column.ok_or(error::DataNotAvaiableYet)?;
 
-        // TODO: Collect missign mails and create request-batch to get mail-data
         let entries = column
             .entries()
             .iter()
-            .map(|entry| match entry {
-                ColumnStateEntry::Mailbox(id) => {
-                    let mailbox = backend.mailbox_get_data(id).unwrap();
-                    Some(ColumnDisplayEntryData::mailbox(&mailbox))
-                }
-                ColumnStateEntry::SingleMail(mail_id) => {
-                    let mail = backend.mail_get_data(mail_id)?;
-                    Some(ColumnDisplayEntryData::mail(MailEntryType::Single, &mail))
-                }
-                ColumnStateEntry::CollapsedThread(mail_id, _) => {
-                    let mail = backend.mail_get_data(mail_id)?;
-                    Some(ColumnDisplayEntryData::mail(
-                        MailEntryType::ThreadCollapsed,
-                        &mail,
-                    ))
-                }
-                ColumnStateEntry::ThreadStart { mail_id, .. } => {
-                    let mail = backend.mail_get_data(mail_id)?;
-                    Some(ColumnDisplayEntryData::mail(
-                        MailEntryType::ThreadStart,
-                        &mail,
-                    ))
-                }
-                ColumnStateEntry::ThreadChild(mail_id, _) => {
-                    let mail = backend.mail_get_data(mail_id)?;
-                    Some(ColumnDisplayEntryData::mail(
-                        MailEntryType::ThreadChild,
-                        &mail,
-                    ))
-                }
-                ColumnStateEntry::ThreadEnd(mail_id, _) => {
-                    let mail = backend.mail_get_data(mail_id)?;
-                    Some(ColumnDisplayEntryData::mail(
-                        MailEntryType::ThreadEnd,
-                        &mail,
-                    ))
-                }
-            })
-            .map(|data| {
-                data.map(|data| ColumnDisplayEntry {
-                    is_selected: false,
-                    data,
-                })
-            })
-            .collect::<Option<Vec<ColumnDisplayEntry>>>()?;
+            .map(|entry| ColumnDisplayEntry::try_from((entry, backend.clone())))
+            .collect::<Result<Vec<ColumnDisplayEntry>, error::DataNotAvaiableYet>>()?;
 
-        Some(Self {
+        Ok(Self {
             entries,
             state: &mut column.state,
         })
@@ -81,8 +40,57 @@ impl<'a> ColumnDisplay<'a> {
 
 #[derive(Debug)]
 pub struct ColumnDisplayEntry {
-    pub is_selected: bool,
+    pub selection_type: Option<SelectionType>,
     pub data: ColumnDisplayEntryData,
+}
+
+impl TryFrom<(&ColumnStateEntry, Rc<Backend>)> for ColumnDisplayEntry {
+    type Error = error::DataNotAvaiableYet;
+
+    fn try_from((entry, backend): (&ColumnStateEntry, Rc<Backend>)) -> Result<Self, Self::Error> {
+        let selection_type = entry.selection.map(SelectionType::from);
+        let data = match &entry.entry_type {
+            ColumnStateEntryType::Mailbox(id) => {
+                let mailbox = backend.mailbox_get_data(id).unwrap();
+                ColumnDisplayEntryData::mailbox(&mailbox)
+            }
+            ColumnStateEntryType::SingleMail(mail_id) => {
+                let mail = backend
+                    .mail_get_data(mail_id)
+                    .ok_or(error::DataNotAvaiableYet)?;
+                ColumnDisplayEntryData::mail(MailEntryType::Single, &mail)
+            }
+            ColumnStateEntryType::CollapsedThread(mail_id, _) => {
+                let mail = backend
+                    .mail_get_data(mail_id)
+                    .ok_or(error::DataNotAvaiableYet)?;
+                ColumnDisplayEntryData::mail(MailEntryType::ThreadCollapsed, &mail)
+            }
+            ColumnStateEntryType::ThreadStart { mail_id, .. } => {
+                let mail = backend
+                    .mail_get_data(mail_id)
+                    .ok_or(error::DataNotAvaiableYet)?;
+                ColumnDisplayEntryData::mail(MailEntryType::ThreadStart, &mail)
+            }
+            ColumnStateEntryType::ThreadChild(mail_id, _) => {
+                let mail = backend
+                    .mail_get_data(mail_id)
+                    .ok_or(error::DataNotAvaiableYet)?;
+                ColumnDisplayEntryData::mail(MailEntryType::ThreadChild, &mail)
+            }
+            ColumnStateEntryType::ThreadEnd(mail_id, _) => {
+                let mail = backend
+                    .mail_get_data(mail_id)
+                    .ok_or(error::DataNotAvaiableYet)?;
+                ColumnDisplayEntryData::mail(MailEntryType::ThreadEnd, &mail)
+            }
+        };
+
+        Ok(Self {
+            selection_type,
+            data,
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -103,6 +111,13 @@ pub enum ColumnDisplayEntryData {
 }
 
 impl ColumnDisplayEntryData {
+    pub fn mailbox(mailbox: &MailboxData) -> Self {
+        Self::Mailbox {
+            name: mailbox.name.clone(),
+            unread_mails: mailbox.unread_mails,
+        }
+    }
+
     pub fn mail(ty: MailEntryType, mail: &MailData) -> Self {
         Self::Mail {
             ty,
@@ -114,13 +129,6 @@ impl ColumnDisplayEntryData {
                 .to_string(),
             has_attachment: mail.has_attachment,
             is_unread: !mail.keywords.contains(&MailKeyword::Seen),
-        }
-    }
-
-    pub fn mailbox(mailbox: &MailboxData) -> Self {
-        Self::Mailbox {
-            name: mailbox.name.clone(),
-            unread_mails: mailbox.unread_mails,
         }
     }
 }

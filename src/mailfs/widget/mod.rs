@@ -1,20 +1,22 @@
 mod column_data;
+mod error;
 mod mail_preview;
 mod render_data;
+mod selection_type;
 
 pub use column_data::{ColumnDisplay, ColumnDisplayEntryData, MailEntryType, RightColumn};
 pub use mail_preview::MailPreview;
 pub use render_data::RenderData;
 
 use super::State;
-use crate::utils::ui::ScreenState;
+use crate::{mailfs::widget::selection_type::SelectionType, utils::ui::ScreenState};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     style::{
         Style,
         palette::material::{
-            BLUE, BLUE_GRAY, CYAN, GRAY, GREEN, LIGHT_BLUE, ORANGE, PINK, TEAL, WHITE,
+            BLUE, BLUE_GRAY, CYAN, GRAY, GREEN, LIGHT_BLUE, ORANGE, PINK, RED, TEAL, WHITE,
         },
     },
     symbols::line::VERTICAL,
@@ -276,11 +278,15 @@ fn render_left_border_line(area: Rect, buf: &mut Buffer, column: Option<&ColumnD
                 .entries
                 .iter()
                 .map(|entry| {
-                    if entry.is_selected {
-                        ListItem::new(VERTICAL).style(Style::new().bg(ORANGE.c500))
-                    } else {
-                        ListItem::new(VERTICAL)
-                    }
+                    let style = entry
+                        .selection_type
+                        .map(|ty| match ty {
+                            SelectionType::Selected => Style::new().bg(ORANGE.c500),
+                            SelectionType::Cut => Style::new().bg(RED.c500),
+                        })
+                        .unwrap_or(Style::new());
+
+                    ListItem::new(VERTICAL).style(style)
                 })
                 .collect();
 
