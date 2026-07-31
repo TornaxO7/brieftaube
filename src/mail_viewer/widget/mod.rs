@@ -213,7 +213,7 @@ fn adjust_scrollbars(
             }
             ScrollAction::ScrollDown(amount) => {
                 let pos = vertical.get_position();
-                *vertical = vertical.position((pos + amount).min(text.height()));
+                *vertical = vertical.position((pos + amount).min(amount_unseen_lines));
             }
             ScrollAction::ScrollHalfPageDown => {
                 let prev_pos = vertical.get_position();
