@@ -5,12 +5,12 @@ use crate::{
         mails::types::{MailAddress, MailData, MailKeyword},
     },
     mailfs::{
-        state::{ColumnState, ColumnStateEntry, ColumnStateEntryType},
-        widget::{error, mail_preview::MailPreview, selection_type::SelectionType},
+        state::{self, ColumnState, ColumnStateEntry, EntryId},
+        widget::{error, mail_preview::MailPreview, selection_type::DisplaySelectionType},
     },
 };
 use ratatui::widgets::TableState;
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
 #[derive(Debug)]
 pub struct ColumnDisplay<'a> {
@@ -21,6 +21,7 @@ pub struct ColumnDisplay<'a> {
 impl<'a> ColumnDisplay<'a> {
     pub fn new(
         column: Option<&'a mut ColumnState>,
+        selection_mapping: &HashMap<EntryId, state::SelectionType>,
         backend: Rc<Backend>,
     ) -> Result<Self, error::DataNotAvaiableYet> {
         let column = column.ok_or(error::DataNotAvaiableYet)?;
@@ -28,7 +29,12 @@ impl<'a> ColumnDisplay<'a> {
         let entries = column
             .entries()
             .iter()
-            .map(|entry| ColumnDisplayEntry::try_from((entry, backend.clone())))
+            .map(|entry| {
+                let id = EntryId::from(entry);
+                let selection = selection_mapping.get(&id).map(DisplaySelectionType::from);
+
+                ColumnDisplayEntry::new(entry, selection, backend.clone())
+            })
             .collect::<Result<Vec<ColumnDisplayEntry>, error::DataNotAvaiableYet>>()?;
 
         Ok(Self {
@@ -40,45 +46,46 @@ impl<'a> ColumnDisplay<'a> {
 
 #[derive(Debug)]
 pub struct ColumnDisplayEntry {
-    pub selection_type: Option<SelectionType>,
+    pub selection_type: Option<DisplaySelectionType>,
     pub data: ColumnDisplayEntryData,
 }
 
-impl TryFrom<(&ColumnStateEntry, Rc<Backend>)> for ColumnDisplayEntry {
-    type Error = error::DataNotAvaiableYet;
-
-    fn try_from((entry, backend): (&ColumnStateEntry, Rc<Backend>)) -> Result<Self, Self::Error> {
-        let selection_type = entry.selection.map(SelectionType::from);
-        let data = match &entry.entry_type {
-            ColumnStateEntryType::Mailbox(id) => {
+impl ColumnDisplayEntry {
+    pub fn new(
+        entry: &ColumnStateEntry,
+        selection_type: Option<DisplaySelectionType>,
+        backend: Rc<Backend>,
+    ) -> Result<Self, error::DataNotAvaiableYet> {
+        let data = match entry {
+            ColumnStateEntry::Mailbox(id) => {
                 let mailbox = backend.mailbox_get_data(id).unwrap();
                 ColumnDisplayEntryData::mailbox(&mailbox)
             }
-            ColumnStateEntryType::SingleMail(mail_id) => {
+            ColumnStateEntry::SingleMail(mail_id) => {
                 let mail = backend
                     .mail_get_data(mail_id)
                     .ok_or(error::DataNotAvaiableYet)?;
                 ColumnDisplayEntryData::mail(MailEntryType::Single, &mail)
             }
-            ColumnStateEntryType::CollapsedThread(mail_id, _) => {
+            ColumnStateEntry::CollapsedThread(mail_id, _) => {
                 let mail = backend
                     .mail_get_data(mail_id)
                     .ok_or(error::DataNotAvaiableYet)?;
                 ColumnDisplayEntryData::mail(MailEntryType::ThreadCollapsed, &mail)
             }
-            ColumnStateEntryType::ThreadStart { mail_id, .. } => {
+            ColumnStateEntry::ThreadStart { mail_id, .. } => {
                 let mail = backend
                     .mail_get_data(mail_id)
                     .ok_or(error::DataNotAvaiableYet)?;
                 ColumnDisplayEntryData::mail(MailEntryType::ThreadStart, &mail)
             }
-            ColumnStateEntryType::ThreadChild(mail_id, _) => {
+            ColumnStateEntry::ThreadChild(mail_id, _) => {
                 let mail = backend
                     .mail_get_data(mail_id)
                     .ok_or(error::DataNotAvaiableYet)?;
                 ColumnDisplayEntryData::mail(MailEntryType::ThreadChild, &mail)
             }
-            ColumnStateEntryType::ThreadEnd(mail_id, _) => {
+            ColumnStateEntry::ThreadEnd(mail_id, _) => {
                 let mail = backend
                     .mail_get_data(mail_id)
                     .ok_or(error::DataNotAvaiableYet)?;
@@ -87,8 +94,8 @@ impl TryFrom<(&ColumnStateEntry, Rc<Backend>)> for ColumnDisplayEntry {
         };
 
         Ok(Self {
-            selection_type,
             data,
+            selection_type,
         })
     }
 }

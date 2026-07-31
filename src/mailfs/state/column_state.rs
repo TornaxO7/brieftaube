@@ -6,7 +6,7 @@ use crate::{
         threads::types::ThreadId,
         types::CollapsedMail,
     },
-    mailfs::state::{error, selection_type::SelectionType},
+    mailfs::state::error,
 };
 use ratatui::widgets::TableState;
 use std::rc::Rc;
@@ -61,22 +61,7 @@ impl ColumnState {
 }
 
 #[derive(Clone, Debug)]
-pub struct ColumnStateEntry {
-    pub selection: Option<SelectionType>,
-    pub entry_type: ColumnStateEntryType,
-}
-
-impl ColumnStateEntry {
-    pub fn new(entry_type: ColumnStateEntryType) -> Self {
-        Self {
-            selection: None,
-            entry_type,
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub enum ColumnStateEntryType {
+pub enum ColumnStateEntry {
     Mailbox(MailboxId),
     /// Mails which are the only mail in a thread
     SingleMail(MailId),
@@ -100,7 +85,7 @@ impl ColumnStateEntry {
         mailbox: ParentMailboxId,
         backend: Rc<Backend>,
     ) -> Result<Vec<Self>, error::BackendNotReady> {
-        let mut entries: Vec<ColumnStateEntryType> = Vec::new();
+        let mut entries: Vec<ColumnStateEntry> = Vec::new();
 
         // get mailboxes
         {
@@ -109,7 +94,7 @@ impl ColumnStateEntry {
                 .ok_or(error::BackendNotReady)?;
 
             for mailbox_id in mailbox_ids {
-                entries.push(ColumnStateEntryType::Mailbox(mailbox_id));
+                entries.push(ColumnStateEntry::Mailbox(mailbox_id));
             }
         }
 
@@ -122,22 +107,14 @@ impl ColumnStateEntry {
             for collapsed_mail in collapsed_mails {
                 match collapsed_mail {
                     CollapsedMail::SingleMail(mail_id) => {
-                        entries.push(ColumnStateEntryType::SingleMail(mail_id))
+                        entries.push(ColumnStateEntry::SingleMail(mail_id))
                     }
                     CollapsedMail::CollapsedThread(mail_id, thread_id) => {
-                        entries.push(ColumnStateEntryType::CollapsedThread(mail_id, thread_id))
+                        entries.push(ColumnStateEntry::CollapsedThread(mail_id, thread_id))
                     }
                 }
             }
         }
-
-        let entries = entries
-            .into_iter()
-            .map(|entry_type| ColumnStateEntry {
-                selection: None,
-                entry_type,
-            })
-            .collect();
 
         Ok(entries)
     }

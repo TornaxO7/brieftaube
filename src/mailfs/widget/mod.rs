@@ -10,7 +10,7 @@ pub use render_data::RenderData;
 
 use super::State;
 use crate::{
-    mailfs::widget::selection_type::SelectionType,
+    mailfs::widget::selection_type::DisplaySelectionType,
     utils::ui::{ScreenOverlay, ScreenState, input::Input, palette::Palette},
 };
 use ratatui::{
@@ -306,8 +306,8 @@ fn render_border_line(area: Rect, buf: &mut Buffer, column: Option<&ColumnDispla
                     let style = entry
                         .selection_type
                         .map(|ty| match ty {
-                            SelectionType::Selected => Style::new().bg(ORANGE.c500),
-                            SelectionType::Cut => Style::new().bg(RED.c500),
+                            DisplaySelectionType::Selected => Style::new().bg(ORANGE.c500),
+                            DisplaySelectionType::Cut => Style::new().bg(RED.c500),
                         })
                         .unwrap_or(Style::new());
 

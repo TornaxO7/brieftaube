@@ -6,7 +6,7 @@ pub mod types;
 
 use crate::{backend::task_manager::TaskManager, config::Config};
 use jmap_client::client::Client;
-use std::{rc::Rc, sync::Arc};
+use std::sync::Arc;
 
 type GetState = String;
 type QueryState = String;

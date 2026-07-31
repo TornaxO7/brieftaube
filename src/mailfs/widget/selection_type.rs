@@ -1,16 +1,16 @@
-use crate::mailfs::state;
+use crate::mailfs::state::SelectionType;
 
 #[derive(Debug, Clone, Copy)]
-pub enum SelectionType {
+pub enum DisplaySelectionType {
     Selected,
     Cut,
 }
 
-impl From<state::SelectionType> for SelectionType {
-    fn from(ty: state::SelectionType) -> Self {
+impl From<&SelectionType> for DisplaySelectionType {
+    fn from(ty: &SelectionType) -> Self {
         match ty {
-            state::SelectionType::Selected => Self::Selected,
-            state::SelectionType::Cut => Self::Cut,
+            SelectionType::Selected => Self::Selected,
+            SelectionType::Cut => Self::Cut,
         }
     }
 }
