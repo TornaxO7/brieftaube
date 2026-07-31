@@ -9,7 +9,10 @@ pub use mail_preview::MailPreview;
 pub use render_data::RenderData;
 
 use super::State;
-use crate::{mailfs::widget::selection_type::SelectionType, utils::ui::ScreenState};
+use crate::{
+    mailfs::widget::selection_type::SelectionType,
+    utils::ui::{ScreenOverlay, ScreenState, input::Input, palette::Palette},
+};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
@@ -21,7 +24,7 @@ use ratatui::{
     },
     symbols::line::VERTICAL,
     text::{Line, Text},
-    widgets::{Block, Cell, List, ListItem, Paragraph, Row, StatefulWidget, Table, Widget},
+    widgets::{Block, Cell, Clear, List, ListItem, Paragraph, Row, StatefulWidget, Table, Widget},
 };
 
 const FOLDER: &str = "🖿";
@@ -84,6 +87,19 @@ impl StatefulWidget for Mailfs {
                 RightColumn::MailPreview(_) => None,
             }),
         );
+
+        if let Some(overlay) = state.overlay() {
+            let area = area.centered(Constraint::Percentage(80), Constraint::Percentage(80));
+            Widget::render(Clear, area, buf);
+            match overlay {
+                ScreenOverlay::Palette(state) => {
+                    StatefulWidget::render(Palette::new(), area, buf, state)
+                }
+                ScreenOverlay::Input(state) => {
+                    StatefulWidget::render(Input::new(), area, buf, state)
+                }
+            }
+        }
     }
 }
 

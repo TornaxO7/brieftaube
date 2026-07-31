@@ -62,6 +62,7 @@ impl State {
                 ("gg", Action::NavigateToTop),
                 ("ge", Action::NavigateToBottom),
                 (" ", Action::SelectEntryToggle),
+                (":", Action::OpenCommandPalette),
             ])),
         }
     }
@@ -104,7 +105,7 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
             ScreenOverlayResult::Palette(value) => match value {
                 PaletteValue::Action(action) => self.apply_action(action),
             },
-            ScreenOverlayResult::Cancel => {}
+            ScreenOverlayResult::Cancel => self.overlay = None,
             ScreenOverlayResult::Input { .. } => unreachable!(),
         }
     }
