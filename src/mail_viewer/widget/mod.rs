@@ -55,12 +55,6 @@ fn render_view_modes(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
 // TODO: Respect the area size before scrolling.
 //    If the whole mail can be fitted within the area rect, there's no need to add the scrollbars.
 fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
-    let [rest, vertical_scrollbar_area] =
-        Layout::horizontal([Constraint::Fill(1), Constraint::Length(1)]).areas(area);
-
-    let [content_area, horizontal_scrollbar_area] =
-        Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(rest);
-
     match data.variant {
         ViewVariant::Markdown => {
             let Some(html) = data.mail.rest.html_body.clone() else {
@@ -78,13 +72,14 @@ fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
             let renderer = Renderer::new(RenderOptions::default().width(area.width));
             let text = renderer.text_from_str(&content).unwrap();
 
-            adjust_scrollbars(
-                &text,
-                area,
-                data.vertical,
-                data.horizontal,
-                data.scroll_queue,
-            );
+            let (content_area, vertical_scrollbar_area, horizontal_scrollbar_area) =
+                adjust_scrollbars(
+                    &text,
+                    area,
+                    data.vertical,
+                    data.horizontal,
+                    data.scroll_queue,
+                );
 
             Widget::render(
                 Paragraph::new(text).block(Block::bordered()).scroll((
@@ -95,19 +90,23 @@ fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
                 buf,
             );
 
-            StatefulWidget::render(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight),
-                vertical_scrollbar_area,
-                buf,
-                data.vertical,
-            );
+            if let Some(area) = vertical_scrollbar_area {
+                StatefulWidget::render(
+                    Scrollbar::new(ScrollbarOrientation::VerticalRight),
+                    area,
+                    buf,
+                    data.vertical,
+                );
+            }
 
-            StatefulWidget::render(
-                Scrollbar::new(ScrollbarOrientation::HorizontalBottom),
-                horizontal_scrollbar_area,
-                buf,
-                data.horizontal,
-            );
+            if let Some(area) = horizontal_scrollbar_area {
+                StatefulWidget::render(
+                    Scrollbar::new(ScrollbarOrientation::HorizontalBottom),
+                    area,
+                    buf,
+                    data.horizontal,
+                );
+            }
         }
         ViewVariant::Text => {
             let Some(content) = data.mail.rest.text_body.clone() else {
@@ -121,13 +120,14 @@ fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
 
             let text = Text::from(content);
 
-            adjust_scrollbars(
-                &text,
-                area,
-                data.vertical,
-                data.horizontal,
-                data.scroll_queue,
-            );
+            let (content_area, vertical_scrollbar_area, horizontal_scrollbar_area) =
+                adjust_scrollbars(
+                    &text,
+                    area,
+                    data.vertical,
+                    data.horizontal,
+                    data.scroll_queue,
+                );
 
             Widget::render(
                 Paragraph::new(text).block(Block::bordered()).scroll((
@@ -138,19 +138,23 @@ fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
                 buf,
             );
 
-            StatefulWidget::render(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight),
-                vertical_scrollbar_area,
-                buf,
-                data.vertical,
-            );
+            if let Some(area) = vertical_scrollbar_area {
+                StatefulWidget::render(
+                    Scrollbar::new(ScrollbarOrientation::VerticalRight),
+                    area,
+                    buf,
+                    data.vertical,
+                );
+            }
 
-            StatefulWidget::render(
-                Scrollbar::new(ScrollbarOrientation::HorizontalBottom),
-                horizontal_scrollbar_area,
-                buf,
-                data.horizontal,
-            );
+            if let Some(area) = horizontal_scrollbar_area {
+                StatefulWidget::render(
+                    Scrollbar::new(ScrollbarOrientation::HorizontalBottom),
+                    area,
+                    buf,
+                    data.horizontal,
+                );
+            }
         }
 
         ViewVariant::Attachments => {
@@ -201,7 +205,7 @@ fn adjust_scrollbars(
     vertical: &mut ScrollbarState,
     horizontal: &mut ScrollbarState,
     queue: &mut Option<ScrollAction>,
-) {
+) -> (Rect, Option<Rect>, Option<Rect>) {
     let amount_unseen_lines = text.height().saturating_sub(area.height as usize);
     let amount_unseen_columns = text.width().saturating_sub(area.width as usize);
 
@@ -241,7 +245,35 @@ fn adjust_scrollbars(
 
     // restrict height
     *vertical = vertical.content_length(amount_unseen_lines);
+    let (rest, vertical_scrollbar_area) = {
+        let scrollbar_is_visible = amount_unseen_lines > 0;
+        if scrollbar_is_visible {
+            let [rest, scrollbar_area] =
+                Layout::horizontal([Constraint::Fill(1), Constraint::Length(1)]).areas(area);
+
+            (rest, Some(scrollbar_area))
+        } else {
+            (area, None)
+        }
+    };
 
     // restrict width
     *horizontal = horizontal.content_length(amount_unseen_columns);
+    let (mail_content_area, horizontal_scrollbar_area) = {
+        let scrollbar_is_visible = amount_unseen_columns > 0;
+        if scrollbar_is_visible {
+            let [mail_content_area, scrollbar_area] =
+                Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(rest);
+
+            (mail_content_area, Some(scrollbar_area))
+        } else {
+            (rest, None)
+        }
+    };
+
+    (
+        mail_content_area,
+        vertical_scrollbar_area,
+        horizontal_scrollbar_area,
+    )
 }
