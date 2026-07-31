@@ -1,3 +1,6 @@
+mod mail_viewer;
+
+pub use mail_viewer::*;
 use serde::{Deserialize, Serialize};
 
 const FILE_NAME: &str = "config.toml";
@@ -9,6 +12,8 @@ pub struct Config {
     pub host: String,
     browser: Option<String>,
     editor: Option<String>,
+
+    pub mail_viewer: MailViewer,
 }
 
 impl Config {
