@@ -66,20 +66,6 @@ impl MailsBackend {
 
 /// Request methods
 impl MailsBackend {
-    async fn request_mail(&self, id: MailId) -> Result<(), jmap_client::Error> {
-        let response = {
-            let mut request = self.client.build();
-            request
-                .get_email()
-                .ids(Some([&id.0]))
-                .properties(MailData::PROPERTIES);
-            request.send_get_email().await?
-        };
-
-        self.handle_get_response(response);
-        Ok(())
-    }
-
     async fn request_update_mails(
         &self,
         updates: Vec<MailUpdate>,
