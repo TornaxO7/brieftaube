@@ -13,7 +13,7 @@ use crate::{
     backend::{
         Backend,
         mailbox::types::{ParentMailboxId, TOP_PARENT_MAILBOX_ID},
-        mails::types::MailId,
+        mails::types::{MailId, MailKeyword, MailUpdate},
         threads::types::ThreadId,
     },
     mailfs::widget::{ColumnDisplay, MailPreview, RenderData, RightColumn},
@@ -85,6 +85,8 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
             Action::OpenLogs => self.open_logs(),
 
             Action::SelectEntryToggle => self.select_entry(),
+
+            Action::MarkMailAsUnseen => self.mark_mail_as_unseen(),
         }
     }
 
@@ -103,7 +105,10 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
     fn handle_overlay_result(&mut self, result: ScreenOverlayResult<PaletteValue, InputType>) {
         match result {
             ScreenOverlayResult::Palette(value) => match value {
-                PaletteValue::Action(action) => self.apply_action(action),
+                PaletteValue::Action(action) => {
+                    self.apply_action(action);
+                    self.overlay = None;
+                }
             },
             ScreenOverlayResult::Cancel => self.overlay = None,
             ScreenOverlayResult::Input { .. } => unreachable!(),
@@ -401,6 +406,27 @@ impl State {
                     entry.selection = Some(SelectionType::Selected);
                 }
                 self.navigate_down();
+            }
+        }
+    }
+
+    fn mark_mail_as_unseen(&mut self) {
+        if let Some(column) = self.get_center_column() {
+            if let Some(entry) = column.selected_entry() {
+                match &entry.entry_type {
+                    ColumnStateEntryType::Mailbox(_) => {}
+                    ColumnStateEntryType::SingleMail(mail_id)
+                    | ColumnStateEntryType::CollapsedThread(mail_id, _)
+                    | ColumnStateEntryType::ThreadStart { mail_id, .. }
+                    | ColumnStateEntryType::ThreadChild(mail_id, _)
+                    | ColumnStateEntryType::ThreadEnd(mail_id, _) => {
+                        self.backend.mail_update(MailUpdate {
+                            id: mail_id.clone(),
+                            patch_keywords: Some(vec![(MailKeyword::Seen, false)]),
+                            ..Default::default()
+                        })
+                    }
+                }
             }
         }
     }
