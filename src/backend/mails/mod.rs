@@ -15,8 +15,6 @@ use std::sync::{Arc, Mutex};
 use tracing::{error, warn};
 use types::MailId;
 
-const INIT_ROOT_MAILS: usize = 10;
-
 pub struct MailsBackend {
     client: Arc<Client>,
     cache: Arc<Mutex<Cache>>,
