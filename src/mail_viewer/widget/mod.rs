@@ -57,8 +57,6 @@ fn render_tabs(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
 }
 
 /// Rendering implementations
-// TODO: Respect the area size before scrolling.
-//    If the whole mail can be fitted within the area rect, there's no need to add the scrollbars.
 fn render_viewer(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
     match &mut data.viewer_state {
         ViewerState::Metadata(_state) => {
