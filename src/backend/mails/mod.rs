@@ -3,7 +3,7 @@ pub mod types;
 
 use crate::backend::{
     Backend,
-    mails::types::{MailBodyType, MailData, MailDataRest, MailUpdate},
+    mails::types::{MailBodyType, MailData, MailDataAttachment, MailDataRest, MailUpdate},
     task_manager::TaskId,
     threads::types::ThreadId,
 };
@@ -115,6 +115,33 @@ impl MailsBackend {
 
         Ok(())
     }
+
+    async fn request_attachments(&self, id: MailId) -> Result<(), jmap_client::Error> {
+        let mut response = {
+            let mut request = self.client.build();
+
+            request
+                .get_email()
+                .ids(Some([&id.0]))
+                .properties([jmap_client::email::Property::Attachments]);
+
+            request.send_get_email().await?
+        };
+
+        let mail = response.take_list()[0].clone();
+        let attachments: Vec<MailDataAttachment> = mail
+            .attachments()
+            .unwrap()
+            .iter()
+            .map(MailDataAttachment::from)
+            .collect();
+
+        let mut cache = self.cache.lock().unwrap();
+        cache.set_state(response.take_state());
+        cache.set_attachments(&id, attachments);
+
+        Ok(())
+    }
 }
 
 impl Backend {
@@ -198,8 +225,28 @@ impl Backend {
                     }
                 };
 
+                // TODO: Provide option/method to only set one value
                 mails.handle_rest_get_response(&id, response);
             });
+        }
+    }
+
+    pub fn mail_request_attachments(&self, id: &MailId) {
+        let attachments_not_already_fetched = {
+            let mail = self.mails.get_data(id).unwrap();
+            mail.rest.attachments.is_none()
+        };
+
+        if attachments_not_already_fetched {
+            let id = id.clone();
+            let mails = self.mails.clone();
+
+            self.task_manager
+                .spawn(TaskId::FetchMailAttachments, async move {
+                    if let Err(err) = mails.request_attachments(id).await {
+                        error!("Couldn't request attachments of mail:\n{err}");
+                    }
+                })
         }
     }
 

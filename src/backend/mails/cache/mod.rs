@@ -5,7 +5,7 @@ use crate::backend::{
     GetState,
     mails::{
         MailData,
-        types::{MailDataRest, MailUpdate},
+        types::{MailDataAttachment, MailDataRest, MailUpdate},
     },
     threads::types::ThreadId,
 };
@@ -40,6 +40,11 @@ impl Cache {
 
     pub fn get_mail(&self, id: &MailId) -> Option<&MailData> {
         self.mails.get(id)
+    }
+
+    pub fn set_attachments(&mut self, id: &MailId, attachments: Vec<MailDataAttachment>) {
+        let mail = self.mails.get_mut(id).unwrap();
+        mail.rest.attachments = Some(attachments);
     }
 
     pub fn set_mail_rest(&mut self, id: &MailId, rest: MailDataRest) {

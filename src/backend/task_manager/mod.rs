@@ -12,6 +12,7 @@ pub enum TaskId {
     QueryRootMails(MailboxId),
     GetThreadMails,
     FetchMailRest,
+    FetchMailAttachments,
     SetMailSeen,
 }
 
