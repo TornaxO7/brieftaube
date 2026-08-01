@@ -10,7 +10,7 @@ use ratatui::{
     layout::{Constraint, HorizontalAlignment, Layout, Rect},
     style::{
         Style,
-        palette::material::{GREEN, WHITE, YELLOW},
+        palette::material::{BLACK, BLUE, GREEN, PINK, WHITE, YELLOW},
     },
     text::Text,
     widgets::{
@@ -197,7 +197,49 @@ fn render_viewer(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
         }
 
         ViewerState::Attachments(state) => {
-            todo!()
+            let Some(attachments) = &data.mail.attachments else {
+                Widget::render(
+                    Paragraph::new("Fetching attachments...").block(Block::bordered()),
+                    area,
+                    buf,
+                );
+
+                return;
+            };
+
+            if let Some(scroll) = data.scroll_queue.take() {
+                match scroll {
+                    ScrollAction::ScrollUp(amount) => {
+                        state.scroll_up_by(amount as u16);
+                    }
+                    ScrollAction::ScrollDown(amount) => {
+                        state.scroll_down_by(amount as u16);
+                    }
+                    _ => {}
+                }
+            }
+
+            let rows: Vec<Row<'_>> = attachments
+                .iter()
+                .map(|a| {
+                    Row::new([
+                        Text::raw(&a.size).style(Style::new().fg(YELLOW.c500)),
+                        Text::raw(&a.name),
+                        Text::raw(&a.content_type).style(Style::new().fg(PINK.c500)),
+                    ])
+                })
+                .collect();
+
+            let widths = [Constraint::Max(6), Constraint::Fill(1), Constraint::Fill(1)];
+
+            StatefulWidget::render(
+                Table::new(rows, widths)
+                    .row_highlight_style(Style::new().fg(BLACK).bg(BLUE.c500))
+                    .block(Block::bordered().title("Attachments")),
+                area,
+                buf,
+                state,
+            );
         }
     }
 }

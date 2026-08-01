@@ -10,7 +10,7 @@ use crate::{
         mails::types::{MailBodyType, MailId, MailKeyword, MailUpdate},
     },
     mail_viewer::{
-        types::FullMailDisplay,
+        types::MailDisplay,
         widget::{RenderData, ViewerState},
     },
     utils::ui::{
@@ -154,6 +154,8 @@ impl<'a> ScreenState<'a, Action, PaletteType, InputType, RenderData<'a>> for Sta
             Action::OpenMetadataTab => self.set_viewer(Viewer::Metadata),
             Action::OpenTextTab => self.set_viewer(Viewer::Text),
             Action::OpenMarkdownTab => self.set_viewer(Viewer::Markdown),
+            Action::OpenAttachmentsTab => self.set_viewer(Viewer::Attachments),
+
             Action::OpenLogs => self.app_actions.push(crate::Action::OpenLogViewer),
             Action::OpenMailInBrowser => self.open_html_mail_in_browser(),
 
@@ -213,7 +215,7 @@ impl<'a> ScreenState<'a, Action, PaletteType, InputType, RenderData<'a>> for Sta
 
         RenderData {
             viewer_state,
-            mail: FullMailDisplay::from(mail),
+            mail: MailDisplay::from(mail),
             scroll_queue: &mut self.scroll_action,
         }
     }

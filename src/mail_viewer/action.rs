@@ -54,6 +54,9 @@ pub enum Action {
     OpenTextTab,
     #[strum(message = "Display the mail of html-text as markdown.")]
     OpenMarkdownTab,
+    #[strum(message = "Display attachments of the mail.")]
+    OpenAttachmentsTab,
+
     #[strum(message = "Open log viewer")]
     OpenLogs,
     #[strum(message = "Open html mail in browser")]

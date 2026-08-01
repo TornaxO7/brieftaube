@@ -1,3 +1,3 @@
-mod full_mail_display;
+mod mail_display;
 
-pub use full_mail_display::FullMailDisplay;
+pub use mail_display::MailDisplay;
