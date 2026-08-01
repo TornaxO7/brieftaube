@@ -229,12 +229,6 @@ fn render_right_column(area: Rect, buf: &mut Buffer, data: &mut RightColumn) {
 fn render_mail_preview(area: Rect, buf: &mut Buffer, mail: &mut MailPreview) {
     const HEADERS: [&str; 5] = ["Received at:", "From:", "To:", "Subject:", "Cc:"];
 
-    let [header_area, preview_area] = Layout::vertical([
-        Constraint::Length(HEADERS.len() as u16 + 2),
-        Constraint::Fill(1),
-    ])
-    .areas(area);
-
     let MailPreview {
         from,
         to,
@@ -242,7 +236,26 @@ fn render_mail_preview(area: Rect, buf: &mut Buffer, mail: &mut MailPreview) {
         subject,
         preview,
         received_at,
+        attachments,
     } = mail;
+
+    // TODO: HERE
+    // How to calculate attachments area?
+    let [header_area, preview_area, attachments_area] = {
+        let constraints = match attachments {
+            Some(attachments) => vec![
+                Constraint::Length(HEADERS.len() as u16 + 2),
+                Constraint::Fill(1),
+                Constraint::Max(attachments.len() as u16),
+            ],
+            None => vec![
+                Constraint::Length(HEADERS.len() as u16 + 2),
+                Constraint::Fill(1),
+            ],
+        };
+
+        Layout::vertical(constraints).areas(area)
+    };
 
     let headers: Vec<(&str, &str)> = HEADERS
         .iter()
