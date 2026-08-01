@@ -5,7 +5,7 @@ use crate::backend::{
     GetState,
     mails::{
         MailData,
-        types::{MailDataAttachment, MailDataRest, MailUpdate},
+        types::{MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailUpdate},
     },
     threads::types::ThreadId,
 };
@@ -44,12 +44,17 @@ impl Cache {
 
     pub fn set_attachments(&mut self, id: &MailId, attachments: Vec<MailDataAttachment>) {
         let mail = self.mails.get_mut(id).unwrap();
-        mail.rest.attachments = Some(attachments);
+        mail.attachments = Some(attachments);
     }
 
-    pub fn set_mail_rest(&mut self, id: &MailId, rest: MailDataRest) {
-        let mail = self.mails.get_mut(id).expect("Mail already exists");
-        mail.rest = rest;
+    pub fn set_text_body(&mut self, id: &MailId, body: MailDataTextBody) {
+        let mail = self.mails.get_mut(id).unwrap();
+        mail.text_body = Some(body);
+    }
+
+    pub fn set_html_body(&mut self, id: &MailId, body: MailDataHtmlBody) {
+        let mail = self.mails.get_mut(id).unwrap();
+        mail.html_body = Some(body);
     }
 }
 

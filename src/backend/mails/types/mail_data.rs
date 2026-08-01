@@ -18,7 +18,9 @@ pub struct MailData {
     pub has_attachment: bool,
     pub mailbox_ids: HashSet<MailboxId>,
 
-    pub rest: MailDataRest,
+    pub text_body: Option<MailDataTextBody>,
+    pub html_body: Option<MailDataHtmlBody>,
+    pub attachments: Option<Vec<MailDataAttachment>>,
 }
 
 impl MailData {
@@ -64,44 +66,35 @@ impl MailData {
                 .into_iter()
                 .map(|id| MailboxId(id.to_owned()))
                 .collect(),
-            rest: MailDataRest::default(),
+
+            text_body: None,
+            html_body: None,
+            attachments: None,
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct MailDataRest {
-    pub text_body: Option<String>,
-    pub html_body: Option<String>,
-    pub attachments: Option<Vec<MailDataAttachment>>,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MailDataTextBody(pub String);
+
+impl MailDataTextBody {
+    pub fn new(mail: &Email) -> Self {
+        let parts = mail.text_body().unwrap();
+        let content = join_body_values(mail, parts).unwrap();
+
+        Self(content)
+    }
 }
 
-impl MailDataRest {
-    pub const PROPERTIES: [Property; 4] = [
-        Property::TextBody,
-        Property::HtmlBody,
-        Property::BodyValues,
-        Property::Attachments,
-    ];
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MailDataHtmlBody(pub String);
 
+impl MailDataHtmlBody {
     pub fn new(mail: &Email) -> Self {
-        let text_body = mail
-            .text_body()
-            .and_then(|text_body| join_body_values(mail, text_body));
+        let parts = mail.html_body().unwrap();
+        let content = join_body_values(mail, parts).unwrap();
 
-        let html_body = mail
-            .html_body()
-            .and_then(|html_body| join_body_values(mail, html_body));
-
-        let attachments = mail
-            .attachments()
-            .map(|parts| parts.iter().map(MailDataAttachment::from).collect());
-
-        Self {
-            text_body,
-            html_body,
-            attachments,
-        }
+        Self(content)
     }
 }
 

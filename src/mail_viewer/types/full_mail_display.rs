@@ -1,4 +1,6 @@
-use crate::backend::mails::types::{MailData, MailDataRest, MailId, addresses_to_string};
+use crate::backend::mails::types::{
+    MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, addresses_to_string,
+};
 
 pub struct FullMailDisplay {
     pub id: MailId,
@@ -8,13 +10,14 @@ pub struct FullMailDisplay {
     pub subject: String,
     pub received_at: String,
     pub has_attachment: bool,
-    pub rest: MailDataRest,
+
+    pub html_body: Option<MailDataHtmlBody>,
+    pub text_body: Option<MailDataTextBody>,
+    pub attachments: Option<Vec<MailDataAttachment>>,
 }
 
 impl From<&MailData> for FullMailDisplay {
     fn from(mail: &MailData) -> Self {
-        let rest = mail.rest.clone();
-
         Self {
             id: mail.id.clone(),
             from: addresses_to_string(&mail.from),
@@ -23,7 +26,10 @@ impl From<&MailData> for FullMailDisplay {
             subject: mail.subject.clone(),
             received_at: mail.received_at.format("%A, %d %B %Y %T").to_string(),
             has_attachment: mail.has_attachment,
-            rest,
+
+            html_body: mail.html_body.clone(),
+            text_body: mail.text_body.clone(),
+            attachments: mail.attachments.clone(),
         }
     }
 }

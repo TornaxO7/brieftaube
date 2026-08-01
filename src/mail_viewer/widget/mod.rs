@@ -54,7 +54,7 @@ fn render_view_modes(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
 fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
     match data.variant {
         ViewVariant::Markdown => {
-            let Some(html) = data.mail.rest.html_body.clone() else {
+            let Some(html) = data.mail.html_body.clone() else {
                 Widget::render(
                     Paragraph::new("Fetching html body...").block(Block::bordered()),
                     area,
@@ -63,7 +63,7 @@ fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
 
                 return;
             };
-            let markdown = html_to_markdown_rs::convert(&html, None).unwrap();
+            let markdown = html_to_markdown_rs::convert(&html.0, None).unwrap();
             let content = markdown.content.unwrap();
 
             let renderer = Renderer::new(RenderOptions::default().width(area.width));
@@ -106,7 +106,7 @@ fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
             }
         }
         ViewVariant::Text => {
-            let Some(content) = data.mail.rest.text_body.clone() else {
+            let Some(content) = data.mail.text_body.clone() else {
                 Widget::render(
                     Paragraph::new("Fetching text body part of mail...").block(Block::bordered()),
                     area,
@@ -115,7 +115,7 @@ fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
                 return;
             };
 
-            let text = Text::from(content);
+            let text = Text::from(content.0);
 
             let (content_area, vertical_scrollbar_area, horizontal_scrollbar_area) =
                 adjust_scrollbars(

@@ -2,5 +2,4 @@
 pub enum MailBodyType {
     Text,
     Html,
-    All,
 }

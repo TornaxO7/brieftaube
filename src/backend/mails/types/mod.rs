@@ -4,9 +4,9 @@ mod mail_data;
 mod mail_keyword;
 mod mail_update;
 
-pub use mail_address::{MailAddress, addresses_to_string};
+pub use mail_address::*;
 pub use mail_body_type::MailBodyType;
-pub use mail_data::{MailData, MailDataAttachment, MailDataRest};
+pub use mail_data::*;
 pub use mail_keyword::MailKeyword;
 pub use mail_update::MailUpdate;
 

@@ -165,25 +165,21 @@ impl<'a> ScreenState<'a, Action, PaletteType, InputType, RenderData<'a>> for Sta
     }
 
     fn render_data(&'a mut self) -> RenderData<'a> {
-        let mail = self.backend.mail_get_data(&self.id).unwrap();
-
         match self.variant {
             ViewVariant::Text => {
-                if mail.rest.text_body.is_none() {
-                    self.backend
-                        .mail_request_body_type(&mail.id, MailBodyType::Text);
-                }
+                self.backend
+                    .mail_request_body_type(&self.id, MailBodyType::Text);
             }
             ViewVariant::Markdown => {
-                if mail.rest.html_body.is_none() {
-                    self.backend
-                        .mail_request_body_type(&mail.id, MailBodyType::Html);
-                }
+                self.backend
+                    .mail_request_body_type(&self.id, MailBodyType::Html);
             }
             ViewVariant::Attachments => {
-                todo!()
+                self.backend.mail_request_attachments(&self.id);
             }
         }
+
+        let mail = self.backend.mail_get_data(&self.id).unwrap();
 
         RenderData {
             variant: self.variant,

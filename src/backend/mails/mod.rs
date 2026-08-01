@@ -3,7 +3,9 @@ pub mod types;
 
 use crate::backend::{
     Backend,
-    mails::types::{MailBodyType, MailData, MailDataAttachment, MailDataRest, MailUpdate},
+    mails::types::{
+        MailBodyType, MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailUpdate,
+    },
     task_manager::TaskId,
     threads::types::ThreadId,
 };
@@ -49,23 +51,26 @@ impl MailsBackend {
             cache.add(MailData::new(mail));
         }
     }
-
-    pub fn handle_rest_get_response(&self, id: &MailId, mut response: EmailGetResponse) {
-        let mut cache = self.cache.lock().unwrap();
-        cache.set_state(response.take_state());
-
-        let mails = response.take_list();
-        debug_assert!(
-            mails.len() == 1,
-            "Eh... this function should be only called for _one_ mail. ._."
-        );
-
-        cache.set_mail_rest(id, MailDataRest::new(&mails[0]));
-    }
 }
 
 /// Request methods
 impl MailsBackend {
+    async fn request_mails(&self, ids: &[MailId]) -> Result<(), jmap_client::Error> {
+        let response = {
+            let mut request = self.client.build();
+
+            request
+                .get_email()
+                .properties(MailData::PROPERTIES)
+                .ids(Some(ids.iter().map(|id| &id.0)));
+
+            request.send_get_email().await?
+        };
+
+        self.handle_get_response(response);
+        Ok(())
+    }
+
     async fn request_update_mails(
         &self,
         updates: Vec<MailUpdate>,
@@ -116,6 +121,40 @@ impl MailsBackend {
         Ok(())
     }
 
+    async fn request_body_type(
+        &self,
+        id: &MailId,
+        body_type: MailBodyType,
+    ) -> Result<(), jmap_client::Error> {
+        let mut response = {
+            let mut request = self.client.build();
+            let get_mail = request.get_email().ids(Some([&id.0]));
+            match body_type {
+                MailBodyType::Text => get_mail.arguments().fetch_text_body_values(true),
+                MailBodyType::Html => get_mail.arguments().fetch_html_body_values(true),
+            };
+
+            request.send_get_email().await?
+        };
+
+        let mail = response.take_list()[0].clone();
+
+        let mut cache = self.cache.lock().unwrap();
+        cache.set_state(response.take_state());
+        match body_type {
+            MailBodyType::Text => {
+                let body = MailDataTextBody::new(&mail);
+                cache.set_text_body(&id, body);
+            }
+            MailBodyType::Html => {
+                let body = MailDataHtmlBody::new(&mail);
+                cache.set_html_body(&id, body);
+            }
+        }
+
+        Ok(())
+    }
+
     async fn request_attachments(&self, id: MailId) -> Result<(), jmap_client::Error> {
         let mut response = {
             let mut request = self.client.build();
@@ -156,88 +195,44 @@ impl Backend {
             .expect("Thread has already been requested.");
 
         self.mails.get_datas(&thread_mail_ids).or_else(|| {
-            let client = self.client.clone();
             let mails = self.mails.clone();
 
             self.task_manager.spawn(TaskId::GetThreadMails, async move {
-                let response = {
-                    let mut request = client.build();
-
-                    request
-                        .get_email()
-                        .properties(MailData::PROPERTIES)
-                        .ids(Some(thread_mail_ids.iter().map(|id| &id.0)));
-
-                    match request.send_get_email().await {
-                        Ok(r) => r,
-                        Err(err) => {
-                            error!("Couldn't send thread-mails request to server:\n{err}");
-                            return;
-                        }
-                    }
-                };
-
-                mails.handle_get_response(response);
+                if let Err(err) = mails.request_mails(&thread_mail_ids).await {
+                    error!("Couldn't request mails of thread:\n{err}");
+                }
             });
             None
         })
     }
 
     pub fn mail_request_body_type(&self, id: &MailId, body_type: MailBodyType) {
-        let mail_is_not_fully_fetched = {
+        let already_cached = {
             let mail = self.mails.get_data(id).unwrap();
-
             match body_type {
-                MailBodyType::Text => mail.rest.text_body.is_none(),
-                MailBodyType::Html => mail.rest.html_body.is_none(),
-                MailBodyType::All => mail.rest.text_body.is_none() && mail.rest.html_body.is_none(),
+                MailBodyType::Text => mail.text_body.is_some(),
+                MailBodyType::Html => mail.html_body.is_some(),
             }
         };
 
-        if mail_is_not_fully_fetched {
+        if !already_cached {
             let id = id.clone();
-            let client = self.client.clone();
             let mails = self.mails.clone();
-
             self.task_manager.spawn(TaskId::FetchMailRest, async move {
-                let response = {
-                    let mut request = client.build();
-
-                    let get_mail = request
-                        .get_email()
-                        .ids(Some([&id.0]))
-                        .properties(MailDataRest::PROPERTIES);
-
-                    match body_type {
-                        MailBodyType::Text => get_mail.arguments().fetch_text_body_values(true),
-                        MailBodyType::Html => get_mail.arguments().fetch_html_body_values(true),
-                        MailBodyType::All => get_mail.arguments().fetch_all_body_values(true),
-                    };
-
-                    match request.send_get_email().await {
-                        Ok(r) => r,
-                        Err(err) => {
-                            error!(
-                                "Couldn't send request to fetch full mail data to server:\n{err}"
-                            );
-                            return;
-                        }
-                    }
-                };
-
-                // TODO: Provide option/method to only set one value
-                mails.handle_rest_get_response(&id, response);
+                if let Err(err) = mails.request_body_type(&id, body_type).await {
+                    error!("Couldn't request body of mail:\n{err}");
+                }
             });
         }
     }
 
     pub fn mail_request_attachments(&self, id: &MailId) {
-        let attachments_not_already_fetched = {
+        let attachments_already_fetched = {
             let mail = self.mails.get_data(id).unwrap();
-            mail.rest.attachments.is_none()
+            mail.attachments.is_some()
         };
 
-        if attachments_not_already_fetched {
+        if !attachments_already_fetched {
             let id = id.clone();
             let mails = self.mails.clone();
 
