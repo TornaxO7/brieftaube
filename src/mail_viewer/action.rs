@@ -48,6 +48,8 @@ pub enum Action {
     #[strum(message = "Scroll half page to the left.")]
     ScrollHalfPageLeft,
 
+    #[strum(message = "Display metadata of mail.")]
+    OpenMetadataTab,
     #[strum(message = "Display the mail as text.")]
     OpenTextTab,
     #[strum(message = "Display the mail of html-text as markdown.")]

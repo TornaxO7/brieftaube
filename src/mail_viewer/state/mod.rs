@@ -151,6 +151,7 @@ impl<'a> ScreenState<'a, Action, PaletteType, InputType, RenderData<'a>> for Sta
             Action::ScrollHalfPageLeft => self.scroll_half_page_left(),
             Action::ScrollHalfPageRight => self.scroll_half_page_right(),
 
+            Action::OpenMetadataTab => self.set_viewer(Viewer::Metadata),
             Action::OpenTextTab => self.set_viewer(Viewer::Text),
             Action::OpenMarkdownTab => self.set_viewer(Viewer::Markdown),
             Action::OpenLogs => self.app_actions.push(crate::Action::OpenLogViewer),
@@ -279,8 +280,8 @@ impl State {
         self.scroll_action = Some(ScrollAction::ScrollHalfPageRight);
     }
 
-    fn set_viewer(&mut self, variant: Viewer) {
-        self.selected_viewer = variant;
+    fn set_viewer(&mut self, viewer: Viewer) {
+        self.selected_viewer = viewer;
     }
 
     fn open_html_mail_in_browser(&self) {

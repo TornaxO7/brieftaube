@@ -7,12 +7,15 @@ use crate::{
 use pulldown_cmark_mdcat::ratatui::{RenderOptions, Renderer};
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Layout, Rect},
-    style::{Style, palette::material::YELLOW},
+    layout::{Constraint, HorizontalAlignment, Layout, Rect},
+    style::{
+        Style,
+        palette::material::{GREEN, WHITE, YELLOW},
+    },
     text::Text,
     widgets::{
-        Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget,
-        Tabs, Widget,
+        Block, Clear, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState,
+        StatefulWidget, Table, Tabs, Widget,
     },
 };
 pub use render_data::*;
@@ -58,8 +61,47 @@ fn render_tabs(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
 //    If the whole mail can be fitted within the area rect, there's no need to add the scrollbars.
 fn render_viewer(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
     match &mut data.viewer_state {
-        ViewerState::Metadata(state) => {
-            todo!()
+        ViewerState::Metadata(_state) => {
+            const HEADERS: [&str; 6] = [
+                "Received at:",
+                "From:",
+                "To:",
+                "Subject:",
+                "Cc:",
+                "Keywords:",
+            ];
+            const LONGEST_HEADER_NAME: usize = longest_header_name(&HEADERS);
+
+            let rows: Vec<Row> = [
+                (HEADERS[0], &data.mail.received_at),
+                (HEADERS[1], &data.mail.from),
+                (HEADERS[2], &data.mail.to),
+                (HEADERS[3], &data.mail.subject),
+                (HEADERS[4], &data.mail.cc),
+                (HEADERS[5], &data.mail.keywords),
+            ]
+            .iter()
+            .map(|(header, value)| {
+                let header = Text::raw(*header)
+                    .alignment(HorizontalAlignment::Right)
+                    .style(Style::new().fg(GREEN.c500));
+
+                let value = Text::raw(*value).style(Style::new().fg(WHITE));
+
+                Row::new([header, value])
+            })
+            .collect();
+
+            let widths = [
+                Constraint::Length(LONGEST_HEADER_NAME as u16),
+                Constraint::Fill(1),
+            ];
+
+            Widget::render(
+                Table::new(rows, widths).block(Block::bordered().title("Metadata")),
+                area,
+                buf,
+            );
         }
         ViewerState::Markdown {
             vertical,
@@ -283,4 +325,17 @@ fn adjust_scrollbars(
         vertical_scrollbar_area,
         horizontal_scrollbar_area,
     )
+}
+
+// I wish `const` in rust would be more powerful :(
+const fn longest_header_name(headers: &[&str]) -> usize {
+    let mut max = 0;
+    let mut i = 0;
+    while i < headers.len() {
+        if headers[i].len() > max {
+            max = headers[i].len();
+        }
+        i += 1;
+    }
+    max
 }
