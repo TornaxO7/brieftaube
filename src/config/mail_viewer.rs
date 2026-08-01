@@ -8,7 +8,7 @@ pub struct MailViewer {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DefaultTab {
-    Headers,
+    Metadata,
     Text,
     Markdown,
     Attachments,

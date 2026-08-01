@@ -1,6 +1,6 @@
 use ratatui::widgets::TableState;
 
 #[derive(Default)]
-pub struct HeadersViewer {
+pub struct MetadataViewer {
     pub state: TableState,
 }

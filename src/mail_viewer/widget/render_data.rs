@@ -1,7 +1,7 @@
 use ratatui::widgets::{ScrollbarState, TableState};
 
 use crate::mail_viewer::{
-    state::{AttachmentViewer, HeadersViewer, MarkdownViewer, ScrollAction, TextViewer},
+    state::{AttachmentViewer, MarkdownViewer, MetadataViewer, ScrollAction, TextViewer},
     types::FullMailDisplay,
 };
 
@@ -12,7 +12,7 @@ pub struct RenderData<'a> {
 }
 
 pub enum ViewerState<'a> {
-    Headers(&'a mut TableState),
+    Metadata(&'a mut TableState),
     Text {
         vertical: &'a mut ScrollbarState,
         horizontal: &'a mut ScrollbarState,
@@ -24,9 +24,9 @@ pub enum ViewerState<'a> {
     Attachments(&'a mut TableState),
 }
 
-impl<'a> From<&'a mut HeadersViewer> for ViewerState<'a> {
-    fn from(viewer: &'a mut HeadersViewer) -> Self {
-        Self::Headers(&mut viewer.state)
+impl<'a> From<&'a mut MetadataViewer> for ViewerState<'a> {
+    fn from(viewer: &'a mut MetadataViewer) -> Self {
+        Self::Metadata(&mut viewer.state)
     }
 }
 
@@ -50,6 +50,6 @@ impl<'a> From<&'a mut MarkdownViewer> for ViewerState<'a> {
 
 impl<'a> From<&'a mut AttachmentViewer> for ViewerState<'a> {
     fn from(viewer: &'a mut AttachmentViewer) -> Self {
-        Self::Headers(&mut viewer.state)
+        Self::Metadata(&mut viewer.state)
     }
 }

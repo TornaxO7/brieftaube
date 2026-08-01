@@ -37,14 +37,14 @@ impl StatefulWidget for MailViewer {
 
 fn render_tabs(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
     let idx = match data.viewer_state {
-        ViewerState::Headers(_) => 0,
+        ViewerState::Metadata(_) => 0,
         ViewerState::Text { .. } => 1,
         ViewerState::Markdown { .. } => 2,
         ViewerState::Attachments(_) => 3,
     };
 
     Widget::render(
-        Tabs::new(["Headers", "Text", "Markdown (HTML)", "Attachments"])
+        Tabs::new(["Metadata", "Text", "Markdown (HTML)", "Attachments"])
             .block(Block::bordered().title("Tabs"))
             .highlight_style(Style::new().fg(YELLOW.c500))
             .select(Some(idx)),
@@ -58,7 +58,7 @@ fn render_tabs(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
 //    If the whole mail can be fitted within the area rect, there's no need to add the scrollbars.
 fn render_viewer(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
     match &mut data.viewer_state {
-        ViewerState::Headers(state) => {
+        ViewerState::Metadata(state) => {
             todo!()
         }
         ViewerState::Markdown {

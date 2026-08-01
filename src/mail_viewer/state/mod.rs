@@ -1,6 +1,6 @@
 mod attachment_viewer;
-mod headers_viewer;
 mod markdown_viewer;
+mod metadata_viewer;
 mod text_viewer;
 
 use super::Action;
@@ -18,8 +18,8 @@ use crate::{
     },
 };
 pub use attachment_viewer::AttachmentViewer;
-pub use headers_viewer::HeadersViewer;
 pub use markdown_viewer::MarkdownViewer;
+pub use metadata_viewer::MetadataViewer;
 use std::{collections::HashMap, rc::Rc};
 pub use text_viewer::TextViewer;
 use tracing::debug;
@@ -35,7 +35,7 @@ pub enum InputType {}
 
 #[derive(Debug, Clone, Copy)]
 pub enum Viewer {
-    Headers,
+    Metadata,
     Text,
     Markdown,
     Attachments,
@@ -64,7 +64,7 @@ pub struct State {
     backend: Rc<Backend>,
 
     selected_viewer: Viewer,
-    headers_viewer: HeadersViewer,
+    metadata_viewer: MetadataViewer,
     text_viewer: TextViewer,
     markdown_viewer: MarkdownViewer,
     attachment_viewer: AttachmentViewer,
@@ -78,7 +78,7 @@ pub struct State {
 impl State {
     pub fn new(id: MailId, backend: Rc<Backend>) -> Self {
         let selected_viewer = match backend.config().mail_viewer.default_tab {
-            crate::config::DefaultTab::Headers => Viewer::Headers,
+            crate::config::DefaultTab::Metadata => Viewer::Metadata,
             crate::config::DefaultTab::Attachments => Viewer::Attachments,
             crate::config::DefaultTab::Text => {
                 backend.mail_request_body_type(&id, MailBodyType::Text);
@@ -121,7 +121,7 @@ impl State {
             ])),
             selected_viewer,
 
-            headers_viewer: HeadersViewer::default(),
+            metadata_viewer: MetadataViewer::default(),
             text_viewer: TextViewer::default(),
             markdown_viewer: MarkdownViewer::default(),
             attachment_viewer: AttachmentViewer::default(),
@@ -189,7 +189,7 @@ impl<'a> ScreenState<'a, Action, PaletteType, InputType, RenderData<'a>> for Sta
     fn render_data(&'a mut self) -> RenderData<'a> {
         tracing::debug!("Selected viewer: {:?}", self.selected_viewer);
         let viewer_state = match self.selected_viewer {
-            Viewer::Headers => ViewerState::from(&mut self.headers_viewer),
+            Viewer::Metadata => ViewerState::from(&mut self.metadata_viewer),
             Viewer::Text => {
                 self.backend
                     .mail_request_body_type(&self.id, MailBodyType::Text);
