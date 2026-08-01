@@ -249,6 +249,8 @@ impl State {
         self.scroll_action = Some(action);
     }
 
+    // TODO: If in attachment tab: Download the selected attachment and open the directory in it?
+    //       Maybe create an action which downloads all attachments and then opens the directory?
     fn scroll_right(&mut self) {
         let action = match self.keybindings.flush_int_prefix() {
             Some(num) => ScrollAction::ScrollRight(num),
