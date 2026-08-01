@@ -69,7 +69,7 @@ impl MailData {
 
             text_body: None,
             html_body: None,
-            attachments: None,
+            attachments: (!mail.has_attachment()).then_some(vec![]),
         }
     }
 }
