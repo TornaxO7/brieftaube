@@ -451,6 +451,22 @@ impl<'a> State {
         let current_column = self.navigation_stack.last().cloned().unwrap();
         self.update_column(&current_column);
 
+        let preview_mail_id = {
+            self.get_center_column()
+                .and_then(|column| column.selected_entry())
+                .and_then(|entry| match entry {
+                    ColumnStateEntry::Mailbox(_) => None,
+                    ColumnStateEntry::SingleMail(mail_id)
+                    | ColumnStateEntry::CollapsedThread(mail_id, _)
+                    | ColumnStateEntry::ThreadStart { mail_id, .. }
+                    | ColumnStateEntry::ThreadChild(mail_id, _)
+                    | ColumnStateEntry::ThreadEnd(mail_id, _) => Some(mail_id),
+                })
+        };
+        if let Some(id) = preview_mail_id {
+            self.backend.mail_request_attachments(&id);
+        }
+
         if let Some(right_mailbox) = self.get_right_column_mailbox() {
             self.update_column(&right_mailbox);
         }

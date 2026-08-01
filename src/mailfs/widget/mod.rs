@@ -15,7 +15,7 @@ use crate::{
 };
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Layout, Rect},
+    layout::{Constraint, HorizontalAlignment, Layout, Rect},
     style::{
         Style,
         palette::material::{
@@ -239,43 +239,74 @@ fn render_mail_preview(area: Rect, buf: &mut Buffer, mail: &mut MailPreview) {
         attachments,
     } = mail;
 
-    // TODO: HERE
-    // How to calculate attachments area?
-    let [header_area, preview_area, attachments_area] = {
-        let constraints = match attachments {
-            Some(attachments) => vec![
-                Constraint::Length(HEADERS.len() as u16 + 2),
-                Constraint::Fill(1),
-                Constraint::Max(attachments.len() as u16),
-            ],
-            None => vec![
-                Constraint::Length(HEADERS.len() as u16 + 2),
-                Constraint::Fill(1),
-            ],
-        };
+    let (header_area, preview_area, attachments_area) = {
+        let mut constraints = vec![
+            Constraint::Length(HEADERS.len() as u16 + 2),
+            Constraint::Fill(1),
+        ];
 
-        Layout::vertical(constraints).areas(area)
+        // TODO: Check if attachments are currently _loading_ or not...
+        //       To avoid a sudden appearence of the attachment list
+        match attachments {
+            Some(a) if !a.is_empty() => {
+                constraints.push(Constraint::Max(a.len() as u16 + 2));
+
+                let [header, preview, attachments_area] = Layout::vertical(constraints).areas(area);
+                (header, preview, Some(attachments_area))
+            }
+            _ => {
+                let [header, preview] = Layout::vertical(constraints).areas(area);
+                (header, preview, None)
+            }
+        }
     };
 
-    let headers: Vec<(&str, &str)> = HEADERS
-        .iter()
-        .zip([
-            received_at.as_str(),
-            from.as_str(),
-            to.as_str(),
-            subject.as_str(),
-            cc.as_str(),
-        ])
-        .map(|(&header_name, value)| (header_name, value))
-        .collect();
+    // headers
+    {
+        let headers: Vec<(&str, &str)> = HEADERS
+            .iter()
+            .zip([
+                received_at.as_str(),
+                from.as_str(),
+                to.as_str(),
+                subject.as_str(),
+                cc.as_str(),
+            ])
+            .map(|(&header_name, value)| (header_name, value))
+            .collect();
 
-    render_headers(header_area, buf, &headers);
+        render_headers(header_area, buf, &headers);
+    }
 
+    // preview
     Widget::render(
-        Paragraph::new(preview.as_str()).block(Block::bordered()),
+        Paragraph::new(preview.as_str()).block(Block::bordered().title("Preview")),
         preview_area,
         buf,
     );
+
+    // attachments
+    if let (Some(attachments_area), Some(attachments)) = (attachments_area, attachments) {
+        let rows: Vec<Row> = attachments
+            .iter()
+            .map(|attachment| {
+                Row::new([
+                    Cell::new(attachment.name.clone()),
+                    Text::raw(attachment.content_type.clone())
+                        .alignment(HorizontalAlignment::Right)
+                        .into(),
+                ])
+            })
+            .collect();
+
+        let widths = [Constraint::Fill(1), Constraint::Fill(1)];
+
+        Widget::render(
+            Table::new(rows, widths).block(Block::bordered().title("Attachments")),
+            attachments_area,
+            buf,
+        );
+    }
 }
 
 fn render_headers(area: Rect, buf: &mut Buffer, headers: &[(&'static str, &str)]) {

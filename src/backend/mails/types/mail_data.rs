@@ -100,8 +100,8 @@ impl MailDataHtmlBody {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MailDataAttachment {
-    pub name: Option<String>,
-    pub content_type: Option<String>,
+    pub name: String,
+    pub content_type: String,
     pub size: usize,
     pub blob_id: Option<String>,
 }
@@ -109,8 +109,8 @@ pub struct MailDataAttachment {
 impl From<&EmailBodyPart> for MailDataAttachment {
     fn from(part: &EmailBodyPart) -> Self {
         Self {
-            name: part.name().map(ToString::to_string),
-            content_type: part.content_type().map(ToString::to_string),
+            name: part.name().unwrap().to_string(),
+            content_type: part.content_type().unwrap().to_string(),
             size: part.size(),
             blob_id: part.blob_id().map(ToString::to_string),
         }
