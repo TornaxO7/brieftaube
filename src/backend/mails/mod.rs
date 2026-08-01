@@ -244,8 +244,12 @@ impl Backend {
     }
 
     pub fn mails_update(&self, updates: Vec<MailUpdate>) {
-        let mails = self.mails.clone();
+        let updates_are_empty = updates.iter().all(|update| update.is_empty());
+        if updates.is_empty() || updates_are_empty {
+            return;
+        }
 
+        let mails = self.mails.clone();
         self.task_manager.spawn(TaskId::SetMailSeen, async move {
             if let Err(err) = mails.request_update_mails(updates).await {
                 error!("Couldn't send request to update mails to server:\n{err}");
