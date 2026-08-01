@@ -1,6 +1,5 @@
 mod render_data;
 
-use super::state::ViewVariant;
 use crate::{
     mail_viewer::state::ScrollAction,
     utils::ui::{ScreenOverlay, ScreenState, input::Input, palette::Palette},
@@ -16,7 +15,7 @@ use ratatui::{
         Tabs, Widget,
     },
 };
-pub use render_data::RenderData;
+pub use render_data::*;
 
 #[derive(Default)]
 pub struct MailViewer {}
@@ -26,23 +25,29 @@ impl StatefulWidget for MailViewer {
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let mut data = state.render_data();
-        let [main_panel, view_mode] =
+        let [main_panel, tab_area] =
             Layout::vertical([Constraint::Fill(1), Constraint::Length(3)]).areas(area);
 
-        render_view_modes(view_mode, buf, &mut data);
-        render_mail_content(main_panel, buf, &mut data);
-        // render_attachment_list(bottom, buf, &mut data);
+        render_tabs(tab_area, buf, &mut data);
+        render_viewer(main_panel, buf, &mut data);
 
         render_overlay(area, buf, state);
     }
 }
 
-fn render_view_modes(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
+fn render_tabs(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
+    let idx = match data.viewer_state {
+        ViewerState::Headers(_) => 0,
+        ViewerState::Text { .. } => 1,
+        ViewerState::Markdown { .. } => 2,
+        ViewerState::Attachments(_) => 3,
+    };
+
     Widget::render(
-        Tabs::new(["Text", "Markdown (HTML)", "Attachments"])
+        Tabs::new(["Headers", "Text", "Markdown (HTML)", "Attachments"])
             .block(Block::bordered().title("Tabs"))
             .highlight_style(Style::new().fg(YELLOW.c500))
-            .select(Some(data.variant as usize)),
+            .select(Some(idx)),
         area,
         buf,
     );
@@ -51,9 +56,15 @@ fn render_view_modes(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
 /// Rendering implementations
 // TODO: Respect the area size before scrolling.
 //    If the whole mail can be fitted within the area rect, there's no need to add the scrollbars.
-fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
-    match data.variant {
-        ViewVariant::Markdown => {
+fn render_viewer(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
+    match &mut data.viewer_state {
+        ViewerState::Headers(state) => {
+            todo!()
+        }
+        ViewerState::Markdown {
+            vertical,
+            horizontal,
+        } => {
             let Some(html) = data.mail.html_body.clone() else {
                 Widget::render(
                     Paragraph::new("Fetching html body...").block(Block::bordered()),
@@ -70,18 +81,12 @@ fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
             let text = renderer.text_from_str(&content).unwrap();
 
             let (content_area, vertical_scrollbar_area, horizontal_scrollbar_area) =
-                adjust_scrollbars(
-                    &text,
-                    area,
-                    data.vertical,
-                    data.horizontal,
-                    data.scroll_queue,
-                );
+                adjust_scrollbars(&text, area, vertical, horizontal, data.scroll_queue);
 
             Widget::render(
                 Paragraph::new(text).block(Block::bordered()).scroll((
-                    data.vertical.get_position() as u16,
-                    data.horizontal.get_position() as u16,
+                    vertical.get_position() as u16,
+                    horizontal.get_position() as u16,
                 )),
                 content_area,
                 buf,
@@ -92,7 +97,7 @@ fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
                     Scrollbar::new(ScrollbarOrientation::VerticalRight),
                     area,
                     buf,
-                    data.vertical,
+                    vertical,
                 );
             }
 
@@ -101,12 +106,15 @@ fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
                     Scrollbar::new(ScrollbarOrientation::HorizontalBottom),
                     area,
                     buf,
-                    data.horizontal,
+                    horizontal,
                 );
             }
         }
-        ViewVariant::Text => {
-            let Some(content) = data.mail.text_body.clone() else {
+        ViewerState::Text {
+            vertical,
+            horizontal,
+        } => {
+            let Some(content) = data.mail.text_body.as_ref() else {
                 Widget::render(
                     Paragraph::new("Fetching text body part of mail...").block(Block::bordered()),
                     area,
@@ -115,21 +123,15 @@ fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
                 return;
             };
 
-            let text = Text::from(content.0);
+            let text = Text::from(content.0.clone());
 
             let (content_area, vertical_scrollbar_area, horizontal_scrollbar_area) =
-                adjust_scrollbars(
-                    &text,
-                    area,
-                    data.vertical,
-                    data.horizontal,
-                    data.scroll_queue,
-                );
+                adjust_scrollbars(&text, area, vertical, horizontal, data.scroll_queue);
 
             Widget::render(
                 Paragraph::new(text).block(Block::bordered()).scroll((
-                    data.vertical.get_position() as u16,
-                    data.horizontal.get_position() as u16,
+                    vertical.get_position() as u16,
+                    horizontal.get_position() as u16,
                 )),
                 content_area,
                 buf,
@@ -140,7 +142,7 @@ fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
                     Scrollbar::new(ScrollbarOrientation::VerticalRight),
                     area,
                     buf,
-                    data.vertical,
+                    vertical,
                 );
             }
 
@@ -149,12 +151,12 @@ fn render_mail_content(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
                     Scrollbar::new(ScrollbarOrientation::HorizontalBottom),
                     area,
                     buf,
-                    data.horizontal,
+                    horizontal,
                 );
             }
         }
 
-        ViewVariant::Attachments => {
+        ViewerState::Attachments(state) => {
             todo!()
         }
     }
@@ -232,10 +234,18 @@ fn adjust_scrollbars(
                 let new_pos = prev_pos + area.width as usize / 2;
                 *horizontal = horizontal.position(new_pos.min(amount_unseen_columns));
             }
-
+            ScrollAction::ScrollRight(amount) => {
+                let prev_pos = horizontal.get_position();
+                let new_pos = prev_pos + amount;
+                *horizontal = horizontal.position(new_pos.min(amount_unseen_columns));
+            }
             ScrollAction::ScrollHalfPageLeft => {
                 let prev_pos = horizontal.get_position();
                 *horizontal = horizontal.position(prev_pos.saturating_sub(area.width as usize / 2));
+            }
+            ScrollAction::ScrollLeft(amount) => {
+                let prev_pos = horizontal.get_position();
+                *horizontal = horizontal.position(prev_pos.saturating_sub(amount));
             }
         }
     }

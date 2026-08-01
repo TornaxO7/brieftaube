@@ -16,20 +16,20 @@ pub struct FullMailDisplay {
     pub attachments: Option<Vec<MailDataAttachment>>,
 }
 
-impl From<&MailData> for FullMailDisplay {
-    fn from(mail: &MailData) -> Self {
+impl From<MailData> for FullMailDisplay {
+    fn from(mail: MailData) -> Self {
         Self {
-            id: mail.id.clone(),
+            id: mail.id,
             from: addresses_to_string(&mail.from),
             to: addresses_to_string(&mail.to),
             cc: addresses_to_string(&mail.cc),
-            subject: mail.subject.clone(),
+            subject: mail.subject,
             received_at: mail.received_at.format("%A, %d %B %Y %T").to_string(),
             has_attachment: mail.has_attachment,
 
-            html_body: mail.html_body.clone(),
-            text_body: mail.text_body.clone(),
-            attachments: mail.attachments.clone(),
+            html_body: mail.html_body,
+            text_body: mail.text_body,
+            attachments: mail.attachments,
         }
     }
 }

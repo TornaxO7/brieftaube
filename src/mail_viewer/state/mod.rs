@@ -1,17 +1,28 @@
+mod attachment_viewer;
+mod headers_viewer;
+mod markdown_viewer;
+mod text_viewer;
+
 use super::Action;
 use crate::{
     backend::{
         Backend,
         mails::types::{MailBodyType, MailId, MailKeyword, MailUpdate},
     },
-    mail_viewer::{types::FullMailDisplay, widget::RenderData},
+    mail_viewer::{
+        types::FullMailDisplay,
+        widget::{RenderData, ViewerState},
+    },
     utils::ui::{
         ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager, palette,
     },
 };
-use ratatui::widgets::ScrollbarState;
+pub use attachment_viewer::AttachmentViewer;
+pub use headers_viewer::HeadersViewer;
+pub use markdown_viewer::MarkdownViewer;
 use std::{collections::HashMap, rc::Rc};
-use tracing::{debug, error, warn};
+pub use text_viewer::TextViewer;
+use tracing::debug;
 
 #[derive(Debug, Clone)]
 pub enum PaletteType {
@@ -23,7 +34,8 @@ pub enum PaletteType {
 pub enum InputType {}
 
 #[derive(Debug, Clone, Copy)]
-pub enum ViewVariant {
+pub enum Viewer {
+    Headers,
     Text,
     Markdown,
     Attachments,
@@ -37,6 +49,8 @@ pub enum ScrollAction {
     ScrollHalfPageUp,
     ScrollHalfPageRight,
     ScrollHalfPageLeft,
+    ScrollLeft(usize),
+    ScrollRight(usize),
     SetTop,
     SetBottom,
 }
@@ -48,26 +62,31 @@ pub struct State {
 
     id: MailId,
     backend: Rc<Backend>,
-    variant: ViewVariant,
-    vertical: ScrollbarState,
-    horizontal: ScrollbarState,
+
+    selected_viewer: Viewer,
+    headers_viewer: HeadersViewer,
+    text_viewer: TextViewer,
+    markdown_viewer: MarkdownViewer,
+    attachment_viewer: AttachmentViewer,
+
+    /// Contains the scrolling action for the current, selected viewer.
+    /// Since we don't know the height and width of the area where each viewer
+    /// gets rendered to, we have to apply the scroll action _later_ during the rendering...
     scroll_action: Option<ScrollAction>,
 }
 
 impl State {
     pub fn new(id: MailId, backend: Rc<Backend>) -> Self {
-        let variant = match backend.config().mail_viewer.default_tab {
-            crate::config::DefaultTab::Headers => {
-                todo!()
-            }
-            crate::config::DefaultTab::Attachments => ViewVariant::Attachments,
+        let selected_viewer = match backend.config().mail_viewer.default_tab {
+            crate::config::DefaultTab::Headers => Viewer::Headers,
+            crate::config::DefaultTab::Attachments => Viewer::Attachments,
             crate::config::DefaultTab::Text => {
                 backend.mail_request_body_type(&id, MailBodyType::Text);
-                ViewVariant::Text
+                Viewer::Text
             }
             crate::config::DefaultTab::Markdown => {
                 backend.mail_request_body_type(&id, MailBodyType::Html);
-                ViewVariant::Markdown
+                Viewer::Markdown
             }
         };
 
@@ -100,9 +119,12 @@ impl State {
                 ("<BS>", Action::Back),
                 ("<C-l>", Action::OpenLogs),
             ])),
-            variant,
-            vertical: ScrollbarState::default(),
-            horizontal: ScrollbarState::default(),
+            selected_viewer,
+
+            headers_viewer: HeadersViewer::default(),
+            text_viewer: TextViewer::default(),
+            markdown_viewer: MarkdownViewer::default(),
+            attachment_viewer: AttachmentViewer::default(),
         }
     }
 }
@@ -129,8 +151,8 @@ impl<'a> ScreenState<'a, Action, PaletteType, InputType, RenderData<'a>> for Sta
             Action::ScrollHalfPageLeft => self.scroll_half_page_left(),
             Action::ScrollHalfPageRight => self.scroll_half_page_right(),
 
-            Action::OpenTextTab => self.set_variant(ViewVariant::Text),
-            Action::OpenMarkdownTab => self.set_variant(ViewVariant::Markdown),
+            Action::OpenTextTab => self.set_viewer(Viewer::Text),
+            Action::OpenMarkdownTab => self.set_viewer(Viewer::Markdown),
             Action::OpenLogs => self.app_actions.push(crate::Action::OpenLogViewer),
             Action::OpenMailInBrowser => self.open_html_mail_in_browser(),
 
@@ -165,27 +187,32 @@ impl<'a> ScreenState<'a, Action, PaletteType, InputType, RenderData<'a>> for Sta
     }
 
     fn render_data(&'a mut self) -> RenderData<'a> {
-        match self.variant {
-            ViewVariant::Text => {
+        tracing::debug!("Selected viewer: {:?}", self.selected_viewer);
+        let viewer_state = match self.selected_viewer {
+            Viewer::Headers => ViewerState::from(&mut self.headers_viewer),
+            Viewer::Text => {
                 self.backend
                     .mail_request_body_type(&self.id, MailBodyType::Text);
+
+                ViewerState::from(&mut self.text_viewer)
             }
-            ViewVariant::Markdown => {
+            Viewer::Markdown => {
                 self.backend
                     .mail_request_body_type(&self.id, MailBodyType::Html);
+
+                ViewerState::from(&mut self.markdown_viewer)
             }
-            ViewVariant::Attachments => {
+            Viewer::Attachments => {
                 self.backend.mail_request_attachments(&self.id);
+                ViewerState::from(&mut self.attachment_viewer)
             }
-        }
+        };
 
         let mail = self.backend.mail_get_data(&self.id).unwrap();
 
         RenderData {
-            variant: self.variant,
-            mail: FullMailDisplay::from(&mail),
-            horizontal: &mut self.horizontal,
-            vertical: &mut self.vertical,
+            viewer_state,
+            mail: FullMailDisplay::from(mail),
             scroll_queue: &mut self.scroll_action,
         }
     }
@@ -211,17 +238,21 @@ impl State {
     }
 
     fn scroll_left(&mut self) {
-        match self.variant {
-            ViewVariant::Text | ViewVariant::Markdown => self.horizontal.prev(),
-            ViewVariant::Attachments => todo!(),
-        }
+        let action = match self.keybindings.flush_int_prefix() {
+            Some(num) => ScrollAction::ScrollLeft(num),
+            None => ScrollAction::ScrollLeft(1),
+        };
+
+        self.scroll_action = Some(action);
     }
 
     fn scroll_right(&mut self) {
-        match self.variant {
-            ViewVariant::Text | ViewVariant::Markdown => self.horizontal.next(),
-            ViewVariant::Attachments => todo!(),
-        }
+        let action = match self.keybindings.flush_int_prefix() {
+            Some(num) => ScrollAction::ScrollRight(num),
+            None => ScrollAction::ScrollRight(1),
+        };
+
+        self.scroll_action = Some(action);
     }
 
     fn scroll_to_top(&mut self) {
@@ -248,8 +279,8 @@ impl State {
         self.scroll_action = Some(ScrollAction::ScrollHalfPageRight);
     }
 
-    fn set_variant(&mut self, variant: ViewVariant) {
-        self.variant = variant;
+    fn set_viewer(&mut self, variant: Viewer) {
+        self.selected_viewer = variant;
     }
 
     fn open_html_mail_in_browser(&self) {

@@ -12,7 +12,7 @@ use crate::backend::{
 use cache::Cache;
 use jmap_client::{client::Client, core::response::EmailGetResponse};
 use std::sync::{Arc, Mutex};
-use tracing::{error, warn};
+use tracing::{debug, error, instrument, warn};
 use types::MailId;
 
 pub struct MailsBackend {
@@ -119,6 +119,7 @@ impl MailsBackend {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     async fn request_body_type(
         &self,
         id: &MailId,
@@ -141,10 +142,12 @@ impl MailsBackend {
         cache.set_state(response.take_state());
         match body_type {
             MailBodyType::Text => {
+                debug!("Setting text body");
                 let body = MailDataTextBody::new(&mail);
                 cache.set_text_body(&id, body);
             }
             MailBodyType::Html => {
+                debug!("Setting html body");
                 let body = MailDataHtmlBody::new(&mail);
                 cache.set_html_body(&id, body);
             }
@@ -216,7 +219,7 @@ impl Backend {
         if !already_cached {
             let id = id.clone();
             let mails = self.mails.clone();
-            self.task_manager.spawn(TaskId::FetchMailRest, async move {
+            self.task_manager.spawn(TaskId::FetchBodyType, async move {
                 if let Err(err) = mails.request_body_type(&id, body_type).await {
                     error!("Couldn't request body of mail:\n{err}");
                 }
