@@ -82,9 +82,9 @@ fn render_viewer(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
             .map(|(header, value)| {
                 let header = Text::raw(*header)
                     .alignment(HorizontalAlignment::Right)
-                    .style(Style::new().fg(GREEN.c500));
+                    .style(Style::new().fg(BLUE.c500));
 
-                let value = Text::raw(*value).style(Style::new().fg(WHITE));
+                let value = Text::raw(*value);
 
                 Row::new([header, value])
             })
