@@ -19,7 +19,7 @@ use ratatui::{
     style::{
         Style,
         palette::material::{
-            BLUE, BLUE_GRAY, CYAN, GRAY, GREEN, LIGHT_BLUE, ORANGE, PINK, RED, TEAL, WHITE,
+            BLUE, BLUE_GRAY, CYAN, GRAY, GREEN, LIGHT_BLUE, ORANGE, PINK, RED, TEAL, WHITE, YELLOW,
         },
     },
     symbols::line::VERTICAL,
@@ -248,15 +248,22 @@ fn render_mail_preview(area: Rect, buf: &mut Buffer, mail: &mut MailPreview) {
         // TODO: Check if attachments are currently _loading_ or not...
         //       To avoid a sudden appearence of the attachment list
         match attachments {
-            Some(a) if !a.is_empty() => {
-                constraints.push(Constraint::Max(a.len() as u16 + 2));
+            Some(a) => {
+                if a.is_empty() {
+                    let [header, preview] = Layout::vertical(constraints).areas(area);
+                    (header, preview, None)
+                } else {
+                    constraints.push(Constraint::Max(a.len() as u16 + 2));
 
+                    let [header, preview, attachments_area] =
+                        Layout::vertical(constraints).areas(area);
+                    (header, preview, Some(attachments_area))
+                }
+            }
+            None => {
+                constraints.push(Constraint::Length(3));
                 let [header, preview, attachments_area] = Layout::vertical(constraints).areas(area);
                 (header, preview, Some(attachments_area))
-            }
-            _ => {
-                let [header, preview] = Layout::vertical(constraints).areas(area);
-                (header, preview, None)
             }
         }
     };
@@ -286,26 +293,36 @@ fn render_mail_preview(area: Rect, buf: &mut Buffer, mail: &mut MailPreview) {
     );
 
     // attachments
-    if let (Some(attachments_area), Some(attachments)) = (attachments_area, attachments) {
-        let rows: Vec<Row> = attachments
-            .iter()
-            .map(|attachment| {
-                Row::new([
-                    Cell::new(attachment.name.clone()),
-                    Text::raw(attachment.content_type.clone())
-                        .alignment(HorizontalAlignment::Right)
-                        .into(),
-                ])
-            })
-            .collect();
+    if let Some(area) = attachments_area {
+        let block = Block::bordered().title("Attachments");
+        match attachments {
+            Some(attachments) => {
+                let rows: Vec<Row> = attachments
+                    .iter()
+                    .map(|attachment| {
+                        Row::new([
+                            Cell::new(attachment.name.clone()),
+                            Text::raw(attachment.content_type.clone())
+                                .alignment(HorizontalAlignment::Right)
+                                .into(),
+                        ])
+                    })
+                    .collect();
 
-        let widths = [Constraint::Fill(1), Constraint::Fill(1)];
+                let widths = [Constraint::Fill(1), Constraint::Fill(1)];
 
-        Widget::render(
-            Table::new(rows, widths).block(Block::bordered().title("Attachments")),
-            attachments_area,
-            buf,
-        );
+                Widget::render(Table::new(rows, widths).block(block), area, buf);
+            }
+            None => {
+                Widget::render(
+                    Paragraph::new("Fetching attachments...")
+                        .style(Style::new().fg(YELLOW.c500))
+                        .block(block),
+                    area,
+                    buf,
+                );
+            }
+        };
     }
 }
 
