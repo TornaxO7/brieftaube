@@ -87,6 +87,7 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
             Action::OpenLogs => self.open_logs(),
 
             Action::SelectEntryToggle => self.select_entry(),
+            Action::CutSelectedEntries => self.cut_selected_entries(),
 
             Action::MarkMailAsUnseen => self.mail_patch_keywords(&[(MailKeyword::Seen, false)]),
             Action::MarkMailAsSeen => self.mail_patch_keywords(&[(MailKeyword::Seen, true)]),
@@ -398,6 +399,22 @@ impl State {
                 }
 
                 self.navigate_down();
+            }
+        }
+    }
+
+    fn cut_selected_entries(&mut self) {
+        if self.selection.is_empty() {
+            if let Some(column) = self.get_center_column() {
+                if let Some(entry) = column.selected_entry() {
+                    let id = EntryId::from(entry);
+
+                    self.selection.insert(id, SelectionType::Cut);
+                }
+            }
+        } else {
+            for (_id, selection) in self.selection.iter_mut() {
+                *selection = SelectionType::Cut;
             }
         }
     }

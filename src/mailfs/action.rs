@@ -38,6 +38,8 @@ pub enum Action {
 
     #[strum(message = "Toggle entry selection")]
     SelectEntryToggle,
+    #[strum(message = "Mark the current selection as 'cut'.")]
+    CutSelectedEntries,
 
     #[strum(message = "Mark the given mail as seen.")]
     MarkMailAsSeen,
