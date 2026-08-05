@@ -5,7 +5,7 @@ impl Backend {
         let thread_mails = self.get_thread_mails(id);
 
         if thread_mails.is_none() {
-            self.get_or_request_thread_mails(id);
+            self.request_thread_mails(id);
         }
 
         thread_mails
