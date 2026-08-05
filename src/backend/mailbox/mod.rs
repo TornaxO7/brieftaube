@@ -16,22 +16,19 @@ use crate::backend::{
 use cache::Cache;
 use jmap_client::{
     URI,
-    client::Client,
-    core::{error::MethodErrorType, query::QueryResponse, session::Capabilities},
+    core::{query::QueryResponse, session::Capabilities},
 };
 use std::sync::{Arc, Mutex};
 use tracing::{debug, error, instrument, warn};
 use types::{MailboxData, MailboxId};
 
 pub struct MailboxBackend {
-    client: Arc<Client>,
     cache: Arc<Mutex<Cache>>,
 }
 
 impl MailboxBackend {
-    pub fn new(client: Arc<Client>) -> Self {
+    pub fn new() -> Self {
         Self {
-            client,
             cache: Arc::new(Mutex::new(Cache::new())),
         }
     }
@@ -497,7 +494,7 @@ impl Backend {
                             .unwrap();
 
                         threads.handle_get_response(thread_get);
-                        mails.handle_get_response(mail_get);
+                        mails.handle_get_mail(mail_get);
                         mailboxes.handle_query_root_mails_response(id.clone(), root_mail_query);
                     });
 

@@ -3,7 +3,7 @@ use crate::backend::{
     mails::types::MailId,
     threads::{cache::Cache, types::ThreadId},
 };
-use jmap_client::{client::Client, core::response::ThreadGetResponse};
+use jmap_client::core::response::ThreadGetResponse;
 use std::sync::{Arc, Mutex};
 use tracing::instrument;
 
@@ -11,15 +11,13 @@ mod cache;
 pub mod types;
 
 pub struct ThreadsBackend {
-    client: Arc<Client>,
     cache: Arc<Mutex<Cache>>,
 }
 
 /// Methods which are used in the backend
 impl ThreadsBackend {
-    pub fn new(client: Arc<Client>) -> Self {
+    pub fn new() -> Self {
         Self {
-            client,
             cache: Arc::new(Mutex::new(Cache::new())),
         }
     }

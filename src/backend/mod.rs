@@ -31,6 +31,7 @@ pub struct Backend {
 
 /// Methods needed for `main.rs`
 impl Backend {
+    // TODO: Error handling
     pub async fn new() -> Self {
         let config = Config::load().unwrap();
 
@@ -54,9 +55,9 @@ impl Backend {
 
         Self {
             client: client.clone(),
-            mailboxes: Arc::new(mailbox::MailboxBackend::new(client.clone())),
-            mails: Arc::new(mails::MailsBackend::new(client.clone())),
-            threads: Arc::new(threads::ThreadsBackend::new(client.clone())),
+            mailboxes: Arc::new(mailbox::MailboxBackend::new()),
+            mails: Arc::new(mails::MailsBackend::new()),
+            threads: Arc::new(threads::ThreadsBackend::new()),
             task_manager: TaskManager::new(),
             config,
         }
