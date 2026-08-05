@@ -129,7 +129,7 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
             .iter()
             .map(|id| match id {
                 Some(id) => {
-                    let mailbox = backend.mailbox_get_data(id).unwrap();
+                    let mailbox = backend.get_mailbox_data(id).unwrap();
                     format!("{}/", mailbox.name)
                 }
                 None => String::from("/"),
@@ -449,7 +449,7 @@ impl State {
                 }
             }
 
-            self.backend.mails_update(updates);
+            self.backend.update_mails(updates);
             return;
         }
 
@@ -463,7 +463,7 @@ impl State {
                     | ColumnStateEntry::ThreadStart { mail_id, .. }
                     | ColumnStateEntry::ThreadChild(mail_id, _)
                     | ColumnStateEntry::ThreadEnd(mail_id, _) => {
-                        self.backend.mails_update(vec![MailUpdate {
+                        self.backend.update_mails(vec![MailUpdate {
                             id: mail_id.clone(),
                             patch_keywords: Some(patch.to_vec()),
                             ..Default::default()
@@ -494,7 +494,7 @@ impl<'a> State {
                 })
         };
         if let Some(id) = preview_mail_id {
-            self.backend.request_mails_attachments(&id);
+            self.backend.get_or_request_mail_attachments(&id);
         }
 
         if let Some(right_mailbox) = self.get_right_column_mailbox() {

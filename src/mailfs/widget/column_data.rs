@@ -58,7 +58,7 @@ impl ColumnDisplayEntry {
     ) -> Result<Self, error::DataNotAvaiableYet> {
         let data = match entry {
             ColumnStateEntry::Mailbox(id) => {
-                let mailbox = backend.mailbox_get_data(id).unwrap();
+                let mailbox = backend.get_mailbox_data(id).unwrap();
                 ColumnDisplayEntryData::mailbox(&mailbox)
             }
             ColumnStateEntry::SingleMail(mail_id) => {

@@ -14,7 +14,7 @@ impl Backend {
         body
     }
 
-    fn get_mail_body_type(&self, id: &MailId, ty: MailBodyType) -> Option<String> {
+    pub fn get_mail_body_type(&self, id: &MailId, ty: MailBodyType) -> Option<String> {
         let store = self.store.lock().unwrap();
         let mail = store.mails.get(id).unwrap();
 

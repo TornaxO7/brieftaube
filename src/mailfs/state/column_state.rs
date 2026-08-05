@@ -90,7 +90,7 @@ impl ColumnStateEntry {
         // get mailboxes
         {
             let mailbox_ids = backend
-                .mailboxes_get_or_request_children(mailbox.clone())
+                .get_or_request_mailbox_children(mailbox.clone())
                 .ok_or(error::BackendNotReady)?;
 
             for mailbox_id in mailbox_ids {
@@ -101,7 +101,7 @@ impl ColumnStateEntry {
         // get mails
         if let Some(parent_mailbox_id) = mailbox.as_ref() {
             let collapsed_mails = backend
-                .mailbox_get_or_request_root_mails(parent_mailbox_id)
+                .get_or_request_mailbox_root_mails(parent_mailbox_id)
                 .ok_or(error::BackendNotReady)?;
 
             for collapsed_mail in collapsed_mails {

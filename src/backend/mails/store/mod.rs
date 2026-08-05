@@ -1,12 +1,8 @@
 pub mod error;
 
-use super::MailId;
 use crate::backend::{
-    GetState,
-    mails::{
-        MailData,
-        types::{MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailUpdate},
-    },
+    GetState, MailData, MailId,
+    mails::types::{MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailUpdate},
     threads::types::ThreadId,
 };
 use std::collections::HashMap;

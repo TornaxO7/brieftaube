@@ -81,16 +81,16 @@ impl State {
             crate::config::DefaultTab::Metadata => Viewer::Metadata,
             crate::config::DefaultTab::Attachments => Viewer::Attachments,
             crate::config::DefaultTab::Text => {
-                backend.request_mail_body_type(&id, MailBodyType::Text);
+                backend.get_or_request_mail_body(&id, MailBodyType::Text);
                 Viewer::Text
             }
             crate::config::DefaultTab::Markdown => {
-                backend.request_mail_body_type(&id, MailBodyType::Html);
+                backend.get_or_request_mail_body(&id, MailBodyType::Html);
                 Viewer::Markdown
             }
         };
 
-        backend.mails_update(vec![MailUpdate {
+        backend.update_mails(vec![MailUpdate {
             id: id.clone(),
             patch_keywords: Some(vec![(MailKeyword::Seen, true)]),
             ..Default::default()
@@ -195,18 +195,18 @@ impl<'a> ScreenState<'a, Action, PaletteType, InputType, RenderData<'a>> for Sta
             Viewer::Metadata => ViewerState::from(&mut self.metadata_viewer),
             Viewer::Text => {
                 self.backend
-                    .request_mail_body_type(&self.id, MailBodyType::Text);
+                    .get_or_request_mail_body(&self.id, MailBodyType::Text);
 
                 ViewerState::from(&mut self.text_viewer)
             }
             Viewer::Markdown => {
                 self.backend
-                    .request_mail_body_type(&self.id, MailBodyType::Html);
+                    .get_or_request_mail_body(&self.id, MailBodyType::Html);
 
                 ViewerState::from(&mut self.markdown_viewer)
             }
             Viewer::Attachments => {
-                self.backend.request_mails_attachments(&self.id);
+                self.backend.get_or_request_mail_attachments(&self.id);
                 ViewerState::from(&mut self.attachment_viewer)
             }
         };

@@ -7,7 +7,7 @@ use crate::backend::{
     mailbox::types::{MailboxUpdate, ParentMailboxId},
     mails::types::MailId,
 };
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct RootMails {
@@ -26,7 +26,7 @@ impl RootMails {
 
 // IDEA: Use `Arc` insead of the actual data for cheap clones out of the cache
 pub struct Store {
-    mailboxes: HashMap<MailboxId, Arc<MailboxData>>,
+    mailboxes: HashMap<MailboxId, MailboxData>,
     // Children always exist in `mailboxes`.
     children_mapping: HashMap<ParentMailboxId, Vec<MailboxId>>,
 
@@ -66,8 +66,8 @@ impl Store {
         self.root_mails_state.insert(parent, root_mails);
     }
 
-    pub fn get_data(&self, id: &MailboxId) -> Option<Arc<MailboxData>> {
-        self.mailboxes.get(id).cloned()
+    pub fn get_data(&self, id: &MailboxId) -> Option<&MailboxData> {
+        self.mailboxes.get(id)
     }
 
     #[instrument(skip(self))]
@@ -82,10 +82,7 @@ impl Store {
         children
     }
 
-    pub fn get_children_data(
-        &self,
-        parent_id: &Option<MailboxId>,
-    ) -> Option<Vec<Arc<MailboxData>>> {
+    pub fn get_children_data(&self, parent_id: &Option<MailboxId>) -> Option<Vec<MailboxData>> {
         let children_ids = self.children_mapping.get(parent_id)?;
 
         children_ids
@@ -140,7 +137,7 @@ impl Store {
     #[instrument(skip(self))]
     pub fn add(&mut self, mailbox: MailboxData) {
         let id = mailbox.id.clone();
-        self.mailboxes.insert(id.clone(), Arc::new(mailbox.clone()));
+        self.mailboxes.insert(id.clone(), mailbox.clone());
     }
 
     pub fn add_children(&mut self, parent: ParentMailboxId, additional_children: &[MailboxData]) {
@@ -169,7 +166,7 @@ impl Store {
             .or_insert(additional_children_ids);
     }
 
-    pub fn remove(&mut self, id: MailboxId) -> Option<Arc<MailboxData>> {
+    pub fn remove(&mut self, id: MailboxId) -> Option<MailboxData> {
         let mailbox = self.mailboxes.remove(&id)?;
         if let Some(siblings) = self.children_mapping.get_mut(&mailbox.parent_id) {
             siblings.retain(|id| *id != mailbox.id);
@@ -180,17 +177,17 @@ impl Store {
 
     pub fn update(&mut self, new: MailboxUpdate) {
         if let (Some(new_name), Some(mailbox)) = (new.name, self.mailboxes.get_mut(&new.id)) {
-            Arc::make_mut(mailbox).name = new_name;
+            mailbox.name = new_name;
         }
 
         if let (Some(new_role), Some(mailbox)) = (new.role, self.mailboxes.get_mut(&new.id)) {
-            Arc::make_mut(mailbox).role = new_role;
+            mailbox.role = new_role;
         }
 
         if let (Some(new_sort_order), Some(mailbox)) =
             (new.sort_order, self.mailboxes.get_mut(&new.id))
         {
-            Arc::make_mut(mailbox).sort_order = new_sort_order;
+            mailbox.sort_order = new_sort_order;
 
             if let Some(siblings) = self.children_mapping.get_mut(&mailbox.parent_id) {
                 let old_pos = siblings
@@ -229,7 +226,7 @@ impl Store {
 
             // finally, update the parent
             if let Some(mailbox) = self.mailboxes.get_mut(&new.id) {
-                Arc::make_mut(mailbox).parent_id = new_parent;
+                mailbox.parent_id = new_parent;
             }
         }
     }

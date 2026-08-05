@@ -2,7 +2,7 @@ use crate::backend::{Backend, MailUpdate, task_manager::TaskId};
 use tracing::{error, warn};
 
 impl Backend {
-    pub fn set_mails_updates(&self, updates: Vec<MailUpdate>) {
+    pub fn update_mails(&self, updates: Vec<MailUpdate>) {
         let updates_do_nothing = updates.iter().all(|update| update.is_empty());
 
         if updates.is_empty() || updates_do_nothing {

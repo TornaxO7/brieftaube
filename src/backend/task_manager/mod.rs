@@ -17,6 +17,8 @@ pub enum TaskId {
 
     RequestMails,
     UpdateMail,
+
+    MailboxGet,
 }
 
 /// Add waiting-time for each task to avoid too many requests.

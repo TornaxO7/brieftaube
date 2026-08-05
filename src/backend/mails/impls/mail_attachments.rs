@@ -21,7 +21,7 @@ impl Backend {
             .and_then(|mail| mail.attachments.clone())
     }
 
-    pub fn request_mails_attachments(&self, ids: &[MailId]) {
+    fn request_mails_attachments(&self, ids: &[MailId]) {
         let ids = ids.to_owned();
         let store = self.store.clone();
         let client = self.client.clone();

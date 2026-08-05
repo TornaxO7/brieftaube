@@ -11,7 +11,7 @@ impl Backend {
         thread_mails
     }
 
-    fn get_thread_mails(&self, id: &ThreadId) -> Option<Vec<MailData>> {
+    pub fn get_thread_mails(&self, id: &ThreadId) -> Option<Vec<MailData>> {
         let store = self.store.lock().unwrap();
 
         let thread_mail_ids = store
