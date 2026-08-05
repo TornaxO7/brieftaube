@@ -1,9 +1,4 @@
-use crate::backend::{Backend, MailData, MailId, mails::Store, task_manager::TaskId};
-use jmap_client::{
-    Set,
-    core::{get::GetRequest, response::EmailGetResponse},
-    email::Email,
-};
+use crate::backend::{Backend, MailData, MailId, task_manager::TaskId};
 use tracing::error;
 
 impl Backend {
@@ -28,33 +23,28 @@ impl Backend {
         let store = self.store.clone();
 
         self.task_manager.spawn(TaskId::RequestMails, async move {
-            let mut request = client.build();
+            let mut response = {
+                let mut request = client.build();
 
-            request_get_mails(request.get_email(), &ids);
+                request
+                    .get_email()
+                    .properties(MailData::PROPERTIES)
+                    .ids(Some(ids.iter().map(|id| &id.0)));
 
-            let response = match request.send_get_email().await {
-                Ok(r) => r,
-                Err(err) => {
-                    error!("Couldn't send `Email/get` request to server:\n{err}");
-                    return;
+                match request.send_get_email().await {
+                    Ok(r) => r,
+                    Err(err) => {
+                        error!("Couldn't send `Email/get` request to server:\n{err}");
+                        return;
+                    }
                 }
             };
 
             let mut store = store.lock().unwrap();
-            handle_get_mails(&mut store.mails, response);
+            store.mails.set_state(response.take_state());
+            for mail in response.take_list() {
+                store.mails.add(MailData::new(mail));
+            }
         });
-    }
-}
-
-pub fn request_get_mails<'a>(request: &mut GetRequest<Email<Set>>, ids: &[MailId]) {
-    request
-        .properties(MailData::PROPERTIES)
-        .ids(Some(ids.iter().map(|id| &id.0)));
-}
-
-pub fn handle_get_mails(store: &mut Store, mut response: EmailGetResponse) {
-    store.set_state(response.take_state());
-    for mail in response.take_list() {
-        store.add(MailData::new(mail));
     }
 }

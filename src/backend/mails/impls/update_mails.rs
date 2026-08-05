@@ -1,11 +1,5 @@
-use jmap_client::{
-    Set,
-    core::{response::EmailSetResponse, set::SetRequest},
-    email::Email,
-};
+use crate::backend::{Backend, MailUpdate, task_manager::TaskId};
 use tracing::{error, warn};
-
-use crate::backend::{Backend, MailUpdate, mails::Store, task_manager::TaskId};
 
 impl Backend {
     pub fn set_mails_updates(&self, updates: Vec<MailUpdate>) {
@@ -18,62 +12,57 @@ impl Backend {
         let client = self.client.clone();
         let store = self.store.clone();
         self.task_manager.spawn(TaskId::UpdateMail, async move {
-            let mut request = client.build();
+            let mut response = {
+                let mut request = client.build();
 
-            request_update_mails(request.set_email(), &updates);
+                let set_mail = request.set_email();
 
-            let response = match request.send_set_email().await {
-                Ok(r) => r,
-                Err(err) => {
-                    error!("Couldn't send `Email/set` request to server, to update mails:\n{err}");
-                    return;
+                for update in updates.iter() {
+                    if !update.is_empty() {
+                        let mail_to_update = set_mail.update(&update.id.0);
+
+                        if let Some(keywords) = update.patch_keywords.as_ref() {
+                            for (keyword, set) in keywords {
+                                mail_to_update.keyword(keyword.to_string().as_str(), *set);
+                            }
+                        }
+
+                        if let Some(new_mailboxes) = update.mailbox_ids.as_ref() {
+                            for (mailbox_id, set) in new_mailboxes {
+                                mail_to_update.mailbox_id(&mailbox_id.0, *set);
+                            }
+                        }
+                    }
+                }
+
+                match request.send_set_email().await {
+                    Ok(r) => r,
+                    Err(err) => {
+                        error!(
+                            "Couldn't send `Email/set` request to server, to update mails:\n{err}"
+                        );
+                        return;
+                    }
                 }
             };
 
             let mut store = store.lock().unwrap();
-            handle_update_mails(&mut store.mails, updates, response);
+
+            store.mails.set_state(response.take_new_state());
+
+            for update in updates {
+                match response.updated(&update.id.0) {
+                    Ok(None) => {}
+                    Ok(Some(huh)) => warn!(
+                        "The server sent an unexpected response mail:\n{huh:?}\nCould you please create an issue? :>"
+                    ),
+                    Err(err) => {
+                        error!("Couldn't update mail:\n{err}");
+                        continue;
+                    }
+                }
+                store.mails.update(update);
+            }
         });
-    }
-}
-
-fn request_update_mails(request: &mut SetRequest<Email<Set>>, updates: &[MailUpdate]) {
-    for update in updates.iter() {
-        if !update.is_empty() {
-            let mail_to_update = request.update(&update.id.0);
-
-            if let Some(keywords) = update.patch_keywords.as_ref() {
-                for (keyword, set) in keywords {
-                    mail_to_update.keyword(keyword.to_string().as_str(), *set);
-                }
-            }
-
-            if let Some(new_mailboxes) = update.mailbox_ids.as_ref() {
-                for (mailbox_id, set) in new_mailboxes {
-                    mail_to_update.mailbox_id(&mailbox_id.0, *set);
-                }
-            }
-        }
-    }
-}
-
-fn handle_update_mails(
-    store: &mut Store,
-    updates: Vec<MailUpdate>,
-    mut response: EmailSetResponse,
-) {
-    store.set_state(response.take_new_state());
-
-    for update in updates {
-        match response.updated(&update.id.0) {
-            Ok(None) => {}
-            Ok(Some(huh)) => warn!(
-                "The server sent an unexpected response mail:\n{huh:?}\nCould you please create an issue? :>"
-            ),
-            Err(err) => {
-                error!("Couldn't update mail:\n{err}");
-                continue;
-            }
-        }
-        store.update(update);
     }
 }

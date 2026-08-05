@@ -1,11 +1,5 @@
-use jmap_client::{
-    Set,
-    core::{get::GetRequest, response::EmailGetResponse},
-    email::Email,
-};
+use crate::backend::{Backend, MailDataAttachment, MailId, task_manager::TaskId};
 use tracing::error;
-
-use crate::backend::{Backend, MailDataAttachment, MailId, mails::Store, task_manager::TaskId};
 
 impl Backend {
     pub fn get_or_request_mail_attachments(&self, id: &MailId) -> Option<Vec<MailDataAttachment>> {
@@ -34,41 +28,38 @@ impl Backend {
 
         self.task_manager
             .spawn(TaskId::FetchMailAttachments, async move {
-                let mut request = client.build();
+                let mut response = {
+                    let mut request = client.build();
 
-                request_mail_attachments(request.get_email(), &ids);
+                    request
+                        .get_email()
+                        .ids(Some(ids.iter().map(|id| &id.0)))
+                        .properties([jmap_client::email::Property::Attachments]);
 
-                let response = match request.send_get_email().await {
-                    Ok(r) => r,
-                    Err(err) => {
-                        error!("Couldn't request attachments of mail:\n{err}");
-                        return;
+                    match request.send_get_email().await {
+                        Ok(r) => r,
+                        Err(err) => {
+                            error!("Couldn't request attachments of mail:\n{err}");
+                            return;
+                        }
                     }
                 };
 
                 let mut store = store.lock().unwrap();
-                handle_mail_attachments(&mut store.mails, response);
+                store.mails.set_state(response.take_state());
+
+                for mail in response.take_list() {
+                    let attachments: Vec<MailDataAttachment> = mail
+                        .attachments()
+                        .unwrap()
+                        .iter()
+                        .map(MailDataAttachment::from)
+                        .collect();
+
+                    store
+                        .mails
+                        .set_attachments(&MailId(mail.id().unwrap().to_owned()), attachments);
+                }
             })
-    }
-}
-
-fn request_mail_attachments(request: &mut GetRequest<Email<Set>>, ids: &[MailId]) {
-    request
-        .ids(Some(ids.iter().map(|id| &id.0)))
-        .properties([jmap_client::email::Property::Attachments]);
-}
-
-fn handle_mail_attachments(store: &mut Store, mut response: EmailGetResponse) {
-    store.set_state(response.take_state());
-
-    for mail in response.take_list() {
-        let attachments: Vec<MailDataAttachment> = mail
-            .attachments()
-            .unwrap()
-            .iter()
-            .map(MailDataAttachment::from)
-            .collect();
-
-        store.set_attachments(&MailId(mail.id().unwrap().to_owned()), attachments);
     }
 }

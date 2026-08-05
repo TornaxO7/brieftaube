@@ -1,6 +1,6 @@
-mod impls;
 mod store;
 
+pub mod impls;
 pub mod types;
 
 use crate::backend::mails::types::MailData;
