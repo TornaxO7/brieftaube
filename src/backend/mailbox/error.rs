@@ -13,3 +13,12 @@ pub enum MailboxValidationError {
     #[error("A mailbox named '{name}' already exists in the target mailbox")]
     DuplicateName { name: String },
 }
+
+#[derive(Debug, Error)]
+pub enum MailboxUpdateError {
+    #[error(transparent)]
+    Validation(#[from] MailboxValidationError),
+
+    #[error(transparent)]
+    Jmap(#[from] jmap_client::Error),
+}

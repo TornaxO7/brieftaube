@@ -1,7 +1,7 @@
 use super::{MailboxId, SortOrder};
 use jmap_client::mailbox::Role;
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MailboxUpdate {
     pub id: MailboxId,
     pub name: Option<String>,

@@ -4,15 +4,23 @@ pub mod types;
 
 use crate::backend::{
     Backend,
-    mailbox::{cache::RootMails, types::ParentMailboxId},
+    mailbox::{
+        cache::RootMails,
+        error::{MailboxUpdateError, MailboxValidationError},
+        types::{MailboxUpdate, MailboxValidate, ParentMailboxId},
+    },
     mails::types::MailData,
     task_manager::TaskId,
     types::CollapsedMail,
 };
 use cache::Cache;
-use jmap_client::{client::Client, core::query::QueryResponse};
+use jmap_client::{
+    URI,
+    client::Client,
+    core::{error::MethodErrorType, query::QueryResponse, session::Capabilities},
+};
 use std::sync::{Arc, Mutex};
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, instrument, warn};
 use types::{MailboxData, MailboxId};
 
 pub struct MailboxBackend {
@@ -153,86 +161,55 @@ impl MailboxBackend {
     //     }
     // }
 
-    // pub async fn update_mailboxes(&self, mailboxes: Vec<MailboxUpdate>) {
-    //     if !self.cache_is_initialised() || mailboxes.is_empty() {
-    //         return;
-    //     }
+    pub async fn request_update(
+        &self,
+        mailboxes: Vec<MailboxUpdate>,
+    ) -> Result<(), MailboxUpdateError> {
+        if mailboxes.is_empty() {
+            return Ok(());
+        }
 
-    //     if let Err(errors) = self.validate_mailboxes(&mailboxes) {
-    //         for error in errors {
-    //             error!("Can't update mailbox: {}", error);
-    //         }
-    //         return;
-    //     }
+        self.validate_mailbox_updates(&mailboxes)?;
 
-    //     let mut response = {
-    //         let current_state = {
-    //             let cache = self.cache.lock().unwrap();
-    //             cache.get_state()
-    //         };
+        let mut response = {
+            let mut request = self.client.build();
+            let set_mailbox = request.set_mailbox();
 
-    //         let mut request = self.client.build();
-    //         let set_mailbox = request.set_mailbox().if_in_state(current_state);
+            for mailbox in mailboxes.iter() {
+                let update = set_mailbox.update(&mailbox.id);
+                if let Some(name) = &mailbox.name {
+                    update.name(name);
+                }
 
-    //         for mailbox in mailboxes.iter() {
-    //             let u = set_mailbox.update(&mailbox.id);
-    //             if let Some(name) = &mailbox.name {
-    //                 u.name(name);
-    //             }
+                if let Some(role) = mailbox.role.clone() {
+                    update.role(role);
+                }
 
-    //             if let Some(role) = mailbox.role.clone() {
-    //                 u.role(role);
-    //             }
+                if let Some(sort_order) = mailbox.sort_order.clone() {
+                    update.sort_order(sort_order);
+                }
 
-    //             if let Some(sort_order) = mailbox.sort_order.clone() {
-    //                 u.sort_order(sort_order);
-    //             }
+                if let Some(parent_id) = mailbox.parent_id.clone() {
+                    update.parent_id(parent_id);
+                }
+            }
 
-    //             if let Some(parent_id) = mailbox.parent_id.clone() {
-    //                 u.parent_id(parent_id);
-    //             }
-    //         }
+            request.send_set_mailbox().await?
+        };
 
-    //         match request.send_set_mailbox().await {
-    //             Ok(r) => r,
-    //             Err(err) => {
-    //                 error!("Couldn't request server to update the mailboxes:\n{err}");
+        let mut cache = self.cache.lock().unwrap();
 
-    //                 match err {
-    //                     jmap_client::Error::Method(method) => match method.p_type {
-    //                         MethodErrorType::StateMismatch => {
-    //                             self.request_mailboxes_get().await;
-    //                         }
-    //                         _ => {}
-    //                     },
-    //                     _ => {}
-    //                 }
+        for mailbox in mailboxes {
+            if response.updated(mailbox.id.as_str())?.is_some() {
+                warn!(
+                    "Server also wanted some updates... but it... shouldn't. Please restart the client, just to be sure."
+                );
+            }
+            cache.update(mailbox);
+        }
 
-    //                 return;
-    //             }
-    //         }
-    //     };
-
-    //     let mut cache = self.cache.lock().unwrap();
-    //     cache.set_state(response.take_new_state());
-
-    //     for mailbox in mailboxes {
-    //         match response.updated(&mailbox.id) {
-    //             Ok(_) => {
-    //                 cache.update(mailbox);
-    //             }
-    //             Err(err) => match cache.get_data(&mailbox.id) {
-    //                 Some(mailbox) => {
-    //                     let name = mailbox.name.clone();
-    //                     error!("Couldn't update the mailbox of '{name}':\n{err}");
-    //                 }
-    //                 None => {
-    //                     error!("Couldn't update a mailbox:\n{err}");
-    //                 }
-    //             },
-    //         };
-    //     }
-    // }
+        Ok(())
+    }
 
     // pub async fn create_mailboxes(&self, mailboxes: Vec<MailboxNew>) {
     //     if !self.cache_is_initialised() || mailboxes.is_empty() {
@@ -328,80 +305,70 @@ impl MailboxBackend {
     //         };
     //     }
     // }
-
-    // pub fn mail_capability(&self) -> jmap_client::email::MailCapabilities {
-    //     let id = self.client.default_account_id();
-
-    //     match self
-    //         .client
-    //         .session()
-    //         .account(id)
-    //         .unwrap()
-    //         .capability(URI::Mail.as_ref())
-    //         .unwrap()
-    //         .clone()
-    //     {
-    //         Capabilities::Mail(cap) => cap,
-    //         _ => unreachable!(),
-    //     }
-    // }
 }
 
 // helpers
-// impl MailboxBackend {
-//     fn validate_mailboxes<'a, M>(
-//         &self,
-//         mailboxes: &'a [M],
-//     ) -> Result<(), Vec<MailboxValidationError>>
-//     where
-//         &'a M: Into<MailboxValidate>,
-//     {
-//         let cache = self.cache.lock().unwrap();
-//         let caps = self.mail_capability();
-//         let mut errors = Vec::with_capacity(mailboxes.len());
+impl MailboxBackend {
+    fn mail_capability(&self) -> jmap_client::email::MailCapabilities {
+        let id = self.client.default_account_id();
 
-//         for mailbox in mailboxes {
-//             let MailboxValidate {
-//                 name,
-//                 role: _,
-//                 sort_order: _,
-//                 parent_id,
-//             } = mailbox.into();
+        match self
+            .client
+            .session()
+            .account(id)
+            .unwrap()
+            .capability(URI::Mail.as_ref())
+            .unwrap()
+            .clone()
+        {
+            Capabilities::Mail(cap) => cap,
+            _ => unreachable!(),
+        }
+    }
 
-//             if let Some(name) = name.as_ref() {
-//                 let min = 1;
-//                 let max = caps.max_size_mailbox_name();
+    fn validate_mailbox_updates<'a, M>(
+        &self,
+        mailboxes: &'a [M],
+    ) -> Result<(), MailboxValidationError>
+    where
+        &'a M: Into<MailboxValidate>,
+    {
+        let cache = self.cache.lock().unwrap();
+        let caps = self.mail_capability();
 
-//                 if !(min < name.len() && name.len() <= max) {
-//                     errors.push(MailboxValidationError::NameTooLong { max });
-//                 }
-//             }
+        for mailbox in mailboxes {
+            let MailboxValidate {
+                name, parent_id, ..
+            } = mailbox.into();
 
-//             if let Some(parent_id) = parent_id.as_ref() {
-//                 let max = caps.max_mailbox_depth();
-//                 if cache.depth_of(parent_id) + 1 > max {
-//                     errors.push(MailboxValidationError::MaxDepthExceeded { max });
-//                 }
-//             }
+            if let Some(name) = name.as_ref() {
+                let min = 1;
+                let max = caps.max_size_mailbox_name();
 
-//             if let Some(parent_id) = parent_id.as_ref()
-//                 && let Some(name) = name.as_ref()
-//             {
-//                 if cache.contains_mailbox_name(&parent_id, &name) {
-//                     errors.push(MailboxValidationError::DuplicateName {
-//                         name: name.to_string(),
-//                     });
-//                 }
-//             }
-//         }
+                if !(min < name.len() && name.len() <= max) {
+                    return Err(MailboxValidationError::NameTooLong { max });
+                }
+            }
 
-//         if errors.is_empty() {
-//             Ok(())
-//         } else {
-//             Err(errors)
-//         }
-//     }
-// }
+            if let Some(parent_id) = parent_id.as_ref() {
+                let max = caps.max_mailbox_depth();
+                if cache.depth_of(parent_id) + 1 > max {
+                    return Err(MailboxValidationError::MaxDepthExceeded { max });
+                }
+            }
+
+            if let Some(parent_id) = parent_id.as_ref()
+                && let Some(name) = name.as_ref()
+            {
+                if cache.contains_mailbox_name(&parent_id, &name) {
+                    return Err(MailboxValidationError::DuplicateName { name: name.clone() });
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
 
 impl MailboxBackend {
     fn get_child_mailboxes(&self, parent: &ParentMailboxId) -> Option<Vec<MailboxId>> {

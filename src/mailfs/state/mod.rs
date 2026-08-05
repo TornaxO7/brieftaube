@@ -88,6 +88,7 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
 
             Action::SelectEntryToggle => self.select_entry(),
             Action::CutSelectedEntries => self.cut_selected_entries(),
+            Action::PasteSelectedEntries => self.paste_selected_entries(),
 
             Action::MarkMailAsUnseen => self.mail_patch_keywords(&[(MailKeyword::Seen, false)]),
             Action::MarkMailAsSeen => self.mail_patch_keywords(&[(MailKeyword::Seen, true)]),
@@ -415,6 +416,18 @@ impl State {
         } else {
             for (_id, selection) in self.selection.iter_mut() {
                 *selection = SelectionType::Cut;
+            }
+        }
+    }
+
+    fn paste_selected_entries(&mut self) {
+        for (entry_id, selection) in self.selection.drain() {
+            match selection {
+                SelectionType::Selected => {}
+                SelectionType::Cut => match entry_id {
+                    EntryId::Mail(id) => {}
+                    EntryId::Mailbox(id) => {}
+                },
             }
         }
     }
