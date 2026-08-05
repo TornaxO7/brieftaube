@@ -12,6 +12,10 @@ impl Backend {
         attachments
     }
 
+    pub fn prefetch_mail_attachments(&self, id: &MailId) {
+        self.get_or_request_mail_attachments(id);
+    }
+
     pub fn get_mail_attachments(&self, id: &MailId) -> Option<Vec<MailDataAttachment>> {
         let store = self.store.lock().unwrap();
 

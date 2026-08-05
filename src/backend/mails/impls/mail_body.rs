@@ -14,6 +14,10 @@ impl Backend {
         body
     }
 
+    pub fn prefetch_mail_body(&self, id: &MailId, ty: MailBodyType) {
+        self.get_or_request_mail_body(id, ty);
+    }
+
     pub fn get_mail_body_type(&self, id: &MailId, ty: MailBodyType) -> Option<String> {
         let store = self.store.lock().unwrap();
         let mail = store.mails.get(id).unwrap();

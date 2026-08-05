@@ -81,11 +81,11 @@ impl State {
             crate::config::DefaultTab::Metadata => Viewer::Metadata,
             crate::config::DefaultTab::Attachments => Viewer::Attachments,
             crate::config::DefaultTab::Text => {
-                backend.get_or_request_mail_body(&id, MailBodyType::Text);
+                backend.prefetch_mail_body(&id, MailBodyType::Text);
                 Viewer::Text
             }
             crate::config::DefaultTab::Markdown => {
-                backend.get_or_request_mail_body(&id, MailBodyType::Html);
+                backend.prefetch_mail_body(&id, MailBodyType::Html);
                 Viewer::Markdown
             }
         };
@@ -195,18 +195,18 @@ impl<'a> ScreenState<'a, Action, PaletteType, InputType, RenderData<'a>> for Sta
             Viewer::Metadata => ViewerState::from(&mut self.metadata_viewer),
             Viewer::Text => {
                 self.backend
-                    .get_or_request_mail_body(&self.id, MailBodyType::Text);
+                    .prefetch_mail_body(&self.id, MailBodyType::Text);
 
                 ViewerState::from(&mut self.text_viewer)
             }
             Viewer::Markdown => {
                 self.backend
-                    .get_or_request_mail_body(&self.id, MailBodyType::Html);
+                    .prefetch_mail_body(&self.id, MailBodyType::Html);
 
                 ViewerState::from(&mut self.markdown_viewer)
             }
             Viewer::Attachments => {
-                self.backend.get_or_request_mail_attachments(&self.id);
+                self.backend.prefetch_mail_attachments(&self.id);
                 ViewerState::from(&mut self.attachment_viewer)
             }
         };
