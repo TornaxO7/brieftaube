@@ -1,18 +1,11 @@
-use crate::backend::{
-    Backend,
-    mails::types::MailId,
-    threads::{cache::Cache, types::ThreadId},
-};
-use jmap_client::core::response::ThreadGetResponse;
-use std::sync::{Arc, Mutex};
-use tracing::instrument;
-
-mod cache;
+mod store;
 pub mod types;
 
-pub struct ThreadsBackend {
-    cache: Arc<Mutex<Cache>>,
-}
+use crate::backend::{Backend, mails::types::MailId, threads::types::ThreadId};
+use jmap_client::core::response::ThreadGetResponse;
+use std::sync::{Arc, Mutex};
+pub use store::Store;
+use tracing::instrument;
 
 /// Methods which are used in the backend
 impl ThreadsBackend {

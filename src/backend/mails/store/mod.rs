@@ -12,13 +12,13 @@ use crate::backend::{
 use std::collections::HashMap;
 
 #[derive(Default)]
-pub struct Cache {
+pub struct Store {
     mails: HashMap<MailId, MailData>,
     state: GetState,
 }
 
 /// Methods used by the backend
-impl Cache {
+impl Store {
     pub fn new() -> Self {
         Self {
             mails: HashMap::new(),
@@ -38,7 +38,7 @@ impl Cache {
         self.state = new_state;
     }
 
-    pub fn get_mail(&self, id: &MailId) -> Option<&MailData> {
+    pub fn get(&self, id: &MailId) -> Option<&MailData> {
         self.mails.get(id)
     }
 
@@ -58,7 +58,7 @@ impl Cache {
     }
 }
 
-impl Cache {
+impl Store {
     pub fn flush(&mut self) {
         self.mails.clear();
         self.state.clear();

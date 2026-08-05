@@ -1,12 +1,12 @@
 use crate::backend::{GetState, mails::types::MailId, threads::types::ThreadId};
 use std::collections::HashMap;
 
-pub struct Cache {
+pub struct Store {
     threads: HashMap<ThreadId, Vec<MailId>>,
     state: GetState,
 }
 
-impl Cache {
+impl Store {
     pub fn new() -> Self {
         Self {
             threads: HashMap::new(),
@@ -18,7 +18,7 @@ impl Cache {
         self.state.clone()
     }
 
-    pub fn get_thread_mails(&self, id: &ThreadId) -> Option<&[MailId]> {
+    pub fn get_mails(&self, id: &ThreadId) -> Option<&[MailId]> {
         self.threads.get(id).map(|mail_ids| mail_ids.as_slice())
     }
 
@@ -28,7 +28,7 @@ impl Cache {
 }
 
 /// Cache alterning methods
-impl Cache {
+impl Store {
     pub fn flush(&mut self) {
         self.threads.clear();
         self.state.clear();

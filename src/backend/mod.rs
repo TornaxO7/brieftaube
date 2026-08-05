@@ -1,12 +1,18 @@
 pub mod mailbox;
 pub mod mails;
+mod store;
 pub mod task_manager;
 pub mod threads;
 pub mod types;
 
+pub use mailbox::types::*;
+pub use mails::types::*;
+pub use threads::types::*;
+
 use crate::{backend::task_manager::TaskManager, config::Config};
 use jmap_client::client::Client;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use store::Store;
 
 type GetState = String;
 type QueryState = String;
@@ -19,13 +25,8 @@ type QueryState = String;
 /// For combined requests
 pub struct Backend {
     config: Config,
-
     client: Arc<Client>,
-
-    mailboxes: Arc<mailbox::MailboxBackend>,
-    mails: Arc<mails::MailsBackend>,
-    threads: Arc<threads::ThreadsBackend>,
-
+    store: Arc<Mutex<Store>>,
     task_manager: TaskManager,
 }
 
@@ -55,9 +56,7 @@ impl Backend {
 
         Self {
             client: client.clone(),
-            mailboxes: Arc::new(mailbox::MailboxBackend::new()),
-            mails: Arc::new(mails::MailsBackend::new()),
-            threads: Arc::new(threads::ThreadsBackend::new()),
+            store: Arc::new(Mutex::new(Store::new())),
             task_manager: TaskManager::new(),
             config,
         }

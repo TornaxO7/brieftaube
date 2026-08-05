@@ -81,11 +81,11 @@ impl State {
             crate::config::DefaultTab::Metadata => Viewer::Metadata,
             crate::config::DefaultTab::Attachments => Viewer::Attachments,
             crate::config::DefaultTab::Text => {
-                backend.mail_request_body_type(&id, MailBodyType::Text);
+                backend.request_mail_body_type(&id, MailBodyType::Text);
                 Viewer::Text
             }
             crate::config::DefaultTab::Markdown => {
-                backend.mail_request_body_type(&id, MailBodyType::Html);
+                backend.request_mail_body_type(&id, MailBodyType::Html);
                 Viewer::Markdown
             }
         };
@@ -195,23 +195,23 @@ impl<'a> ScreenState<'a, Action, PaletteType, InputType, RenderData<'a>> for Sta
             Viewer::Metadata => ViewerState::from(&mut self.metadata_viewer),
             Viewer::Text => {
                 self.backend
-                    .mail_request_body_type(&self.id, MailBodyType::Text);
+                    .request_mail_body_type(&self.id, MailBodyType::Text);
 
                 ViewerState::from(&mut self.text_viewer)
             }
             Viewer::Markdown => {
                 self.backend
-                    .mail_request_body_type(&self.id, MailBodyType::Html);
+                    .request_mail_body_type(&self.id, MailBodyType::Html);
 
                 ViewerState::from(&mut self.markdown_viewer)
             }
             Viewer::Attachments => {
-                self.backend.mail_request_attachments(&self.id);
+                self.backend.request_mails_attachments(&self.id);
                 ViewerState::from(&mut self.attachment_viewer)
             }
         };
 
-        let mail = self.backend.mail_get_data(&self.id).unwrap();
+        let mail = self.backend.get_mail(&self.id).unwrap();
 
         RenderData {
             viewer_state,

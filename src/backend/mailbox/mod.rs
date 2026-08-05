@@ -1,11 +1,10 @@
-mod cache;
 mod error;
+mod store;
 pub mod types;
 
 use crate::backend::{
     Backend,
     mailbox::{
-        cache::RootMails,
         error::{MailboxUpdateError, MailboxValidationError},
         types::{MailboxUpdate, MailboxValidate, ParentMailboxId},
     },
@@ -13,12 +12,13 @@ use crate::backend::{
     task_manager::TaskId,
     types::CollapsedMail,
 };
-use cache::Cache;
 use jmap_client::{
     URI,
     core::{query::QueryResponse, session::Capabilities},
 };
 use std::sync::{Arc, Mutex};
+use store::RootMails;
+pub use store::Store;
 use tracing::{debug, error, instrument, warn};
 use types::{MailboxData, MailboxId};
 

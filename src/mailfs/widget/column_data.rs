@@ -62,33 +62,23 @@ impl ColumnDisplayEntry {
                 ColumnDisplayEntryData::mailbox(&mailbox)
             }
             ColumnStateEntry::SingleMail(mail_id) => {
-                let mail = backend
-                    .mail_get_data(mail_id)
-                    .ok_or(error::DataNotAvaiableYet)?;
+                let mail = backend.get_mail(mail_id).ok_or(error::DataNotAvaiableYet)?;
                 ColumnDisplayEntryData::mail(MailEntryType::Single, &mail)
             }
             ColumnStateEntry::CollapsedThread(mail_id, _) => {
-                let mail = backend
-                    .mail_get_data(mail_id)
-                    .ok_or(error::DataNotAvaiableYet)?;
+                let mail = backend.get_mail(mail_id).ok_or(error::DataNotAvaiableYet)?;
                 ColumnDisplayEntryData::mail(MailEntryType::ThreadCollapsed, &mail)
             }
             ColumnStateEntry::ThreadStart { mail_id, .. } => {
-                let mail = backend
-                    .mail_get_data(mail_id)
-                    .ok_or(error::DataNotAvaiableYet)?;
+                let mail = backend.get_mail(mail_id).ok_or(error::DataNotAvaiableYet)?;
                 ColumnDisplayEntryData::mail(MailEntryType::ThreadStart, &mail)
             }
             ColumnStateEntry::ThreadChild(mail_id, _) => {
-                let mail = backend
-                    .mail_get_data(mail_id)
-                    .ok_or(error::DataNotAvaiableYet)?;
+                let mail = backend.get_mail(mail_id).ok_or(error::DataNotAvaiableYet)?;
                 ColumnDisplayEntryData::mail(MailEntryType::ThreadChild, &mail)
             }
             ColumnStateEntry::ThreadEnd(mail_id, _) => {
-                let mail = backend
-                    .mail_get_data(mail_id)
-                    .ok_or(error::DataNotAvaiableYet)?;
+                let mail = backend.get_mail(mail_id).ok_or(error::DataNotAvaiableYet)?;
                 ColumnDisplayEntryData::mail(MailEntryType::ThreadEnd, &mail)
             }
         };

@@ -25,7 +25,7 @@ impl RootMails {
 }
 
 // IDEA: Use `Arc` insead of the actual data for cheap clones out of the cache
-pub struct Cache {
+pub struct Store {
     mailboxes: HashMap<MailboxId, Arc<MailboxData>>,
     // Children always exist in `mailboxes`.
     children_mapping: HashMap<ParentMailboxId, Vec<MailboxId>>,
@@ -36,7 +36,7 @@ pub struct Cache {
     root_mails_state: HashMap<MailboxId, RootMails>,
 }
 
-impl Cache {
+impl Store {
     pub fn new() -> Self {
         Self {
             mailboxes: HashMap::new(),
@@ -128,7 +128,7 @@ impl Cache {
 }
 
 // Methods altering the cache
-impl Cache {
+impl Store {
     #[instrument(skip(self))]
     pub fn flush(&mut self) {
         debug!("Flushing cache.");

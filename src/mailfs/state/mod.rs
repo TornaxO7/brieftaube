@@ -147,7 +147,7 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
                 | ColumnStateEntry::ThreadChild(id, _)
                 | ColumnStateEntry::ThreadEnd(id, _) => Some(id),
             })
-            .and_then(|mail_id| backend.mail_get_data(mail_id))
+            .and_then(|mail_id| backend.get_mail(mail_id))
             .map(MailPreview::from)
             .map(RightColumn::MailPreview);
 
@@ -494,7 +494,7 @@ impl<'a> State {
                 })
         };
         if let Some(id) = preview_mail_id {
-            self.backend.mail_request_attachments(&id);
+            self.backend.request_mails_attachments(&id);
         }
 
         if let Some(right_mailbox) = self.get_right_column_mailbox() {
@@ -520,7 +520,7 @@ impl<'a> State {
                     self.threads_to_uncollapse.get(id).cloned().unwrap()
                 {
                     if let Some(mut thread_mails) =
-                        self.backend.mail_get_or_request_thread_mails(&thread_id)
+                        self.backend.get_or_request_thread_mails(&thread_id)
                     {
                         debug_assert!(
                             thread_mails.len() >= 2,
