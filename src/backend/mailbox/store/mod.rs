@@ -1,10 +1,13 @@
-use jmap_client::core::query::QueryResponse;
+use jmap_client::{core::query::QueryResponse, email::MailCapabilities};
 use tracing::{debug, instrument};
 
 use super::types::{MailboxData, MailboxId};
 use crate::backend::{
-    GetState, QueryState,
-    mailbox::types::{MailboxUpdate, ParentMailboxId},
+    GetState, MailboxValidate, QueryState,
+    mailbox::{
+        error::MailboxValidationError,
+        types::{MailboxUpdate, ParentMailboxId},
+    },
     mails::types::MailId,
 };
 use std::collections::HashMap;
@@ -90,6 +93,25 @@ impl Store {
             .map(|id| self.mailboxes.get(id).cloned())
             .collect()
     }
+}
+
+/// validation
+impl Store {
+    /// Depth of the given parent (root = 0, its children = 1, ...).
+    pub fn depth_of(&self, parent_id: &Option<MailboxId>) -> usize {
+        let mut depth = 0;
+        let mut current = parent_id.clone();
+
+        while let Some(id) = current {
+            depth += 1;
+            current = self
+                .mailboxes
+                .get(&id)
+                .and_then(|mailbox| mailbox.parent_id.clone());
+        }
+
+        depth
+    }
 
     pub fn contains_mailbox_name(&self, parent: &ParentMailboxId, name: &str) -> bool {
         let Some(children) = self.children_mapping.get(parent) else {
@@ -105,22 +127,6 @@ impl Store {
         }
 
         false
-    }
-
-    /// Depth of the given parent (root = 0, its children = 1, ...).
-    pub fn depth_of(&self, parent_id: &Option<MailboxId>) -> usize {
-        let mut depth = 0;
-        let mut current = parent_id.clone();
-
-        while let Some(id) = current {
-            depth += 1;
-            current = self
-                .mailboxes
-                .get(&id)
-                .and_then(|mailbox| mailbox.parent_id.clone());
-        }
-
-        depth
     }
 }
 

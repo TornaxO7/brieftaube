@@ -18,6 +18,7 @@ pub enum TaskId {
     RequestMails,
     UpdateMail,
 
+    MailboxSet,
     MailboxGet,
     UpdateMailbox,
 }

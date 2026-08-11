@@ -23,6 +23,10 @@ impl<I: Clone> State<I> {
         }
     }
 
+    pub fn input_len(&self, line: usize) -> usize {
+        self.input.lines()[line].len()
+    }
+
     pub fn handle_event<P>(&mut self, event: KeyEvent) -> Option<ScreenOverlayResult<P, I>> {
         match event.code {
             KeyCode::Esc => Some(ScreenOverlayResult::Cancel),

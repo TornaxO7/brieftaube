@@ -10,7 +10,7 @@ use ratatui::{
     layout::{Constraint, HorizontalAlignment, Layout, Rect},
     style::{
         Style,
-        palette::material::{BLACK, BLUE, GREEN, PINK, WHITE, YELLOW},
+        palette::material::{BLACK, BLUE, PINK, YELLOW},
     },
     text::Text,
     widgets::{
@@ -242,29 +242,6 @@ fn render_viewer(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
             );
         }
     }
-}
-
-fn render_attachment_list(_area: Rect, _buf: &mut Buffer, _data: &mut RenderData) {
-    // if data.mail.has_attachment {
-    //     let attachments = &data.mail.rest.attachments;
-
-    //     let builder = ListBuilder::new(|context| {
-    //         const HEIGHT: u16 = 1;
-
-    //         let attachment = &attachments[context.index];
-    //         let widget = AttachmentWidget {
-    //             name: attachment.name.as_deref().unwrap_or("<unnamed>"),
-    //             ty: attachment.content_type.as_deref().unwrap_or("<unknown>"),
-    //         };
-
-    //         (widget, HEIGHT)
-    //     });
-
-    //     let list =
-    //         ListView::new(builder, attachments.len()).block(Block::bordered().title("Attachments"));
-
-    //     StatefulWidget::render(list, area, buf, &mut tui_widget_list::ListState::default());
-    // }
 }
 
 fn render_overlay(area: Rect, buf: &mut Buffer, state: &mut super::State) {

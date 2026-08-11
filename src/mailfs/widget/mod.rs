@@ -89,13 +89,19 @@ impl StatefulWidget for Mailfs {
         );
 
         if let Some(overlay) = state.overlay() {
-            let area = area.centered(Constraint::Percentage(80), Constraint::Percentage(80));
-            Widget::render(Clear, area, buf);
             match overlay {
                 ScreenOverlay::Palette(state) => {
+                    let area =
+                        area.centered(Constraint::Percentage(80), Constraint::Percentage(80));
+                    Widget::render(Clear, area, buf);
                     StatefulWidget::render(Palette::new(), area, buf, state)
                 }
                 ScreenOverlay::Input(state) => {
+                    let area = area.centered(
+                        Constraint::Length(state.input_len(0).max(75) as u16),
+                        Constraint::Length(3),
+                    );
+                    Widget::render(Clear, area, buf);
                     StatefulWidget::render(Input::new(), area, buf, state)
                 }
             }

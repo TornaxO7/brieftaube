@@ -51,6 +51,12 @@ pub enum ScreenOverlay<P: Clone, I: Clone> {
     Input(input::State<I>),
 }
 
+impl<P: Clone, I: Clone> ScreenOverlay<P, I> {
+    pub fn input<S: ToString>(desc: S, typ: I) -> Self {
+        Self::Input(input::State::new(desc, typ))
+    }
+}
+
 pub enum ScreenOverlayResult<P, I> {
     Palette(P),
     Input { value: String, typ: I },

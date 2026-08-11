@@ -44,6 +44,9 @@ pub enum Action {
     #[strum(message = "Paste the entries which are marked as 'cut'.")]
     PasteSelectedEntries,
 
+    #[strum(message = "Create a new mailbox in the current mailbox.")]
+    CreateMailbox,
+
     #[strum(message = "Mark the given mail as seen.")]
     MarkMailAsSeen,
     #[strum(message = "Mark the given mail as unseen.")]

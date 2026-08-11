@@ -1,2 +1,4 @@
 #[derive(Debug, Clone)]
-pub enum InputType {}
+pub enum InputType {
+    NewMailboxName,
+}

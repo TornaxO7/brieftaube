@@ -3,6 +3,7 @@ mod error;
 mod input_type;
 mod palette_value;
 mod selection;
+mod task;
 
 pub use column_state::{ColumnState, ColumnStateEntry};
 pub use palette_value::PaletteValue;
@@ -11,10 +12,9 @@ pub use selection::{EntryId, SelectionType};
 use super::Action;
 use crate::{
     backend::{
-        Backend,
+        Backend, MailboxNew,
         mailbox::types::{ParentMailboxId, TOP_PARENT_MAILBOX_ID},
-        mails::types::{MailId, MailKeyword, MailUpdate},
-        threads::types::ThreadId,
+        mails::types::{MailKeyword, MailUpdate},
     },
     mailfs::widget::{ColumnDisplay, MailPreview, RenderData, RightColumn},
     utils::ui::{
@@ -22,11 +22,8 @@ use crate::{
     },
 };
 use input_type::InputType;
-use std::{
-    collections::{HashMap, HashSet},
-    rc::Rc,
-    vec::Drain,
-};
+use std::{collections::HashMap, rc::Rc, vec::Drain};
+use task::Task;
 use tracing::{debug, instrument, warn};
 
 pub struct State {
@@ -37,9 +34,7 @@ pub struct State {
     columns: HashMap<ParentMailboxId, ColumnState>,
     navigation_stack: Vec<ParentMailboxId>,
 
-    /// stores which threads needs to be uncollapsed
-    // if there needs to be more "task": Move it to an extra struct
-    threads_to_uncollapse: HashMap<ParentMailboxId, HashSet<(MailId, ThreadId)>>,
+    tasks: Vec<Task>,
     selection: HashMap<EntryId, SelectionType>,
     backend: Rc<Backend>,
 }
@@ -53,7 +48,7 @@ impl State {
             selection: HashMap::new(),
             navigation_stack: vec![TOP_PARENT_MAILBOX_ID],
             app_actions: Vec::with_capacity(2),
-            threads_to_uncollapse: HashMap::new(),
+            tasks: Vec::with_capacity(16),
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", Action::Quit),
                 ("j", Action::NavigateDown),
@@ -90,6 +85,8 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
             Action::CutSelectedEntries => self.cut_selected_entries(),
             Action::PasteSelectedEntries => self.paste_selected_entries(),
 
+            Action::CreateMailbox => self.create_mailbox(),
+
             Action::MarkMailAsUnseen => self.mail_patch_keywords(&[(MailKeyword::Seen, false)]),
             Action::MarkMailAsSeen => self.mail_patch_keywords(&[(MailKeyword::Seen, true)]),
         }
@@ -111,17 +108,36 @@ impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for St
         match result {
             ScreenOverlayResult::Palette(value) => match value {
                 PaletteValue::Action(action) => {
-                    self.apply_action(action);
                     self.overlay = None;
+                    self.apply_action(action);
                 }
             },
             ScreenOverlayResult::Cancel => self.overlay = None,
-            ScreenOverlayResult::Input { .. } => unreachable!(),
+            ScreenOverlayResult::Input { value, typ } => match typ {
+                InputType::NewMailboxName => {
+                    if let Some(center) = self.get_center_column() {
+                        let parent_id = center.mailbox().clone();
+                        let new = MailboxNew {
+                            name: value,
+                            parent_id,
+                            ..Default::default()
+                        };
+
+                        match self.backend.create_mailbox(new) {
+                            Ok(()) => {}
+                            Err(err) => {
+                                tracing::error!("Can't create mailbox:\n{err}");
+                            }
+                        }
+                    }
+                    todo!("update state");
+                }
+            },
         }
     }
 
     fn render_data(&'a mut self) -> RenderData<'a> {
-        self.update_columns();
+        self.update();
         let backend = self.backend.clone();
 
         let mailbox_path = self
@@ -309,12 +325,10 @@ impl State {
                             .push(crate::Action::OpenMailViewer(mail_id));
                     }
                     ColumnStateEntry::CollapsedThread(mail_id, thread_id) => {
-                        // we need to create a "task" because we may need to wait for the server...
-                        let list = self
-                            .threads_to_uncollapse
-                            .get_mut(column.mailbox())
-                            .unwrap();
-                        list.insert((mail_id, thread_id));
+                        self.tasks.push(Task::UncollapseThread {
+                            collapsed_mail_id: mail_id,
+                            thread_id,
+                        });
                     }
                 }
             }
@@ -425,11 +439,22 @@ impl State {
             match selection {
                 SelectionType::Selected => {}
                 SelectionType::Cut => match entry_id {
-                    EntryId::Mail(id) => {}
-                    EntryId::Mailbox(id) => {}
+                    EntryId::Mail(_id) => {
+                        todo!()
+                    }
+                    EntryId::Mailbox(_id) => {
+                        todo!()
+                    }
                 },
             }
         }
+    }
+
+    pub fn create_mailbox(&mut self) {
+        self.overlay = Some(ScreenOverlay::input(
+            "Create mailbox:",
+            InputType::NewMailboxName,
+        ));
     }
 
     fn mail_patch_keywords(&mut self, patch: &[(MailKeyword, bool)]) {
@@ -477,7 +502,7 @@ impl State {
 
 /// Methods for loading the columns
 impl<'a> State {
-    fn update_columns(&mut self) {
+    fn update(&mut self) {
         let current_column = self.navigation_stack.last().cloned().unwrap();
         self.update_column(&current_column);
 
@@ -503,86 +528,17 @@ impl<'a> State {
     }
 
     fn update_column(&mut self, id: &ParentMailboxId) {
-        match self.columns.get_mut(id) {
+        match self.columns.get_mut(&id) {
             None => {
                 if let Ok(entries) =
                     ColumnStateEntry::create_entries(id.clone(), self.backend.clone())
                 {
                     let state = ColumnState::new(id.clone(), entries);
                     self.columns.insert(id.clone(), state);
-                    self.threads_to_uncollapse
-                        .insert(id.clone(), HashSet::new());
                 }
             }
             Some(column) => {
-                // uncollapse threads if needed
-                for (collapsed_mail_id, thread_id) in
-                    self.threads_to_uncollapse.get(id).cloned().unwrap()
-                {
-                    if let Some(mut thread_mails) =
-                        self.backend.get_or_request_thread_mails(&thread_id)
-                    {
-                        debug_assert!(
-                            thread_mails.len() >= 2,
-                            "Uncollapseable threads must have at least 2 mails <.<"
-                        );
-
-                        // according to the jmap specs: The thread saves the mails from oldest to latest,
-                        // but we want the newest mail to be first: So reverse it
-                        thread_mails.reverse();
-
-                        let new_entries = {
-                            let (first, rest) = thread_mails.split_first().unwrap();
-                            let (last, inner) = rest.split_last().unwrap();
-
-                            let mut new_entries = vec![ColumnStateEntry::ThreadStart {
-                                mail_id: first.id.clone(),
-                                thread_id: thread_id.clone(),
-                                collapsed_mail_id: collapsed_mail_id.clone(),
-                            }];
-
-                            new_entries.extend(inner.iter().map(|mail| {
-                                ColumnStateEntry::ThreadChild(mail.id.clone(), thread_id.clone())
-                            }));
-
-                            new_entries.push(ColumnStateEntry::ThreadEnd(
-                                last.id.clone(),
-                                thread_id.clone(),
-                            ));
-
-                            new_entries
-                        };
-
-                        match column
-                            .entries()
-                            .iter()
-                            .position(|entry| matches!(entry, ColumnStateEntry::CollapsedThread(_, entry_thread_id) if entry_thread_id == &thread_id))
-                        {
-                            Some(thread_idx) => {
-                                column
-                                    .entries_mut()
-                                    .splice(thread_idx..(thread_idx + 1), new_entries);
-                            },
-                            None => {
-                                warn!("Eh, the thread with the id '{}' seems to be disappeared so it can't be uncollapsed now.... weird. Welp, it won't get uncollapsed then.", thread_id.0);
-                            }
-                        };
-
-                        let threads_to_uncollapse = self.threads_to_uncollapse.get_mut(id).unwrap();
-                        threads_to_uncollapse.remove(&(collapsed_mail_id, thread_id));
-                    }
-                }
-
-                // TODO: Update column by comparing current entries with entries from cache/backend.
-                //
-                // Steps:
-                // 1. Add new mailboxes
-                // 2. Update mailboxes
-                // 3. Remove removed mailboxes
-                //
-                // 4. Add new mails
-                // 5. Update mails
-                // 6. Remove removed mails from backend
+                self.tasks.retain(|task| task.apply(column, &self.backend));
             }
         }
     }
