@@ -15,7 +15,7 @@ use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator};
 )]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
-pub enum Action {
+pub enum UserAction {
     #[strum(props(intern = true))]
     OpenCommandPalette,
 
@@ -60,7 +60,7 @@ pub enum Action {
     Quit,
 }
 
-impl Action {
+impl UserAction {
     pub fn palette_options() -> Vec<Entry<PaletteValue>> {
         Self::iter()
             .filter_map(|action| {

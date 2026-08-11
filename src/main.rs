@@ -88,14 +88,15 @@ impl App {
                 _ = self.statusbar.has_changed() => { }
                 _ = self.backend.finish_next_task() => { }
                 maybe_event = reader.next().fuse() => match maybe_event {
-                    Some(Ok(event)) => self.handle_event(event),
+                    Some(Ok(event)) => if let Some(action) = self.handle_event(event) {
+                        self.apply_action(action);
+                    }
                     Some(Err(e)) => error!("{}", e),
                     None => {},
                 }
             }
             self.sync_throbber();
 
-            self.apply_action();
             if self.needs_full_redraw {
                 self.needs_full_redraw = false;
                 terminal.clear().unwrap();
@@ -130,7 +131,7 @@ impl App {
         };
     }
 
-    fn handle_event(&mut self, event: Event) {
+    fn handle_event(&mut self, event: Event) -> Option<Action> {
         match self.screens.last_mut().unwrap() {
             // Screen::Mailboxes(state) => state.handle_event(event, &mut self.statusbar),
             // Screen::MailList(state) => state.handle_event(event, &mut self.statusbar),
@@ -138,58 +139,43 @@ impl App {
             Screen::MailViewer(state) => state.handle_event(event, &mut self.statusbar),
             Screen::Mailfs(state) => state.handle_event(event, &mut self.statusbar),
             Screen::LogViewer(state) => state.handle_event(event, &mut self.statusbar),
-        };
+        }
     }
 
-    fn apply_action(&mut self) {
-        let actions = {
-            let actions = match self.screens.last_mut().unwrap() {
-                // Screen::Mailboxes(state) => state.get_app_actions(),
-                // Screen::MailList(state) => state.get_app_actions(),
-                // Screen::Composer(state) => state.get_app_actions(),
-                Screen::MailViewer(state) => state.get_app_actions(),
-                Screen::Mailfs(state) => state.get_app_actions(),
-                Screen::LogViewer(state) => state.get_app_actions(),
-            };
+    fn apply_action(&mut self, action: Action) {
+        match action {
+            Action::OpenMailViewer(id) => {
+                let backend = self.backend.clone();
+                let next_screen = Screen::MailViewer(mail_viewer::State::new(id, backend));
 
-            actions.collect::<Vec<Action>>()
-        };
+                self.statusbar.set_screen(&next_screen);
+                self.screens.push(next_screen);
+            }
+            Action::OpenLogViewer => {
+                let next_screen = Screen::LogViewer(log_viewer::State::new());
 
-        for action in actions {
-            match action {
-                Action::OpenMailViewer(id) => {
-                    let backend = self.backend.clone();
-                    let next_screen = Screen::MailViewer(mail_viewer::State::new(id, backend));
+                self.statusbar.set_screen(&next_screen);
+                self.screens.push(next_screen);
+            }
+            // Action::OpenComposer => {
+            //     // let next_screen =
+            //     //     Screen::Composer(composer::ui::State::new(self.account.clone()));
+            //     todo!()
 
-                    self.statusbar.set_screen(&next_screen);
-                    self.screens.push(next_screen);
-                }
-                Action::OpenLogViewer => {
-                    let next_screen = Screen::LogViewer(log_viewer::State::new());
+            //     // self.statusbar.set_screen(&next_screen);
+            //     // self.screens.push(next_screen);
+            // }
+            Action::Redraw => {
+                self.needs_full_redraw = true;
+            }
+            Action::Back => {
+                self.screens.pop();
 
-                    self.statusbar.set_screen(&next_screen);
-                    self.screens.push(next_screen);
-                }
-                // Action::OpenComposer => {
-                //     // let next_screen =
-                //     //     Screen::Composer(composer::ui::State::new(self.account.clone()));
-                //     todo!()
-
-                //     // self.statusbar.set_screen(&next_screen);
-                //     // self.screens.push(next_screen);
-                // }
-                Action::Redraw => {
-                    self.needs_full_redraw = true;
-                }
-                Action::Back => {
-                    self.screens.pop();
-
-                    let screen = self.screens.last().unwrap();
-                    self.statusbar.set_screen(screen);
-                }
-                Action::Quit => {
-                    self.is_running = false;
-                }
+                let screen = self.screens.last().unwrap();
+                self.statusbar.set_screen(screen);
+            }
+            Action::Quit => {
+                self.is_running = false;
             }
         }
     }

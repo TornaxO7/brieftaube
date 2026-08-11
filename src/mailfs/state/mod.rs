@@ -3,13 +3,13 @@ mod error;
 mod input_type;
 mod palette_value;
 mod selection;
-mod task;
+mod update;
 
 pub use column_state::{ColumnState, ColumnStateEntry};
 pub use palette_value::PaletteValue;
 pub use selection::{EntryId, SelectionType};
 
-use super::Action;
+use super::UserAction;
 use crate::{
     backend::{
         Backend, MailboxNew,
@@ -22,21 +22,19 @@ use crate::{
     },
 };
 use input_type::InputType;
-use std::{collections::HashMap, rc::Rc, vec::Drain};
-use task::Task;
-use tracing::{debug, instrument, warn};
+use std::{collections::HashMap, rc::Rc};
+use tracing::debug;
+use update::Update;
 
 pub struct State {
-    app_actions: Vec<crate::Action>,
-    keybindings: KeybindManager<Action>,
-    overlay: Option<ScreenOverlay<PaletteValue, InputType>>,
+    backend: Rc<Backend>,
+    updates: Vec<Update>,
 
+    keybindings: KeybindManager<UserAction>,
+    overlay: Option<ScreenOverlay<PaletteValue, InputType>>,
     columns: HashMap<ParentMailboxId, ColumnState>,
     navigation_stack: Vec<ParentMailboxId>,
-
-    tasks: Vec<Task>,
     selection: HashMap<EntryId, SelectionType>,
-    backend: Rc<Backend>,
 }
 
 impl State {
@@ -47,56 +45,51 @@ impl State {
             columns: HashMap::new(),
             selection: HashMap::new(),
             navigation_stack: vec![TOP_PARENT_MAILBOX_ID],
-            app_actions: Vec::with_capacity(2),
-            tasks: Vec::with_capacity(16),
+            updates: Vec::with_capacity(16),
             keybindings: KeybindManager::new(HashMap::from([
-                ("q", Action::Quit),
-                ("j", Action::NavigateDown),
-                ("l", Action::NavigateRight),
-                ("<C-l>", Action::OpenLogs),
-                ("h", Action::NavigateLeft),
-                ("k", Action::NavigateUp),
-                ("gg", Action::NavigateToTop),
-                ("ge", Action::NavigateToBottom),
-                (" ", Action::SelectEntryToggle),
-                (":", Action::OpenCommandPalette),
+                ("q", UserAction::Quit),
+                ("j", UserAction::NavigateDown),
+                ("l", UserAction::NavigateRight),
+                ("<C-l>", UserAction::OpenLogs),
+                ("h", UserAction::NavigateLeft),
+                ("k", UserAction::NavigateUp),
+                ("gg", UserAction::NavigateToTop),
+                ("ge", UserAction::NavigateToBottom),
+                (" ", UserAction::SelectEntryToggle),
+                (":", UserAction::OpenCommandPalette),
             ])),
         }
     }
 }
 
-impl<'a> ScreenState<'a, Action, PaletteValue, InputType, RenderData<'a>> for State {
-    #[instrument(skip(self))]
-    fn apply_action(&mut self, action: Action) {
+impl<'a> ScreenState<'a, UserAction, PaletteValue, InputType, RenderData<'a>> for State {
+    fn apply_action(&mut self, action: UserAction) -> Option<crate::Action> {
         debug!("{:?}", action);
+
         match action {
-            Action::Quit => self.quit(),
-            Action::OpenCommandPalette => self.open_command_palette(),
-            Action::NavigateDown => self.navigate_down(),
-            Action::NavigateUp => self.navigate_up(),
-            Action::NavigateToTop => self.navigate_to_top(),
-            Action::NavigateToBottom => self.navigate_to_bottom(),
-            Action::NavigateRight => self.navigate_right(),
-            Action::NavigateLeft => self.navigate_left(),
-            Action::NavigateToParent => self.navigate_to_parent(),
-            Action::OpenLogs => self.open_logs(),
+            UserAction::Quit => self.quit(),
+            UserAction::OpenCommandPalette => self.open_command_palette(),
+            UserAction::NavigateDown => self.navigate_down(),
+            UserAction::NavigateUp => self.navigate_up(),
+            UserAction::NavigateToTop => self.navigate_to_top(),
+            UserAction::NavigateToBottom => self.navigate_to_bottom(),
+            UserAction::NavigateRight => return self.navigate_right(),
+            UserAction::NavigateLeft => self.navigate_left(),
+            UserAction::NavigateToParent => self.navigate_to_parent(),
+            UserAction::OpenLogs => self.open_logs(),
 
-            Action::SelectEntryToggle => self.select_entry(),
-            Action::CutSelectedEntries => self.cut_selected_entries(),
-            Action::PasteSelectedEntries => self.paste_selected_entries(),
+            UserAction::SelectEntryToggle => self.select_entry(),
+            UserAction::CutSelectedEntries => self.cut_selected_entries(),
+            UserAction::PasteSelectedEntries => self.paste_selected_entries(),
 
-            Action::CreateMailbox => self.create_mailbox(),
+            UserAction::CreateMailbox => self.create_mailbox(),
 
-            Action::MarkMailAsUnseen => self.mail_patch_keywords(&[(MailKeyword::Seen, false)]),
-            Action::MarkMailAsSeen => self.mail_patch_keywords(&[(MailKeyword::Seen, true)]),
+            UserAction::MarkMailAsUnseen => self.mail_patch_keywords(&[(MailKeyword::Seen, false)]),
+            UserAction::MarkMailAsSeen => self.mail_patch_keywords(&[(MailKeyword::Seen, true)]),
         }
     }
 
-    fn get_app_actions(&mut self) -> Drain<'_, crate::Action> {
-        self.app_actions.drain(..)
-    }
-
-    fn keybinding_manager(&mut self) -> &mut KeybindManager<Action> {
+    fn keybinding_manager(&mut self) -> &mut KeybindManager<UserAction> {
         &mut self.keybindings
     }
 
@@ -267,37 +260,45 @@ impl State {
 
 /// Action implementations
 impl State {
-    fn quit(&mut self) {
-        self.app_actions.push(crate::Action::Quit);
+    fn quit(&self) -> Option<crate::Action> {
+        Some(crate::Action::Quit)
     }
 
-    fn open_command_palette(&mut self) {
+    fn open_command_palette(&mut self) -> Option<crate::Action> {
         self.overlay = Some(ScreenOverlay::Palette(palette::State::new(
-            Action::palette_options(),
+            UserAction::palette_options(),
         )));
+
+        None
     }
 
-    fn navigate_down(&mut self) {
+    fn navigate_down(&mut self) -> Option<crate::Action> {
         if let Some(column) = self.get_center_column_mut() {
             let pos = column.state.selected();
             let new_pos = pos.map(|old_pos| (old_pos + 1).min(column.entries().len() - 1));
             column.state.select(new_pos);
         }
+
+        None
     }
 
-    fn navigate_up(&mut self) {
+    fn navigate_up(&mut self) -> Option<crate::Action> {
         if let Some(column) = self.get_center_column_mut() {
             column.state.select_previous();
         }
+
+        None
     }
 
-    fn navigate_to_top(&mut self) {
+    fn navigate_to_top(&mut self) -> Option<crate::Action> {
         if let Some(column) = self.get_center_column_mut() {
             column.state.select_first();
         }
+
+        None
     }
 
-    fn navigate_to_bottom(&mut self) {
+    fn navigate_to_bottom(&mut self) -> Option<crate::Action> {
         if let Some(column) = self.get_center_column_mut() {
             if column.entries().is_empty() {
                 column.state.select(None);
@@ -306,9 +307,11 @@ impl State {
                 column.state.select(Some(len - 1));
             }
         }
+
+        None
     }
 
-    fn navigate_right(&mut self) {
+    fn navigate_right(&mut self) -> Option<crate::Action> {
         let center_column = self.columns.get(self.navigation_stack.last().unwrap());
 
         if let Some(column) = center_column {
@@ -321,11 +324,10 @@ impl State {
                     | ColumnStateEntry::ThreadChild(mail_id, _)
                     | ColumnStateEntry::ThreadEnd(mail_id, _)
                     | ColumnStateEntry::SingleMail(mail_id) => {
-                        self.app_actions
-                            .push(crate::Action::OpenMailViewer(mail_id));
+                        return Some(crate::Action::OpenMailViewer(mail_id));
                     }
                     ColumnStateEntry::CollapsedThread(mail_id, thread_id) => {
-                        self.tasks.push(Task::UncollapseThread {
+                        self.updates.push(Update::UncollapseThread {
                             collapsed_mail_id: mail_id,
                             thread_id,
                         });
@@ -333,9 +335,11 @@ impl State {
                 }
             }
         }
+
+        None
     }
 
-    fn navigate_left(&mut self) {
+    fn navigate_left(&mut self) -> Option<crate::Action> {
         if let Some(column) = self.get_center_column_mut() {
             if let Some(entry) = column.selected_entry() {
                 match &entry {
@@ -386,25 +390,29 @@ impl State {
                             .splice(start_pos..=end_pos, [new_entry]);
                     }
                 };
-                return;
+                return None;
             }
         }
 
         // fallback
         self.navigate_to_parent();
+
+        None
     }
 
-    fn navigate_to_parent(&mut self) {
+    fn navigate_to_parent(&mut self) -> Option<crate::Action> {
         if self.navigation_stack.len() > 1 {
             self.navigation_stack.pop();
         }
+
+        None
     }
 
-    fn open_logs(&mut self) {
-        self.app_actions.push(crate::Action::OpenLogViewer);
+    fn open_logs(&mut self) -> Option<crate::Action> {
+        Some(crate::Action::OpenLogViewer)
     }
 
-    fn select_entry(&mut self) {
+    fn select_entry(&mut self) -> Option<crate::Action> {
         if let Some(column) = self.get_center_column() {
             if let Some(entry) = column.selected_entry() {
                 let id = EntryId::from(entry);
@@ -416,9 +424,11 @@ impl State {
                 self.navigate_down();
             }
         }
+
+        None
     }
 
-    fn cut_selected_entries(&mut self) {
+    fn cut_selected_entries(&mut self) -> Option<crate::Action> {
         if self.selection.is_empty() {
             if let Some(column) = self.get_center_column() {
                 if let Some(entry) = column.selected_entry() {
@@ -432,9 +442,11 @@ impl State {
                 *selection = SelectionType::Cut;
             }
         }
+
+        None
     }
 
-    fn paste_selected_entries(&mut self) {
+    fn paste_selected_entries(&mut self) -> Option<crate::Action> {
         for (entry_id, selection) in self.selection.drain() {
             match selection {
                 SelectionType::Selected => {}
@@ -448,16 +460,20 @@ impl State {
                 },
             }
         }
+
+        None
     }
 
-    pub fn create_mailbox(&mut self) {
+    fn create_mailbox(&mut self) -> Option<crate::Action> {
         self.overlay = Some(ScreenOverlay::input(
             "Create mailbox:",
             InputType::NewMailboxName,
         ));
+
+        None
     }
 
-    fn mail_patch_keywords(&mut self, patch: &[(MailKeyword, bool)]) {
+    fn mail_patch_keywords(&mut self, patch: &[(MailKeyword, bool)]) -> Option<crate::Action> {
         if !self.selection.is_empty() {
             let mut updates = Vec::with_capacity(self.selection.len());
 
@@ -475,7 +491,7 @@ impl State {
             }
 
             self.backend.update_mails(updates);
-            return;
+            return None;
         }
 
         // use current selected entry
@@ -497,6 +513,8 @@ impl State {
                 }
             }
         }
+
+        None
     }
 }
 

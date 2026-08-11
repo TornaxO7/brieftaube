@@ -1,6 +1,6 @@
-use crate::mailfs::Action;
+use crate::mailfs::UserAction;
 
 #[derive(Debug, Clone)]
 pub enum PaletteValue {
-    Action(Action),
+    Action(UserAction),
 }

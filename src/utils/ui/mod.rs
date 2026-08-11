@@ -6,36 +6,41 @@ use crossterm::event::{Event, KeyEvent};
 use keybindmanager::{HandleEvent, KeybindManager};
 
 pub trait ScreenState<'a, A: Clone + std::fmt::Debug, P: Clone, I: Clone, R> {
-    fn apply_action(&mut self, action: A);
-
-    fn get_app_actions(&mut self) -> std::vec::Drain<'_, crate::Action>;
+    fn apply_action(&mut self, action: A) -> Option<crate::Action>;
 
     fn keybinding_manager(&mut self) -> &mut KeybindManager<A>;
 
-    fn handle_event(&mut self, event: Event, statusbar: &mut crate::statusbar::State) {
+    fn handle_event(
+        &mut self,
+        event: Event,
+        statusbar: &mut crate::statusbar::State,
+    ) -> Option<crate::Action> {
         match event {
             Event::Key(event) => {
                 if let Some(overlay) = self.overlay() {
                     if let Some(result) = overlay.handle_event(event) {
                         self.handle_overlay_result(result);
                     }
-                    return;
+
+                    return None;
                 }
 
                 statusbar.push_key_press(event);
                 match self.keybinding_manager().handle_event(event) {
                     HandleEvent::Action(action) => {
-                        self.apply_action(action);
+                        let action = self.apply_action(action);
                         statusbar.reset_key_press();
+                        action
                     }
-                    HandleEvent::Registered => {}
+                    HandleEvent::Registered => None,
                     HandleEvent::Cancel => {
                         statusbar.reset_key_press();
+                        None
                     }
                 }
             }
-            Event::Mouse(_event) => {}
-            _ => {}
+            Event::Mouse(_event) => None,
+            _ => None,
         }
     }
 

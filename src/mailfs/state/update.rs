@@ -3,15 +3,16 @@ use crate::{
     mailfs::state::{ColumnState, ColumnStateEntry},
 };
 
+/// Tasks which require data from the backend which may not be there yet.
 #[derive(Debug)]
-pub enum Task {
+pub enum Update {
     UncollapseThread {
         collapsed_mail_id: MailId,
         thread_id: ThreadId,
     },
 }
 
-impl Task {
+impl Update {
     pub fn apply(&self, column: &mut ColumnState, backend: &Backend) -> bool {
         match self {
             Self::UncollapseThread {
