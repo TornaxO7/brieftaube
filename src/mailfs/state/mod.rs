@@ -12,14 +12,12 @@ pub use selection::{EntryId, SelectionType};
 use super::UserAction;
 use crate::{
     backend::{
-        self, Backend, MailboxNew,
+        self, Backend, MailId, MailboxData, MailboxId, MailboxNew,
         mailbox::types::{ParentMailboxId, TOP_PARENT_MAILBOX_ID},
         mails::types::{MailKeyword, MailUpdate},
     },
     mailfs::{
-        state::pending_op::{
-            OpInitMailbox, OpMailAttachments, OpMoveMailboxUp, OpUncollapseThread,
-        },
+        state::pending_op::{OpMoveMailboxUp, OpUncollapseThread},
         widget::{ColumnDisplay, MailPreview, RenderData, RightColumn},
     },
     utils::ui::{
@@ -50,7 +48,7 @@ impl State {
             columns: HashMap::new(),
             selection: HashMap::new(),
             navigation_stack: vec![TOP_PARENT_MAILBOX_ID],
-            pending_ops: vec![PendingOp::InitMailbox(OpInitMailbox(TOP_PARENT_MAILBOX_ID))],
+            pending_ops: vec![PendingOp::InitMailbox(TOP_PARENT_MAILBOX_ID)],
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", UserAction::Quit),
                 ("j", UserAction::NavigateDown),
@@ -238,9 +236,9 @@ impl<'a> ScreenState<'a, UserAction, PaletteValue, InputType, RenderData<'a>> fo
     fn update(&mut self) {
         for pending_op in std::mem::take(&mut self.pending_ops) {
             let state = match &pending_op {
-                PendingOp::InitMailbox(data) => self.op_init_mailbox(data),
+                PendingOp::InitMailbox(id) => self.op_init_mailbox(id),
                 PendingOp::UncollapseThread(data) => self.op_uncollapse_thread(data),
-                PendingOp::MailAttachments(data) => self.op_mail_attachments(data),
+                PendingOp::MailAttachments(id) => self.op_mail_attachments(id),
                 PendingOp::MoveMailboxUp(data) => self.op_move_mailbox_up(data),
             };
 
@@ -294,7 +292,7 @@ impl State {
 
                         if !column_initialsed {
                             self.pending_ops
-                                .push(PendingOp::InitMailbox(OpInitMailbox(Some(id.clone()))));
+                                .push(PendingOp::InitMailbox(Some(id.clone())));
                         }
                     }
                     ColumnStateEntry::SingleMail(mail_id)
@@ -308,9 +306,8 @@ impl State {
                             .expect("Mail must be availabel.");
 
                         if mail.attachments.is_none() {
-                            self.pending_ops.push(PendingOp::MailAttachments(
-                                pending_op::OpMailAttachments(mail_id.clone()),
-                            ));
+                            self.pending_ops
+                                .push(PendingOp::MailAttachments(mail_id.clone()));
                         }
                     }
                 };
@@ -618,12 +615,12 @@ impl State {
 
 /// Methods for the pending ops
 impl State {
-    fn op_init_mailbox(&mut self, data: &OpInitMailbox) -> Result<(), error::BackendNotReady> {
+    fn op_init_mailbox(&mut self, id: &ParentMailboxId) -> Result<(), error::BackendNotReady> {
         let mut entries: Vec<ColumnStateEntry> = Vec::new();
 
         let mailbox_ids = self
             .backend
-            .get_or_request_mailbox_children(data.0.clone())
+            .get_or_request_mailbox_children(id.clone())
             .ok_or(error::BackendNotReady)?;
 
         entries.extend(
@@ -632,7 +629,7 @@ impl State {
                 .map(|id| ColumnStateEntry::Mailbox(id)),
         );
 
-        if let Some(parent_mailbox_id) = data.0.as_ref() {
+        if let Some(parent_mailbox_id) = id.as_ref() {
             let collapsed_mails = self
                 .backend
                 .get_or_request_mailbox_root_mails(parent_mailbox_id)
@@ -650,10 +647,10 @@ impl State {
             ));
         }
 
-        let column = ColumnState::new(data.0.clone(), entries);
-        self.columns.insert(data.0.clone(), column);
+        let column = ColumnState::new(id.clone(), entries);
+        self.columns.insert(id.clone(), column);
 
-        let is_for_center_column = self.get_center_column_mailbox() == data.0;
+        let is_for_center_column = self.get_center_column_mailbox() == *id;
         if is_for_center_column {
             self.update_right_column();
         }
@@ -719,15 +716,36 @@ impl State {
         Ok(())
     }
 
-    fn op_mail_attachments(
-        &mut self,
-        data: &OpMailAttachments,
-    ) -> Result<(), error::BackendNotReady> {
-        self.backend.prefetch_mail_attachments(&data.0);
+    fn op_mail_attachments(&mut self, id: &MailId) -> Result<(), error::BackendNotReady> {
+        self.backend.prefetch_mail_attachments(id);
         Ok(())
     }
 
     fn op_move_mailbox_up(&mut self, data: &OpMoveMailboxUp) -> Result<(), error::BackendNotReady> {
+        let Some(column) = self.columns.get(&data.parent) else {
+            return Ok(());
+        };
+
+        let mailboxes: Vec<MailboxData> = column
+            .entries()
+            .iter()
+            .cloned()
+            .map_while(|entry| match entry {
+                ColumnStateEntry::Mailbox(id) => Some(id),
+                _ => None,
+            })
+            .map(|id| self.backend.get_mailbox_data(&id).unwrap())
+            .collect();
+
+        let idx_of_mailbox_to_move = mailboxes
+            .iter()
+            .position(|mailbox| mailbox.id == data.mailbox)
+            .unwrap();
+
+        if idx_of_mailbox_to_move == 0 {
+            return Ok(());
+        }
+
         todo!()
     }
 }

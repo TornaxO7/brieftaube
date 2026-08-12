@@ -3,14 +3,11 @@ use crate::backend::{MailId, MailboxId, ParentMailboxId, ThreadId};
 /// Tasks which require data from the backend which may not be there yet.
 #[derive(Debug)]
 pub enum PendingOp {
-    InitMailbox(OpInitMailbox),
+    InitMailbox(ParentMailboxId),
     UncollapseThread(OpUncollapseThread),
-    MailAttachments(OpMailAttachments),
+    MailAttachments(MailId),
     MoveMailboxUp(OpMoveMailboxUp),
 }
-
-#[derive(Debug)]
-pub struct OpInitMailbox(pub ParentMailboxId);
 
 #[derive(Debug)]
 pub struct OpUncollapseThread {
@@ -21,7 +18,7 @@ pub struct OpUncollapseThread {
 }
 
 #[derive(Debug)]
-pub struct OpMailAttachments(pub MailId);
-
-#[derive(Debug)]
-pub struct OpMoveMailboxUp(pub MailboxId);
+pub struct OpMoveMailboxUp {
+    pub parent: ParentMailboxId,
+    pub mailbox: MailboxId,
+}

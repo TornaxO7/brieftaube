@@ -125,7 +125,11 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnDisplay) {
             let mut row = Vec::with_capacity(widths.len());
 
             match &entry.data {
-                ColumnDisplayEntryData::Mailbox { name, unread_mails } => {
+                ColumnDisplayEntryData::Mailbox {
+                    name,
+                    unread_mails,
+                    sort_order,
+                } => {
                     // ⏺
                     if *unread_mails > 0 {
                         row.push(Cell::from(MAIL_UNREAD_SYMBOL).style(Style::new().fg(BLUE.c800)));
@@ -137,11 +141,7 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnDisplay) {
                     row.push(Cell::from(FOLDER).style(Style::new().fg(BLUE.c500)));
 
                     // name
-                    row.push(
-                        Cell::from(name.clone())
-                            .style(Style::new().fg(LIGHT_BLUE.c600))
-                            .column_span(2),
-                    );
+                    row.push(Cell::from(name.clone()).style(Style::new().fg(LIGHT_BLUE.c600)));
 
                     // unread_mails
                     {
@@ -153,6 +153,9 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnDisplay) {
 
                         row.push(Cell::from(format!("{}", unread_mails)).style(style));
                     }
+
+                    // sort-order
+                    row.push(Cell::from(format!("{}", sort_order)));
                 }
                 ColumnDisplayEntryData::Mail {
                     ty,

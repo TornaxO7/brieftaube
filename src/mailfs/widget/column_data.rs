@@ -95,6 +95,7 @@ pub enum ColumnDisplayEntryData {
     Mailbox {
         name: String,
         unread_mails: usize,
+        sort_order: u32,
     },
     Mail {
         ty: MailEntryType,
@@ -110,6 +111,7 @@ pub enum ColumnDisplayEntryData {
 impl ColumnDisplayEntryData {
     pub fn mailbox(mailbox: &MailboxData) -> Self {
         Self::Mailbox {
+            sort_order: mailbox.sort_order,
             name: mailbox.name.clone(),
             unread_mails: mailbox.unread_mails,
         }
