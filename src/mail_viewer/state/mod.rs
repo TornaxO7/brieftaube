@@ -219,7 +219,7 @@ impl<'a> ScreenState<'a, Action, PaletteType, InputType, RenderData<'a>> for Sta
         }
     }
 
-    fn update(&mut self) {}
+    async fn update(&mut self) {}
 }
 
 impl State {

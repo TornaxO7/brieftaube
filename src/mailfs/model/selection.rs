@@ -1,6 +1,6 @@
 use crate::{
     backend::{mailbox::types::MailboxId, mails::types::MailId},
-    mailfs::state::ColumnStateEntry,
+    mailfs::model::ColumnStateEntry,
 };
 
 #[derive(Hash, PartialEq, Eq)]

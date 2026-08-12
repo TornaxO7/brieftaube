@@ -1,25 +1,85 @@
 use crate::backend::{
     Backend, MailData, MailId, MailboxId, ThreadId, mailbox, mailbox::store::RootMails, mails,
-    task_manager::TaskId, threads, types::CollapsedMail,
+    threads, types::CollapsedMail,
 };
 use jmap_client::core::{
     query::QueryResponse,
     response::{EmailGetResponse, ThreadGetResponse},
 };
-use tracing::error;
 
 impl Backend {
-    pub fn get_or_request_mailbox_root_mails(&self, id: &MailboxId) -> Option<Vec<CollapsedMail>> {
-        let root_mails = self.get_mailbox_root_mails(id);
+    pub async fn get_mailbox_root_mails(
+        &self,
+        id: &MailboxId,
+    ) -> Result<Vec<CollapsedMail>, jmap_client::Error> {
+        match self.get_mailbox_root_mails_cached(id) {
+            Some(cached_root_mails) => Ok(cached_root_mails),
+            None => {
+                let mut response = {
+                    let mut request = self.client.build();
 
-        if root_mails.is_none() {
-            self.request_mailbox_root_mails(id);
+                    let mail_query_result = {
+                        let query_mail = request
+                            .query_email()
+                            .filter(jmap_client::email::query::Filter::InMailbox {
+                                value: id.clone().0,
+                            })
+                            .sort([
+                                jmap_client::email::query::Comparator::received_at().descending()
+                            ])
+                            .position(0)
+                            .limit(10);
+                        query_mail.arguments().collapse_threads(true);
+                        query_mail.result_reference()
+                    };
+
+                    let thread_ids = request
+                        .get_email()
+                        .ids_ref(mail_query_result)
+                        .properties(MailData::PROPERTIES)
+                        .result_reference(jmap_client::email::Property::ThreadId);
+
+                    request.get_thread().ids_ref(thread_ids);
+
+                    request.send().await?
+                };
+
+                let mut store = self.store.lock().unwrap();
+
+                handle_thread_response(
+                    &mut store.threads,
+                    response
+                        .pop_method_response()
+                        .unwrap()
+                        .unwrap_get_thread()
+                        .unwrap(),
+                );
+
+                handle_mail_response(
+                    &mut store.mails,
+                    response
+                        .pop_method_response()
+                        .unwrap()
+                        .unwrap_get_email()
+                        .unwrap(),
+                );
+
+                handle_root_mails_response(
+                    &mut store.mailbox,
+                    &id,
+                    response
+                        .pop_method_response()
+                        .unwrap()
+                        .unwrap_query_email()
+                        .unwrap(),
+                );
+
+                Ok(self.get_mailbox_root_mails_cached(id).unwrap())
+            }
         }
-
-        root_mails
     }
 
-    pub fn get_mailbox_root_mails(&self, id: &MailboxId) -> Option<Vec<CollapsedMail>> {
+    fn get_mailbox_root_mails_cached(&self, id: &MailboxId) -> Option<Vec<CollapsedMail>> {
         let store = self.store.lock().unwrap();
         store.mailbox.get_root_mails(id).map(|root_mails| {
             let mut collapsed_mails: Vec<CollapsedMail> = Vec::with_capacity({
@@ -52,80 +112,6 @@ impl Backend {
 
             collapsed_mails
         })
-    }
-
-    fn request_mailbox_root_mails(&self, id: &MailboxId) {
-        let client = self.client.clone();
-        let store = self.store.clone();
-        let id = id.to_owned();
-
-        self.task_manager
-            .spawn(TaskId::QueryRootMails(id.clone()), async move {
-                let mut response = {
-                    let mut request = client.build();
-
-                    let mail_query_result = {
-                        let query_mail = request
-                            .query_email()
-                            .filter(jmap_client::email::query::Filter::InMailbox {
-                                value: id.clone().0,
-                            })
-                            .sort([
-                                jmap_client::email::query::Comparator::received_at().descending()
-                            ])
-                            .position(0)
-                            .limit(10);
-                        query_mail.arguments().collapse_threads(true);
-                        query_mail.result_reference()
-                    };
-
-                    let thread_ids = request
-                        .get_email()
-                        .ids_ref(mail_query_result)
-                        .properties(MailData::PROPERTIES)
-                        .result_reference(jmap_client::email::Property::ThreadId);
-
-                    request.get_thread().ids_ref(thread_ids);
-
-                    match request.send().await {
-                        Ok(r) => r,
-                        Err(err) => {
-                            error!("Couldn't request root mails of mailbox:\n{err}");
-                            return;
-                        }
-                    }
-                };
-
-                let mut store = store.lock().unwrap();
-
-                handle_thread_response(
-                    &mut store.threads,
-                    response
-                        .pop_method_response()
-                        .unwrap()
-                        .unwrap_get_thread()
-                        .unwrap(),
-                );
-
-                handle_mail_response(
-                    &mut store.mails,
-                    response
-                        .pop_method_response()
-                        .unwrap()
-                        .unwrap_get_email()
-                        .unwrap(),
-                );
-
-                handle_root_mails_response(
-                    &mut store.mailbox,
-                    &id,
-                    response
-                        .pop_method_response()
-                        .unwrap()
-                        .unwrap_query_email()
-                        .unwrap(),
-                );
-            });
     }
 }
 

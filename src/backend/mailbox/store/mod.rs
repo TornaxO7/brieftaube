@@ -80,8 +80,6 @@ impl Store {
             .get(parent)
             .map(|children| children.as_slice());
 
-        // debug!("Children of '{parent:?}':\n{children:?}");
-
         children
     }
 

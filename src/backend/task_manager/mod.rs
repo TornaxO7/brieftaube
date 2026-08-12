@@ -1,27 +1,6 @@
-use crate::backend::{
-    mailbox::types::{MailboxId, ParentMailboxId},
-    mails::types::MailId,
-};
 use std::{cell::RefCell, collections::VecDeque};
 use tokio::task::JoinHandle;
 use tracing::{debug, instrument};
-
-#[derive(Debug, PartialEq, Hash)]
-pub enum TaskId {
-    QueryChildMailboxes(ParentMailboxId),
-    QueryRootMails(MailboxId),
-    GetThreadMails,
-    FetchBodyType,
-    FetchMailAttachments,
-    SetMailSeen,
-
-    RequestMails,
-    UpdateMail,
-
-    MailboxSet,
-    MailboxGet,
-    UpdateMailbox,
-}
 
 /// Add waiting-time for each task to avoid too many requests.
 pub struct TaskManager {
@@ -54,30 +33,13 @@ impl TaskManager {
     }
 }
 
-/// helper
-impl TaskManager {
-    fn is_already_running(&self, id: &TaskId) -> bool {
-        self.tasks
-            .borrow()
-            .iter()
-            .find(|task| &task.id == id)
-            .is_some()
-    }
-}
-
 /// starting tasks
 impl TaskManager {
     #[instrument(skip(self, future))]
-    pub fn spawn<F>(&self, id: TaskId, future: F)
+    pub fn spawn<F>(&self, future: F)
     where
         F: Future<Output = ()> + Send + 'static,
     {
-        if self.is_already_running(&id) {
-            debug!("'{id:?}' is already running. Abort.");
-            return;
-        }
-        debug!("Spawning '{id:?}'");
-
         let new_task = Task {
             id,
             inner: tokio::spawn(future),

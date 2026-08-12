@@ -1,7 +1,6 @@
 pub mod mailbox;
 pub mod mails;
 mod store;
-pub mod task_manager;
 pub mod threads;
 pub mod types;
 
@@ -9,7 +8,7 @@ pub use mailbox::types::*;
 pub use mails::types::*;
 pub use threads::types::*;
 
-use crate::{backend::task_manager::TaskManager, config::Config};
+use crate::config::Config;
 use jmap_client::client::Client;
 use std::sync::{Arc, Mutex};
 use store::Store;
@@ -27,7 +26,6 @@ pub struct Backend {
     config: Config,
     client: Arc<Client>,
     store: Arc<Mutex<Store>>,
-    task_manager: TaskManager,
 }
 
 /// Methods needed for `main.rs`
@@ -57,17 +55,8 @@ impl Backend {
         Self {
             client: client.clone(),
             store: Arc::new(Mutex::new(Store::new())),
-            task_manager: TaskManager::new(),
             config,
         }
-    }
-
-    pub fn has_tasks_running(&self) -> bool {
-        self.task_manager.has_tasks_running()
-    }
-
-    pub async fn finish_next_task(&self) {
-        self.task_manager.finish_next_task().await;
     }
 
     pub fn config(&self) -> &Config {

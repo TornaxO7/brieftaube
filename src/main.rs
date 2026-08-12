@@ -1,22 +1,30 @@
 mod backend;
+mod task_manager;
 // mod composer;
 mod config;
-mod log_viewer;
-mod mail_viewer;
+// mod log_viewer;
+// mod mail_viewer;
 mod statusbar;
 mod utils;
 
 mod mailfs;
 
-use crate::{backend::mails::types::MailId, statusbar::Statusbar, utils::ui::ScreenState};
+use crate::{statusbar::Statusbar, task_manager::TaskManager, utils::ui::ScreenState};
 use color_eyre::eyre;
 use crossterm::event::Event;
 use futures::{FutureExt, StreamExt};
 use ratatui::{
     DefaultTerminal, Frame,
     layout::{Constraint, Layout},
+    widgets::Clear,
 };
-use std::{fs::OpenOptions, io, path::PathBuf, rc::Rc, sync::OnceLock};
+use std::{
+    fs::OpenOptions,
+    io,
+    path::PathBuf,
+    rc::Rc,
+    sync::{Arc, OnceLock},
+};
 use tracing::{error, level_filters::LevelFilter};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use xdg::BaseDirectories;
@@ -38,15 +46,15 @@ async fn main() -> eyre::Result<()> {
 
 enum Screen {
     // Composer(composer::ui::State),
-    MailViewer(mail_viewer::State),
-    LogViewer(log_viewer::State),
-    Mailfs(mailfs::State),
+    // MailViewer(mail_viewer::State),
+    // LogViewer(log_viewer::State),
+    Mailfs(mailfs::Model),
 }
 
 #[derive(Debug)]
 pub enum Action {
-    OpenMailViewer(MailId),
-    OpenLogViewer,
+    // OpenMailViewer(MailId),
+    // OpenLogViewer,
     // OpenComposer,
     Redraw,
     Back,
@@ -56,22 +64,26 @@ pub enum Action {
 /// Stores the app state
 pub struct App {
     is_running: bool,
-    backend: Rc<backend::Backend>,
+    backend: Arc<backend::Backend>,
     screens: Vec<Screen>,
     statusbar: statusbar::State,
+    task_manager: Rc<TaskManager>,
 
     needs_full_redraw: bool,
 }
 
 impl App {
     pub async fn new(counter: statusbar::Counter) -> eyre::Result<Self> {
-        let backend = Rc::new(backend::Backend::new().await);
-        let initial_screen = Screen::Mailfs(mailfs::State::new(backend.clone()));
+        let task_manager = Rc::new(TaskManager::new());
+        let backend = Arc::new(backend::Backend::new().await);
+        let initial_screen =
+            Screen::Mailfs(mailfs::Model::new(backend.clone(), task_manager.clone()));
 
         let statusbar = statusbar::State::new(&initial_screen, counter);
 
         Ok(Self {
             is_running: true,
+            task_manager,
             backend,
             screens: vec![initial_screen],
             statusbar,
@@ -86,7 +98,7 @@ impl App {
         while self.is_running {
             tokio::select! {
                 _ = self.statusbar.has_changed() => { }
-                _ = self.backend.finish_next_task() => { }
+                _ = self.task_manager.finish_next_task() => {}
                 maybe_event = reader.next().fuse() => match maybe_event {
                     Some(Ok(event)) => if let Some(action) = self.handle_event(event) {
                         self.apply_action(action);
@@ -97,12 +109,6 @@ impl App {
             }
 
             self.sync_throbber();
-
-            if self.needs_full_redraw {
-                self.needs_full_redraw = false;
-                terminal.clear().unwrap();
-            }
-
             terminal.draw(|frame| self.draw_screen(frame))?;
         }
 
@@ -112,23 +118,26 @@ impl App {
     fn draw_screen(&mut self, frame: &mut Frame) {
         let area = frame.area();
 
+        if self.needs_full_redraw {
+            self.needs_full_redraw = false;
+            frame.render_widget(Clear, area);
+        }
+
         let [statusbar, screen] =
             Layout::vertical([Constraint::Length(3), Constraint::Fill(0)]).areas(area);
         frame.render_stateful_widget(Statusbar::default(), statusbar, &mut self.statusbar);
 
         match self.screens.last_mut().unwrap() {
-            Screen::Mailfs(state) => {
-                frame.render_stateful_widget(mailfs::Mailfs::default(), screen, state);
-            }
+            Screen::Mailfs(model) => frame.render_stateful_widget(mailfs::Mailfs, screen, model),
             // Screen::Composer(state) => {
             //     frame.render_stateful_widget(composer::ui::Composer::default(), screen, state);
             // }
-            Screen::MailViewer(state) => {
-                frame.render_stateful_widget(mail_viewer::MailViewer::default(), screen, state);
-            }
-            Screen::LogViewer(state) => {
-                frame.render_stateful_widget(log_viewer::LogViewer::default(), screen, state);
-            }
+            // Screen::MailViewer(state) => {
+            //     frame.render_stateful_widget(mail_viewer::MailViewer::default(), screen, state);
+            // }
+            // Screen::LogViewer(state) => {
+            //     frame.render_stateful_widget(log_viewer::LogViewer::default(), screen, state);
+            // }
         };
     }
 
@@ -137,27 +146,27 @@ impl App {
             // Screen::Mailboxes(state) => state.handle_event(event, &mut self.statusbar),
             // Screen::MailList(state) => state.handle_event(event, &mut self.statusbar),
             // Screen::Composer(state) => state.handle_event(event, &mut self.statusbar),
-            Screen::MailViewer(state) => state.handle_event(event, &mut self.statusbar),
+            // Screen::MailViewer(state) => state.handle_event(event, &mut self.statusbar),
             Screen::Mailfs(state) => state.handle_event(event, &mut self.statusbar),
-            Screen::LogViewer(state) => state.handle_event(event, &mut self.statusbar),
+            // Screen::LogViewer(state) => state.handle_event(event, &mut self.statusbar),
         }
     }
 
     fn apply_action(&mut self, action: Action) {
         match action {
-            Action::OpenMailViewer(id) => {
-                let backend = self.backend.clone();
-                let next_screen = Screen::MailViewer(mail_viewer::State::new(id, backend));
+            // Action::OpenMailViewer(id) => {
+            //     let backend = self.backend.clone();
+            //     let next_screen = Screen::MailViewer(mail_viewer::State::new(id, backend));
 
-                self.statusbar.set_screen(&next_screen);
-                self.screens.push(next_screen);
-            }
-            Action::OpenLogViewer => {
-                let next_screen = Screen::LogViewer(log_viewer::State::new());
+            //     self.statusbar.set_screen(&next_screen);
+            //     self.screens.push(next_screen);
+            // }
+            // Action::OpenLogViewer => {
+            //     let next_screen = Screen::LogViewer(log_viewer::State::new());
 
-                self.statusbar.set_screen(&next_screen);
-                self.screens.push(next_screen);
-            }
+            //     self.statusbar.set_screen(&next_screen);
+            //     self.screens.push(next_screen);
+            // }
             // Action::OpenComposer => {
             //     // let next_screen =
             //     //     Screen::Composer(composer::ui::State::new(self.account.clone()));
@@ -184,11 +193,10 @@ impl App {
     fn sync_throbber(&mut self) {
         let top_screen_has_tasks_running =
             match self.screens.last().expect("There's at least one screen") {
-                // Screen::Mailboxes(_) => self.account.mailboxes.has_tasks_running(),
-                // Screen::MailList(_) => self.account.mails.has_tasks_running(),
                 // Screen::Composer(_) => todo!(),
-                Screen::MailViewer(_) | Screen::Mailfs(_) => self.backend.has_tasks_running(),
-                Screen::LogViewer(_) => false,
+                // Screen::MailViewer(_) | Screen::Mailfs(_) => self.backend.has_tasks_running(),
+                Screen::Mailfs(_) => self.task_manager.has_tasks_running(),
+                // Screen::LogViewer(_) => false,
             };
 
         if top_screen_has_tasks_running {

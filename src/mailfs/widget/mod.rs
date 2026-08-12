@@ -4,13 +4,12 @@ mod mail_preview;
 mod render_data;
 mod selection_type;
 
-pub use column_data::{ColumnDisplay, ColumnDisplayEntryData, MailEntryType, RightColumn};
+pub use column_data::{ColumnDisplay, ColumnDisplayEntryData, MailEntryType};
 pub use mail_preview::MailPreview;
-pub use render_data::RenderData;
 
-use super::State;
+use super::Model;
 use crate::{
-    mailfs::widget::selection_type::DisplaySelectionType,
+    mailfs::{model::RightColumn, widget::selection_type::DisplaySelectionType},
     utils::ui::{ScreenOverlay, ScreenState, input::Input, palette::Palette},
 };
 use ratatui::{
@@ -36,19 +35,17 @@ const THREAD_FOLDED: &str = "▸";
 const THREAD_UNFOLDED: &str = "▾";
 const ATTACHMENT: &str = "📎";
 
-#[derive(Default)]
-pub struct Mailfs {}
+pub struct Mailfs;
 
 impl StatefulWidget for Mailfs {
-    type State = State;
+    type State = Model;
 
-    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let mut data = state.render_data();
-
+    fn render(self, area: Rect, buf: &mut Buffer, model: &mut Self::State) {
+        let mut columns = model.columns.lock().unwrap();
         let [path_area, filesystem_area] =
             Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]).areas(area);
 
-        render_path(path_area, buf, &data.mailbox_path);
+        render_path(path_area, buf, &model);
 
         let [
             border_line1,
@@ -67,28 +64,57 @@ impl StatefulWidget for Mailfs {
         ])
         .areas(filesystem_area);
 
-        render_border_line(border_line1, buf, data.left.as_ref());
-        if let Some(left) = data.left.as_mut() {
-            render_column(left_area, buf, left);
-        }
-        if let Some(center) = data.center.as_mut() {
-            render_column(center_area, buf, center);
-        }
-        render_border_line(border_line2, buf, data.center.as_ref());
+        match model.left_column_mailbox() {
+            None => {
+                render_border_line(border_line1, buf, None);
+            }
+            Some(left_mailbox) => {
+                let column = columns.get_mut(&left_mailbox).unwrap();
+                let column_display =
+                    ColumnDisplay::new(column, &model.selection, model.backend.clone());
 
-        if let Some(right) = data.right.as_mut() {
-            render_right_column(right_area, buf, right);
+                render_border_line(border_line1, buf, Some(&column_display));
+                render_column(left_area, buf, column_display);
+            }
         }
-        render_border_line(
-            border_line3,
-            buf,
-            data.right.as_ref().and_then(|right| match right {
-                RightColumn::ColumnData(column) => Some(column),
-                RightColumn::MailPreview(_) => None,
-            }),
-        );
 
-        if let Some(overlay) = state.overlay() {
+        match model.center_column_mailbox() {
+            None => {
+                render_border_line(border_line1, buf, None);
+            }
+            Some(center_mailbox) => {
+                let column = columns.get_mut(&Some(center_mailbox)).unwrap();
+                let column_display =
+                    ColumnDisplay::new(column, &model.selection, model.backend.clone());
+
+                render_border_line(border_line2, buf, Some(&column_display));
+                render_column(center_area, buf, column_display);
+            }
+        }
+
+        match model.right_column(&columns) {
+            Some(RightColumn::Mailbox(id)) => {
+                let column = columns.get_mut(&Some(id)).unwrap();
+                let column_display =
+                    ColumnDisplay::new(column, &model.selection, model.backend.clone());
+
+                render_border_line(border_line3, buf, Some(&column_display));
+                render_column(right_area, buf, column_display);
+            }
+            Some(RightColumn::MailPreview(id)) => {
+                let mail = model.backend.get_mail(&id).unwrap();
+                let mut preview = mail.into();
+
+                render_border_line(border_line3, buf, None);
+                render_mail_preview(right_area, buf, &mut preview);
+            }
+            None => {
+                render_border_line(border_line3, buf, None);
+            }
+        }
+
+        // TODO: Move that somewhere else?
+        if let Some(overlay) = model.overlay() {
             match overlay {
                 ScreenOverlay::Palette(state) => {
                     let area =
@@ -109,7 +135,7 @@ impl StatefulWidget for Mailfs {
     }
 }
 
-fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnDisplay) {
+fn render_column(area: Rect, buf: &mut Buffer, data: ColumnDisplay) {
     let widths = [
         Constraint::Length(1),
         Constraint::Length(1),
@@ -226,13 +252,6 @@ fn render_column(area: Rect, buf: &mut Buffer, data: &mut ColumnDisplay) {
         buf,
         data.state,
     );
-}
-
-fn render_right_column(area: Rect, buf: &mut Buffer, data: &mut RightColumn) {
-    match data {
-        RightColumn::ColumnData(data) => render_column(area, buf, data),
-        RightColumn::MailPreview(preview) => render_mail_preview(area, buf, preview),
-    }
 }
 
 fn render_mail_preview(area: Rect, buf: &mut Buffer, mail: &mut MailPreview) {
@@ -392,6 +411,19 @@ fn render_border_line(area: Rect, buf: &mut Buffer, column: Option<&ColumnDispla
     }
 }
 
-fn render_path(area: Rect, buf: &mut Buffer, path: &str) {
+fn render_path(area: Rect, buf: &mut Buffer, model: &Model) {
+    let backend = model.backend.clone();
+    let path = model
+        .navigation_stack
+        .iter()
+        .map(|id| match id {
+            Some(id) => {
+                let mailbox = backend.get_mailbox_data(id).unwrap();
+                format!("{}/", mailbox.name)
+            }
+            None => String::from("/"),
+        })
+        .collect::<String>();
+
     Widget::render(Line::raw(path).style(Style::new().fg(TEAL.c400)), area, buf);
 }

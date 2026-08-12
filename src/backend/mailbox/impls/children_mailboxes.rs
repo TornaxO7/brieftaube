@@ -1,37 +1,23 @@
-use crate::backend::{Backend, MailboxData, MailboxId, ParentMailboxId};
-use tracing::error;
+use crate::backend::{Backend, MailboxData, ParentMailboxId};
 
 impl Backend {
-    pub fn get_or_request_mailbox_children(
+    pub async fn get_mailbox_children(
         &self,
         parent: ParentMailboxId,
-    ) -> Option<Vec<MailboxId>> {
-        let children = self.get_mailbox_children(parent.clone());
+    ) -> Result<Vec<MailboxData>, jmap_client::Error> {
+        let children = {
+            let store = self.store.lock().unwrap();
+            store
+                .mailbox
+                .get_children_data(&parent)
+                .map(|children| children.to_owned())
+        };
 
-        if children.is_none() {
-            self.request_mailbox_children(parent);
-        }
-
-        children
-    }
-
-    fn get_mailbox_children(&self, parent: ParentMailboxId) -> Option<Vec<MailboxId>> {
-        let store = self.store.lock().unwrap();
-        store
-            .mailbox
-            .get_children(&parent)
-            .map(|children| children.to_owned())
-    }
-
-    fn request_mailbox_children(&self, parent: ParentMailboxId) {
-        let client = self.client.clone();
-        let store = self.store.clone();
-
-        self.task_manager.spawn(
-            crate::backend::task_manager::TaskId::QueryChildMailboxes(parent.clone()),
-            async move {
+        match children {
+            Some(cached_children) => Ok(cached_children),
+            None => {
                 let mut response = {
-                    let mut request = client.build();
+                    let mut request = self.client.build();
 
                     let query_result = request
                         .query_mailbox()
@@ -45,16 +31,9 @@ impl Backend {
                         .ids_ref(query_result)
                         .properties(MailboxData::PROPERTIES);
 
-                    match request.send().await {
-                        Ok(r) => r,
-                        Err(err) => {
-                            error!("Couldn't send request to get mailbox children:\n{err}");
-                            return;
-                        }
-                    }
+                    request.send().await?
                 };
 
-                let mut store = store.lock().unwrap();
                 let mut mailbox_get_response = response
                     .pop_method_response()
                     .unwrap()
@@ -68,11 +47,14 @@ impl Backend {
                     .map(MailboxData::from)
                     .collect();
 
+                let mut store = self.store.lock().unwrap();
                 store
                     .mailbox
                     .set_children_query_state(parent.clone(), mailbox_get_response.take_state());
                 store.mailbox.add_children(parent.clone(), &child_mailboxes);
-            },
-        );
+
+                Ok(child_mailboxes)
+            }
+        }
     }
 }

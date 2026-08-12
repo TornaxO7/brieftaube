@@ -1,8 +1,7 @@
 mod column_state;
-mod error;
 mod input_type;
 mod palette_value;
-mod pending_op;
+// mod pending_op;
 mod selection;
 
 pub use column_state::{ColumnState, ColumnStateEntry};
@@ -12,43 +11,51 @@ pub use selection::{EntryId, SelectionType};
 use super::UserAction;
 use crate::{
     backend::{
-        self, Backend, MailId, MailboxData, MailboxId, MailboxNew,
+        self, Backend, MailId, MailboxData, MailboxId,
         mailbox::types::{ParentMailboxId, TOP_PARENT_MAILBOX_ID},
         mails::types::{MailKeyword, MailUpdate},
     },
-    mailfs::{
-        state::pending_op::{OpMoveMailboxUp, OpUncollapseThread},
-        widget::{ColumnDisplay, MailPreview, RenderData, RightColumn},
-    },
+    task_manager::TaskManager,
     utils::ui::{
         ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager, palette,
     },
 };
 use input_type::InputType;
-use pending_op::PendingOp;
-use std::{collections::HashMap, rc::Rc};
+use std::{
+    collections::HashMap,
+    rc::Rc,
+    sync::{Arc, Mutex},
+};
 use tracing::{debug, warn};
 
-pub struct State {
-    backend: Rc<Backend>,
-    pending_ops: Vec<PendingOp>,
+type Columns = Arc<Mutex<HashMap<ParentMailboxId, ColumnState>>>;
 
-    keybindings: KeybindManager<UserAction>,
-    overlay: Option<ScreenOverlay<PaletteValue, InputType>>,
-    columns: HashMap<ParentMailboxId, ColumnState>,
-    navigation_stack: Vec<ParentMailboxId>,
-    selection: HashMap<EntryId, SelectionType>,
+pub enum RightColumn {
+    Mailbox(MailboxId),
+    MailPreview(MailId),
 }
 
-impl State {
-    pub fn new(backend: Rc<Backend>) -> Self {
+pub struct Model {
+    keybindings: KeybindManager<UserAction>,
+    task_manager: Rc<TaskManager>,
+
+    pub backend: Arc<Backend>,
+    pub selection: HashMap<EntryId, SelectionType>,
+    pub navigation_stack: Vec<ParentMailboxId>,
+    pub columns: Columns,
+    pub overlay: Option<ScreenOverlay<PaletteValue, InputType>>,
+}
+
+impl Model {
+    pub fn new(backend: Arc<Backend>, task_manager: Rc<TaskManager>) -> Self {
         Self {
+            columns: Arc::new(Mutex::new(HashMap::new())),
+            navigation_stack: vec![TOP_PARENT_MAILBOX_ID],
+            selection: HashMap::new(),
+            task_manager,
+
             backend,
             overlay: None,
-            columns: HashMap::new(),
-            selection: HashMap::new(),
-            navigation_stack: vec![TOP_PARENT_MAILBOX_ID],
-            pending_ops: vec![PendingOp::InitMailbox(TOP_PARENT_MAILBOX_ID)],
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", UserAction::Quit),
                 ("j", UserAction::NavigateDown),
@@ -65,7 +72,7 @@ impl State {
     }
 }
 
-impl<'a> ScreenState<'a, UserAction, PaletteValue, InputType, RenderData<'a>> for State {
+impl<'a> ScreenState<'a, UserAction, PaletteValue, InputType> for Model {
     fn apply_user_action(&mut self, action: UserAction) -> Option<crate::Action> {
         debug!("{:?}", action);
 
@@ -114,213 +121,61 @@ impl<'a> ScreenState<'a, UserAction, PaletteValue, InputType, RenderData<'a>> fo
                 }
             },
             ScreenOverlayResult::Cancel => self.overlay = None,
-            ScreenOverlayResult::Input { value, typ } => match typ {
+            ScreenOverlayResult::Input { value: _, typ } => match typ {
                 InputType::NewMailboxName => {
-                    if let Some(center) = self.get_center_column() {
-                        let parent_id = center.mailbox().clone();
-                        let new = MailboxNew {
-                            name: value,
-                            parent_id,
-                            ..Default::default()
-                        };
-
-                        match self.backend.create_mailbox(new) {
-                            Ok(()) => {}
-                            Err(err) => {
-                                tracing::error!("Can't create mailbox:\n{err}");
-                            }
-                        }
-                    }
-                    todo!("update state");
+                    // if let Some(center) = self.get_center_column() {
+                    //     let parent_id = center.mailbox().clone();
+                    //     let _new = MailboxNew {
+                    //         name: value,
+                    //         parent_id,
+                    //         ..Default::default()
+                    //     };
+                    // }
+                    // todo!("update state");
+                    todo!()
                 }
             },
         };
 
         None
     }
-
-    fn render_data(&'a mut self) -> RenderData<'a> {
-        self.update();
-
-        let backend = self.backend.clone();
-
-        let mailbox_path = self
-            .navigation_stack
-            .iter()
-            .map(|id| match id {
-                Some(id) => {
-                    let mailbox = backend.get_mailbox_data(id).unwrap();
-                    format!("{}/", mailbox.name)
-                }
-                None => String::from("/"),
-            })
-            .collect::<String>();
-
-        let right_preview = self
-            .get_center_column()
-            .and_then(|center_column| center_column.selected_entry())
-            .and_then(|selected_entry| match selected_entry {
-                ColumnStateEntry::Mailbox(_) => None,
-                ColumnStateEntry::SingleMail(id)
-                | ColumnStateEntry::CollapsedThread(id, _)
-                | ColumnStateEntry::ThreadStart { mail_id: id, .. }
-                | ColumnStateEntry::ThreadChild(id, _)
-                | ColumnStateEntry::ThreadEnd(id, _) => Some(id),
-            })
-            .and_then(|mail_id| backend.get_mail(mail_id))
-            .map(MailPreview::from)
-            .map(RightColumn::MailPreview);
-
-        let (left, center, right_column) = {
-            let center_mailbox = self.get_center_column_mailbox();
-            match (
-                self.get_left_column_mailbox(),
-                self.get_right_column_mailbox(),
-            ) {
-                (Some(left_mailbox), Some(right_mailbox)) => {
-                    let [left, center, right] = self.columns.get_disjoint_mut([
-                        &left_mailbox,
-                        &center_mailbox,
-                        &right_mailbox,
-                    ]);
-
-                    (
-                        ColumnDisplay::new(left, &self.selection, backend.clone()).ok(),
-                        ColumnDisplay::new(center, &self.selection, backend.clone()).ok(),
-                        ColumnDisplay::new(right, &self.selection, backend.clone()).ok(),
-                    )
-                }
-                (Some(left_mailbox), None) => {
-                    let [left, center] = self
-                        .columns
-                        .get_disjoint_mut([&left_mailbox, &center_mailbox]);
-
-                    (
-                        ColumnDisplay::new(left, &self.selection, backend.clone()).ok(),
-                        ColumnDisplay::new(center, &self.selection, backend.clone()).ok(),
-                        None,
-                    )
-                }
-                (None, Some(right_mailbox)) => {
-                    let [center, right] = self
-                        .columns
-                        .get_disjoint_mut([&center_mailbox, &right_mailbox]);
-
-                    (
-                        None,
-                        ColumnDisplay::new(center, &self.selection, backend.clone()).ok(),
-                        ColumnDisplay::new(right, &self.selection, backend.clone()).ok(),
-                    )
-                }
-                (None, None) => {
-                    let center_column = self.columns.get_mut(self.navigation_stack.last().unwrap());
-                    (
-                        None,
-                        ColumnDisplay::new(center_column, &self.selection, backend.clone()).ok(),
-                        None,
-                    )
-                }
-            }
-        };
-
-        let right = right_preview.or(right_column.map(|column| RightColumn::ColumnData(column)));
-
-        RenderData {
-            mailbox_path,
-            left,
-            center,
-            right,
-        }
-    }
-
-    fn update(&mut self) {
-        for pending_op in std::mem::take(&mut self.pending_ops) {
-            let state = match &pending_op {
-                PendingOp::InitMailbox(id) => self.op_init_mailbox(id),
-                PendingOp::UncollapseThread(data) => self.op_uncollapse_thread(data),
-                PendingOp::MailAttachments(id) => self.op_mail_attachments(id),
-                PendingOp::MoveMailboxUp(data) => self.op_move_mailbox_up(data),
-            };
-
-            match state {
-                Err(error::BackendNotReady) => self.pending_ops.push(pending_op),
-                Ok(()) => {}
-            }
-        }
-    }
 }
 
 /// Helper functions
-impl State {
-    fn get_left_column_mailbox(&self) -> Option<ParentMailboxId> {
+impl<'a> Model {
+    pub fn left_column_mailbox(&self) -> Option<ParentMailboxId> {
         (self.navigation_stack.len().checked_sub(2))
             .map(|idx| &self.navigation_stack[idx])
             .cloned()
     }
 
-    fn get_center_column_mailbox(&self) -> ParentMailboxId {
+    pub fn center_column_mailbox(&self) -> ParentMailboxId {
         self.navigation_stack.last().cloned().unwrap()
     }
 
-    fn get_right_column_mailbox(&self) -> Option<ParentMailboxId> {
-        self.get_center_column()
+    pub fn right_column(
+        &self,
+        columns: &'a HashMap<ParentMailboxId, ColumnState>,
+    ) -> Option<RightColumn> {
+        let center = self.center_column_mailbox();
+
+        columns
+            .get(&center)
             .and_then(|center| center.selected_entry())
             .cloned()
-            .and_then(|selected| {
-                if let ColumnStateEntry::Mailbox(id) = selected.clone() {
-                    Some(Some(id))
-                } else {
-                    None
-                }
+            .map(|selected| match selected {
+                ColumnStateEntry::Mailbox(id) => RightColumn::Mailbox(id),
+                ColumnStateEntry::SingleMail(mail_id)
+                | ColumnStateEntry::CollapsedThread(mail_id, _)
+                | ColumnStateEntry::ThreadStart { mail_id, .. }
+                | ColumnStateEntry::ThreadChild(mail_id, _)
+                | ColumnStateEntry::ThreadEnd(mail_id, _) => RightColumn::MailPreview(mail_id),
             })
-    }
-
-    fn get_center_column(&self) -> Option<&ColumnState> {
-        self.columns.get(self.navigation_stack.last().unwrap())
-    }
-
-    fn get_center_column_mut(&mut self) -> Option<&mut ColumnState> {
-        self.columns.get_mut(self.navigation_stack.last().unwrap())
-    }
-
-    fn update_right_column(&mut self) {
-        if let Some(center) = self.get_center_column() {
-            if let Some(entry) = center.selected_entry() {
-                match entry {
-                    ColumnStateEntry::Mailbox(id) => {
-                        let column_initialsed = self.columns.contains_key(&Some(id.clone()));
-
-                        if !column_initialsed {
-                            self.pending_ops
-                                .push(PendingOp::InitMailbox(Some(id.clone())));
-                        }
-                    }
-                    ColumnStateEntry::SingleMail(mail_id)
-                    | ColumnStateEntry::CollapsedThread(mail_id, _)
-                    | ColumnStateEntry::ThreadStart { mail_id, .. }
-                    | ColumnStateEntry::ThreadChild(mail_id, _)
-                    | ColumnStateEntry::ThreadEnd(mail_id, _) => {
-                        let mail = self
-                            .backend
-                            .get_mail(mail_id)
-                            .expect("Mail must be availabel.");
-
-                        if mail.attachments.is_none() {
-                            self.pending_ops
-                                .push(PendingOp::MailAttachments(mail_id.clone()));
-                        }
-                    }
-                };
-
-                // start the requests
-                self.update();
-            }
-        }
     }
 }
 
 /// Action implementations
-impl State {
+impl Model {
     fn quit(&self) -> Option<crate::Action> {
         Some(crate::Action::Quit)
     }
@@ -333,22 +188,38 @@ impl State {
         None
     }
 
-    fn navigate_down(&mut self) -> Option<crate::Action> {
-        if let Some(column) = self.get_center_column_mut() {
-            let pos = column.state.selected();
-            let new_pos = pos.map(|old_pos| (old_pos + 1).min(column.entries().len() - 1));
-            column.state.select(new_pos);
+    fn navigate_down(&self) -> Option<crate::Action> {
+        let mut guard = self.columns.lock().unwrap();
 
-            self.update_right_column();
+        if let Some(center) = guard.get_mut(&self.center_column_mailbox()) {
+            let pos = center.state.selected();
+            let new_pos = pos.map(|old_pos| (old_pos + 1).min(center.entries().len() - 1));
+            center.state.select(new_pos);
+
+            todo!();
+
+            // match center.selected_entry().unwrap() {
+            //     ColumnStateEntry::Mailbox(id) => self
+            //         .backend
+            //         .spawn(op_init_mailbox(self.columns.clone(), id.clone())),
+            //     ColumnStateEntry::SingleMail(mail_id)
+            //     | ColumnStateEntry::CollapsedThread(mail_id, _)
+            //     | ColumnStateEntry::ThreadStart { mail_id, .. }
+            //     | ColumnStateEntry::ThreadChild(mail_id, _)
+            //     | ColumnStateEntry::ThreadEnd(mail_id, _) => {
+            //         todo!()
+            //     }
+            // }
         }
 
         None
     }
 
-    fn navigate_up(&mut self) -> Option<crate::Action> {
-        if let Some(column) = self.get_center_column_mut() {
+    fn navigate_up(&self) -> Option<crate::Action> {
+        let mut columns = self.columns.lock().unwrap();
+
+        if let Some(column) = columns.get_mut(&self.center_column_mailbox()) {
             column.state.select_previous();
-            self.update_right_column();
         }
 
         None
@@ -481,7 +352,8 @@ impl State {
     }
 
     fn open_logs(&mut self) -> Option<crate::Action> {
-        Some(crate::Action::OpenLogViewer)
+        // Some(crate::Action::OpenLogViewer)
+        todo!()
     }
 
     fn select_entry(&mut self) -> Option<crate::Action> {
@@ -614,57 +486,8 @@ impl State {
 }
 
 /// Methods for the pending ops
-impl State {
-    fn op_init_mailbox(&mut self, id: &ParentMailboxId) -> Result<(), error::BackendNotReady> {
-        let mut entries: Vec<ColumnStateEntry> = Vec::new();
-
-        // mailbox children
-        {
-            let mut mailboxes: Vec<MailboxData> = self
-                .backend
-                .get_or_request_mailbox_children(id.clone())
-                .ok_or(error::BackendNotReady)?
-                .into_iter()
-                .map(|id| self.backend.get_mailbox_data(&id).expect("Just fetched?!"))
-                .collect();
-
-            mailboxes.sort_by_key(|mailbox| mailbox.sort_order);
-
-            entries.extend(
-                mailboxes
-                    .into_iter()
-                    .map(|mailbox| ColumnStateEntry::Mailbox(mailbox.id)),
-            );
-        }
-
-        if let Some(parent_mailbox_id) = id.as_ref() {
-            let collapsed_mails = self
-                .backend
-                .get_or_request_mailbox_root_mails(parent_mailbox_id)
-                .ok_or(error::BackendNotReady)?;
-
-            entries.extend(collapsed_mails.into_iter().map(
-                |collapsed_mail| match collapsed_mail {
-                    backend::types::CollapsedMail::SingleMail(mail_id) => {
-                        ColumnStateEntry::SingleMail(mail_id)
-                    }
-                    backend::types::CollapsedMail::CollapsedThread(mail_id, thread_id) => {
-                        ColumnStateEntry::CollapsedThread(mail_id, thread_id)
-                    }
-                },
-            ));
-        }
-
-        let column = ColumnState::new(id.clone(), entries);
-        self.columns.insert(id.clone(), column);
-
-        let is_for_center_column = self.get_center_column_mailbox() == *id;
-        if is_for_center_column {
-            self.update_right_column();
-        }
-
-        Ok(())
-    }
+impl Model {
+    fn op_init_mailbox(&mut self, id: &ParentMailboxId) -> Result<(), error::BackendNotReady> {}
 
     fn op_uncollapse_thread(
         &mut self,
@@ -731,6 +554,10 @@ impl State {
 
     fn op_move_mailbox_up(&mut self, data: &OpMoveMailboxUp) -> Result<(), error::BackendNotReady> {
         let Some(column) = self.columns.get(&data.parent) else {
+            warn!(
+                "Can't move mailbox up. Column for mailbox with the id '{:?}' doesn't exist (anymore?).",
+                data.parent
+            );
             return Ok(());
         };
 
@@ -756,4 +583,49 @@ impl State {
 
         todo!()
     }
+}
+
+async fn op_init_mailbox(id: ParentMailboxId, columns: Columns, backend: Arc<Backend>) {
+    let mut entries: Vec<ColumnStateEntry> = Vec::new();
+
+    // mailbox children
+    {
+        let mut mailboxes: Vec<MailboxData> = backend
+            .get_mailbox_children(id.clone())
+            .await
+            .expect("Children come successfully. No retry-mechanism implemented yet :(");
+
+        mailboxes.sort_by_key(|mailbox| mailbox.sort_order);
+
+        entries.extend(
+            mailboxes
+                .into_iter()
+                .map(|mailbox| ColumnStateEntry::Mailbox(mailbox.id)),
+        );
+    }
+
+    if let Some(parent_mailbox_id) = id.as_ref() {
+        let collapsed_mails = backend
+            .get_mailbox_root_mails(parent_mailbox_id)
+            .await
+            .expect("No error handling yet");
+
+        entries.extend(
+            collapsed_mails
+                .into_iter()
+                .map(|collapsed_mail| match collapsed_mail {
+                    backend::types::CollapsedMail::SingleMail(mail_id) => {
+                        ColumnStateEntry::SingleMail(mail_id)
+                    }
+                    backend::types::CollapsedMail::CollapsedThread(mail_id, thread_id) => {
+                        ColumnStateEntry::CollapsedThread(mail_id, thread_id)
+                    }
+                }),
+        );
+    }
+
+    let column = ColumnState::new(id.clone(), entries);
+    self.columns.insert(id.clone(), column);
+
+    Ok(())
 }

@@ -5,12 +5,10 @@ pub mod palette;
 use crossterm::event::{Event, KeyEvent};
 use keybindmanager::{HandleEvent, KeybindManager};
 
-pub trait ScreenState<'a, A: Clone + std::fmt::Debug, P: Clone, I: Clone, R> {
+pub trait ScreenState<'a, A: Clone + std::fmt::Debug, P: Clone, I: Clone> {
     fn apply_user_action(&mut self, action: A) -> Option<crate::Action>;
 
     fn keybinding_manager(&mut self) -> &mut KeybindManager<A>;
-
-    fn update(&mut self);
 
     fn handle_event(
         &mut self,
@@ -48,8 +46,6 @@ pub trait ScreenState<'a, A: Clone + std::fmt::Debug, P: Clone, I: Clone, R> {
 
     fn handle_overlay_result(&mut self, result: ScreenOverlayResult<P, I>)
     -> Option<crate::Action>;
-
-    fn render_data(&'a mut self) -> R;
 }
 
 pub enum ScreenOverlay<P: Clone, I: Clone> {
