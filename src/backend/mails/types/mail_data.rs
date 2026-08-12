@@ -38,7 +38,44 @@ impl MailData {
         Property::MailboxIds,
     ];
 
-    pub fn new(mut mail: Email) -> Self {
+    // pub fn new(mut mail: Email) -> Self {
+    //     Self {
+    //         id: MailId(mail.take_id()),
+    //         thread_id: ThreadId(mail.take_thread_id().unwrap()),
+    //         keywords: mail.keywords().into_iter().map(MailKeyword::from).collect(),
+    //         from: mail
+    //             .take_from()
+    //             .map(|addresses| addresses.into_iter().map(MailAddress::from).collect())
+    //             .unwrap_or(vec![]),
+    //         to: mail
+    //             .to()
+    //             .map(|addresses| addresses.into_iter().map(MailAddress::from).collect())
+    //             .unwrap_or(vec![]),
+    //         cc: mail
+    //             .take_cc()
+    //             .map(|cc| cc.into_iter().map(MailAddress::from).collect())
+    //             .unwrap_or(vec![]),
+    //         subject: mail.take_subject().unwrap(),
+    //         preview: mail.take_preview().unwrap(),
+    //         received_at: DateTime::<Utc>::from_timestamp(mail.received_at().unwrap(), 0)
+    //             .expect("Valid timestamp")
+    //             .with_timezone(&Local),
+    //         has_attachment: mail.has_attachment(),
+    //         mailbox_ids: mail
+    //             .mailbox_ids()
+    //             .into_iter()
+    //             .map(|id| MailboxId(id.to_owned()))
+    //             .collect(),
+
+    //         text_body: None,
+    //         html_body: None,
+    //         attachments: (!mail.has_attachment()).then_some(vec![]),
+    //     }
+    // }
+}
+
+impl From<jmap_client::email::Email> for MailData {
+    fn from(mut mail: jmap_client::email::Email) -> Self {
         Self {
             id: MailId(mail.take_id()),
             thread_id: ThreadId(mail.take_thread_id().unwrap()),

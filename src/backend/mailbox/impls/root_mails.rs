@@ -132,7 +132,7 @@ fn handle_thread_response(store: &mut threads::Store, mut response: ThreadGetRes
 
 fn handle_mail_response(store: &mut mails::Store, mut response: EmailGetResponse) {
     for mail in response.take_list() {
-        store.add(MailData::new(mail));
+        store.add(MailData::from(mail));
     }
 
     store.set_state(response.take_state());

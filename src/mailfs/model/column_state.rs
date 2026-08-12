@@ -2,6 +2,7 @@ use crate::backend::{
     mailbox::types::{MailboxId, ParentMailboxId},
     mails::types::MailId,
     threads::types::ThreadId,
+    types::CollapsedMail,
 };
 use ratatui::widgets::TableState;
 
@@ -71,4 +72,15 @@ pub enum ColumnStateEntry {
     },
     ThreadChild(MailId, ThreadId),
     ThreadEnd(MailId, ThreadId),
+}
+
+impl From<CollapsedMail> for ColumnStateEntry {
+    fn from(collapsed: CollapsedMail) -> Self {
+        match collapsed {
+            CollapsedMail::SingleMail(id) => Self::SingleMail(id),
+            CollapsedMail::CollapsedThread(mail_id, thread_id) => {
+                Self::CollapsedThread(mail_id, thread_id)
+            }
+        }
+    }
 }

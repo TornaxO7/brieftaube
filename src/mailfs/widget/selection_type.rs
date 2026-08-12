@@ -1,4 +1,4 @@
-use crate::mailfs::state::SelectionType;
+use crate::mailfs::model::SelectionType;
 
 #[derive(Debug, Clone, Copy)]
 pub enum DisplaySelectionType {

@@ -9,7 +9,9 @@ mod utils;
 
 mod mailfs;
 
-use crate::{statusbar::Statusbar, task_manager::TaskManager, utils::ui::ScreenState};
+use crate::{
+    backend::MailId, statusbar::Statusbar, task_manager::TaskManager, utils::ui::ScreenState,
+};
 use color_eyre::eyre;
 use crossterm::event::Event;
 use futures::{FutureExt, StreamExt};
@@ -53,7 +55,7 @@ enum Screen {
 
 #[derive(Debug)]
 pub enum Action {
-    // OpenMailViewer(MailId),
+    OpenMailViewer(MailId),
     // OpenLogViewer,
     // OpenComposer,
     Redraw,
@@ -154,13 +156,14 @@ impl App {
 
     fn apply_action(&mut self, action: Action) {
         match action {
-            // Action::OpenMailViewer(id) => {
-            //     let backend = self.backend.clone();
-            //     let next_screen = Screen::MailViewer(mail_viewer::State::new(id, backend));
+            Action::OpenMailViewer(_id) => {
+                todo!();
+                // let backend = self.backend.clone();
+                // let next_screen = Screen::MailViewer(mail_viewer::State::new(id, backend));
 
-            //     self.statusbar.set_screen(&next_screen);
-            //     self.screens.push(next_screen);
-            // }
+                // self.statusbar.set_screen(&next_screen);
+                // self.screens.push(next_screen);
+            }
             // Action::OpenLogViewer => {
             //     let next_screen = Screen::LogViewer(log_viewer::State::new());
 

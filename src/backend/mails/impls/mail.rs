@@ -1,50 +1,55 @@
 use crate::backend::{Backend, MailData, MailId};
-use tracing::error;
 
 impl Backend {
-    pub fn get_or_request_mail(&self, id: &MailId) -> Option<MailData> {
-        let mail = self.get_mail(id);
-
-        if mail.is_none() {
-            self.request_mails(&[id.to_owned()]);
-        }
-
-        mail
-    }
-
     pub fn get_mail(&self, id: &MailId) -> Option<MailData> {
         let store = self.store.lock().unwrap();
         store.mails.get(id).cloned()
     }
 
-    pub fn request_mails(&self, ids: &[MailId]) {
-        let client = self.client.clone();
-        let ids = ids.to_owned();
-        let store = self.store.clone();
+    pub async fn get_or_request_mail(&self, id: &MailId) -> Result<MailData, jmap_client::Error> {
+        self.get_or_request_mails(&[id.clone()])
+            .await
+            .map(|mails| mails[0].clone())
+    }
 
-        self.task_manager.spawn(TaskId::RequestMails, async move {
-            let mut response = {
-                let mut request = client.build();
+    pub fn get_mails(&self, ids: &[MailId]) -> Option<Vec<MailData>> {
+        let store = self.store.lock().unwrap();
+        ids.iter().map(|id| store.mails.get(id).cloned()).collect()
+    }
 
-                request
-                    .get_email()
-                    .properties(MailData::PROPERTIES)
-                    .ids(Some(ids.iter().map(|id| &id.0)));
+    pub async fn get_or_request_mails(
+        &self,
+        ids: &[MailId],
+    ) -> Result<Vec<MailData>, jmap_client::Error> {
+        match self.get_mails(ids) {
+            Some(mails) => Ok(mails),
+            None => {
+                let mut response = {
+                    let mut request = self.client.build();
 
-                match request.send_get_email().await {
-                    Ok(r) => r,
-                    Err(err) => {
-                        error!("Couldn't send `Email/get` request to server:\n{err}");
-                        return;
-                    }
+                    request
+                        .get_email()
+                        .properties(MailData::PROPERTIES)
+                        .ids(Some(ids.iter().map(|id| &id.0)));
+
+                    request.send_get_email().await?
+                };
+
+                let mut store = self.store.lock().unwrap();
+                store.mails.set_state(response.take_state());
+
+                let mails: Vec<MailData> = response
+                    .take_list()
+                    .into_iter()
+                    .map(MailData::from)
+                    .collect();
+
+                for mail in mails.iter() {
+                    store.mails.add(mail.clone());
                 }
-            };
 
-            let mut store = store.lock().unwrap();
-            store.mails.set_state(response.take_state());
-            for mail in response.take_list() {
-                store.mails.add(MailData::new(mail));
+                Ok(mails)
             }
-        });
+        }
     }
 }

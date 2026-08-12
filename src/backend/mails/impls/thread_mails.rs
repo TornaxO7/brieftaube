@@ -1,14 +1,21 @@
 use crate::backend::{Backend, MailData, ThreadId};
 
 impl Backend {
-    pub fn get_or_request_thread_mails(&self, id: &ThreadId) -> Option<Vec<MailData>> {
-        let thread_mails = self.get_thread_mails(id);
+    pub async fn get_or_request_thread_mails(
+        &self,
+        id: &ThreadId,
+    ) -> Result<Vec<MailData>, jmap_client::Error> {
+        match self.get_thread_mails(id) {
+            Some(thread_mails) => Ok(thread_mails),
+            None => {
+                let thread_mail_ids = {
+                    let store = self.store.lock().unwrap();
+                    store.threads.get_mails(&id).unwrap().to_vec()
+                };
 
-        if thread_mails.is_none() {
-            self.request_thread_mails(id);
+                self.get_or_request_mails(&thread_mail_ids).await
+            }
         }
-
-        thread_mails
     }
 
     pub fn get_thread_mails(&self, id: &ThreadId) -> Option<Vec<MailData>> {
@@ -23,14 +30,5 @@ impl Backend {
             .iter()
             .map(|mail_id| store.mails.get(mail_id).cloned())
             .collect()
-    }
-
-    fn request_thread_mails(&self, id: &ThreadId) {
-        let thread_mail_ids = {
-            let store = self.store.lock().unwrap();
-            store.threads.get_mails(&id).unwrap().to_vec()
-        };
-
-        self.request_mails(&thread_mail_ids);
     }
 }

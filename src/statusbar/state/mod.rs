@@ -35,19 +35,19 @@ impl State {
             Screen::Mailfs(_) => "Mail Filesystem",
             // Screen::MailList(_) => "Mail-List",
             // Screen::Composer(_) => "Composer",
-            Screen::MailViewer(_) => "Mail-Viewer",
-            Screen::LogViewer(_) => "Log-Viewer",
+            // Screen::MailViewer(_) => "Mail-Viewer",
+            // Screen::LogViewer(_) => "Log-Viewer",
         };
 
-        match screen {
-            Screen::LogViewer(_) => {
-                self.show_counter = false;
-            }
-            _ => {
-                self.show_counter = true;
-                self.counter.reset();
-            }
-        };
+        // match screen {
+        //     Screen::LogViewer(_) => {
+        //         self.show_counter = false;
+        //     }
+        //     _ => {
+        //         self.show_counter = true;
+        //         self.counter.reset();
+        //     }
+        // };
     }
 
     pub fn push_key_press(&mut self, event: KeyEvent) {

@@ -1,4 +1,4 @@
-use crate::{mailfs::state::PaletteValue, utils::ui::palette::Entry};
+use crate::{mailfs::model::PaletteValue, utils::ui::palette::Entry};
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator};
 

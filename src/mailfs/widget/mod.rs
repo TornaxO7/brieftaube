@@ -1,7 +1,7 @@
 mod column_data;
 mod error;
 mod mail_preview;
-mod render_data;
+// mod render_data;
 mod selection_type;
 
 pub use column_data::{ColumnDisplay, ColumnDisplayEntryData, MailEntryType};
@@ -10,7 +10,7 @@ pub use mail_preview::MailPreview;
 use super::Model;
 use crate::{
     mailfs::{model::RightColumn, widget::selection_type::DisplaySelectionType},
-    utils::ui::{ScreenOverlay, ScreenState, input::Input, palette::Palette},
+    utils::ui::{ScreenOverlay, input::Input, palette::Palette},
 };
 use ratatui::{
     buffer::Buffer,
@@ -83,7 +83,7 @@ impl StatefulWidget for Mailfs {
                 render_border_line(border_line1, buf, None);
             }
             Some(center_mailbox) => {
-                let column = columns.get_mut(&Some(center_mailbox)).unwrap();
+                let column = columns.get_mut(&Some(center_mailbox.clone())).unwrap();
                 let column_display =
                     ColumnDisplay::new(column, &model.selection, model.backend.clone());
 
@@ -94,7 +94,7 @@ impl StatefulWidget for Mailfs {
 
         match model.right_column(&columns) {
             Some(RightColumn::Mailbox(id)) => {
-                let column = columns.get_mut(&Some(id)).unwrap();
+                let column = columns.get_mut(&Some(id.clone())).unwrap();
                 let column_display =
                     ColumnDisplay::new(column, &model.selection, model.backend.clone());
 
@@ -114,7 +114,7 @@ impl StatefulWidget for Mailfs {
         }
 
         // TODO: Move that somewhere else?
-        if let Some(overlay) = model.overlay() {
+        if let Some(overlay) = model.overlay.as_mut() {
             match overlay {
                 ScreenOverlay::Palette(state) => {
                     let area =
