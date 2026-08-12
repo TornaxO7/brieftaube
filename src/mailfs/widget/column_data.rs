@@ -59,11 +59,23 @@ impl ColumnDisplayEntry {
                 let mailbox = backend.get_mailbox_data(id).unwrap();
                 ColumnDisplayEntryData::mailbox(&mailbox)
             }
-            ColumnStateEntry::SingleMail(mail_id)
-            | ColumnStateEntry::CollapsedThread(mail_id, _)
-            | ColumnStateEntry::ThreadStart { mail_id, .. }
-            | ColumnStateEntry::ThreadChild(mail_id, _)
-            | ColumnStateEntry::ThreadEnd(mail_id, _) => {
+            ColumnStateEntry::SingleMail(mail_id) => {
+                let mail = backend.get_mail(mail_id).unwrap();
+                ColumnDisplayEntryData::mail(MailEntryType::Single, &mail)
+            }
+            ColumnStateEntry::CollapsedThread(mail_id, _) => {
+                let mail = backend.get_mail(mail_id).unwrap();
+                ColumnDisplayEntryData::mail(MailEntryType::ThreadCollapsed, &mail)
+            }
+            ColumnStateEntry::ThreadStart { mail_id, .. } => {
+                let mail = backend.get_mail(mail_id).unwrap();
+                ColumnDisplayEntryData::mail(MailEntryType::ThreadStart, &mail)
+            }
+            ColumnStateEntry::ThreadChild(mail_id, _) => {
+                let mail = backend.get_mail(mail_id).unwrap();
+                ColumnDisplayEntryData::mail(MailEntryType::ThreadChild, &mail)
+            }
+            ColumnStateEntry::ThreadEnd(mail_id, _) => {
                 let mail = backend.get_mail(mail_id).unwrap();
                 ColumnDisplayEntryData::mail(MailEntryType::ThreadEnd, &mail)
             }
