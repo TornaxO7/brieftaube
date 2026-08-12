@@ -48,8 +48,16 @@ pub struct Model {
 
 impl Model {
     pub fn new(backend: Arc<Backend>, task_manager: Rc<TaskManager>) -> Self {
+        let columns = Arc::new(Mutex::new(HashMap::new()));
+        let c = columns.clone();
+        let b = backend.clone();
+
+        task_manager.spawn(async move {
+            op_init_mailbox(TOP_PARENT_MAILBOX_ID, c, b).await;
+        });
+
         Self {
-            columns: Arc::new(Mutex::new(HashMap::new())),
+            columns,
             navigation_stack: vec![TOP_PARENT_MAILBOX_ID],
             selection: HashMap::new(),
             task_manager,

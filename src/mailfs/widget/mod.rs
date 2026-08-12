@@ -78,14 +78,13 @@ impl StatefulWidget for Mailfs {
             }
         }
 
-        match model.center_column_mailbox() {
+        match columns.get_mut(model.center_column_mailbox()) {
             None => {
                 render_border_line(border_line1, buf, None);
             }
-            Some(center_mailbox) => {
-                let column = columns.get_mut(&Some(center_mailbox.clone())).unwrap();
+            Some(center) => {
                 let column_display =
-                    ColumnDisplay::new(column, &model.selection, model.backend.clone());
+                    ColumnDisplay::new(center, &model.selection, model.backend.clone());
 
                 render_border_line(border_line2, buf, Some(&column_display));
                 render_column(center_area, buf, column_display);
@@ -93,20 +92,25 @@ impl StatefulWidget for Mailfs {
         }
 
         match model.right_column(&columns) {
-            Some(RightColumn::Mailbox(id)) => {
-                let column = columns.get_mut(&Some(id.clone())).unwrap();
-                let column_display =
-                    ColumnDisplay::new(column, &model.selection, model.backend.clone());
+            Some(RightColumn::Mailbox(id)) => match columns.get_mut(&Some(id)) {
+                Some(right) => {
+                    let column_display =
+                        ColumnDisplay::new(right, &model.selection, model.backend.clone());
 
-                render_border_line(border_line3, buf, Some(&column_display));
-                render_column(right_area, buf, column_display);
-            }
+                    render_border_line(border_line3, buf, Some(&column_display));
+                    render_column(right_area, buf, column_display);
+                }
+                None => {
+                    render_border_line(border_line3, buf, None);
+                }
+            },
             Some(RightColumn::MailPreview(id)) => {
-                let mail = model.backend.get_mail(&id).unwrap();
-                let mut preview = mail.into();
-
                 render_border_line(border_line3, buf, None);
-                render_mail_preview(right_area, buf, &mut preview);
+
+                if let Some(mail) = model.backend.get_mail(&id) {
+                    let mut preview = mail.into();
+                    render_mail_preview(right_area, buf, &mut preview);
+                }
             }
             None => {
                 render_border_line(border_line3, buf, None);

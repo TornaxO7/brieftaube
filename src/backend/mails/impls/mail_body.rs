@@ -48,7 +48,8 @@ impl Backend {
         id: &MailId,
         ty: MailBodyType,
     ) -> Result<(), jmap_client::Error> {
-        self.get_or_request_mail_body(id, ty).await.map(|_| ())
+        self.get_or_request_mail_body(id, ty).await?;
+        Ok(())
     }
 
     pub fn get_mail_body_type(&self, id: &MailId, ty: MailBodyType) -> Option<String> {
