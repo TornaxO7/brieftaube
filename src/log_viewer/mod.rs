@@ -1,7 +1,7 @@
 mod action;
-mod state;
+mod model;
 mod widget;
 
 pub use action::Action;
-pub use state::State;
+pub use model::Model;
 pub use widget::LogViewer;

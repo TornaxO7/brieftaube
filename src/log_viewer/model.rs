@@ -14,7 +14,7 @@ pub enum PaletteType {
 #[derive(Debug, Clone)]
 pub enum InputType {}
 
-pub struct State {
+pub struct Model {
     overlay: Option<ScreenOverlay<PaletteType, InputType>>,
     keybindings: KeybindManager<Action>,
 
@@ -22,7 +22,7 @@ pub struct State {
     log_file_path: String,
 }
 
-impl State {
+impl Model {
     pub fn new() -> Self {
         Self {
             log_file_path: crate::get_log_file_path()
@@ -49,7 +49,7 @@ impl State {
     }
 }
 
-impl<'a> ScreenState<'a, Action, PaletteType, InputType, ()> for State {
+impl<'a> ScreenState<'a, Action, PaletteType, InputType> for Model {
     fn apply_user_action(&mut self, action: Action) -> Option<crate::Action> {
         tracing::debug!("Action: {:?}", action);
         match action {
@@ -88,8 +88,4 @@ impl<'a> ScreenState<'a, Action, PaletteType, InputType, ()> for State {
             ScreenOverlayResult::Input { value: _, typ: _ } => unreachable!(""),
         }
     }
-
-    fn render_data(&mut self) {}
-
-    fn update(&mut self) {}
 }

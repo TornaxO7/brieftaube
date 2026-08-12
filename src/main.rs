@@ -2,7 +2,7 @@ mod backend;
 mod task_manager;
 // mod composer;
 mod config;
-// mod log_viewer;
+mod log_viewer;
 // mod mail_viewer;
 mod statusbar;
 mod utils;
@@ -49,14 +49,14 @@ async fn main() -> eyre::Result<()> {
 enum Screen {
     // Composer(composer::ui::State),
     // MailViewer(mail_viewer::State),
-    // LogViewer(log_viewer::State),
+    LogViewer(log_viewer::Model),
     Mailfs(mailfs::Model),
 }
 
 #[derive(Debug)]
 pub enum Action {
     OpenMailViewer(MailId),
-    // OpenLogViewer,
+    OpenLogViewer,
     // OpenComposer,
     Redraw,
     Back,
@@ -137,9 +137,9 @@ impl App {
             // Screen::MailViewer(state) => {
             //     frame.render_stateful_widget(mail_viewer::MailViewer::default(), screen, state);
             // }
-            // Screen::LogViewer(state) => {
-            //     frame.render_stateful_widget(log_viewer::LogViewer::default(), screen, state);
-            // }
+            Screen::LogViewer(state) => {
+                frame.render_stateful_widget(log_viewer::LogViewer, screen, state);
+            }
         };
     }
 
@@ -150,7 +150,7 @@ impl App {
             // Screen::Composer(state) => state.handle_event(event, &mut self.statusbar),
             // Screen::MailViewer(state) => state.handle_event(event, &mut self.statusbar),
             Screen::Mailfs(state) => state.handle_event(event, &mut self.statusbar),
-            // Screen::LogViewer(state) => state.handle_event(event, &mut self.statusbar),
+            Screen::LogViewer(state) => state.handle_event(event, &mut self.statusbar),
         }
     }
 
@@ -164,12 +164,12 @@ impl App {
                 // self.statusbar.set_screen(&next_screen);
                 // self.screens.push(next_screen);
             }
-            // Action::OpenLogViewer => {
-            //     let next_screen = Screen::LogViewer(log_viewer::State::new());
+            Action::OpenLogViewer => {
+                let next_screen = Screen::LogViewer(log_viewer::Model::new());
 
-            //     self.statusbar.set_screen(&next_screen);
-            //     self.screens.push(next_screen);
-            // }
+                self.statusbar.set_screen(&next_screen);
+                self.screens.push(next_screen);
+            }
             // Action::OpenComposer => {
             //     // let next_screen =
             //     //     Screen::Composer(composer::ui::State::new(self.account.clone()));
@@ -199,7 +199,7 @@ impl App {
                 // Screen::Composer(_) => todo!(),
                 // Screen::MailViewer(_) | Screen::Mailfs(_) => self.backend.has_tasks_running(),
                 Screen::Mailfs(_) => self.task_manager.has_tasks_running(),
-                // Screen::LogViewer(_) => false,
+                Screen::LogViewer(_) => false,
             };
 
         if top_screen_has_tasks_running {

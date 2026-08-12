@@ -7,11 +7,10 @@ use ratatui::{
 };
 use tui_logger::TuiLoggerWidget;
 
-#[derive(Default)]
-pub struct LogViewer {}
+pub struct LogViewer;
 
 impl StatefulWidget for LogViewer {
-    type State = super::State;
+    type State = super::Model;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         TuiLoggerWidget::default()

@@ -507,8 +507,7 @@ impl Model {
     }
 
     fn open_logs(&mut self) -> Option<crate::Action> {
-        // Some(crate::Action::OpenLogViewer)
-        todo!()
+        Some(crate::Action::OpenLogViewer)
     }
 
     fn select_entry(&mut self) -> Option<crate::Action> {
