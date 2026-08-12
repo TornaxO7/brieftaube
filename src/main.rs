@@ -95,6 +95,7 @@ impl App {
                     None => {},
                 }
             }
+
             self.sync_throbber();
 
             if self.needs_full_redraw {

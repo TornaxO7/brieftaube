@@ -1,15 +1,9 @@
-use crate::{
-    backend::{
-        Backend,
-        mailbox::types::{MailboxId, ParentMailboxId},
-        mails::types::MailId,
-        threads::types::ThreadId,
-        types::CollapsedMail,
-    },
-    mailfs::state::error,
+use crate::backend::{
+    mailbox::types::{MailboxId, ParentMailboxId},
+    mails::types::MailId,
+    threads::types::ThreadId,
 };
 use ratatui::widgets::TableState;
-use std::rc::Rc;
 
 /// Internal representation of a column
 #[derive(Clone, Debug)]
@@ -77,45 +71,4 @@ pub enum ColumnStateEntry {
     },
     ThreadChild(MailId, ThreadId),
     ThreadEnd(MailId, ThreadId),
-}
-
-impl ColumnStateEntry {
-    /// get the entries of the given mailbox
-    pub fn create_entries(
-        mailbox: ParentMailboxId,
-        backend: Rc<Backend>,
-    ) -> Result<Vec<Self>, error::BackendNotReady> {
-        let mut entries: Vec<ColumnStateEntry> = Vec::new();
-
-        // get mailboxes
-        {
-            let mailbox_ids = backend
-                .get_or_request_mailbox_children(mailbox.clone())
-                .ok_or(error::BackendNotReady)?;
-
-            for mailbox_id in mailbox_ids {
-                entries.push(ColumnStateEntry::Mailbox(mailbox_id));
-            }
-        }
-
-        // get mails
-        if let Some(parent_mailbox_id) = mailbox.as_ref() {
-            let collapsed_mails = backend
-                .get_or_request_mailbox_root_mails(parent_mailbox_id)
-                .ok_or(error::BackendNotReady)?;
-
-            for collapsed_mail in collapsed_mails {
-                match collapsed_mail {
-                    CollapsedMail::SingleMail(mail_id) => {
-                        entries.push(ColumnStateEntry::SingleMail(mail_id))
-                    }
-                    CollapsedMail::CollapsedThread(mail_id, thread_id) => {
-                        entries.push(ColumnStateEntry::CollapsedThread(mail_id, thread_id))
-                    }
-                }
-            }
-        }
-
-        Ok(entries)
-    }
 }

@@ -6,9 +6,11 @@ use crossterm::event::{Event, KeyEvent};
 use keybindmanager::{HandleEvent, KeybindManager};
 
 pub trait ScreenState<'a, A: Clone + std::fmt::Debug, P: Clone, I: Clone, R> {
-    fn apply_action(&mut self, action: A) -> Option<crate::Action>;
+    fn apply_user_action(&mut self, action: A) -> Option<crate::Action>;
 
     fn keybinding_manager(&mut self) -> &mut KeybindManager<A>;
+
+    fn update(&mut self);
 
     fn handle_event(
         &mut self,
@@ -18,17 +20,15 @@ pub trait ScreenState<'a, A: Clone + std::fmt::Debug, P: Clone, I: Clone, R> {
         match event {
             Event::Key(event) => {
                 if let Some(overlay) = self.overlay() {
-                    if let Some(result) = overlay.handle_event(event) {
-                        self.handle_overlay_result(result);
-                    }
-
-                    return None;
+                    return overlay
+                        .handle_event(event)
+                        .and_then(|result| self.handle_overlay_result(result));
                 }
 
                 statusbar.push_key_press(event);
                 match self.keybinding_manager().handle_event(event) {
                     HandleEvent::Action(action) => {
-                        let action = self.apply_action(action);
+                        let action = self.apply_user_action(action);
                         statusbar.reset_key_press();
                         action
                     }
@@ -46,7 +46,8 @@ pub trait ScreenState<'a, A: Clone + std::fmt::Debug, P: Clone, I: Clone, R> {
 
     fn overlay(&mut self) -> Option<&mut ScreenOverlay<P, I>>;
 
-    fn handle_overlay_result(&mut self, result: ScreenOverlayResult<P, I>);
+    fn handle_overlay_result(&mut self, result: ScreenOverlayResult<P, I>)
+    -> Option<crate::Action>;
 
     fn render_data(&'a mut self) -> R;
 }

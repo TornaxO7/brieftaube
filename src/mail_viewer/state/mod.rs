@@ -56,7 +56,6 @@ pub enum ScrollAction {
 }
 
 pub struct State {
-    app_actions: Vec<crate::Action>,
     overlay: Option<ScreenOverlay<PaletteType, InputType>>,
     keybindings: KeybindManager<Action>,
 
@@ -99,7 +98,6 @@ impl State {
         Self {
             id,
             backend,
-            app_actions: vec![],
             scroll_action: None,
             overlay: None,
             keybindings: KeybindManager::new(HashMap::from([
@@ -130,10 +128,10 @@ impl State {
 }
 
 impl<'a> ScreenState<'a, Action, PaletteType, InputType, RenderData<'a>> for State {
-    fn apply_action(&mut self, action: Action) {
+    fn apply_user_action(&mut self, action: Action) -> Option<crate::Action> {
         debug!("Action: {}", action);
         match action {
-            Action::Quit => self.app_actions.push(crate::Action::Quit),
+            Action::Quit => return Some(crate::Action::Quit),
             Action::OpenCommandPalette => {
                 self.overlay = Some(ScreenOverlay::Palette(palette::State::new(
                     super::action::palette_options(),
@@ -156,17 +154,15 @@ impl<'a> ScreenState<'a, Action, PaletteType, InputType, RenderData<'a>> for Sta
             Action::OpenMarkdownTab => self.set_viewer(Viewer::Markdown),
             Action::OpenAttachmentsTab => self.set_viewer(Viewer::Attachments),
 
-            Action::OpenLogs => self.app_actions.push(crate::Action::OpenLogViewer),
+            Action::OpenLogs => return Some(crate::Action::OpenLogViewer),
             Action::OpenMailInBrowser => self.open_html_mail_in_browser(),
 
             Action::Back => {
-                self.app_actions.push(crate::Action::Back);
+                return Some(crate::Action::Back);
             }
-        }
-    }
+        };
 
-    fn get_app_actions(&mut self) -> std::vec::Drain<'_, crate::Action> {
-        self.app_actions.drain(..)
+        None
     }
 
     fn keybinding_manager(&mut self) -> &mut KeybindManager<Action> {
@@ -177,13 +173,16 @@ impl<'a> ScreenState<'a, Action, PaletteType, InputType, RenderData<'a>> for Sta
         self.overlay.as_mut()
     }
 
-    fn handle_overlay_result(&mut self, result: ScreenOverlayResult<PaletteType, InputType>) {
+    fn handle_overlay_result(
+        &mut self,
+        result: ScreenOverlayResult<PaletteType, InputType>,
+    ) -> Option<crate::Action> {
         self.overlay = None;
 
         match result {
-            ScreenOverlayResult::Cancel => {}
+            ScreenOverlayResult::Cancel => None,
             ScreenOverlayResult::Palette(value) => match value {
-                PaletteType::Action(action) => self.apply_action(action),
+                PaletteType::Action(action) => self.apply_user_action(action),
             },
             ScreenOverlayResult::Input { value: _, typ: _ } => unreachable!(),
         }
@@ -219,6 +218,8 @@ impl<'a> ScreenState<'a, Action, PaletteType, InputType, RenderData<'a>> for Sta
             scroll_queue: &mut self.scroll_action,
         }
     }
+
+    fn update(&mut self) {}
 }
 
 impl State {

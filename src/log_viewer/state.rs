@@ -15,7 +15,6 @@ pub enum PaletteType {
 pub enum InputType {}
 
 pub struct State {
-    app_actions: Vec<crate::Action>,
     overlay: Option<ScreenOverlay<PaletteType, InputType>>,
     keybindings: KeybindManager<Action>,
 
@@ -26,7 +25,6 @@ pub struct State {
 impl State {
     pub fn new() -> Self {
         Self {
-            app_actions: vec![],
             log_file_path: crate::get_log_file_path()
                 .expect("Get log file path")
                 .to_string_lossy()
@@ -52,24 +50,20 @@ impl State {
 }
 
 impl<'a> ScreenState<'a, Action, PaletteType, InputType, ()> for State {
-    fn apply_action(&mut self, action: Action) {
+    fn apply_user_action(&mut self, action: Action) -> Option<crate::Action> {
         tracing::debug!("Action: {:?}", action);
         match action {
-            Action::Back => {
-                self.app_actions.push(crate::Action::Back);
-            }
-            Action::Quit => self.app_actions.push(crate::Action::Quit),
+            Action::Back => return Some(crate::Action::Back),
+            Action::Quit => return Some(crate::Action::Quit),
 
             Action::OpenCommandPalette => {
                 self.overlay = Some(ScreenOverlay::Palette(palette::State::new(
                     super::action::palette_options(),
                 )));
             }
-        }
-    }
+        };
 
-    fn get_app_actions(&mut self) -> std::vec::Drain<'_, crate::Action> {
-        self.app_actions.drain(..)
+        None
     }
 
     fn keybinding_manager(&mut self) -> &mut KeybindManager<Action> {
@@ -80,17 +74,22 @@ impl<'a> ScreenState<'a, Action, PaletteType, InputType, ()> for State {
         self.overlay.as_mut()
     }
 
-    fn handle_overlay_result(&mut self, result: ScreenOverlayResult<PaletteType, InputType>) {
+    fn handle_overlay_result(
+        &mut self,
+        result: ScreenOverlayResult<PaletteType, InputType>,
+    ) -> Option<crate::Action> {
         self.overlay = None;
 
         match result {
-            ScreenOverlayResult::Cancel => {}
+            ScreenOverlayResult::Cancel => None,
             ScreenOverlayResult::Palette(value) => match value {
-                PaletteType::Action(action) => self.apply_action(action),
+                PaletteType::Action(action) => self.apply_user_action(action),
             },
             ScreenOverlayResult::Input { value: _, typ: _ } => unreachable!(""),
         }
     }
 
     fn render_data(&mut self) {}
+
+    fn update(&mut self) {}
 }
