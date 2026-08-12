@@ -5,7 +5,7 @@ use crate::backend::{MailId, MailboxId, ParentMailboxId, ThreadId};
 pub enum PendingOp {
     InitMailbox(OpInitMailbox),
     UncollapseThread(OpUncollapseThread),
-    PreviewMail(OpPreviewMail),
+    MailAttachments(OpMailAttachments),
 }
 
 #[derive(Debug)]
@@ -20,4 +20,4 @@ pub struct OpUncollapseThread {
 }
 
 #[derive(Debug)]
-pub struct OpPreviewMail(pub MailId);
+pub struct OpMailAttachments(pub MailId);

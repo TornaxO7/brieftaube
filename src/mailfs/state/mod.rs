@@ -17,7 +17,7 @@ use crate::{
         mails::types::{MailKeyword, MailUpdate},
     },
     mailfs::{
-        state::pending_op::{OpInitMailbox, OpPreviewMail, OpUncollapseThread},
+        state::pending_op::{OpInitMailbox, OpMailAttachments, OpUncollapseThread},
         widget::{ColumnDisplay, MailPreview, RenderData, RightColumn},
     },
     utils::ui::{
@@ -28,11 +28,6 @@ use input_type::InputType;
 use pending_op::PendingOp;
 use std::{collections::HashMap, rc::Rc};
 use tracing::debug;
-
-struct PendingOps {
-    buffer1: Vec<PendingOp>,
-    buffer2: Vec<PendingOp>,
-}
 
 pub struct State {
     backend: Rc<Backend>,
@@ -242,7 +237,7 @@ impl<'a> ScreenState<'a, UserAction, PaletteValue, InputType, RenderData<'a>> fo
             let state = match &pending_op {
                 PendingOp::InitMailbox(data) => self.op_init_mailbox(data),
                 PendingOp::UncollapseThread(data) => self.op_uncollapse_thread(data),
-                PendingOp::PreviewMail(data) => self.op_preview_mail(data),
+                PendingOp::MailAttachments(data) => self.op_mail_attachments(data),
             };
 
             match state {
@@ -303,14 +298,21 @@ impl State {
                     | ColumnStateEntry::ThreadStart { mail_id, .. }
                     | ColumnStateEntry::ThreadChild(mail_id, _)
                     | ColumnStateEntry::ThreadEnd(mail_id, _) => {
-                        let mail_previewable = self.backend.get_mail(mail_id).is_some();
-                        if !mail_previewable {
-                            self.pending_ops.push(PendingOp::PreviewMail(
-                                pending_op::OpPreviewMail(mail_id.clone()),
+                        let mail = self
+                            .backend
+                            .get_mail(mail_id)
+                            .expect("Mail must be availabel.");
+
+                        if mail.attachments.is_none() {
+                            self.pending_ops.push(PendingOp::MailAttachments(
+                                pending_op::OpMailAttachments(mail_id.clone()),
                             ));
                         }
                     }
                 };
+
+                // start the requests
+                self.update();
             }
         }
     }
@@ -690,7 +692,10 @@ impl State {
         Ok(())
     }
 
-    fn op_preview_mail(&mut self, data: &OpPreviewMail) -> Result<(), error::BackendNotReady> {
+    fn op_mail_attachments(
+        &mut self,
+        data: &OpMailAttachments,
+    ) -> Result<(), error::BackendNotReady> {
         self.backend.prefetch_mail_attachments(&data.0);
         Ok(())
     }
