@@ -618,16 +618,24 @@ impl State {
     fn op_init_mailbox(&mut self, id: &ParentMailboxId) -> Result<(), error::BackendNotReady> {
         let mut entries: Vec<ColumnStateEntry> = Vec::new();
 
-        let mailbox_ids = self
-            .backend
-            .get_or_request_mailbox_children(id.clone())
-            .ok_or(error::BackendNotReady)?;
-
-        entries.extend(
-            mailbox_ids
+        // mailbox children
+        {
+            let mut mailboxes: Vec<MailboxData> = self
+                .backend
+                .get_or_request_mailbox_children(id.clone())
+                .ok_or(error::BackendNotReady)?
                 .into_iter()
-                .map(|id| ColumnStateEntry::Mailbox(id)),
-        );
+                .map(|id| self.backend.get_mailbox_data(&id).expect("Just fetched?!"))
+                .collect();
+
+            mailboxes.sort_by_key(|mailbox| mailbox.sort_order);
+
+            entries.extend(
+                mailboxes
+                    .into_iter()
+                    .map(|mailbox| ColumnStateEntry::Mailbox(mailbox.id)),
+            );
+        }
 
         if let Some(parent_mailbox_id) = id.as_ref() {
             let collapsed_mails = self
