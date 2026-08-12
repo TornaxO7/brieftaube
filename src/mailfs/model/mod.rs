@@ -53,7 +53,13 @@ impl Model {
         let b = backend.clone();
 
         task_manager.spawn(async move {
-            op_init_mailbox(TOP_PARENT_MAILBOX_ID, c.clone(), b.clone()).await;
+            match op_init_mailbox(TOP_PARENT_MAILBOX_ID, c.clone(), b.clone()).await {
+                Ok(()) => {}
+                Err(err) => {
+                    error!("Couldn't initialise root mailbox:\n{err}");
+                    return;
+                }
+            }
 
             let selected_entry = {
                 let columns = c.lock().unwrap();
@@ -73,7 +79,12 @@ impl Model {
                         };
 
                         if right_column_not_loaded {
-                            op_init_mailbox(Some(id), c, b).await;
+                            match op_init_mailbox(Some(id), c, b).await {
+                                Ok(()) => {}
+                                Err(err) => {
+                                    error!("Couldn't initialize mailbox (the column will be empty):\n{err}");
+                                }
+                            }
                         }
                     }
                     ColumnStateEntry::SingleMail(mail_id)
@@ -228,7 +239,12 @@ impl<'a> Model {
                     let backend = self.backend.clone();
 
                     self.task_manager.spawn(async move {
-                        op_init_mailbox(Some(id), columns, backend).await;
+                        match op_init_mailbox(Some(id), columns, backend).await {
+                            Ok(()) => {}
+                            Err(err) => {
+                                error!("Couldn't initialize mailbox for right column:\n{err}");
+                            }
+                        }
                     });
                 }
             }
@@ -391,8 +407,20 @@ impl Model {
                     let backend = self.backend.clone();
 
                     self.task_manager.spawn(async move {
-                        op_uncollapse_thread(column_mailbox, mail_id, thread_id, columns, backend)
-                            .await;
+                        match op_uncollapse_thread(
+                            column_mailbox,
+                            mail_id,
+                            thread_id,
+                            columns,
+                            backend,
+                        )
+                        .await
+                        {
+                            Ok(()) => {}
+                            Err(err) => {
+                                error!("Can't uncollapse thread:\n{err}");
+                            }
+                        }
                     });
                 }
             }
@@ -681,15 +709,16 @@ impl Model {
 //     }
 // }
 
-async fn op_init_mailbox(id: ParentMailboxId, columns: Columns, backend: Arc<Backend>) {
+async fn op_init_mailbox(
+    id: ParentMailboxId,
+    columns: Columns,
+    backend: Arc<Backend>,
+) -> Result<(), jmap_client::Error> {
     let mut entries: Vec<ColumnStateEntry> = Vec::new();
 
     // mailbox children
     {
-        let mut mailboxes: Vec<MailboxData> = backend
-            .get_mailbox_children(id.clone())
-            .await
-            .expect("Children come successfully. No retry-mechanism implemented yet :(");
+        let mut mailboxes: Vec<MailboxData> = backend.get_mailbox_children(id.clone()).await?;
 
         mailboxes.sort_by_key(|mailbox| mailbox.sort_order);
 
@@ -704,8 +733,7 @@ async fn op_init_mailbox(id: ParentMailboxId, columns: Columns, backend: Arc<Bac
     if let Some(parent_mailbox_id) = id.as_ref() {
         let collapsed_mails = backend
             .get_or_request_mailbox_root_mails(parent_mailbox_id)
-            .await
-            .expect("No error handling yet");
+            .await?;
 
         entries.extend(collapsed_mails.into_iter().map(ColumnStateEntry::from));
     }
@@ -713,6 +741,8 @@ async fn op_init_mailbox(id: ParentMailboxId, columns: Columns, backend: Arc<Bac
     let created_column = ColumnState::new(id.clone(), entries);
     let mut guard = columns.lock().unwrap();
     guard.insert(id.clone(), created_column);
+
+    Ok(())
 }
 
 async fn op_uncollapse_thread(
@@ -721,11 +751,8 @@ async fn op_uncollapse_thread(
     thread_id: ThreadId,
     columns: Columns,
     backend: Arc<Backend>,
-) {
-    let mut thread_mails = backend
-        .get_or_request_thread_mails(&thread_id)
-        .await
-        .expect("No error handling yet");
+) -> Result<(), jmap_client::Error> {
+    let mut thread_mails = backend.get_or_request_thread_mails(&thread_id).await?;
 
     let mut columns = columns.lock().unwrap();
     let column = columns
@@ -774,4 +801,6 @@ async fn op_uncollapse_thread(
     column
         .entries_mut()
         .splice(thread_idx..(thread_idx + 1), thread_children_entries);
+
+    Ok(())
 }
