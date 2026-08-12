@@ -361,10 +361,20 @@ impl Model {
         };
 
         if let Some(entry) = selected_entry {
-            match entry.clone() {
+            match entry {
                 ColumnStateEntry::Mailbox(id) => {
                     self.navigation_stack.push(Some(id));
-                    self.load_right_column_for(entry);
+
+                    let selected_entry = {
+                        let columns = self.columns.lock().unwrap();
+                        columns
+                            .get(self.center_column_mailbox())
+                            .and_then(|column| column.selected_entry().cloned())
+                    };
+
+                    if let Some(entry) = selected_entry {
+                        self.load_right_column_for(entry);
+                    }
                 }
                 ColumnStateEntry::ThreadStart { mail_id, .. }
                 | ColumnStateEntry::ThreadChild(mail_id, _)
