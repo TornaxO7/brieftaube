@@ -8,11 +8,11 @@ use jmap_client::core::{
 };
 
 impl Backend {
-    pub async fn get_mailbox_root_mails(
+    pub async fn get_or_request_mailbox_root_mails(
         &self,
         id: &MailboxId,
     ) -> Result<Vec<CollapsedMail>, jmap_client::Error> {
-        match self.get_mailbox_root_mails_cached(id) {
+        match self.get_mailbox_root_mails(id) {
             Some(cached_root_mails) => Ok(cached_root_mails),
             None => {
                 let mut response = {
@@ -44,42 +44,44 @@ impl Backend {
                     request.send().await?
                 };
 
-                let mut store = self.store.lock().unwrap();
+                {
+                    let mut store = self.store.lock().unwrap();
 
-                handle_thread_response(
-                    &mut store.threads,
-                    response
-                        .pop_method_response()
-                        .unwrap()
-                        .unwrap_get_thread()
-                        .unwrap(),
-                );
+                    handle_thread_response(
+                        &mut store.threads,
+                        response
+                            .pop_method_response()
+                            .unwrap()
+                            .unwrap_get_thread()
+                            .unwrap(),
+                    );
 
-                handle_mail_response(
-                    &mut store.mails,
-                    response
-                        .pop_method_response()
-                        .unwrap()
-                        .unwrap_get_email()
-                        .unwrap(),
-                );
+                    handle_mail_response(
+                        &mut store.mails,
+                        response
+                            .pop_method_response()
+                            .unwrap()
+                            .unwrap_get_email()
+                            .unwrap(),
+                    );
 
-                handle_root_mails_response(
-                    &mut store.mailbox,
-                    &id,
-                    response
-                        .pop_method_response()
-                        .unwrap()
-                        .unwrap_query_email()
-                        .unwrap(),
-                );
+                    handle_root_mails_response(
+                        &mut store.mailbox,
+                        &id,
+                        response
+                            .pop_method_response()
+                            .unwrap()
+                            .unwrap_query_email()
+                            .unwrap(),
+                    );
+                }
 
-                Ok(self.get_mailbox_root_mails_cached(id).unwrap())
+                Ok(self.get_mailbox_root_mails(id).unwrap())
             }
         }
     }
 
-    fn get_mailbox_root_mails_cached(&self, id: &MailboxId) -> Option<Vec<CollapsedMail>> {
+    fn get_mailbox_root_mails(&self, id: &MailboxId) -> Option<Vec<CollapsedMail>> {
         let store = self.store.lock().unwrap();
         store.mailbox.get_root_mails(id).map(|root_mails| {
             let mut collapsed_mails: Vec<CollapsedMail> = Vec::with_capacity({

@@ -53,7 +53,47 @@ impl Model {
         let b = backend.clone();
 
         task_manager.spawn(async move {
-            op_init_mailbox(TOP_PARENT_MAILBOX_ID, c, b).await;
+            op_init_mailbox(TOP_PARENT_MAILBOX_ID, c.clone(), b.clone()).await;
+            debug!("Initialized root mailbox");
+
+            let selected_entry = {
+                let columns = c.lock().unwrap();
+                columns
+                    .get(&TOP_PARENT_MAILBOX_ID)
+                    .unwrap()
+                    .selected_entry()
+                    .cloned()
+            };
+
+            if let Some(entry) = selected_entry {
+                match entry {
+                    ColumnStateEntry::Mailbox(id) => {
+                        debug!("Check if right is loaded");
+                        let right_column_not_loaded = {
+                            let columns = c.lock().unwrap();
+                            !columns.contains_key(&Some(id.clone()))
+                        };
+
+                        if right_column_not_loaded {
+                            debug!("Initialing right mailbox");
+                            op_init_mailbox(Some(id), c, b).await;
+                            debug!("Finished loading right");
+                        }
+                    }
+                    ColumnStateEntry::SingleMail(mail_id)
+                    | ColumnStateEntry::CollapsedThread(mail_id, _)
+                    | ColumnStateEntry::ThreadStart { mail_id, .. }
+                    | ColumnStateEntry::ThreadChild(mail_id, _)
+                    | ColumnStateEntry::ThreadEnd(mail_id, _) => {
+                        match b.prefetch_mail_attachments(&mail_id).await {
+                            Ok(()) => {}
+                            Err(err) => {
+                                error!("Couldn't fetch mail attachments:\n{err}");
+                            }
+                        }
+                    }
+                }
+            }
         });
 
         Self {
@@ -650,7 +690,7 @@ async fn op_init_mailbox(id: ParentMailboxId, columns: Columns, backend: Arc<Bac
     // the first mails from the mailbox
     if let Some(parent_mailbox_id) = id.as_ref() {
         let collapsed_mails = backend
-            .get_mailbox_root_mails(parent_mailbox_id)
+            .get_or_request_mailbox_root_mails(parent_mailbox_id)
             .await
             .expect("No error handling yet");
 
@@ -658,7 +698,6 @@ async fn op_init_mailbox(id: ParentMailboxId, columns: Columns, backend: Arc<Bac
     }
 
     let created_column = ColumnState::new(id.clone(), entries);
-
     let mut guard = columns.lock().unwrap();
     guard.insert(id.clone(), created_column);
 }
