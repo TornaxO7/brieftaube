@@ -42,7 +42,8 @@ impl Backend {
     }
 
     pub async fn prefetch_mail_attachments(&self, id: &MailId) -> Result<(), jmap_client::Error> {
-        self.get_or_request_mail_attachments(id).await.map(|_| ())
+        self.get_or_request_mail_attachments(id).await?;
+        Ok(())
     }
 
     pub fn get_mail_attachments(&self, id: &MailId) -> Option<Vec<MailDataAttachment>> {

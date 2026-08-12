@@ -54,7 +54,6 @@ impl Model {
 
         task_manager.spawn(async move {
             op_init_mailbox(TOP_PARENT_MAILBOX_ID, c.clone(), b.clone()).await;
-            debug!("Initialized root mailbox");
 
             let selected_entry = {
                 let columns = c.lock().unwrap();
@@ -68,16 +67,13 @@ impl Model {
             if let Some(entry) = selected_entry {
                 match entry {
                     ColumnStateEntry::Mailbox(id) => {
-                        debug!("Check if right is loaded");
                         let right_column_not_loaded = {
                             let columns = c.lock().unwrap();
                             !columns.contains_key(&Some(id.clone()))
                         };
 
                         if right_column_not_loaded {
-                            debug!("Initialing right mailbox");
                             op_init_mailbox(Some(id), c, b).await;
-                            debug!("Finished loading right");
                         }
                     }
                     ColumnStateEntry::SingleMail(mail_id)
