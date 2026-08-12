@@ -17,7 +17,9 @@ use crate::{
         mails::types::{MailKeyword, MailUpdate},
     },
     mailfs::{
-        state::pending_op::{OpInitMailbox, OpMailAttachments, OpUncollapseThread},
+        state::pending_op::{
+            OpInitMailbox, OpMailAttachments, OpMoveMailboxUp, OpUncollapseThread,
+        },
         widget::{ColumnDisplay, MailPreview, RenderData, RightColumn},
     },
     utils::ui::{
@@ -27,7 +29,7 @@ use crate::{
 use input_type::InputType;
 use pending_op::PendingOp;
 use std::{collections::HashMap, rc::Rc};
-use tracing::debug;
+use tracing::{debug, warn};
 
 pub struct State {
     backend: Rc<Backend>,
@@ -85,6 +87,8 @@ impl<'a> ScreenState<'a, UserAction, PaletteValue, InputType, RenderData<'a>> fo
             UserAction::CutSelectedEntries => self.cut_selected_entries(),
             UserAction::PasteSelectedEntries => self.paste_selected_entries(),
 
+            UserAction::MoveMailboxUp => self.move_mailbox_up(),
+            UserAction::MoveMailboxDown => self.move_mailbox_down(),
             UserAction::CreateMailbox => self.create_mailbox(),
 
             UserAction::MarkMailAsUnseen => self.mail_patch_keywords(&[(MailKeyword::Seen, false)]),
@@ -176,7 +180,6 @@ impl<'a> ScreenState<'a, UserAction, PaletteValue, InputType, RenderData<'a>> fo
                 self.get_right_column_mailbox(),
             ) {
                 (Some(left_mailbox), Some(right_mailbox)) => {
-                    debug!("{:?}, {:?}", left_mailbox, right_mailbox);
                     let [left, center, right] = self.columns.get_disjoint_mut([
                         &left_mailbox,
                         &center_mailbox,
@@ -238,6 +241,7 @@ impl<'a> ScreenState<'a, UserAction, PaletteValue, InputType, RenderData<'a>> fo
                 PendingOp::InitMailbox(data) => self.op_init_mailbox(data),
                 PendingOp::UncollapseThread(data) => self.op_uncollapse_thread(data),
                 PendingOp::MailAttachments(data) => self.op_mail_attachments(data),
+                PendingOp::MoveMailboxUp(data) => self.op_move_mailbox_up(data),
             };
 
             match state {
@@ -535,6 +539,29 @@ impl State {
         None
     }
 
+    fn move_mailbox_up(&mut self) -> Option<crate::Action> {
+        // TODO: Check `self.selection` so that the user can move multiple mailboxes
+        if let Some(center) = self.get_center_column() {
+            if let Some(entry) = center.selected_entry() {
+                match entry {
+                    ColumnStateEntry::SingleMail(_)
+                    | ColumnStateEntry::CollapsedThread(_, _)
+                    | ColumnStateEntry::ThreadStart { .. }
+                    | ColumnStateEntry::ThreadChild(_, _)
+                    | ColumnStateEntry::ThreadEnd(_, _) => {
+                        warn!("This action can be only applied to mailboxes.");
+                    }
+                    ColumnStateEntry::Mailbox(mailbox_id) => {}
+                }
+            }
+        }
+        None
+    }
+
+    fn move_mailbox_down(&mut self) -> Option<crate::Action> {
+        todo!();
+    }
+
     fn create_mailbox(&mut self) -> Option<crate::Action> {
         self.overlay = Some(ScreenOverlay::input(
             "Create mailbox:",
@@ -698,5 +725,9 @@ impl State {
     ) -> Result<(), error::BackendNotReady> {
         self.backend.prefetch_mail_attachments(&data.0);
         Ok(())
+    }
+
+    fn op_move_mailbox_up(&mut self, data: &OpMoveMailboxUp) -> Result<(), error::BackendNotReady> {
+        todo!()
     }
 }

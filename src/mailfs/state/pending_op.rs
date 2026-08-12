@@ -6,6 +6,7 @@ pub enum PendingOp {
     InitMailbox(OpInitMailbox),
     UncollapseThread(OpUncollapseThread),
     MailAttachments(OpMailAttachments),
+    MoveMailboxUp(OpMoveMailboxUp),
 }
 
 #[derive(Debug)]
@@ -21,3 +22,6 @@ pub struct OpUncollapseThread {
 
 #[derive(Debug)]
 pub struct OpMailAttachments(pub MailId);
+
+#[derive(Debug)]
+pub struct OpMoveMailboxUp(pub MailboxId);
