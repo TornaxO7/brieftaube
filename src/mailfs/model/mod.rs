@@ -237,16 +237,23 @@ impl<'a> Model {
             | ColumnStateEntry::ThreadStart { mail_id, .. }
             | ColumnStateEntry::ThreadChild(mail_id, _)
             | ColumnStateEntry::ThreadEnd(mail_id, _) => {
-                let mail_id = mail_id.clone();
-                let backend = self.backend.clone();
-                self.task_manager.spawn(async move {
-                    match backend.prefetch_mail_attachments(&mail_id).await {
-                        Ok(()) => {}
-                        Err(err) => {
-                            error!("Couldn't fetch mail attachments:\n{err}");
+                let misses_attachments = {
+                    let mail = self.backend.get_mail(&mail_id).unwrap();
+                    mail.attachments.is_none()
+                };
+
+                if misses_attachments {
+                    let mail_id = mail_id.clone();
+                    let backend = self.backend.clone();
+                    self.task_manager.spawn(async move {
+                        match backend.prefetch_mail_attachments(&mail_id).await {
+                            Ok(()) => {}
+                            Err(err) => {
+                                error!("Couldn't fetch mail attachments:\n{err}");
+                            }
                         }
-                    }
-                });
+                    });
+                }
             }
         }
     }
