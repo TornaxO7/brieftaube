@@ -203,8 +203,21 @@ mod tests {
         );
 
         assert_eq!(
+            keybinding_parser().parse("<TaB>").unwrap(),
+            vec![KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)]
+        );
+    }
+
+    #[test]
+    fn backtab() {
+        assert_eq!(
             keybinding_parser().parse("<btab>").unwrap(),
-            vec![KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE)]
+            vec![KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)]
+        );
+
+        assert_eq!(
+            keybinding_parser().parse("<bTAb>").unwrap(),
+            vec![KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)]
         );
     }
 }
