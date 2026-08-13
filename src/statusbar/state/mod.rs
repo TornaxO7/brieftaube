@@ -35,7 +35,7 @@ impl State {
             Screen::Mailfs(_) => "Mail Filesystem",
             // Screen::MailList(_) => "Mail-List",
             // Screen::Composer(_) => "Composer",
-            // Screen::MailViewer(_) => "Mail-Viewer",
+            Screen::MailViewer(_) => "Mail-Viewer",
             Screen::LogViewer(_) => "Log-Viewer",
         };
 

@@ -1,7 +1,11 @@
 mod render_data;
 
 use crate::{
-    mail_viewer::state::ScrollAction,
+    mail_viewer::{
+        Model,
+        model::ScrollAction,
+        widget::render_data::{RenderData, ViewerState},
+    },
     utils::ui::{ScreenOverlay, ScreenState, input::Input, palette::Palette},
 };
 use pulldown_cmark_mdcat::ratatui::{RenderOptions, Renderer};
@@ -18,27 +22,26 @@ use ratatui::{
         StatefulWidget, Table, Tabs, Widget,
     },
 };
-pub use render_data::*;
 
-#[derive(Default)]
-pub struct MailViewer {}
+pub struct MailViewer;
 
 impl StatefulWidget for MailViewer {
-    type State = super::State;
+    type State = super::Model;
 
-    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let mut data = state.render_data();
+    fn render(self, area: Rect, buf: &mut Buffer, model: &mut Self::State) {
+        let mut data = RenderData::new(model);
+
         let [main_panel, tab_area] =
             Layout::vertical([Constraint::Fill(1), Constraint::Length(3)]).areas(area);
 
-        render_tabs(tab_area, buf, &mut data);
+        render_tabs(tab_area, buf, &data);
         render_viewer(main_panel, buf, &mut data);
 
-        render_overlay(area, buf, state);
+        render_overlay(area, buf, model);
     }
 }
 
-fn render_tabs(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
+fn render_tabs(area: Rect, buf: &mut Buffer, data: &RenderData) {
     let idx = match data.viewer_state {
         ViewerState::Metadata(_) => 0,
         ViewerState::Text { .. } => 1,
@@ -121,7 +124,7 @@ fn render_viewer(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
             let text = renderer.text_from_str(&content).unwrap();
 
             let (content_area, vertical_scrollbar_area, horizontal_scrollbar_area) =
-                adjust_scrollbars(&text, area, vertical, horizontal, data.scroll_queue);
+                adjust_scrollbars(&text, area, vertical, horizontal, data.scroll_action);
 
             Widget::render(
                 Paragraph::new(text).block(Block::bordered()).scroll((
@@ -166,7 +169,7 @@ fn render_viewer(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
             let text = Text::from(content.0.clone());
 
             let (content_area, vertical_scrollbar_area, horizontal_scrollbar_area) =
-                adjust_scrollbars(&text, area, vertical, horizontal, data.scroll_queue);
+                adjust_scrollbars(&text, area, vertical, horizontal, data.scroll_action);
 
             Widget::render(
                 Paragraph::new(text).block(Block::bordered()).scroll((
@@ -207,7 +210,7 @@ fn render_viewer(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
                 return;
             };
 
-            if let Some(scroll) = data.scroll_queue.take() {
+            if let Some(scroll) = data.scroll_action.take() {
                 match scroll {
                     ScrollAction::ScrollUp(amount) => {
                         state.scroll_up_by(amount as u16);
@@ -244,15 +247,15 @@ fn render_viewer(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
     }
 }
 
-fn render_overlay(area: Rect, buf: &mut Buffer, state: &mut super::State) {
-    if let Some(state) = state.overlay() {
+fn render_overlay(area: Rect, buf: &mut Buffer, model: &mut Model) {
+    if let Some(model) = model.overlay() {
         let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
         Widget::render(Clear, a, buf);
-        match state {
-            ScreenOverlay::Palette(state) => {
-                StatefulWidget::render(Palette::new(), a, buf, state);
+        match model {
+            ScreenOverlay::Palette(model) => {
+                StatefulWidget::render(Palette::new(), a, buf, model);
             }
-            ScreenOverlay::Input(state) => StatefulWidget::render(Input::new(), a, buf, state),
+            ScreenOverlay::Input(model) => StatefulWidget::render(Input::new(), a, buf, model),
         }
     }
 }

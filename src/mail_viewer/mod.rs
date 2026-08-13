@@ -1,8 +1,8 @@
 mod action;
-mod state;
+mod model;
 mod types;
 mod widget;
 
 pub use action::Action;
-pub use state::State;
+pub use model::Model;
 pub use widget::MailViewer;

@@ -3,7 +3,7 @@ mod task_manager;
 // mod composer;
 mod config;
 mod log_viewer;
-// mod mail_viewer;
+mod mail_viewer;
 mod statusbar;
 mod utils;
 
@@ -48,7 +48,7 @@ async fn main() -> eyre::Result<()> {
 
 enum Screen {
     // Composer(composer::ui::State),
-    // MailViewer(mail_viewer::State),
+    MailViewer(mail_viewer::Model),
     LogViewer(log_viewer::Model),
     Mailfs(mailfs::Model),
 }
@@ -134,9 +134,9 @@ impl App {
             // Screen::Composer(state) => {
             //     frame.render_stateful_widget(composer::ui::Composer::default(), screen, state);
             // }
-            // Screen::MailViewer(state) => {
-            //     frame.render_stateful_widget(mail_viewer::MailViewer::default(), screen, state);
-            // }
+            Screen::MailViewer(state) => {
+                frame.render_stateful_widget(mail_viewer::MailViewer, screen, state);
+            }
             Screen::LogViewer(state) => {
                 frame.render_stateful_widget(log_viewer::LogViewer, screen, state);
             }
@@ -148,7 +148,7 @@ impl App {
             // Screen::Mailboxes(state) => state.handle_event(event, &mut self.statusbar),
             // Screen::MailList(state) => state.handle_event(event, &mut self.statusbar),
             // Screen::Composer(state) => state.handle_event(event, &mut self.statusbar),
-            // Screen::MailViewer(state) => state.handle_event(event, &mut self.statusbar),
+            Screen::MailViewer(state) => state.handle_event(event, &mut self.statusbar),
             Screen::Mailfs(state) => state.handle_event(event, &mut self.statusbar),
             Screen::LogViewer(state) => state.handle_event(event, &mut self.statusbar),
         }
@@ -156,13 +156,14 @@ impl App {
 
     fn apply_action(&mut self, action: Action) {
         match action {
-            Action::OpenMailViewer(_id) => {
-                todo!();
-                // let backend = self.backend.clone();
-                // let next_screen = Screen::MailViewer(mail_viewer::State::new(id, backend));
+            Action::OpenMailViewer(id) => {
+                let backend = self.backend.clone();
+                let task_manager = self.task_manager.clone();
+                let next_screen =
+                    Screen::MailViewer(mail_viewer::Model::new(id, backend, task_manager));
 
-                // self.statusbar.set_screen(&next_screen);
-                // self.screens.push(next_screen);
+                self.statusbar.set_screen(&next_screen);
+                self.screens.push(next_screen);
             }
             Action::OpenLogViewer => {
                 let next_screen = Screen::LogViewer(log_viewer::Model::new());
@@ -197,8 +198,7 @@ impl App {
         let top_screen_has_tasks_running =
             match self.screens.last().expect("There's at least one screen") {
                 // Screen::Composer(_) => todo!(),
-                // Screen::MailViewer(_) | Screen::Mailfs(_) => self.backend.has_tasks_running(),
-                Screen::Mailfs(_) => self.task_manager.has_tasks_running(),
+                Screen::MailViewer(_) | Screen::Mailfs(_) => self.task_manager.has_tasks_running(),
                 Screen::LogViewer(_) => false,
             };
 
