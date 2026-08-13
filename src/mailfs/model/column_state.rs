@@ -32,15 +32,19 @@ impl ColumnState {
         }
     }
 
+    pub fn selected_idx(&self) -> Option<usize> {
+        self.state.selected()
+    }
+
     pub fn selected_entry(&self) -> Option<&ColumnStateEntry> {
         self.state.selected().and_then(|idx| self.entries.get(idx))
     }
 
-    pub fn selected_entry_mut(&mut self) -> Option<&mut ColumnStateEntry> {
-        self.state
-            .selected()
-            .and_then(|idx| self.entries.get_mut(idx))
-    }
+    // pub fn selected_entry_mut(&mut self) -> Option<&mut ColumnStateEntry> {
+    //     self.state
+    //         .selected()
+    //         .and_then(|idx| self.entries.get_mut(idx))
+    // }
 
     pub fn entries(&self) -> &[ColumnStateEntry] {
         &self.entries

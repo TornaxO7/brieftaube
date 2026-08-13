@@ -5,7 +5,7 @@ use jmap_client::{
     mailbox::{Mailbox, Role},
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MailboxUpdate {
     pub id: MailboxId,
     pub name: Option<String>,
