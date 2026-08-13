@@ -551,17 +551,21 @@ impl Model {
     }
 
     fn select_entry(&mut self) -> Option<crate::Action> {
-        let columns = self.columns.lock().unwrap();
-        if let Some(column) = columns.get(self.center_column_mailbox()) {
-            if let Some(entry) = column.selected_entry() {
-                let id = EntryId::from(entry);
+        let selected_entry = {
+            let columns = self.columns.lock().unwrap();
+            columns
+                .get(self.center_column_mailbox())
+                .and_then(|center| center.selected_entry().cloned())
+        };
 
-                if self.selection.remove(&id).is_none() {
-                    self.selection.insert(id, SelectionType::Selected);
-                }
+        if let Some(entry) = selected_entry {
+            let id = EntryId::from(entry);
 
-                self.navigate_down();
+            if self.selection.remove(&id).is_none() {
+                self.selection.insert(id, SelectionType::Selected);
             }
+
+            self.navigate_down();
         }
 
         None

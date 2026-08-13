@@ -9,6 +9,12 @@ pub enum EntryId {
     Mailbox(MailboxId),
 }
 
+impl From<ColumnStateEntry> for EntryId {
+    fn from(entry: ColumnStateEntry) -> Self {
+        Self::from(&entry)
+    }
+}
+
 impl From<&ColumnStateEntry> for EntryId {
     fn from(entry: &ColumnStateEntry) -> Self {
         match entry {
