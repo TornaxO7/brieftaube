@@ -19,7 +19,7 @@ pub use markdown_viewer::MarkdownViewer;
 pub use metadata_viewer::MetadataViewer;
 use std::{collections::HashMap, rc::Rc, sync::Arc};
 pub use text_viewer::TextViewer;
-use tracing::{Instrument, debug, error};
+use tracing::{debug, error};
 
 #[derive(Debug, Clone)]
 pub enum PaletteType {

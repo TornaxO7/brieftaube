@@ -27,7 +27,7 @@ impl<A: Clone + std::fmt::Debug> KeybindManager<A> {
             let mut mapping = Vec::new();
 
             for (key, value) in raw_mapping.into_iter() {
-                let keybinding = parse_keybinding().parse(key.as_ref()).unwrap();
+                let keybinding = keybinding_parser().parse(key.as_ref()).unwrap();
                 let keybinding_len = keybinding.len();
 
                 if mapping.len() < keybinding_len {
@@ -88,7 +88,7 @@ impl<A: Clone + std::fmt::Debug> KeybindManager<A> {
     }
 }
 
-fn parse_keybinding<'src>()
+fn keybinding_parser<'src>()
 -> impl Parser<'src, &'src str, Vec<KeyEvent>, chumsky::extra::Err<Rich<'src, char>>> {
     choice((
         keybinding_special(),
@@ -125,6 +125,7 @@ fn keybinding_special<'src>()
                 "CR" => KeyCode::Enter,
                 "BS" => KeyCode::Backspace,
                 "ESC" => KeyCode::Esc,
+                "TAB" => KeyCode::Tab,
                 _ => todo!(),
             };
 
@@ -135,18 +136,26 @@ fn keybinding_special<'src>()
 fn keybinding_with_modifier<'src>()
 -> impl Parser<'src, &'src str, KeyEvent, chumsky::extra::Err<Rich<'src, char>>> {
     just('<')
-        .ignore_then(one_of("CA"))
+        .ignore_then(one_of("CAS"))
         .then(just('-').ignored())
-        .then(one_of('a'..='z'))
+        .then(one_of('a'..='z').repeated().at_least(1).collect::<String>())
         .then_ignore(just('>'))
-        .map(|((special, _), c)| {
+        .map(|((special, _), value)| {
             let modifiers = match special {
                 'C' => KeyModifiers::CONTROL,
                 'A' => KeyModifiers::ALT,
+                'S' => KeyModifiers::SHIFT,
                 _ => todo!(),
             };
 
-            let code = KeyCode::Char(c);
+            let code = if value.len() == 1 {
+                KeyCode::Char(value.chars().next().unwrap())
+            } else {
+                match value.to_ascii_lowercase().as_str() {
+                    "tab" => KeyCode::Tab,
+                    _ => unreachable!(),
+                }
+            };
 
             KeyEvent::new(code, modifiers)
         })
@@ -159,7 +168,7 @@ mod tests {
     #[test]
     fn long_keybinding() {
         assert_eq!(
-            parse_keybinding().parse("<C-n>abc").unwrap(),
+            keybinding_parser().parse("<C-n>abc").unwrap(),
             vec![
                 KeyEvent::new(KeyCode::Char('n'), KeyModifiers::CONTROL),
                 KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE),
@@ -172,7 +181,7 @@ mod tests {
     #[test]
     fn greater_than_and_lower_than_symbols() {
         assert_eq!(
-            parse_keybinding().parse("<<>>").unwrap(),
+            keybinding_parser().parse("<<>>").unwrap(),
             vec![
                 KeyEvent::new(KeyCode::Char('<'), KeyModifiers::NONE),
                 KeyEvent::new(KeyCode::Char('<'), KeyModifiers::NONE),
@@ -185,8 +194,16 @@ mod tests {
     #[test]
     fn alt_keybinding() {
         assert_eq!(
-            parse_keybinding().parse("<A-s>").unwrap(),
+            keybinding_parser().parse("<A-s>").unwrap(),
             vec![KeyEvent::new(KeyCode::Char('s'), KeyModifiers::ALT)]
+        );
+    }
+
+    #[test]
+    fn shift_tab() {
+        assert_eq!(
+            keybinding_parser().parse("<S-tab>").unwrap(),
+            vec![KeyEvent::new(KeyCode::Tab, KeyModifiers::SHIFT)]
         );
     }
 }
