@@ -6,7 +6,7 @@ mod text_viewer;
 use super::Action;
 use crate::{
     backend::{
-        Backend,
+        Backend, MailBodyType, MailData,
         mails::types::{MailId, MailKeyword, MailUpdate},
     },
     task_manager::TaskManager,
@@ -19,7 +19,7 @@ pub use markdown_viewer::MarkdownViewer;
 pub use metadata_viewer::MetadataViewer;
 use std::{collections::HashMap, rc::Rc, sync::Arc};
 pub use text_viewer::TextViewer;
-use tracing::{debug, error};
+use tracing::{Instrument, debug, error};
 
 #[derive(Debug, Clone)]
 pub enum PaletteType {
@@ -56,9 +56,9 @@ pub struct Model {
     overlay: Option<ScreenOverlay<PaletteType, InputType>>,
     keybindings: KeybindManager<Action>,
 
-    pub id: MailId,
-    pub backend: Arc<Backend>,
-    pub task_manager: Rc<TaskManager>,
+    id: MailId,
+    backend: Arc<Backend>,
+    task_manager: Rc<TaskManager>,
 
     pub selected_viewer: Viewer,
     pub metadata_viewer: MetadataViewer,
@@ -99,7 +99,7 @@ impl Model {
             }
         });
 
-        Self {
+        let model = Self {
             id,
             backend,
             task_manager,
@@ -128,6 +128,47 @@ impl Model {
             text_viewer: TextViewer::default(),
             markdown_viewer: MarkdownViewer::default(),
             attachment_viewer: AttachmentViewer::default(),
+        };
+
+        model.request_body_if_absent();
+
+        model
+    }
+
+    pub fn get_mail(&self) -> MailData {
+        self.backend.get_mail(&self.id).unwrap()
+    }
+
+    fn request_body_if_absent(&self) {
+        let mail = self.backend.get_mail(&self.id).unwrap();
+
+        let ty = match self.selected_viewer {
+            Viewer::Metadata | Viewer::Attachments => return,
+            Viewer::Markdown => MailBodyType::Html,
+            Viewer::Text => MailBodyType::Text,
+        };
+
+        let body_is_missing = match ty {
+            MailBodyType::Text => mail.text_body.is_none(),
+            MailBodyType::Html => mail.html_body.is_none(),
+        };
+
+        if body_is_missing {
+            let id = self.id.clone();
+            let b = self.backend.clone();
+            self.task_manager.spawn(async move {
+                match b.prefetch_mail_body(&id, ty).await {
+                    Ok(()) => {}
+                    Err(err) => {
+                        let ty_name = match ty {
+                            MailBodyType::Text => "text",
+                            MailBodyType::Html => "html",
+                        };
+
+                        error!("Couldn't fetch {ty_name}-body of mail:\n{err}");
+                    }
+                }
+            });
         }
     }
 }
@@ -290,6 +331,11 @@ impl Model {
 
     fn set_viewer(&mut self, viewer: Viewer) {
         self.selected_viewer = viewer;
+
+        match viewer {
+            Viewer::Metadata | Viewer::Attachments => {}
+            Viewer::Text | Viewer::Markdown => self.request_body_if_absent(),
+        }
     }
 
     fn open_html_mail_in_browser(&self) {
