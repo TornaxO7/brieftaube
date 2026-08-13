@@ -11,7 +11,7 @@ pub use selection::{EntryId, SelectionType};
 use super::UserAction;
 use crate::{
     backend::{
-        Backend, MailId, MailboxData, MailboxId, MailboxUpdate, ThreadId,
+        Backend, MailId, MailboxData, MailboxId, MailboxNew, MailboxUpdate, ThreadId,
         mailbox::types::{ParentMailboxId, TOP_PARENT_MAILBOX_ID},
         mails::types::{MailKeyword, MailUpdate},
     },
@@ -170,26 +170,89 @@ impl<'a> ScreenState<'a, UserAction, PaletteValue, InputType> for Model {
         &mut self,
         result: ScreenOverlayResult<PaletteValue, InputType>,
     ) -> Option<crate::Action> {
+        self.overlay = None;
+
         match result {
             ScreenOverlayResult::Palette(value) => match value {
                 PaletteValue::Action(action) => {
-                    self.overlay = None;
                     return self.apply_user_action(action);
                 }
             },
-            ScreenOverlayResult::Cancel => self.overlay = None,
-            ScreenOverlayResult::Input { value: _, typ } => match typ {
+            ScreenOverlayResult::Cancel => {}
+            ScreenOverlayResult::Input { value, typ } => match typ {
                 InputType::NewMailboxName => {
-                    // if let Some(center) = self.get_center_column() {
-                    //     let parent_id = center.mailbox().clone();
-                    //     let _new = MailboxNew {
-                    //         name: value,
-                    //         parent_id,
-                    //         ..Default::default()
-                    //     };
-                    // }
-                    // todo!("update state");
-                    todo!()
+                    let column_id = self.center_column_mailbox().clone();
+                    let columns = self.columns.clone();
+                    let backend = self.backend.clone();
+                    self.task_manager.spawn(async move {
+                        let new_mailbox = {
+                            let sort_order = {
+                                let columns = columns.lock().unwrap();
+                                let center = columns.get(&column_id).unwrap();
+                                center
+                                    .entries()
+                                    .iter()
+                                    .map_while(|entry| {
+                                        if let ColumnStateEntry::Mailbox(id) = entry {
+                                            let mailbox = backend.get_mailbox_data(id).unwrap();
+                                            Some(mailbox)
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .max_by_key(|mailbox| mailbox.sort_order)
+                                    .map(|last_mailbox| {
+                                        (last_mailbox.sort_order + 1)
+                                            .next_multiple_of(NORMALIZE_SORT_ORDER_SIZE)
+                                    })
+                                    .unwrap_or(NORMALIZE_SORT_ORDER_SIZE)
+                            };
+
+                            MailboxNew {
+                                name: value,
+                                sort_order: Some(sort_order),
+                                parent_id: column_id.clone(),
+                                ..Default::default()
+                            }
+                        };
+
+                        let new_mailbox_id = match backend.create_mailbox(new_mailbox.clone()).await
+                        {
+                            Ok(created_mailbox_id) => created_mailbox_id,
+                            Err(err) => {
+                                error!("Couldn't create mailbox:\n{err}");
+                                return;
+                            }
+                        };
+
+                        let mut columns = columns.lock().unwrap();
+                        let center = columns.get_mut(&column_id).unwrap();
+                        let new_pos = center
+                            .entries()
+                            .iter()
+                            .take_while(|entry| matches!(entry, ColumnStateEntry::Mailbox(_)))
+                            .position(|entry| {
+                                if let ColumnStateEntry::Mailbox(other_id) = entry {
+                                    let mailbox = backend.get_mailbox_data(other_id).unwrap();
+                                    mailbox.sort_order > new_mailbox.sort_order.unwrap()
+                                } else {
+                                    false
+                                }
+                            })
+                            .unwrap_or(
+                                center
+                                    .entries()
+                                    .iter()
+                                    .position(|entry| {
+                                        !matches!(entry, ColumnStateEntry::Mailbox(_))
+                                    })
+                                    .unwrap_or(center.entries().len()),
+                            );
+
+                        center
+                            .entries_mut()
+                            .insert(new_pos, ColumnStateEntry::Mailbox(new_mailbox_id));
+                    });
                 }
             },
         };
