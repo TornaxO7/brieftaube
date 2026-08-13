@@ -1,7 +1,6 @@
 mod column_state;
 mod input_type;
 mod palette_value;
-// mod pending_op;
 mod selection;
 
 pub use column_state::{ColumnState, ColumnStateEntry};
@@ -12,7 +11,10 @@ use super::UserAction;
 use crate::{
     backend::{
         Backend, MailId, MailboxData, MailboxId, MailboxNew, MailboxUpdate, ThreadId,
-        mailbox::types::{ParentMailboxId, TOP_PARENT_MAILBOX_ID},
+        mailbox::{
+            RemoveMailboxOption,
+            types::{ParentMailboxId, TOP_PARENT_MAILBOX_ID},
+        },
         mails::types::{MailKeyword, MailUpdate},
     },
     task_manager::TaskManager,
@@ -151,7 +153,9 @@ impl<'a> ScreenState<'a, UserAction, PaletteValue, InputType> for Model {
 
             UserAction::MoveMailboxUp => self.move_mailbox_up(),
             UserAction::MoveMailboxDown => self.move_mailbox_down(),
+
             UserAction::CreateMailbox => self.create_mailbox(),
+            UserAction::RemoveMailbox => self.remove_mailbox(),
 
             UserAction::MarkMailAsUnseen => self.mail_patch_keywords(&[(MailKeyword::Seen, false)]),
             UserAction::MarkMailAsSeen => self.mail_patch_keywords(&[(MailKeyword::Seen, true)]),
@@ -697,6 +701,51 @@ impl Model {
             "Create mailbox:",
             InputType::NewMailboxName,
         ));
+
+        None
+    }
+
+    fn remove_mailbox(&mut self) -> Option<crate::Action> {
+        let (selected_entry, current_mailbox) = {
+            let columns = self.columns.lock().unwrap();
+            let current_mailbox = self.center_column_mailbox().clone();
+
+            let selected_entry = columns
+                .get(&current_mailbox)
+                .and_then(|center| center.selected_entry().cloned());
+
+            (selected_entry, current_mailbox)
+        };
+
+        if let Some(entry) = selected_entry {
+            let ColumnStateEntry::Mailbox(mailbox_id) = entry else {
+                warn!("You can only remove a mailbox, if you've selected it.");
+                return None;
+            };
+
+            let columns = self.columns.clone();
+            let backend = self.backend.clone();
+            self.task_manager.spawn(async move {
+                if let Err(err) = backend
+                    .remove_mailbox(&mailbox_id, RemoveMailboxOption::Empty)
+                    .await
+                {
+                    error!("Couldn't remove mailbox:\n{err}");
+                    return;
+                }
+
+                let mut columns = columns.lock().unwrap();
+                let column = columns.get_mut(&current_mailbox).unwrap();
+                let pos = column.entries()
+                    .iter()
+                    .position(|entry| matches!(entry, ColumnStateEntry::Mailbox(other) if other == &mailbox_id));
+
+                if let Some(pos) = pos {
+                    column.entries_mut()
+                        .remove(pos);
+                }
+            });
+        }
 
         None
     }

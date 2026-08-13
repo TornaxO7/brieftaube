@@ -53,8 +53,11 @@ pub enum UserAction {
     MoveMailboxUp,
     #[strum(message = "Move the selected mailbox down")]
     MoveMailboxDown,
+
     #[strum(message = "Create a new mailbox in the current mailbox.")]
     CreateMailbox,
+    #[strum(message = "Remove mailbox only, if it's empty.")]
+    RemoveMailbox,
 
     #[strum(message = "Open logs")]
     OpenLogs,

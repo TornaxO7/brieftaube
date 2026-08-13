@@ -5,10 +5,10 @@ use jmap_client::core::set::SetObject;
 
 #[derive(thiserror::Error, Debug)]
 pub enum CreateMailboxError {
-    #[error(transparent)]
+    #[error("Validation error: {0}")]
     Validation(#[from] MailboxValidationError),
 
-    #[error(transparent)]
+    #[error("From server: {0}")]
     Jmap(#[from] jmap_client::Error),
 }
 

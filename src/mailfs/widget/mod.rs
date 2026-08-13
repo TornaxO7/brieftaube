@@ -1,5 +1,4 @@
 mod column_data;
-mod error;
 mod mail_preview;
 // mod render_data;
 mod selection_type;

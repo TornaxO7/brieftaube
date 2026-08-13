@@ -1,13 +1,10 @@
-use jmap_client::{core::query::QueryResponse, email::MailCapabilities};
+use jmap_client::core::query::QueryResponse;
 use tracing::{debug, instrument};
 
 use super::types::{MailboxData, MailboxId};
 use crate::backend::{
-    GetState, MailboxValidate, QueryState,
-    mailbox::{
-        error::MailboxValidationError,
-        types::{MailboxUpdate, ParentMailboxId},
-    },
+    GetState, QueryState,
+    mailbox::types::{MailboxUpdate, ParentMailboxId},
     mails::types::MailId,
 };
 use std::collections::HashMap;
@@ -170,12 +167,16 @@ impl Store {
             .or_insert(additional_children_ids);
     }
 
-    pub fn remove(&mut self, id: MailboxId) -> Option<MailboxData> {
-        let mailbox = self.mailboxes.remove(&id)?;
+    pub fn remove(&mut self, id: &MailboxId) -> Option<MailboxData> {
+        let mailbox = self.mailboxes.remove(id)?;
         if let Some(siblings) = self.children_mapping.get_mut(&mailbox.parent_id) {
-            siblings.retain(|id| *id != mailbox.id);
+            if let Some(pos) = siblings.iter().position(|other| other == id) {
+                siblings.remove(pos);
+            }
         }
+        self.children_query_state.remove(&Some(id.clone()));
         self.children_mapping.remove(&Some(mailbox.id.clone()));
+        self.root_mails_state.remove(id);
         Some(mailbox)
     }
 

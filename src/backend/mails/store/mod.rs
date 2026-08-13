@@ -64,8 +64,8 @@ impl Store {
         self.mails.insert(mail.id.clone(), mail.clone());
     }
 
-    pub fn remove(&mut self, id: MailId) -> Option<MailData> {
-        self.mails.remove(&id)
+    pub fn remove(&mut self, id: &MailId) -> Option<MailData> {
+        self.mails.remove(id)
     }
 
     pub fn update(&mut self, new: MailUpdate) {

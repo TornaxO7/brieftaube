@@ -41,4 +41,8 @@ impl Store {
     pub fn insert(&mut self, thread_id: ThreadId, mail_ids: Vec<MailId>) -> Option<Vec<MailId>> {
         self.threads.insert(thread_id, mail_ids)
     }
+
+    pub fn remove(&mut self, id: &ThreadId) -> Option<Vec<MailId>> {
+        self.threads.remove(id)
+    }
 }
