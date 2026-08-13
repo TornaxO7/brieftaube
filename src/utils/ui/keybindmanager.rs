@@ -118,44 +118,40 @@ fn keybinding_char<'src>()
 fn keybinding_special<'src>()
 -> impl Parser<'src, &'src str, KeyEvent, chumsky::extra::Err<Rich<'src, char>>> {
     just('<')
-        .ignore_then(choice((just("CR"), just("BS"), just("ESC"))))
+        .ignore_then(
+            one_of('a'..='z')
+                .or(one_of('A'..='Z'))
+                .repeated()
+                .at_least(2)
+                .collect::<String>(),
+        )
         .then_ignore(just('>'))
-        .map(|s| {
-            let code = match s {
-                "CR" => KeyCode::Enter,
-                "BS" => KeyCode::Backspace,
-                "ESC" => KeyCode::Esc,
-                "TAB" => KeyCode::Tab,
-                _ => todo!(),
-            };
-
-            KeyEvent::new(code, KeyModifiers::NONE)
+        .try_map(|s, span| match s.to_lowercase().as_str() {
+            "cr" => Ok(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            "bs" => Ok(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE)),
+            "esc" => Ok(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+            "tab" => Ok(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
+            "btab" => Ok(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
+            _ => Err(Rich::custom(span, "Not a known special key.")),
         })
 }
 
 fn keybinding_with_modifier<'src>()
 -> impl Parser<'src, &'src str, KeyEvent, chumsky::extra::Err<Rich<'src, char>>> {
     just('<')
-        .ignore_then(one_of("CAS"))
-        .then(just('-').ignored())
-        .then(one_of('a'..='z').repeated().at_least(1).collect::<String>())
+        .ignore_then(one_of("CAScas"))
+        .then_ignore(just('-'))
+        .then(one_of('a'..='z').or(one_of('A'..='Z')))
         .then_ignore(just('>'))
-        .map(|((special, _), value)| {
-            let modifiers = match special {
-                'C' => KeyModifiers::CONTROL,
-                'A' => KeyModifiers::ALT,
-                'S' => KeyModifiers::SHIFT,
+        .map(|(special, value): (char, char)| {
+            let modifiers = match special.to_ascii_lowercase() {
+                'c' => KeyModifiers::CONTROL,
+                'a' => KeyModifiers::ALT,
+                's' => KeyModifiers::SHIFT,
                 _ => todo!(),
             };
 
-            let code = if value.len() == 1 {
-                KeyCode::Char(value.chars().next().unwrap())
-            } else {
-                match value.to_ascii_lowercase().as_str() {
-                    "tab" => KeyCode::Tab,
-                    _ => unreachable!(),
-                }
-            };
+            let code = KeyCode::Char(value);
 
             KeyEvent::new(code, modifiers)
         })
@@ -200,10 +196,15 @@ mod tests {
     }
 
     #[test]
-    fn shift_tab() {
+    fn tab() {
         assert_eq!(
-            keybinding_parser().parse("<S-tab>").unwrap(),
-            vec![KeyEvent::new(KeyCode::Tab, KeyModifiers::SHIFT)]
+            keybinding_parser().parse("<tab>").unwrap(),
+            vec![KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)]
+        );
+
+        assert_eq!(
+            keybinding_parser().parse("<btab>").unwrap(),
+            vec![KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE)]
         );
     }
 }

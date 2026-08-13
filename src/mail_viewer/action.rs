@@ -57,6 +57,11 @@ pub enum Action {
     #[strum(message = "Display attachments of the mail.")]
     OpenAttachmentsTab,
 
+    #[strum(message = "Open next tab (to the right)")]
+    OpenNextTab,
+    #[strum(message = "Open previous tab (to the  left)")]
+    OpenPreviousTab,
+
     #[strum(message = "Open log viewer")]
     OpenLogs,
     #[strum(message = "Open html mail in browser")]

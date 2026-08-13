@@ -121,6 +121,8 @@ impl Model {
                 ("ge", Action::ScrollToBottom),
                 ("<BS>", Action::Back),
                 ("<C-l>", Action::OpenLogs),
+                ("<Tab>", Action::OpenNextTab),
+                ("<btab>", Action::OpenPreviousTab),
             ])),
             selected_viewer,
 
@@ -199,6 +201,8 @@ impl<'a> ScreenState<'a, Action, PaletteType, InputType> for Model {
             Action::OpenTextTab => self.set_viewer(Viewer::Text),
             Action::OpenMarkdownTab => self.set_viewer(Viewer::Markdown),
             Action::OpenAttachmentsTab => self.set_viewer(Viewer::Attachments),
+            Action::OpenNextTab => self.open_next_tab(),
+            Action::OpenPreviousTab => self.open_previous_tab(),
 
             Action::OpenLogs => return Some(crate::Action::OpenLogViewer),
             Action::OpenMailInBrowser => self.open_html_mail_in_browser(),
@@ -336,6 +340,28 @@ impl Model {
             Viewer::Metadata | Viewer::Attachments => {}
             Viewer::Text | Viewer::Markdown => self.request_body_if_absent(),
         }
+    }
+
+    fn open_next_tab(&mut self) {
+        let next = match self.selected_viewer {
+            Viewer::Metadata => Viewer::Text,
+            Viewer::Text => Viewer::Markdown,
+            Viewer::Markdown => Viewer::Attachments,
+            Viewer::Attachments => Viewer::Metadata,
+        };
+
+        self.selected_viewer = next;
+    }
+
+    fn open_previous_tab(&mut self) {
+        let previous = match self.selected_viewer {
+            Viewer::Metadata => Viewer::Attachments,
+            Viewer::Text => Viewer::Metadata,
+            Viewer::Markdown => Viewer::Text,
+            Viewer::Attachments => Viewer::Markdown,
+        };
+
+        self.selected_viewer = previous;
     }
 
     fn open_html_mail_in_browser(&self) {

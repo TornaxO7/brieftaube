@@ -17,6 +17,7 @@ pub trait ScreenState<'a, A: Clone + std::fmt::Debug, P: Clone, I: Clone> {
     ) -> Option<crate::Action> {
         match event {
             Event::Key(event) => {
+                tracing::debug!("{:#?}", event);
                 if let Some(overlay) = self.overlay() {
                     return overlay
                         .handle_event(event)
