@@ -727,7 +727,7 @@ impl Model {
             let backend = self.backend.clone();
             self.task_manager.spawn(async move {
                 if let Err(err) = backend
-                    .remove_mailbox(&mailbox_id, RemoveMailboxOption::Empty)
+                    .remove_mailboxes(&[mailbox_id.clone()], RemoveMailboxOption::Empty)
                     .await
                 {
                     error!("Couldn't remove mailbox:\n{err}");
