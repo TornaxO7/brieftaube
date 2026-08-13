@@ -564,194 +564,24 @@ impl Model {
     }
 
     fn move_mailbox_up(&mut self) -> Option<crate::Action> {
-        // TODO: Check `self.selection` so that the user can move multiple mailboxes
-        let selected_entry = {
-            let columns = self.columns.lock().unwrap();
-            columns
-                .get(&self.center_column_mailbox())
-                .and_then(|center| center.selected_entry().cloned())
-        };
-
-        if let Some(entry) = selected_entry {
-            match entry {
-                ColumnStateEntry::SingleMail(_)
-                | ColumnStateEntry::CollapsedThread(_, _)
-                | ColumnStateEntry::ThreadStart { .. }
-                | ColumnStateEntry::ThreadChild(_, _)
-                | ColumnStateEntry::ThreadEnd(_, _) => {
-                    warn!("This action can be only applied to mailboxes.");
-                }
-                ColumnStateEntry::Mailbox(mailbox_id) => {
-                    let (idx, last_mailbox_idx) = {
-                        let columns = self.columns.lock().unwrap();
-                        let center = columns.get(&self.center_column_mailbox()).unwrap();
-
-                        let idx = center.selected_idx().unwrap();
-                        let last_mailbox_idx = center
-                            .entries()
-                            .iter()
-                            .position(|entry| !matches!(entry, ColumnStateEntry::Mailbox(_)))
-                            .unwrap_or(center.entries().len() - 1);
-
-                        (idx, last_mailbox_idx)
-                    };
-
-                    let is_at_top = idx == 0;
-                    let there_are_at_least_two_mailboxes = last_mailbox_idx > 0;
-                    if !is_at_top && there_are_at_least_two_mailboxes {
-                        let mailbox = self.backend.get_mailbox_data(&mailbox_id).unwrap();
-                        let mailbox_above = {
-                            let id = {
-                                let columns = self.columns.lock().unwrap();
-                                columns
-                                    .get(&self.center_column_mailbox())
-                                    .map(|center| center.entries()[idx - 1].clone())
-                                    .map(|entry| {
-                                        let ColumnStateEntry::Mailbox(id) = entry else {
-                                            unreachable!("Only mailboxes can be above!")
-                                        };
-                                        id
-                                    })
-                                    .unwrap()
-                            };
-
-                            self.backend.get_mailbox_data(&id).unwrap()
-                        };
-
-                        let update1 = MailboxUpdate {
-                            id: mailbox.id,
-                            sort_order: Some(mailbox_above.sort_order),
-                            ..Default::default()
-                        };
-
-                        let update2 = MailboxUpdate {
-                            id: mailbox_above.id,
-                            sort_order: Some(mailbox.sort_order),
-                            ..Default::default()
-                        };
-
-                        let column_id = self.center_column_mailbox().clone();
-                        let columns = self.columns.clone();
-                        let backend = self.backend.clone();
-                        self.task_manager.spawn(async move {
-                            let updates = vec![update1.clone(), update2.clone()];
-                            if let Err(err) = backend.update_mailboxes(updates).await {
-                                error!("Couldn't move mailbox up:\n{err}");
-                                return;
-                            }
-
-                            let mut columns = columns.lock().unwrap();
-                            if let Some(column) = columns.get_mut(&column_id) {
-                                let entries = column.entries_mut();
-
-                                let pos1 = entries.iter().position(|entry| matches!(entry, ColumnStateEntry::Mailbox(id) if id == &update1.id)).unwrap();
-                                let pos2 = entries.iter().position(|entry| matches!(entry, ColumnStateEntry::Mailbox(id) if id == &update2.id)).unwrap();
-
-                                entries.swap(pos1, pos2);
-                                column.state.select_previous();
-                            }
-                        })
-                    }
-                }
-            }
-        }
-
+        move_mailbox(
+            true,
+            self.center_column_mailbox().clone(),
+            self.backend.clone(),
+            self.columns.clone(),
+            self.task_manager.clone(),
+        );
         None
     }
 
     fn move_mailbox_down(&mut self) -> Option<crate::Action> {
-        // TODO: Check `self.selection` so that the user can move multiple mailboxes
-        let selected_entry = {
-            let columns = self.columns.lock().unwrap();
-            columns
-                .get(&self.center_column_mailbox())
-                .and_then(|center| center.selected_entry().cloned())
-        };
-
-        if let Some(entry) = selected_entry {
-            match entry {
-                ColumnStateEntry::SingleMail(_)
-                | ColumnStateEntry::CollapsedThread(_, _)
-                | ColumnStateEntry::ThreadStart { .. }
-                | ColumnStateEntry::ThreadChild(_, _)
-                | ColumnStateEntry::ThreadEnd(_, _) => {
-                    warn!("This action can be only applied to mailboxes.");
-                }
-                ColumnStateEntry::Mailbox(mailbox_id) => {
-                    let (idx, last_mailbox_idx) = {
-                        let columns = self.columns.lock().unwrap();
-                        let center = columns.get(&self.center_column_mailbox()).unwrap();
-                        let idx = center.selected_idx().unwrap();
-
-                        let last_mailbox_idx = center
-                            .entries()
-                            .iter()
-                            .position(|entry| !matches!(entry, ColumnStateEntry::Mailbox(_)))
-                            .unwrap_or(center.entries().len() - 1);
-
-                        (idx, last_mailbox_idx)
-                    };
-
-                    let is_at_bottom = idx == last_mailbox_idx;
-                    let there_are_at_least_two_mailboxes = last_mailbox_idx > 0;
-                    if !is_at_bottom && there_are_at_least_two_mailboxes {
-                        let mailbox = self.backend.get_mailbox_data(&mailbox_id).unwrap();
-                        let mailbox_below = {
-                            let id = {
-                                let columns = self.columns.lock().unwrap();
-                                columns
-                                    .get(&self.center_column_mailbox())
-                                    .map(|center| center.entries()[idx + 1].clone())
-                                    .map(|entry| {
-                                        let ColumnStateEntry::Mailbox(id) = entry else {
-                                            unreachable!("Only mailboxes can be above!")
-                                        };
-                                        id
-                                    })
-                                    .unwrap()
-                            };
-
-                            self.backend.get_mailbox_data(&id).unwrap()
-                        };
-
-                        let update1 = MailboxUpdate {
-                            id: mailbox.id,
-                            sort_order: Some(mailbox_below.sort_order),
-                            ..Default::default()
-                        };
-
-                        let update2 = MailboxUpdate {
-                            id: mailbox_below.id,
-                            sort_order: Some(mailbox.sort_order),
-                            ..Default::default()
-                        };
-
-                        let column_id = self.center_column_mailbox().clone();
-                        let columns = self.columns.clone();
-                        let backend = self.backend.clone();
-                        self.task_manager.spawn(async move {
-                            let updates = vec![update1.clone(), update2.clone()];
-                            if let Err(err) = backend.update_mailboxes(updates).await {
-                                error!("Couldn't move mailbox up:\n{err}");
-                                return;
-                            }
-
-                            let mut columns = columns.lock().unwrap();
-                            if let Some(column) = columns.get_mut(&column_id) {
-                                let entries = column.entries_mut();
-
-                                let pos1 = entries.iter().position(|entry| matches!(entry, ColumnStateEntry::Mailbox(id) if id == &update1.id)).unwrap();
-                                let pos2 = entries.iter().position(|entry| matches!(entry, ColumnStateEntry::Mailbox(id) if id == &update2.id)).unwrap();
-
-                                entries.swap(pos1, pos2);
-                                column.state.select_next();
-                            }
-                        })
-                    }
-                }
-            }
-        }
-
+        move_mailbox(
+            false,
+            self.center_column_mailbox().clone(),
+            self.backend.clone(),
+            self.columns.clone(),
+            self.task_manager.clone(),
+        );
         None
     }
 
@@ -971,4 +801,114 @@ async fn op_uncollapse_thread(
         .splice(thread_idx..(thread_idx + 1), thread_children_entries);
 
     Ok(())
+}
+
+fn move_mailbox(
+    up: bool,
+    column_mailbox: ParentMailboxId,
+    backend: Arc<Backend>,
+    columns: Columns,
+    task_manager: Rc<TaskManager>,
+) {
+    // TODO: Check `self.selection` so that the user can move multiple mailboxes
+    let selected_entry = {
+        let columns = columns.lock().unwrap();
+        columns
+            .get(&column_mailbox)
+            .and_then(|center| center.selected_entry().cloned())
+    };
+
+    if let Some(entry) = selected_entry {
+        match entry {
+            ColumnStateEntry::SingleMail(_)
+            | ColumnStateEntry::CollapsedThread(_, _)
+            | ColumnStateEntry::ThreadStart { .. }
+            | ColumnStateEntry::ThreadChild(_, _)
+            | ColumnStateEntry::ThreadEnd(_, _) => {
+                warn!("This action can be only applied to mailboxes.");
+            }
+            ColumnStateEntry::Mailbox(mailbox_id) => {
+                let (idx, last_mailbox_idx) = {
+                    let columns = columns.lock().unwrap();
+                    let center = columns.get(&column_mailbox).unwrap();
+
+                    let idx = center.selected_idx().unwrap();
+                    let last_mailbox_idx = center
+                        .entries()
+                        .iter()
+                        .position(|entry| !matches!(entry, ColumnStateEntry::Mailbox(_)))
+                        .unwrap_or(center.entries().len() - 1);
+
+                    (idx, last_mailbox_idx)
+                };
+
+                let can_move_up = if up { idx > 0 } else { true };
+                let can_move_down = if !up { idx < last_mailbox_idx } else { true };
+                let there_are_at_least_two_mailboxes = last_mailbox_idx > 0;
+                if can_move_up && can_move_down && there_are_at_least_two_mailboxes {
+                    let mailbox = backend.get_mailbox_data(&mailbox_id).unwrap();
+                    let other_mailbox = {
+                        let id = {
+                            let columns = columns.lock().unwrap();
+                            columns
+                                .get(&column_mailbox)
+                                .map(|center| {
+                                    let other_idx = if up { idx - 1 } else { idx + 1 };
+                                    center.entries()[other_idx].clone()
+                                })
+                                .map(|entry| {
+                                    let ColumnStateEntry::Mailbox(id) = entry else {
+                                        unreachable!("Only mailboxes can be above!")
+                                    };
+                                    id
+                                })
+                                .unwrap()
+                        };
+
+                        backend.get_mailbox_data(&id).unwrap()
+                    };
+
+                    let update1 = MailboxUpdate {
+                        id: mailbox.id,
+                        sort_order: Some(other_mailbox.sort_order),
+                        ..Default::default()
+                    };
+
+                    let update2 = MailboxUpdate {
+                        id: other_mailbox.id,
+                        sort_order: Some(mailbox.sort_order),
+                        ..Default::default()
+                    };
+
+                    task_manager.spawn(async move {
+                            let updates = vec![update1.clone(), update2.clone()];
+                            if let Err(err) = backend.update_mailboxes(updates).await {
+                                error!("Couldn't move mailbox up:\n{err}");
+                                return;
+                            }
+
+                            let mut columns = columns.lock().unwrap();
+                            if let Some(column) = columns.get_mut(&column_mailbox) {
+                                let entries = column.entries_mut();
+
+                                let pos1 = entries
+                                    .iter()
+                                    .position(|entry| matches!(entry, ColumnStateEntry::Mailbox(id) if id == &update1.id)).unwrap();
+                                let pos2 = entries
+                                    .iter()
+                                    .position(|entry| matches!(entry, ColumnStateEntry::Mailbox(id) if id == &update2.id)).unwrap();
+
+                                entries.swap(pos1, pos2);
+
+                                if up {
+                                    column.state.select_previous();
+                                } else {
+                                    column.state.select_next();
+                                }
+                            }
+                        })
+                }
+            }
+        }
+    }
 }
