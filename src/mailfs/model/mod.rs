@@ -28,6 +28,8 @@ use std::{
 };
 use tracing::{debug, error, warn};
 
+const NORMALIZE_SORT_ORDER_SIZE: u32 = 32;
+
 pub type Columns = Arc<Mutex<HashMap<ParentMailboxId, ColumnState>>>;
 
 pub enum RightColumn {
@@ -272,6 +274,44 @@ impl<'a> Model {
                 }
             }
         }
+    }
+
+    fn normalize_mailbox_sort_order(&self) {
+        let ids: Vec<MailboxId> = {
+            let columns = self.columns.lock().unwrap();
+            let Some(center) = columns.get(self.center_column_mailbox()) else {
+                return;
+            };
+
+            center
+                .entries()
+                .iter()
+                .map_while(|entry| {
+                    if let ColumnStateEntry::Mailbox(id) = entry {
+                        Some(id.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        };
+
+        let backend = self.backend.clone();
+        self.task_manager.spawn(async move {
+            let updates: Vec<MailboxUpdate> = ids
+                .into_iter()
+                .enumerate()
+                .map(|(idx, id)| MailboxUpdate {
+                    id,
+                    sort_order: Some((idx as u32 + 1) * NORMALIZE_SORT_ORDER_SIZE),
+                    ..Default::default()
+                })
+                .collect();
+
+            if let Err(err) = backend.update_mailboxes(updates).await {
+                error!("Couldn't normalize sort order of mailboxes:\n{err}");
+            }
+        });
     }
 }
 
@@ -665,47 +705,6 @@ impl Model {
         None
     }
 }
-
-/// Methods for the pending ops
-// impl Model {
-
-//     fn op_mail_attachments(&mut self, id: &MailId) -> Result<(), error::BackendNotReady> {
-//         self.backend.prefetch_mail_attachments(id);
-//         Ok(())
-//     }
-
-//     fn op_move_mailbox_up(&mut self, data: &OpMoveMailboxUp) -> Result<(), error::BackendNotReady> {
-//         let Some(column) = self.columns.get(&data.parent) else {
-//             warn!(
-//                 "Can't move mailbox up. Column for mailbox with the id '{:?}' doesn't exist (anymore?).",
-//                 data.parent
-//             );
-//             return Ok(());
-//         };
-
-//         let mailboxes: Vec<MailboxData> = column
-//             .entries()
-//             .iter()
-//             .cloned()
-//             .map_while(|entry| match entry {
-//                 ColumnStateEntry::Mailbox(id) => Some(id),
-//                 _ => None,
-//             })
-//             .map(|id| self.backend.get_mailbox_data(&id).unwrap())
-//             .collect();
-
-//         let idx_of_mailbox_to_move = mailboxes
-//             .iter()
-//             .position(|mailbox| mailbox.id == data.mailbox)
-//             .unwrap();
-
-//         if idx_of_mailbox_to_move == 0 {
-//             return Ok(());
-//         }
-
-//         todo!()
-//     }
-// }
 
 async fn op_init_mailbox(
     id: ParentMailboxId,
