@@ -4,10 +4,9 @@ mod task_manager;
 mod config;
 mod log_viewer;
 mod mail_viewer;
+mod mailfs;
 mod statusbar;
 mod utils;
-
-mod mailfs;
 
 use crate::{
     backend::MailId, statusbar::Statusbar, task_manager::TaskManager, utils::ui::ScreenState,
