@@ -842,10 +842,9 @@ fn move_mailbox(
                     (idx, last_mailbox_idx)
                 };
 
-                let can_move_up = if up { idx > 0 } else { true };
-                let can_move_down = if !up { idx < last_mailbox_idx } else { true };
+                let is_not_at_end_of_entries = if up { idx > 0 } else { idx < last_mailbox_idx };
                 let there_are_at_least_two_mailboxes = last_mailbox_idx > 0;
-                if can_move_up && can_move_down && there_are_at_least_two_mailboxes {
+                if is_not_at_end_of_entries && there_are_at_least_two_mailboxes {
                     let mailbox = backend.get_mailbox_data(&mailbox_id).unwrap();
                     let other_mailbox = {
                         let id = {
