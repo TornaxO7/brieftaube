@@ -61,6 +61,7 @@ pub struct Model {
     task_manager: Rc<TaskManager>,
 
     pub selected_viewer: Viewer,
+
     pub metadata_viewer: MetadataViewer,
     pub text_viewer: TextViewer,
     pub markdown_viewer: MarkdownViewer,
@@ -350,7 +351,7 @@ impl Model {
             Viewer::Attachments => Viewer::Metadata,
         };
 
-        self.selected_viewer = next;
+        self.set_viewer(next);
     }
 
     fn open_previous_tab(&mut self) {
@@ -361,7 +362,7 @@ impl Model {
             Viewer::Attachments => Viewer::Markdown,
         };
 
-        self.selected_viewer = previous;
+        self.set_viewer(previous);
     }
 
     fn open_html_mail_in_browser(&self) {
