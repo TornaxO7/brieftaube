@@ -50,8 +50,6 @@ impl LayerModel<Action, super::Action> for AttachmentsViewer {
             Action::NavigateToBottom => todo!(),
             Action::NavigateHalfPageDown => todo!(),
             Action::NavigateHalfPageUp => todo!(),
-            Action::NavigateHalfPageRight => todo!(),
-            Action::NavigateHalfPageLeft => todo!(),
             Action::OpenMetadataTab => todo!(),
             Action::OpenTextTab => todo!(),
             Action::OpenMarkdownTab => todo!(),

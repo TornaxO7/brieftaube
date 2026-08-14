@@ -38,11 +38,6 @@ pub enum Action {
     #[strum(message = "Navigate half page up.")]
     NavigateHalfPageUp,
 
-    #[strum(message = "Navigate half page to the right.")]
-    NavigateHalfPageRight,
-    #[strum(message = "Navigate half page to the left.")]
-    NavigateHalfPageLeft,
-
     #[strum(message = "Display metadata of mail.")]
     OpenMetadataTab,
     #[strum(message = "Display the mail as text.")]
