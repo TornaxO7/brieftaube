@@ -17,7 +17,7 @@ use throbber_widgets_tui::{Throbber, ThrobberState};
 pub struct Statusbar {}
 
 impl StatefulWidget for Statusbar {
-    type State = super::State;
+    type State = super::Model;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let block = Block::bordered();

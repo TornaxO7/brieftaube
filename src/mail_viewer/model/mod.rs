@@ -171,7 +171,7 @@ impl LayerCore for Model {
     fn handle_event(
         &mut self,
         event: crossterm::event::Event,
-        statusbar: &mut crate::statusbar::State,
+        statusbar: &mut crate::statusbar::Model,
     ) -> Option<crate::Action> {
         <Self as LayerModel<Action>>::handle_event(self, event, statusbar)
     }

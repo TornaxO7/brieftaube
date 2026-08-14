@@ -1,5 +1,5 @@
-mod state;
+mod model;
 mod widget;
 
-pub use state::{Counter, State};
+pub use model::{Counter, Model};
 pub use widget::Statusbar;

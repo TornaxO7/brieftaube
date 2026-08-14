@@ -5,7 +5,7 @@ pub use counter::Counter;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use throbber_widgets_tui::ThrobberState;
 
-pub struct State {
+pub struct Model {
     pub(super) screen_name: String,
     pub(super) keypresses: String,
 
@@ -14,7 +14,7 @@ pub struct State {
     pub(super) throbber_state: Option<ThrobberState>,
 }
 
-impl State {
+impl Model {
     pub fn new(init_layer: &Layer, counter: Counter) -> Self {
         let mut state = Self {
             screen_name: String::new(),

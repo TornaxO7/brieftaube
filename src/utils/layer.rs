@@ -5,7 +5,7 @@ pub trait LayerCore {
     fn handle_event(
         &mut self,
         event: Event,
-        statusbar: &mut crate::statusbar::State,
+        statusbar: &mut crate::statusbar::Model,
     ) -> Option<crate::Action>;
 }
 
@@ -30,7 +30,7 @@ where
     fn handle_event(
         &mut self,
         event: Event,
-        statusbar: &mut crate::statusbar::State,
+        statusbar: &mut crate::statusbar::Model,
     ) -> Option<crate::Action> {
         match event {
             Event::Key(event) => {

@@ -74,7 +74,7 @@ pub struct App {
     is_running: bool,
     backend: Arc<backend::Backend>,
     layers: Vec<Layer>,
-    statusbar: statusbar::State,
+    statusbar: statusbar::Model,
     task_manager: Rc<TaskManager>,
 
     needs_full_redraw: bool,
@@ -87,7 +87,7 @@ impl App {
         let initial_layer =
             Layer::Mailfs(mailfs::Model::new(backend.clone(), task_manager.clone()));
 
-        let statusbar = statusbar::State::new(&initial_layer, counter);
+        let statusbar = statusbar::Model::new(&initial_layer, counter);
 
         Ok(Self {
             is_running: true,

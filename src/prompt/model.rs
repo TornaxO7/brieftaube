@@ -24,7 +24,7 @@ impl LayerCore for Model {
     fn handle_event(
         &mut self,
         event: Event,
-        _: &mut crate::statusbar::State,
+        _: &mut crate::statusbar::Model,
     ) -> Option<crate::Action> {
         match event {
             Event::Key(event) => match event.code {
