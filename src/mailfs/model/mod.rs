@@ -7,7 +7,7 @@ pub use selection::{EntryId, SelectionType};
 use super::UserAction;
 use crate::{
     backend::{
-        Backend, MailId, MailboxData, MailboxId, MailboxUpdate, ThreadId,
+        Backend, MailId, MailboxData, MailboxId, MailboxNew, MailboxUpdate, ThreadId,
         mailbox::{
             RemoveMailboxOption,
             types::{ParentMailboxId, TOP_PARENT_MAILBOX_ID},
@@ -34,6 +34,7 @@ pub type Columns = Arc<Mutex<HashMap<ParentMailboxId, ColumnState>>>;
 
 enum OverlayValue {
     Action,
+    NewMailboxName,
 }
 
 pub enum RightColumn {
@@ -140,102 +141,18 @@ impl LayerModel<UserAction> for Model {
                 let action = UserAction::from_str(&msg).unwrap();
                 self.apply_action(action)
             }
+            OverlayValue::NewMailboxName => {
+                let column_id = self.center_column_mailbox().clone();
+                let columns = self.columns.clone();
+                let backend = self.backend.clone();
+                self.task_manager.spawn(async move {
+                    create_new_mailbox(msg, column_id, columns, backend).await;
+                });
+
+                None
+            }
         }
     }
-
-    // fn handle_overlay_result(
-    //     &mut self,
-    //     result: ScreenOverlayResult<PaletteValue, InputType>,
-    // ) -> Option<crate::Action> {
-    //     self.overlay = None;
-
-    //     match result {
-    //         ScreenOverlayResult::Palette(value) => match value {
-    //             PaletteValue::Action(action) => {
-    //                 return self.apply_user_action(action);
-    //             }
-    //         },
-    //         ScreenOverlayResult::Cancel => {}
-    //         ScreenOverlayResult::Input { value, typ } => match typ {
-    //             InputType::NewMailboxName => {
-    //                 let column_id = self.center_column_mailbox().clone();
-    //                 let columns = self.columns.clone();
-    //                 let backend = self.backend.clone();
-    //                 self.task_manager.spawn(async move {
-    //                     let new_mailbox = {
-    //                         let sort_order = {
-    //                             let columns = columns.lock().unwrap();
-    //                             let center = columns.get(&column_id).unwrap();
-    //                             center
-    //                                 .entries()
-    //                                 .iter()
-    //                                 .map_while(|entry| {
-    //                                     if let ColumnStateEntry::Mailbox(id) = entry {
-    //                                         let mailbox = backend.get_mailbox_data(id).unwrap();
-    //                                         Some(mailbox)
-    //                                     } else {
-    //                                         None
-    //                                     }
-    //                                 })
-    //                                 .max_by_key(|mailbox| mailbox.sort_order)
-    //                                 .map(|last_mailbox| {
-    //                                     (last_mailbox.sort_order + 1)
-    //                                         .next_multiple_of(NORMALIZE_SORT_ORDER_SIZE)
-    //                                 })
-    //                                 .unwrap_or(NORMALIZE_SORT_ORDER_SIZE)
-    //                         };
-
-    //                         MailboxNew {
-    //                             name: value,
-    //                             sort_order: Some(sort_order),
-    //                             parent_id: column_id.clone(),
-    //                             ..Default::default()
-    //                         }
-    //                     };
-
-    //                     let new_mailbox_id = match backend.create_mailbox(new_mailbox.clone()).await
-    //                     {
-    //                         Ok(created_mailbox_id) => created_mailbox_id,
-    //                         Err(err) => {
-    //                             error!("Couldn't create mailbox:\n{err}");
-    //                             return;
-    //                         }
-    //                     };
-
-    //                     let mut columns = columns.lock().unwrap();
-    //                     let center = columns.get_mut(&column_id).unwrap();
-    //                     let new_pos = center
-    //                         .entries()
-    //                         .iter()
-    //                         .take_while(|entry| matches!(entry, ColumnStateEntry::Mailbox(_)))
-    //                         .position(|entry| {
-    //                             if let ColumnStateEntry::Mailbox(other_id) = entry {
-    //                                 let mailbox = backend.get_mailbox_data(other_id).unwrap();
-    //                                 mailbox.sort_order > new_mailbox.sort_order.unwrap()
-    //                             } else {
-    //                                 false
-    //                             }
-    //                         })
-    //                         .unwrap_or(
-    //                             center
-    //                                 .entries()
-    //                                 .iter()
-    //                                 .position(|entry| {
-    //                                     !matches!(entry, ColumnStateEntry::Mailbox(_))
-    //                                 })
-    //                                 .unwrap_or(center.entries().len()),
-    //                         );
-
-    //                     center
-    //                         .entries_mut()
-    //                         .insert(new_pos, ColumnStateEntry::Mailbox(new_mailbox_id));
-    //                 });
-    //             }
-    //         },
-    //     };
-
-    //     None
-    // }
 }
 
 /// Helper functions
@@ -668,7 +585,10 @@ impl Model {
     }
 
     fn create_mailbox(&mut self) -> Option<crate::Action> {
-        None
+        self.overlay_value = Some(OverlayValue::NewMailboxName);
+        Some(crate::Action::OpenPrompt {
+            description: "Mailbox name:".to_string(),
+        })
     }
 
     fn remove_mailbox(&mut self) -> Option<crate::Action> {
@@ -1044,4 +964,75 @@ async fn init_mailfs(columns: Columns, backend: Arc<Backend>) {
             }
         }
     }
+}
+
+async fn create_new_mailbox(
+    new_mailbox_name: String,
+    column_id: ParentMailboxId,
+    columns: Columns,
+    backend: Arc<Backend>,
+) {
+    let new_mailbox = {
+        let sort_order = {
+            let columns = columns.lock().unwrap();
+            let center = columns.get(&column_id).unwrap();
+            center
+                .entries()
+                .iter()
+                .map_while(|entry| {
+                    if let ColumnStateEntry::Mailbox(id) = entry {
+                        let mailbox = backend.get_mailbox_data(id).unwrap();
+                        Some(mailbox)
+                    } else {
+                        None
+                    }
+                })
+                .max_by_key(|mailbox| mailbox.sort_order)
+                .map(|last_mailbox| {
+                    (last_mailbox.sort_order + 1).next_multiple_of(NORMALIZE_SORT_ORDER_SIZE)
+                })
+                .unwrap_or(NORMALIZE_SORT_ORDER_SIZE)
+        };
+
+        MailboxNew {
+            name: new_mailbox_name,
+            sort_order: Some(sort_order),
+            parent_id: column_id.clone(),
+            ..Default::default()
+        }
+    };
+
+    let new_mailbox_id = match backend.create_mailbox(new_mailbox.clone()).await {
+        Ok(created_mailbox_id) => created_mailbox_id,
+        Err(err) => {
+            error!("Couldn't create mailbox:\n{err}");
+            return;
+        }
+    };
+
+    let mut columns = columns.lock().unwrap();
+    let center = columns.get_mut(&column_id).unwrap();
+    let new_pos = center
+        .entries()
+        .iter()
+        .take_while(|entry| matches!(entry, ColumnStateEntry::Mailbox(_)))
+        .position(|entry| {
+            if let ColumnStateEntry::Mailbox(other_id) = entry {
+                let mailbox = backend.get_mailbox_data(other_id).unwrap();
+                mailbox.sort_order > new_mailbox.sort_order.unwrap()
+            } else {
+                false
+            }
+        })
+        .unwrap_or(
+            center
+                .entries()
+                .iter()
+                .position(|entry| !matches!(entry, ColumnStateEntry::Mailbox(_)))
+                .unwrap_or(center.entries().len()),
+        );
+
+    center
+        .entries_mut()
+        .insert(new_pos, ColumnStateEntry::Mailbox(new_mailbox_id));
 }

@@ -303,6 +303,27 @@ fn draw_layer(layer: &mut Layer, frame: &mut Frame, area: Rect) {
             frame.render_widget(Clear, area);
             frame.render_stateful_widget(palette::Palette, area, model);
         }
-        Layer::Prompt(model) => frame.render_stateful_widget(prompt::Prompt, area, model),
+        Layer::Prompt(model) => {
+            let area = {
+                let [_top, center, _bottom] = Layout::vertical([
+                    Constraint::Fill(1),
+                    Constraint::Length(3),
+                    Constraint::Fill(1),
+                ])
+                .areas(area);
+
+                let [_left, center, _right] = Layout::horizontal([
+                    Constraint::Fill(1),
+                    Constraint::Min(50),
+                    Constraint::Fill(1),
+                ])
+                .areas(center);
+
+                center
+            };
+
+            frame.render_widget(Clear, area);
+            frame.render_stateful_widget(prompt::Prompt, area, model);
+        }
     }
 }
