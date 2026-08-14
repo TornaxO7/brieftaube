@@ -1,4 +1,4 @@
-use crate::{mailfs::model::PaletteValue, utils::ui::palette::Entry};
+use crate::palette::Entry;
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator};
 
@@ -66,7 +66,7 @@ pub enum UserAction {
 }
 
 impl UserAction {
-    pub fn palette_options() -> Vec<Entry<PaletteValue>> {
+    pub fn palette_options() -> Vec<Entry> {
         Self::iter()
             .filter_map(|action| {
                 if let Some(is_intern) = action.get_bool("intern") {
@@ -77,9 +77,10 @@ impl UserAction {
 
                 let name = action.to_string();
                 let description = action.get_message().unwrap_or_default().to_string();
+                let id = action.to_string();
 
                 Some(Entry {
-                    value: PaletteValue::Action(action),
+                    id,
                     name,
                     description,
                 })

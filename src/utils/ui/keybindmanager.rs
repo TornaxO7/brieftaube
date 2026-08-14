@@ -14,14 +14,13 @@ pub enum HandleEvent<A> {
     Cancel,
 }
 
-#[derive(Debug)]
-pub struct KeybindManager<A> {
+pub struct KeybindManager<A: Clone> {
     int_prefix: String,
     mapping: Vec<HashMap<KeyEvent, Entry<A>>>,
     idx: usize,
 }
 
-impl<A: Clone + std::fmt::Debug> KeybindManager<A> {
+impl<A: Clone> KeybindManager<A> {
     pub fn new<S: AsRef<str>>(raw_mapping: HashMap<S, A>) -> Self {
         let mapping = {
             let mut mapping = Vec::new();

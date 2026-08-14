@@ -1,14 +1,16 @@
 pub mod input;
 pub mod keybindmanager;
-pub mod palette;
 
-use crossterm::event::{Event, KeyEvent};
+use crossterm::event::Event;
 use keybindmanager::{HandleEvent, KeybindManager};
 
-pub trait ScreenState<'a, A: Clone + std::fmt::Debug, P: Clone, I: Clone> {
-    fn apply_user_action(&mut self, action: A) -> Option<crate::Action>;
+pub trait ScreenState<Action>
+where
+    Action: Clone,
+{
+    fn apply_user_action(&mut self, action: Action) -> Option<crate::Action>;
 
-    fn keybinding_manager(&mut self) -> &mut KeybindManager<A>;
+    fn keybinding_manager(&mut self) -> &mut KeybindManager<Action>;
 
     fn handle_event(
         &mut self,
@@ -18,11 +20,6 @@ pub trait ScreenState<'a, A: Clone + std::fmt::Debug, P: Clone, I: Clone> {
         match event {
             Event::Key(event) => {
                 tracing::debug!("{:#?}", event);
-                if let Some(overlay) = self.overlay() {
-                    return overlay
-                        .handle_event(event)
-                        .and_then(|result| self.handle_overlay_result(result));
-                }
 
                 statusbar.push_key_press(event);
                 match self.keybinding_manager().handle_event(event) {
@@ -40,37 +37,6 @@ pub trait ScreenState<'a, A: Clone + std::fmt::Debug, P: Clone, I: Clone> {
             }
             Event::Mouse(_event) => None,
             _ => None,
-        }
-    }
-
-    fn overlay(&mut self) -> Option<&mut ScreenOverlay<P, I>>;
-
-    fn handle_overlay_result(&mut self, result: ScreenOverlayResult<P, I>)
-    -> Option<crate::Action>;
-}
-
-pub enum ScreenOverlay<P: Clone, I: Clone> {
-    Palette(palette::State<P>),
-    Input(input::State<I>),
-}
-
-impl<P: Clone, I: Clone> ScreenOverlay<P, I> {
-    pub fn input<S: ToString>(desc: S, typ: I) -> Self {
-        Self::Input(input::State::new(desc, typ))
-    }
-}
-
-pub enum ScreenOverlayResult<P, I> {
-    Palette(P),
-    Input { value: String, typ: I },
-    Cancel,
-}
-
-impl<P: Clone, I: Clone> ScreenOverlay<P, I> {
-    pub fn handle_event(&mut self, event: KeyEvent) -> Option<ScreenOverlayResult<P, I>> {
-        match self {
-            Self::Palette(state) => state.handle_event(event),
-            Self::Input(state) => state.handle_event(event),
         }
     }
 }

@@ -5,6 +5,7 @@ mod config;
 mod log_viewer;
 mod mail_viewer;
 mod mailfs;
+mod palette;
 mod statusbar;
 mod utils;
 
@@ -50,12 +51,16 @@ enum Screen {
     MailViewer(mail_viewer::Model),
     LogViewer(log_viewer::Model),
     Mailfs(mailfs::Model),
+    Palette(palette::Model),
 }
 
-#[derive(Debug)]
 pub enum Action {
     OpenMailViewer(MailId),
     OpenLogViewer,
+    OpenPalette {
+        entries: Vec<palette::Entry>,
+        callback: palette::Callback,
+    },
     // OpenComposer,
     Redraw,
     Back,
@@ -130,6 +135,7 @@ impl App {
 
         match self.screens.last_mut().unwrap() {
             Screen::Mailfs(model) => frame.render_stateful_widget(mailfs::Mailfs, screen, model),
+            Screen::Palette(model) => frame.render_stateful_widget(palette::Palette, screen, model),
             // Screen::Composer(state) => {
             //     frame.render_stateful_widget(composer::ui::Composer::default(), screen, state);
             // }
@@ -147,6 +153,7 @@ impl App {
             // Screen::Mailboxes(state) => state.handle_event(event, &mut self.statusbar),
             // Screen::MailList(state) => state.handle_event(event, &mut self.statusbar),
             // Screen::Composer(state) => state.handle_event(event, &mut self.statusbar),
+            Screen::Palette(model) => model.handle_event(event),
             Screen::MailViewer(state) => state.handle_event(event, &mut self.statusbar),
             Screen::Mailfs(state) => state.handle_event(event, &mut self.statusbar),
             Screen::LogViewer(state) => state.handle_event(event, &mut self.statusbar),
@@ -162,6 +169,10 @@ impl App {
                     Screen::MailViewer(mail_viewer::Model::new(id, backend, task_manager));
 
                 self.statusbar.set_screen(&next_screen);
+                self.screens.push(next_screen);
+            }
+            Action::OpenPalette { entries, callback } => {
+                let next_screen = Screen::Palette(palette::Model::new(entries, callback));
                 self.screens.push(next_screen);
             }
             Action::OpenLogViewer => {
@@ -198,7 +209,7 @@ impl App {
             match self.screens.last().expect("There's at least one screen") {
                 // Screen::Composer(_) => todo!(),
                 Screen::MailViewer(_) | Screen::Mailfs(_) => self.task_manager.has_tasks_running(),
-                Screen::LogViewer(_) => false,
+                Screen::LogViewer(_) | Screen::Palette(_) => false,
             };
 
         if top_screen_has_tasks_running {

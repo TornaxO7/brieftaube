@@ -4,13 +4,12 @@ mod palette_value;
 mod selection;
 
 pub use column_state::{ColumnState, ColumnStateEntry};
-pub use palette_value::PaletteValue;
 pub use selection::{EntryId, SelectionType};
 
 use super::UserAction;
 use crate::{
     backend::{
-        Backend, MailId, MailboxData, MailboxId, MailboxNew, MailboxUpdate, ThreadId,
+        Backend, MailId, MailboxData, MailboxId, MailboxUpdate, ThreadId,
         mailbox::{
             RemoveMailboxOption,
             types::{ParentMailboxId, TOP_PARENT_MAILBOX_ID},
@@ -18,9 +17,7 @@ use crate::{
         mails::types::{MailKeyword, MailUpdate},
     },
     task_manager::TaskManager,
-    utils::ui::{
-        ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager, palette,
-    },
+    utils::ui::{ScreenState, keybindmanager::KeybindManager},
 };
 use input_type::InputType;
 use std::{
@@ -47,7 +44,6 @@ pub struct Model {
     pub selection: HashMap<EntryId, SelectionType>,
     pub navigation_stack: Vec<ParentMailboxId>,
     pub columns: Columns,
-    pub overlay: Option<ScreenOverlay<PaletteValue, InputType>>,
 }
 
 impl Model {
@@ -114,7 +110,6 @@ impl Model {
             task_manager,
 
             backend,
-            overlay: None,
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", UserAction::Quit),
                 ("j", UserAction::NavigateDown),
@@ -131,7 +126,7 @@ impl Model {
     }
 }
 
-impl<'a> ScreenState<'a, UserAction, PaletteValue, InputType> for Model {
+impl ScreenState<UserAction> for Model {
     fn apply_user_action(&mut self, action: UserAction) -> Option<crate::Action> {
         debug!("{:?}", action);
 
@@ -166,103 +161,99 @@ impl<'a> ScreenState<'a, UserAction, PaletteValue, InputType> for Model {
         &mut self.keybindings
     }
 
-    fn overlay(&mut self) -> Option<&mut ScreenOverlay<PaletteValue, InputType>> {
-        self.overlay.as_mut()
-    }
+    // fn handle_overlay_result(
+    //     &mut self,
+    //     result: ScreenOverlayResult<PaletteValue, InputType>,
+    // ) -> Option<crate::Action> {
+    //     self.overlay = None;
 
-    fn handle_overlay_result(
-        &mut self,
-        result: ScreenOverlayResult<PaletteValue, InputType>,
-    ) -> Option<crate::Action> {
-        self.overlay = None;
+    //     match result {
+    //         ScreenOverlayResult::Palette(value) => match value {
+    //             PaletteValue::Action(action) => {
+    //                 return self.apply_user_action(action);
+    //             }
+    //         },
+    //         ScreenOverlayResult::Cancel => {}
+    //         ScreenOverlayResult::Input { value, typ } => match typ {
+    //             InputType::NewMailboxName => {
+    //                 let column_id = self.center_column_mailbox().clone();
+    //                 let columns = self.columns.clone();
+    //                 let backend = self.backend.clone();
+    //                 self.task_manager.spawn(async move {
+    //                     let new_mailbox = {
+    //                         let sort_order = {
+    //                             let columns = columns.lock().unwrap();
+    //                             let center = columns.get(&column_id).unwrap();
+    //                             center
+    //                                 .entries()
+    //                                 .iter()
+    //                                 .map_while(|entry| {
+    //                                     if let ColumnStateEntry::Mailbox(id) = entry {
+    //                                         let mailbox = backend.get_mailbox_data(id).unwrap();
+    //                                         Some(mailbox)
+    //                                     } else {
+    //                                         None
+    //                                     }
+    //                                 })
+    //                                 .max_by_key(|mailbox| mailbox.sort_order)
+    //                                 .map(|last_mailbox| {
+    //                                     (last_mailbox.sort_order + 1)
+    //                                         .next_multiple_of(NORMALIZE_SORT_ORDER_SIZE)
+    //                                 })
+    //                                 .unwrap_or(NORMALIZE_SORT_ORDER_SIZE)
+    //                         };
 
-        match result {
-            ScreenOverlayResult::Palette(value) => match value {
-                PaletteValue::Action(action) => {
-                    return self.apply_user_action(action);
-                }
-            },
-            ScreenOverlayResult::Cancel => {}
-            ScreenOverlayResult::Input { value, typ } => match typ {
-                InputType::NewMailboxName => {
-                    let column_id = self.center_column_mailbox().clone();
-                    let columns = self.columns.clone();
-                    let backend = self.backend.clone();
-                    self.task_manager.spawn(async move {
-                        let new_mailbox = {
-                            let sort_order = {
-                                let columns = columns.lock().unwrap();
-                                let center = columns.get(&column_id).unwrap();
-                                center
-                                    .entries()
-                                    .iter()
-                                    .map_while(|entry| {
-                                        if let ColumnStateEntry::Mailbox(id) = entry {
-                                            let mailbox = backend.get_mailbox_data(id).unwrap();
-                                            Some(mailbox)
-                                        } else {
-                                            None
-                                        }
-                                    })
-                                    .max_by_key(|mailbox| mailbox.sort_order)
-                                    .map(|last_mailbox| {
-                                        (last_mailbox.sort_order + 1)
-                                            .next_multiple_of(NORMALIZE_SORT_ORDER_SIZE)
-                                    })
-                                    .unwrap_or(NORMALIZE_SORT_ORDER_SIZE)
-                            };
+    //                         MailboxNew {
+    //                             name: value,
+    //                             sort_order: Some(sort_order),
+    //                             parent_id: column_id.clone(),
+    //                             ..Default::default()
+    //                         }
+    //                     };
 
-                            MailboxNew {
-                                name: value,
-                                sort_order: Some(sort_order),
-                                parent_id: column_id.clone(),
-                                ..Default::default()
-                            }
-                        };
+    //                     let new_mailbox_id = match backend.create_mailbox(new_mailbox.clone()).await
+    //                     {
+    //                         Ok(created_mailbox_id) => created_mailbox_id,
+    //                         Err(err) => {
+    //                             error!("Couldn't create mailbox:\n{err}");
+    //                             return;
+    //                         }
+    //                     };
 
-                        let new_mailbox_id = match backend.create_mailbox(new_mailbox.clone()).await
-                        {
-                            Ok(created_mailbox_id) => created_mailbox_id,
-                            Err(err) => {
-                                error!("Couldn't create mailbox:\n{err}");
-                                return;
-                            }
-                        };
+    //                     let mut columns = columns.lock().unwrap();
+    //                     let center = columns.get_mut(&column_id).unwrap();
+    //                     let new_pos = center
+    //                         .entries()
+    //                         .iter()
+    //                         .take_while(|entry| matches!(entry, ColumnStateEntry::Mailbox(_)))
+    //                         .position(|entry| {
+    //                             if let ColumnStateEntry::Mailbox(other_id) = entry {
+    //                                 let mailbox = backend.get_mailbox_data(other_id).unwrap();
+    //                                 mailbox.sort_order > new_mailbox.sort_order.unwrap()
+    //                             } else {
+    //                                 false
+    //                             }
+    //                         })
+    //                         .unwrap_or(
+    //                             center
+    //                                 .entries()
+    //                                 .iter()
+    //                                 .position(|entry| {
+    //                                     !matches!(entry, ColumnStateEntry::Mailbox(_))
+    //                                 })
+    //                                 .unwrap_or(center.entries().len()),
+    //                         );
 
-                        let mut columns = columns.lock().unwrap();
-                        let center = columns.get_mut(&column_id).unwrap();
-                        let new_pos = center
-                            .entries()
-                            .iter()
-                            .take_while(|entry| matches!(entry, ColumnStateEntry::Mailbox(_)))
-                            .position(|entry| {
-                                if let ColumnStateEntry::Mailbox(other_id) = entry {
-                                    let mailbox = backend.get_mailbox_data(other_id).unwrap();
-                                    mailbox.sort_order > new_mailbox.sort_order.unwrap()
-                                } else {
-                                    false
-                                }
-                            })
-                            .unwrap_or(
-                                center
-                                    .entries()
-                                    .iter()
-                                    .position(|entry| {
-                                        !matches!(entry, ColumnStateEntry::Mailbox(_))
-                                    })
-                                    .unwrap_or(center.entries().len()),
-                            );
+    //                     center
+    //                         .entries_mut()
+    //                         .insert(new_pos, ColumnStateEntry::Mailbox(new_mailbox_id));
+    //                 });
+    //             }
+    //         },
+    //     };
 
-                        center
-                            .entries_mut()
-                            .insert(new_pos, ColumnStateEntry::Mailbox(new_mailbox_id));
-                    });
-                }
-            },
-        };
-
-        None
-    }
+    //     None
+    // }
 }
 
 /// Helper functions
@@ -389,11 +380,10 @@ impl Model {
     }
 
     fn open_command_palette(&mut self) -> Option<crate::Action> {
-        self.overlay = Some(ScreenOverlay::Palette(palette::State::new(
-            UserAction::palette_options(),
-        )));
+        let entries = UserAction::palette_options();
+        let callback: crate::palette::Callback = |id| {};
 
-        None
+        Some(crate::Action::OpenPalette { entries, callback })
     }
 
     fn navigate_down(&self) -> Option<crate::Action> {
