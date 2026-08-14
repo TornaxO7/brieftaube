@@ -28,7 +28,11 @@ impl LayerCore for Model {
     ) -> Option<crate::Action> {
         match event {
             Event::Key(event) => match event.code {
-                KeyCode::Esc | KeyCode::Enter => Some(crate::Action::Back),
+                KeyCode::Enter => Some(crate::Action::Back),
+                KeyCode::Esc => {
+                    self.input.clear();
+                    Some(crate::Action::Back)
+                }
                 _ => {
                     self.input.input(event);
                     None
@@ -41,6 +45,8 @@ impl LayerCore for Model {
 
 impl LayerOverlay for Model {
     fn into_message(self) -> Option<String> {
-        Some(self.input.lines()[0].clone())
+        let input = self.input.lines()[0].clone();
+
+        if input.is_empty() { None } else { Some(input) }
     }
 }
