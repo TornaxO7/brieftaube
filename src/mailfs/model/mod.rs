@@ -482,6 +482,8 @@ impl Model {
                     column
                         .entries_mut()
                         .splice(start_pos..=end_pos, [new_entry]);
+
+                    column.state.select(Some(start_pos));
                 }
             };
             return None;
