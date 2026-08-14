@@ -54,6 +54,10 @@ impl Model {
             list_state: ListState::default().with_selected(Some(0)),
         }
     }
+
+    pub fn get_search_term(&self) -> &str {
+        self.input.lines()[0].as_str()
+    }
 }
 
 impl LayerCore for Model {

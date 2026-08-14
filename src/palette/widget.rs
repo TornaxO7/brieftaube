@@ -3,7 +3,8 @@ use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
-    widgets::{Block, List, ListDirection, Paragraph, StatefulWidget, Widget, Wrap},
+    text::{Line, Span},
+    widgets::{Block, List, ListDirection, ListItem, Paragraph, StatefulWidget, Widget, Wrap},
 };
 
 pub struct Palette;
@@ -53,9 +54,39 @@ impl StatefulWidget for Palette {
 
         // options
         {
-            let options_content: Vec<&str> = matches
+            let search_term = state.get_search_term();
+
+            let options_content: Vec<ListItem> = matches
                 .iter()
-                .map(|output| output.data.0.as_str())
+                .map(|output| {
+                    let value = output.data.0.as_str();
+
+                    let spans: Vec<Span> = {
+                        let mut spans = Vec::new();
+
+                        let mut start = 0;
+                        for (match_idx, _) in value.match_indices(search_term) {
+                            if match_idx > start {
+                                spans.push(Span::raw(&value[start..match_idx]));
+                            }
+
+                            spans.push(Span::styled(
+                                &value[match_idx..(match_idx + search_term.len())],
+                                Style::new().bold(),
+                            ));
+
+                            start = match_idx + search_term.len();
+                        }
+
+                        if start < value.len() {
+                            spans.push(Span::raw(&value[start..]));
+                        }
+
+                        spans
+                    };
+
+                    ListItem::new(Line::from(spans))
+                })
                 .collect();
 
             StatefulWidget::render(
