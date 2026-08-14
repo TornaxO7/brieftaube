@@ -1,12 +1,8 @@
 mod render_data;
 
-use crate::{
-    mail_viewer::{
-        Model,
-        model::ScrollAction,
-        widget::render_data::{RenderData, ViewerState},
-    },
-    utils::ui::{ScreenOverlay, ScreenState, input::Input, palette::Palette},
+use crate::mail_viewer::{
+    model::ScrollAction,
+    widget::render_data::{RenderData, ViewerState},
 };
 use pulldown_cmark_mdcat::ratatui::{RenderOptions, Renderer};
 use ratatui::{
@@ -18,8 +14,8 @@ use ratatui::{
     },
     text::Text,
     widgets::{
-        Block, Clear, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState,
-        StatefulWidget, Table, Tabs, Widget,
+        Block, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget,
+        Table, Tabs, Widget,
     },
 };
 
@@ -36,8 +32,6 @@ impl StatefulWidget for MailViewer {
 
         render_tabs(tab_area, buf, &data);
         render_viewer(main_panel, buf, &mut data);
-
-        render_overlay(area, buf, model);
     }
 }
 
@@ -243,19 +237,6 @@ fn render_viewer(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
                 buf,
                 state,
             );
-        }
-    }
-}
-
-fn render_overlay(area: Rect, buf: &mut Buffer, model: &mut Model) {
-    if let Some(model) = model.overlay() {
-        let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
-        Widget::render(Clear, a, buf);
-        match model {
-            ScreenOverlay::Palette(model) => {
-                StatefulWidget::render(Palette::new(), a, buf, model);
-            }
-            ScreenOverlay::Input(model) => StatefulWidget::render(Input::new(), a, buf, model),
         }
     }
 }

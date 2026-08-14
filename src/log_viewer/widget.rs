@@ -1,9 +1,8 @@
-use crate::utils::ui::{ScreenOverlay, ScreenState, input::Input, palette::Palette};
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Rect},
+    layout::Rect,
     style::Style,
-    widgets::{Block, Clear, StatefulWidget, Widget},
+    widgets::{Block, StatefulWidget, Widget},
 };
 use tui_logger::TuiLoggerWidget;
 
@@ -22,16 +21,5 @@ impl StatefulWidget for LogViewer {
             .output_timestamp(Some("[%H:%M:%S]".to_string()))
             .state(state.scroll_state())
             .render(area, buf);
-
-        if let Some(state) = state.overlay() {
-            let a = area.centered(Constraint::Percentage(80), Constraint::Percentage(85));
-            Widget::render(Clear, a, buf);
-            match state {
-                ScreenOverlay::Palette(state) => {
-                    StatefulWidget::render(Palette::new(), a, buf, state);
-                }
-                ScreenOverlay::Input(state) => StatefulWidget::render(Input::new(), a, buf, state),
-            }
-        }
     }
 }

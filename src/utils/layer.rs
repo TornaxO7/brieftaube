@@ -1,14 +1,29 @@
-pub mod input;
-pub mod keybindmanager;
-
+use super::keybindmanager::{HandleEvent, KeybindManager};
 use crossterm::event::Event;
-use keybindmanager::{HandleEvent, KeybindManager};
 
-pub trait ScreenState<Action>
+pub trait LayerCore {
+    fn handle_event(
+        &mut self,
+        event: Event,
+        statusbar: &mut crate::statusbar::State,
+    ) -> Option<crate::Action>;
+}
+
+pub trait LayerOverlay: LayerCore {
+    fn into_message(self) -> Option<String>;
+}
+
+pub trait LayerModel<Action>: LayerCore
 where
     Action: Clone,
 {
-    fn apply_user_action(&mut self, action: Action) -> Option<crate::Action>;
+    #[must_use]
+    fn apply_action(&mut self, action: Action) -> Option<crate::Action>;
+
+    #[must_use]
+    fn handle_overlay<O>(&mut self, overlay: O) -> Option<crate::Action>
+    where
+        O: LayerOverlay;
 
     fn keybinding_manager(&mut self) -> &mut KeybindManager<Action>;
 
@@ -24,7 +39,7 @@ where
                 statusbar.push_key_press(event);
                 match self.keybinding_manager().handle_event(event) {
                     HandleEvent::Action(action) => {
-                        let action = self.apply_user_action(action);
+                        let action = self.apply_action(action);
                         statusbar.reset_key_press();
                         action
                     }

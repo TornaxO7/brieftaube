@@ -7,10 +7,7 @@ pub use column_data::{ColumnDisplay, ColumnDisplayEntryData, MailEntryType};
 pub use mail_preview::MailPreview;
 
 use super::Model;
-use crate::{
-    mailfs::{model::RightColumn, widget::selection_type::DisplaySelectionType},
-    utils::ui::{ScreenOverlay, input::Input, palette::Palette},
-};
+use crate::mailfs::{model::RightColumn, widget::selection_type::DisplaySelectionType};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, HorizontalAlignment, Layout, Rect},
@@ -22,7 +19,7 @@ use ratatui::{
     },
     symbols::line::VERTICAL,
     text::{Line, Text},
-    widgets::{Block, Cell, Clear, List, ListItem, Paragraph, Row, StatefulWidget, Table, Widget},
+    widgets::{Block, Cell, List, ListItem, Paragraph, Row, StatefulWidget, Table, Widget},
 };
 
 const FOLDER: &str = "🖿";
@@ -116,25 +113,25 @@ impl StatefulWidget for Mailfs {
             }
         }
 
-        // TODO: Move that somewhere else?
-        if let Some(overlay) = model.overlay.as_mut() {
-            match overlay {
-                ScreenOverlay::Palette(state) => {
-                    let area =
-                        area.centered(Constraint::Percentage(80), Constraint::Percentage(80));
-                    Widget::render(Clear, area, buf);
-                    StatefulWidget::render(Palette::new(), area, buf, state)
-                }
-                ScreenOverlay::Input(state) => {
-                    let area = area.centered(
-                        Constraint::Length(state.input_len(0).max(75) as u16),
-                        Constraint::Length(3),
-                    );
-                    Widget::render(Clear, area, buf);
-                    StatefulWidget::render(Input::new(), area, buf, state)
-                }
-            }
-        }
+        // // TODO: Move that somewhere else?
+        // if let Some(overlay) = model.overlay.as_mut() {
+        //     match overlay {
+        //         ScreenOverlay::Palette(state) => {
+        //             let area =
+        //                 area.centered(Constraint::Percentage(80), Constraint::Percentage(80));
+        //             Widget::render(Clear, area, buf);
+        //             StatefulWidget::render(Palette::new(), area, buf, state)
+        //         }
+        //         ScreenOverlay::Input(state) => {
+        //             let area = area.centered(
+        //                 Constraint::Length(state.input_len(0).max(75) as u16),
+        //                 Constraint::Length(3),
+        //             );
+        //             Widget::render(Clear, area, buf);
+        //             StatefulWidget::render(Input::new(), area, buf, state)
+        //         }
+        //     }
+        // }
     }
 }
 

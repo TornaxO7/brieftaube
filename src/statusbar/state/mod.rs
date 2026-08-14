@@ -1,12 +1,12 @@
 mod counter;
 
-use crate::Screen;
+use crate::Layer;
 pub use counter::Counter;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use throbber_widgets_tui::ThrobberState;
 
 pub struct State {
-    pub(super) screen_name: &'static str,
+    pub(super) screen_name: String,
     pub(super) keypresses: String,
 
     pub(super) counter: Counter,
@@ -15,9 +15,9 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(init_screen: &Screen, counter: Counter) -> Self {
+    pub fn new(init_layer: &Layer, counter: Counter) -> Self {
         let mut state = Self {
-            screen_name: "",
+            screen_name: String::new(),
             counter: counter,
 
             keypresses: String::new(),
@@ -25,22 +25,22 @@ impl State {
             throbber_state: None,
         };
 
-        state.set_screen(init_screen);
+        state.set_layer(init_layer);
 
         state
     }
 
-    pub fn set_screen(&mut self, screen: &Screen) {
-        self.screen_name = match screen {
-            Screen::Mailfs(_) => "Mail Filesystem",
-            // Screen::MailList(_) => "Mail-List",
-            // Screen::Composer(_) => "Composer",
-            Screen::MailViewer(_) => "Mail-Viewer",
-            Screen::LogViewer(_) => "Log-Viewer",
+    pub fn set_layer(&mut self, layer: &Layer) {
+        self.screen_name = match layer {
+            Layer::Mailfs(_) => "Mail Filesystem".to_string(),
+            Layer::MailViewer(_) => "Mail-Viewer".to_string(),
+            Layer::LogViewer(_) => "Log-Viewer".to_string(),
+            Layer::Palette(_) => "Palette".to_string(),
+            Layer::Prompt(model) => model.desc.clone(),
         };
 
-        match screen {
-            Screen::LogViewer(_) => {
+        match layer {
+            Layer::LogViewer(_) => {
                 self.show_counter = false;
             }
             _ => {

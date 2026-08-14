@@ -10,25 +10,18 @@ use crate::{
         mails::types::{MailId, MailKeyword, MailUpdate},
     },
     task_manager::TaskManager,
-    utils::ui::{
-        ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager, palette,
+    utils::{
+        keybindmanager::KeybindManager,
+        layer::{LayerCore, LayerModel},
     },
 };
+use std::{collections::HashMap, rc::Rc, sync::Arc};
+use tracing::{debug, error};
+
 pub use attachment_viewer::AttachmentViewer;
 pub use markdown_viewer::MarkdownViewer;
 pub use metadata_viewer::MetadataViewer;
-use std::{collections::HashMap, rc::Rc, sync::Arc};
 pub use text_viewer::TextViewer;
-use tracing::{debug, error};
-
-#[derive(Debug, Clone)]
-pub enum PaletteType {
-    /// Palette is displaying commands
-    Action(Action),
-}
-
-#[derive(Debug, Clone)]
-pub enum InputType {}
 
 #[derive(Debug, Clone, Copy)]
 pub enum Viewer {
@@ -53,7 +46,6 @@ pub enum ScrollAction {
 }
 
 pub struct Model {
-    overlay: Option<ScreenOverlay<PaletteType, InputType>>,
     keybindings: KeybindManager<Action>,
 
     id: MailId,
@@ -105,7 +97,6 @@ impl Model {
             backend,
             task_manager,
             scroll_action: None,
-            overlay: None,
             keybindings: KeybindManager::new(HashMap::from([
                 ("j", Action::ScrollDown),
                 ("k", Action::ScrollUp),
@@ -176,15 +167,25 @@ impl Model {
     }
 }
 
-impl<'a> ScreenState<'a, Action, PaletteType, InputType> for Model {
-    fn apply_user_action(&mut self, action: Action) -> Option<crate::Action> {
+impl LayerCore for Model {
+    fn handle_event(
+        &mut self,
+        event: crossterm::event::Event,
+        statusbar: &mut crate::statusbar::State,
+    ) -> Option<crate::Action> {
+        <Self as LayerModel<Action>>::handle_event(self, event, statusbar)
+    }
+}
+
+impl LayerModel<Action> for Model {
+    fn apply_action(&mut self, action: Action) -> Option<crate::Action> {
         debug!("Action: {}", action);
         match action {
             Action::Quit => return Some(crate::Action::Quit),
             Action::OpenCommandPalette => {
-                self.overlay = Some(ScreenOverlay::Palette(palette::State::new(
-                    super::action::palette_options(),
-                )));
+                return Some(crate::Action::OpenPalette {
+                    entries: super::action::palette_options(),
+                });
             }
 
             Action::ScrollUp => self.scroll_up(),
@@ -220,55 +221,12 @@ impl<'a> ScreenState<'a, Action, PaletteType, InputType> for Model {
         &mut self.keybindings
     }
 
-    fn overlay(&mut self) -> Option<&mut ScreenOverlay<PaletteType, InputType>> {
-        self.overlay.as_mut()
-    }
-
-    fn handle_overlay_result(
+    fn handle_overlay<O: crate::utils::layer::LayerOverlay>(
         &mut self,
-        result: ScreenOverlayResult<PaletteType, InputType>,
+        _overlay: O,
     ) -> Option<crate::Action> {
-        self.overlay = None;
-
-        match result {
-            ScreenOverlayResult::Cancel => None,
-            ScreenOverlayResult::Palette(value) => match value {
-                PaletteType::Action(action) => self.apply_user_action(action),
-            },
-            ScreenOverlayResult::Input { value: _, typ: _ } => unreachable!(),
-        }
+        todo!()
     }
-
-    // fn render_data(&'a mut self) -> RenderData<'a> {
-    //     tracing::debug!("Selected viewer: {:?}", self.selected_viewer);
-    //     let viewer_state = match self.selected_viewer {
-    //         Viewer::Metadata => ViewerState::from(&mut self.metadata_viewer),
-    //         Viewer::Text => {
-    //             self.backend
-    //                 .prefetch_mail_body(&self.id, MailBodyType::Text);
-
-    //             ViewerState::from(&mut self.text_viewer)
-    //         }
-    //         Viewer::Markdown => {
-    //             self.backend
-    //                 .prefetch_mail_body(&self.id, MailBodyType::Html);
-
-    //             ViewerState::from(&mut self.markdown_viewer)
-    //         }
-    //         Viewer::Attachments => {
-    //             self.backend.prefetch_mail_attachments(&self.id);
-    //             ViewerState::from(&mut self.attachment_viewer)
-    //         }
-    //     };
-
-    //     let mail = self.backend.get_mail(&self.id).unwrap();
-
-    //     RenderData {
-    //         viewer_state,
-    //         mail: MailDisplay::from(mail),
-    //         scroll_queue: &mut self.scroll_action,
-    //     }
-    // }
 }
 
 impl Model {

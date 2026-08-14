@@ -1,7 +1,7 @@
-use super::model::PaletteType;
-use crate::utils::ui::palette::Entry;
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator};
+
+use crate::palette::PaletteEntry;
 
 #[derive(
     Serialize,
@@ -68,7 +68,7 @@ pub enum Action {
     OpenMailInBrowser,
 }
 
-pub fn palette_options() -> Vec<Entry<PaletteType>> {
+pub fn palette_options() -> Vec<PaletteEntry> {
     Action::iter()
         .filter_map(|action| {
             if let Some(is_intern) = action.get_bool("intern") {
@@ -80,11 +80,7 @@ pub fn palette_options() -> Vec<Entry<PaletteType>> {
             let name = action.to_string();
             let description = action.get_message().unwrap_or_default().to_string();
 
-            Some(Entry {
-                value: PaletteType::Action(action),
-                name,
-                description,
-            })
+            Some(PaletteEntry { name, description })
         })
         .collect()
 }

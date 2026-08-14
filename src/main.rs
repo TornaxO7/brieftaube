@@ -6,11 +6,15 @@ mod log_viewer;
 mod mail_viewer;
 mod mailfs;
 mod palette;
+mod prompt;
 mod statusbar;
 mod utils;
 
 use crate::{
-    backend::MailId, statusbar::Statusbar, task_manager::TaskManager, utils::ui::ScreenState,
+    backend::MailId,
+    statusbar::Statusbar,
+    task_manager::TaskManager,
+    utils::layer::{LayerCore, LayerModel},
 };
 use color_eyre::eyre;
 use crossterm::event::Event;
@@ -46,21 +50,21 @@ async fn main() -> eyre::Result<()> {
     Ok(())
 }
 
-enum Screen {
+enum Layer {
     // Composer(composer::ui::State),
     MailViewer(mail_viewer::Model),
     LogViewer(log_viewer::Model),
     Mailfs(mailfs::Model),
+
     Palette(palette::Model),
+    Prompt(prompt::Model),
 }
 
 pub enum Action {
     OpenMailViewer(MailId),
     OpenLogViewer,
-    OpenPalette {
-        entries: Vec<palette::Entry>,
-        callback: palette::Callback,
-    },
+    OpenPalette { entries: Vec<palette::PaletteEntry> },
+    OpenPrompt { description: String },
     // OpenComposer,
     Redraw,
     Back,
@@ -71,7 +75,7 @@ pub enum Action {
 pub struct App {
     is_running: bool,
     backend: Arc<backend::Backend>,
-    screens: Vec<Screen>,
+    layers: Vec<Layer>,
     statusbar: statusbar::State,
     task_manager: Rc<TaskManager>,
 
@@ -82,16 +86,16 @@ impl App {
     pub async fn new(counter: statusbar::Counter) -> eyre::Result<Self> {
         let task_manager = Rc::new(TaskManager::new());
         let backend = Arc::new(backend::Backend::new().await);
-        let initial_screen =
-            Screen::Mailfs(mailfs::Model::new(backend.clone(), task_manager.clone()));
+        let initial_layer =
+            Layer::Mailfs(mailfs::Model::new(backend.clone(), task_manager.clone()));
 
-        let statusbar = statusbar::State::new(&initial_screen, counter);
+        let statusbar = statusbar::State::new(&initial_layer, counter);
 
         Ok(Self {
             is_running: true,
             task_manager,
             backend,
-            screens: vec![initial_screen],
+            layers: vec![initial_layer],
             statusbar,
             needs_full_redraw: false,
         })
@@ -115,13 +119,13 @@ impl App {
             }
 
             self.sync_throbber();
-            terminal.draw(|frame| self.draw_screen(frame))?;
+            terminal.draw(|frame| self.draw_layer(frame))?;
         }
 
         Ok(())
     }
 
-    fn draw_screen(&mut self, frame: &mut Frame) {
+    fn draw_layer(&mut self, frame: &mut Frame) {
         let area = frame.area();
 
         if self.needs_full_redraw {
@@ -129,34 +133,33 @@ impl App {
             frame.render_widget(Clear, area);
         }
 
-        let [statusbar, screen] =
+        let [statusbar, layer] =
             Layout::vertical([Constraint::Length(3), Constraint::Fill(0)]).areas(area);
         frame.render_stateful_widget(Statusbar::default(), statusbar, &mut self.statusbar);
 
-        match self.screens.last_mut().unwrap() {
-            Screen::Mailfs(model) => frame.render_stateful_widget(mailfs::Mailfs, screen, model),
-            Screen::Palette(model) => frame.render_stateful_widget(palette::Palette, screen, model),
+        match self.layers.last_mut().unwrap() {
+            Layer::Mailfs(model) => frame.render_stateful_widget(mailfs::Mailfs, layer, model),
             // Screen::Composer(state) => {
             //     frame.render_stateful_widget(composer::ui::Composer::default(), screen, state);
             // }
-            Screen::MailViewer(state) => {
-                frame.render_stateful_widget(mail_viewer::MailViewer, screen, state);
+            Layer::MailViewer(state) => {
+                frame.render_stateful_widget(mail_viewer::MailViewer, layer, state);
             }
-            Screen::LogViewer(state) => {
-                frame.render_stateful_widget(log_viewer::LogViewer, screen, state);
+            Layer::LogViewer(state) => {
+                frame.render_stateful_widget(log_viewer::LogViewer, layer, state);
             }
+            Layer::Palette(model) => frame.render_stateful_widget(palette::Palette, layer, model),
+            Layer::Prompt(model) => frame.render_stateful_widget(prompt::Prompt, layer, model),
         };
     }
 
     fn handle_event(&mut self, event: Event) -> Option<Action> {
-        match self.screens.last_mut().unwrap() {
-            // Screen::Mailboxes(state) => state.handle_event(event, &mut self.statusbar),
-            // Screen::MailList(state) => state.handle_event(event, &mut self.statusbar),
-            // Screen::Composer(state) => state.handle_event(event, &mut self.statusbar),
-            Screen::Palette(model) => model.handle_event(event),
-            Screen::MailViewer(state) => state.handle_event(event, &mut self.statusbar),
-            Screen::Mailfs(state) => state.handle_event(event, &mut self.statusbar),
-            Screen::LogViewer(state) => state.handle_event(event, &mut self.statusbar),
+        match self.layers.last_mut().unwrap() {
+            Layer::MailViewer(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
+            Layer::Mailfs(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
+            Layer::LogViewer(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
+            Layer::Palette(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
+            Layer::Prompt(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
         }
     }
 
@@ -165,38 +168,62 @@ impl App {
             Action::OpenMailViewer(id) => {
                 let backend = self.backend.clone();
                 let task_manager = self.task_manager.clone();
-                let next_screen =
-                    Screen::MailViewer(mail_viewer::Model::new(id, backend, task_manager));
+                let next_layer =
+                    Layer::MailViewer(mail_viewer::Model::new(id, backend, task_manager));
 
-                self.statusbar.set_screen(&next_screen);
-                self.screens.push(next_screen);
+                self.statusbar.set_layer(&next_layer);
+                self.layers.push(next_layer);
             }
-            Action::OpenPalette { entries, callback } => {
-                let next_screen = Screen::Palette(palette::Model::new(entries, callback));
-                self.screens.push(next_screen);
+            Action::OpenPalette { entries } => {
+                let next_layer = Layer::Palette(palette::Model::new(entries));
+                self.layers.push(next_layer);
+            }
+            Action::OpenPrompt { description } => {
+                let next_layer = Layer::Prompt(prompt::Model::new(description));
+                self.layers.push(next_layer);
             }
             Action::OpenLogViewer => {
-                let next_screen = Screen::LogViewer(log_viewer::Model::new());
+                let next_layer = Layer::LogViewer(log_viewer::Model::new());
 
-                self.statusbar.set_screen(&next_screen);
-                self.screens.push(next_screen);
+                self.statusbar.set_layer(&next_layer);
+                self.layers.push(next_layer);
             }
             // Action::OpenComposer => {
-            //     // let next_screen =
+            //     // let next_layer =
             //     //     Screen::Composer(composer::ui::State::new(self.account.clone()));
             //     todo!()
 
-            //     // self.statusbar.set_screen(&next_screen);
-            //     // self.screens.push(next_screen);
+            //     // self.statusbar.set_screen(&next_layer);
+            //     // self.screens.push(next_layer);
             // }
             Action::Redraw => {
                 self.needs_full_redraw = true;
             }
             Action::Back => {
-                self.screens.pop();
+                let last_layer = self.layers.pop().unwrap();
 
-                let screen = self.screens.last().unwrap();
-                self.statusbar.set_screen(screen);
+                let current_layer = self.layers.last_mut().unwrap();
+                self.statusbar.set_layer(current_layer);
+
+                let next_action = match last_layer {
+                    Layer::Palette(palette) => match current_layer {
+                        Layer::MailViewer(model) => model.handle_overlay(palette),
+                        Layer::LogViewer(model) => model.handle_overlay(palette),
+                        Layer::Mailfs(model) => model.handle_overlay(palette),
+                        Layer::Palette(_) | Layer::Prompt(_) => unreachable!(),
+                    },
+                    Layer::Prompt(prompt) => match current_layer {
+                        Layer::MailViewer(model) => model.handle_overlay(prompt),
+                        Layer::LogViewer(model) => model.handle_overlay(prompt),
+                        Layer::Mailfs(model) => model.handle_overlay(prompt),
+                        Layer::Palette(_) | Layer::Prompt(_) => unreachable!(),
+                    },
+                    _ => None,
+                };
+
+                if let Some(next_action) = next_action {
+                    self.apply_action(next_action);
+                }
             }
             Action::Quit => {
                 self.is_running = false;
@@ -206,10 +233,10 @@ impl App {
 
     fn sync_throbber(&mut self) {
         let top_screen_has_tasks_running =
-            match self.screens.last().expect("There's at least one screen") {
+            match self.layers.last().expect("There's at least one screen") {
                 // Screen::Composer(_) => todo!(),
-                Screen::MailViewer(_) | Screen::Mailfs(_) => self.task_manager.has_tasks_running(),
-                Screen::LogViewer(_) | Screen::Palette(_) => false,
+                Layer::MailViewer(_) | Layer::Mailfs(_) => self.task_manager.has_tasks_running(),
+                Layer::LogViewer(_) | Layer::Palette(_) | Layer::Prompt(_) => false,
             };
 
         if top_screen_has_tasks_running {

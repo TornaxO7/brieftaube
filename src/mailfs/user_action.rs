@@ -1,4 +1,4 @@
-use crate::palette::Entry;
+use crate::palette::PaletteEntry;
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator};
 
@@ -66,7 +66,7 @@ pub enum UserAction {
 }
 
 impl UserAction {
-    pub fn palette_options() -> Vec<Entry> {
+    pub fn palette_options() -> Vec<PaletteEntry> {
         Self::iter()
             .filter_map(|action| {
                 if let Some(is_intern) = action.get_bool("intern") {
@@ -77,13 +77,8 @@ impl UserAction {
 
                 let name = action.to_string();
                 let description = action.get_message().unwrap_or_default().to_string();
-                let id = action.to_string();
 
-                Some(Entry {
-                    id,
-                    name,
-                    description,
-                })
+                Some(PaletteEntry { name, description })
             })
             .collect()
     }

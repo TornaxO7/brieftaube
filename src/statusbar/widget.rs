@@ -46,7 +46,7 @@ impl StatefulWidget for Statusbar {
         if let Some(throbber) = state.throbber_state.as_mut() {
             render_throbber(throbber_area, buf, throbber);
         }
-        render_screen_name(screen_name, buf, state.screen_name);
+        render_screen_name(screen_name, buf, &state.screen_name);
         render_keypress(right, buf, &state.keypresses);
     }
 }

@@ -1,6 +1,4 @@
 mod column_state;
-mod input_type;
-mod palette_value;
 mod selection;
 
 pub use column_state::{ColumnState, ColumnStateEntry};
@@ -17,9 +15,11 @@ use crate::{
         mails::types::{MailKeyword, MailUpdate},
     },
     task_manager::TaskManager,
-    utils::ui::{ScreenState, keybindmanager::KeybindManager},
+    utils::{
+        keybindmanager::KeybindManager,
+        layer::{LayerCore, LayerModel, LayerOverlay},
+    },
 };
-use input_type::InputType;
 use std::{
     collections::HashMap,
     rc::Rc,
@@ -126,8 +126,18 @@ impl Model {
     }
 }
 
-impl ScreenState<UserAction> for Model {
-    fn apply_user_action(&mut self, action: UserAction) -> Option<crate::Action> {
+impl LayerCore for Model {
+    fn handle_event(
+        &mut self,
+        event: crossterm::event::Event,
+        statusbar: &mut crate::statusbar::State,
+    ) -> Option<crate::Action> {
+        <Self as LayerModel<UserAction>>::handle_event(self, event, statusbar)
+    }
+}
+
+impl LayerModel<UserAction> for Model {
+    fn apply_action(&mut self, action: UserAction) -> Option<crate::Action> {
         debug!("{:?}", action);
 
         match action {
@@ -159,6 +169,10 @@ impl ScreenState<UserAction> for Model {
 
     fn keybinding_manager(&mut self) -> &mut KeybindManager<UserAction> {
         &mut self.keybindings
+    }
+
+    fn handle_overlay<O: LayerOverlay>(&mut self, _overlay: O) -> Option<crate::Action> {
+        todo!()
     }
 
     // fn handle_overlay_result(
@@ -381,9 +395,7 @@ impl Model {
 
     fn open_command_palette(&mut self) -> Option<crate::Action> {
         let entries = UserAction::palette_options();
-        let callback: crate::palette::Callback = |id| {};
-
-        Some(crate::Action::OpenPalette { entries, callback })
+        Some(crate::Action::OpenPalette { entries })
     }
 
     fn navigate_down(&self) -> Option<crate::Action> {
@@ -687,11 +699,6 @@ impl Model {
     }
 
     fn create_mailbox(&mut self) -> Option<crate::Action> {
-        self.overlay = Some(ScreenOverlay::input(
-            "Create mailbox:",
-            InputType::NewMailboxName,
-        ));
-
         None
     }
 

@@ -1,21 +1,13 @@
-use super::Action;
-use crate::utils::ui::{
-    ScreenOverlay, ScreenOverlayResult, ScreenState, keybindmanager::KeybindManager, palette,
+use crate::utils::{
+    keybindmanager::KeybindManager,
+    layer::{LayerCore, LayerModel, LayerOverlay},
 };
-use std::collections::HashMap;
+
+use super::Action;
+use std::{collections::HashMap, str::FromStr};
 use tui_logger::TuiWidgetState;
 
-#[derive(Debug, Clone)]
-pub enum PaletteType {
-    /// Palette is displaying commands
-    Action(Action),
-}
-
-#[derive(Debug, Clone)]
-pub enum InputType {}
-
 pub struct Model {
-    overlay: Option<ScreenOverlay<PaletteType, InputType>>,
     keybindings: KeybindManager<Action>,
 
     state: TuiWidgetState,
@@ -30,7 +22,6 @@ impl Model {
                 .to_string_lossy()
                 .to_string(),
             state: TuiWidgetState::new(),
-            overlay: None,
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", Action::Quit),
                 ("h", Action::Back),
@@ -49,43 +40,39 @@ impl Model {
     }
 }
 
-impl<'a> ScreenState<'a, Action, PaletteType, InputType> for Model {
-    fn apply_user_action(&mut self, action: Action) -> Option<crate::Action> {
+impl LayerCore for Model {
+    fn handle_event(
+        &mut self,
+        event: crossterm::event::Event,
+        statusbar: &mut crate::statusbar::State,
+    ) -> Option<crate::Action> {
+        <Self as LayerModel<Action>>::handle_event(self, event, statusbar)
+    }
+}
+
+impl LayerModel<Action> for Model {
+    fn apply_action(&mut self, action: Action) -> Option<crate::Action> {
         tracing::debug!("Action: {:?}", action);
         match action {
-            Action::Back => return Some(crate::Action::Back),
-            Action::Quit => return Some(crate::Action::Quit),
+            Action::Back => Some(crate::Action::Back),
+            Action::Quit => Some(crate::Action::Quit),
 
-            Action::OpenCommandPalette => {
-                self.overlay = Some(ScreenOverlay::Palette(palette::State::new(
-                    super::action::palette_options(),
-                )));
-            }
-        };
-
-        None
+            Action::OpenCommandPalette => Some(crate::Action::OpenPalette {
+                entries: super::action::palette_options(),
+            }),
+        }
     }
 
     fn keybinding_manager(&mut self) -> &mut KeybindManager<Action> {
         &mut self.keybindings
     }
 
-    fn overlay(&mut self) -> Option<&mut ScreenOverlay<PaletteType, InputType>> {
-        self.overlay.as_mut()
-    }
-
-    fn handle_overlay_result(
-        &mut self,
-        result: ScreenOverlayResult<PaletteType, InputType>,
-    ) -> Option<crate::Action> {
-        self.overlay = None;
-
-        match result {
-            ScreenOverlayResult::Cancel => None,
-            ScreenOverlayResult::Palette(value) => match value {
-                PaletteType::Action(action) => self.apply_user_action(action),
-            },
-            ScreenOverlayResult::Input { value: _, typ: _ } => unreachable!(""),
-        }
+    fn handle_overlay<O>(&mut self, overlay: O) -> Option<crate::Action>
+    where
+        O: LayerOverlay,
+    {
+        let command_palette_msg = overlay.into_message().unwrap();
+        let action = Action::from_str(&command_palette_msg.as_str()).unwrap();
+        self.apply_action(action)
     }
 }
