@@ -47,30 +47,11 @@ impl Backend {
             request.send_set_mailbox().await?
         };
 
+        let mut store = self.store.lock().unwrap();
         for id in ids.iter() {
             response.destroyed(&id.0)?;
+            store.mailbox.remove(id);
         }
-
-        match option {
-            RemoveMailboxOption::Empty => {} // RemoveMailboxOption::Mails => {
-                                             //     let mut store = self.store.lock().unwrap();
-
-                                             //     for id in ids.iter() {
-                                             //         let root_mails = store.mailbox.get_root_mails(&id).unwrap().clone();
-
-                                             //         for root_mail_id in root_mails.ids.iter() {
-                                             //             let root_mail = store.mails.remove(root_mail_id).unwrap();
-                                             //             let thread_mails = store.threads.remove(&root_mail.thread_id).unwrap();
-
-                                             //             for thread_mail in thread_mails.iter() {
-                                             //                 store.mails.remove(thread_mail);
-                                             //             }
-                                             //         }
-
-                                             //         store.mailbox.remove(&id);
-                                             //     }
-                                             // }
-        };
 
         Ok(())
     }

@@ -1,5 +1,5 @@
 use jmap_client::core::query::QueryResponse;
-use tracing::{debug, instrument};
+use tracing::instrument;
 
 use super::types::{MailboxData, MailboxId};
 use crate::backend::{
@@ -12,7 +12,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct RootMails {
     pub ids: Vec<MailId>,
-    pub state: QueryState,
+    pub _state: QueryState,
 }
 
 impl RootMails {
@@ -20,14 +20,15 @@ impl RootMails {
         let state = response.take_query_state();
         let ids = response.take_ids().into_iter().map(MailId).collect();
 
-        Self { ids, state }
+        Self { ids, _state: state }
     }
 }
 
 // IDEA: Use `Arc` insead of the actual data for cheap clones out of the cache
 pub struct Store {
     mailboxes: HashMap<MailboxId, MailboxData>,
-    // Children always exist in `mailboxes`.
+    // Each `MailboxId` has an entry in the `mailboxes` attribute.
+    // `Vec` is **unsorted**
     children_mapping: HashMap<ParentMailboxId, Vec<MailboxId>>,
 
     /// stores the query state of the child-mailboxes of the given parent-mailbox
@@ -44,14 +45,6 @@ impl Store {
             children_query_state: HashMap::new(),
             root_mails_state: HashMap::new(),
         }
-    }
-
-    pub fn is_initialised(&self, parent: &ParentMailboxId) -> bool {
-        self.get_children_query_state(parent).is_some()
-    }
-
-    pub fn get_children_query_state(&self, parent: &ParentMailboxId) -> Option<GetState> {
-        self.children_query_state.get(parent).cloned()
     }
 
     pub fn set_children_query_state(&mut self, parent: ParentMailboxId, new_state: GetState) {
@@ -128,43 +121,15 @@ impl Store {
 // Methods altering the cache
 impl Store {
     #[instrument(skip(self))]
-    pub fn flush(&mut self) {
-        debug!("Flushing cache.");
-        self.mailboxes.clear();
-        self.children_mapping.clear();
-        self.children_query_state.clear();
-    }
-
-    #[instrument(skip(self))]
     pub fn add(&mut self, mailbox: MailboxData) {
         let id = mailbox.id.clone();
-        self.mailboxes.insert(id.clone(), mailbox.clone());
-    }
-
-    pub fn add_children(&mut self, parent: ParentMailboxId, additional_children: &[MailboxData]) {
-        let additional_children_ids: Vec<MailboxId> = additional_children
-            .iter()
-            .map(|mailbox| mailbox.id.clone())
-            .collect();
-
-        for child in additional_children {
-            self.add(child.clone());
-        }
 
         self.children_mapping
-            .entry(parent)
-            .and_modify(|children| {
-                for new_child in additional_children {
-                    let insert_pos = children.partition_point(|entry| {
-                        let child = self.mailboxes.get(entry).unwrap();
+            .entry(mailbox.parent_id.clone())
+            .and_modify(|siblings| siblings.push(id.clone()))
+            .or_insert(vec![id.clone()]);
 
-                        child.sort_order < new_child.sort_order
-                    });
-
-                    children.insert(insert_pos, new_child.id.clone());
-                }
-            })
-            .or_insert(additional_children_ids);
+        self.mailboxes.insert(id.clone(), mailbox.clone());
     }
 
     pub fn remove(&mut self, id: &MailboxId) -> Option<MailboxData> {
@@ -174,6 +139,7 @@ impl Store {
                 siblings.remove(pos);
             }
         }
+
         self.children_query_state.remove(&Some(id.clone()));
         self.children_mapping.remove(&Some(mailbox.id.clone()));
         self.root_mails_state.remove(id);

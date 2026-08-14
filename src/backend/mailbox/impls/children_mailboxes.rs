@@ -51,7 +51,10 @@ impl Backend {
                 store
                     .mailbox
                     .set_children_query_state(parent.clone(), mailbox_get_response.take_state());
-                store.mailbox.add_children(parent.clone(), &child_mailboxes);
+
+                for child_mailbox in child_mailboxes.iter().cloned() {
+                    store.mailbox.add(child_mailbox);
+                }
 
                 Ok(child_mailboxes)
             }
