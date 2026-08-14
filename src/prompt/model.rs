@@ -1,5 +1,6 @@
 use crate::utils::layer::{LayerCore, LayerOverlay};
 use crossterm::event::{Event, KeyCode};
+use ratatui::style::Style;
 use ratatui_textarea::TextArea;
 
 pub struct Model {
@@ -9,14 +10,13 @@ pub struct Model {
 
 impl Model {
     pub fn new<S: ToString>(desc: S) -> Self {
+        let mut input = TextArea::default();
+        input.set_cursor_line_style(Style::default());
+
         Self {
-            input: TextArea::default(),
+            input,
             desc: desc.to_string(),
         }
-    }
-
-    pub fn input_len(&self, line: usize) -> usize {
-        self.input.lines()[line].len()
     }
 }
 
