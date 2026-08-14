@@ -2,12 +2,11 @@ use crate::backend::{Backend, MailboxId};
 
 #[derive(thiserror::Error, Debug)]
 pub enum RemoveMailboxError {
-    #[error("Can't remove mailbox: It's not empty.")]
+    #[error("Mailbox needs to be empty.")]
     NotEmpty,
 
-    #[error("Can't remove mailbox. It has child mailboxes.")]
-    HasChildMailboxes,
-
+    // #[error("Can't remove mailbox. It has child mailboxes.")]
+    // HasChildMailboxes,
     #[error(transparent)]
     Jmap(#[from] jmap_client::Error),
 }
@@ -16,8 +15,8 @@ pub enum RemoveMailboxError {
 pub enum RemoveMailboxOption {
     /// Only remove mailbox if it's empty
     Empty,
-    /// Also remove mails from this mailbox
-    Mails,
+    // /// Also remove mails from this mailbox
+    // Mails,
     // /// Remove all mails and mailboxes in this mailbox.
     // Recursive,
 }
@@ -37,7 +36,7 @@ impl Backend {
 
             let remove_mails = match option {
                 RemoveMailboxOption::Empty => false,
-                RemoveMailboxOption::Mails => true,
+                // RemoveMailboxOption::Mails => true,
             };
 
             request
@@ -53,25 +52,24 @@ impl Backend {
         }
 
         match option {
-            RemoveMailboxOption::Empty => {}
-            RemoveMailboxOption::Mails => {
-                let mut store = self.store.lock().unwrap();
+            RemoveMailboxOption::Empty => {} // RemoveMailboxOption::Mails => {
+                                             //     let mut store = self.store.lock().unwrap();
 
-                for id in ids.iter() {
-                    let root_mails = store.mailbox.get_root_mails(&id).unwrap().clone();
+                                             //     for id in ids.iter() {
+                                             //         let root_mails = store.mailbox.get_root_mails(&id).unwrap().clone();
 
-                    for root_mail_id in root_mails.ids.iter() {
-                        let root_mail = store.mails.remove(root_mail_id).unwrap();
-                        let thread_mails = store.threads.remove(&root_mail.thread_id).unwrap();
+                                             //         for root_mail_id in root_mails.ids.iter() {
+                                             //             let root_mail = store.mails.remove(root_mail_id).unwrap();
+                                             //             let thread_mails = store.threads.remove(&root_mail.thread_id).unwrap();
 
-                        for thread_mail in thread_mails.iter() {
-                            store.mails.remove(thread_mail);
-                        }
-                    }
+                                             //             for thread_mail in thread_mails.iter() {
+                                             //                 store.mails.remove(thread_mail);
+                                             //             }
+                                             //         }
 
-                    store.mailbox.remove(&id);
-                }
-            }
+                                             //         store.mailbox.remove(&id);
+                                             //     }
+                                             // }
         };
 
         Ok(())
@@ -96,12 +94,11 @@ impl Backend {
                 if has_child_mailboxes || has_mails {
                     return Err(RemoveMailboxError::NotEmpty);
                 }
-            }
-            RemoveMailboxOption::Mails => {
-                if has_child_mailboxes {
-                    return Err(RemoveMailboxError::HasChildMailboxes);
-                }
-            }
+            } // RemoveMailboxOption::Mails => {
+              //     if has_child_mailboxes {
+              //         return Err(RemoveMailboxError::HasChildMailboxes);
+              //     }
+              // }
         };
 
         Ok(())
