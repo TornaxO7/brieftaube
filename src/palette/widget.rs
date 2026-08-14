@@ -2,10 +2,7 @@ use crate::palette::Model;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{
-        Style,
-        palette::material::{BLUE, BLUE_GRAY, CYAN, INDIGO, LIGHT_BLUE},
-    },
+    style::{Style, palette::material::BLUE},
     text::{Line, Span},
     widgets::{Block, List, ListDirection, ListItem, Paragraph, StatefulWidget, Widget, Wrap},
 };
