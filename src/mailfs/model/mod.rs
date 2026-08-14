@@ -49,58 +49,11 @@ pub struct Model {
 impl Model {
     pub fn new(backend: Arc<Backend>, task_manager: Rc<TaskManager>) -> Self {
         let columns = Arc::new(Mutex::new(HashMap::new()));
-        let c = columns.clone();
-        let b = backend.clone();
+        let columns2 = columns.clone();
+        let backend2 = backend.clone();
 
         task_manager.spawn(async move {
-            match op_init_mailbox(TOP_PARENT_MAILBOX_ID, c.clone(), b.clone()).await {
-                Ok(()) => {}
-                Err(err) => {
-                    error!("Couldn't initialise root mailbox:\n{err}");
-                    return;
-                }
-            }
-
-            let selected_entry = {
-                let columns = c.lock().unwrap();
-                columns
-                    .get(&TOP_PARENT_MAILBOX_ID)
-                    .unwrap()
-                    .selected_entry()
-                    .cloned()
-            };
-
-            if let Some(entry) = selected_entry {
-                match entry {
-                    ColumnStateEntry::Mailbox(id) => {
-                        let right_column_not_loaded = {
-                            let columns = c.lock().unwrap();
-                            !columns.contains_key(&Some(id.clone()))
-                        };
-
-                        if right_column_not_loaded {
-                            match op_init_mailbox(Some(id), c, b).await {
-                                Ok(()) => {}
-                                Err(err) => {
-                                    error!("Couldn't initialize mailbox (the column will be empty):\n{err}");
-                                }
-                            }
-                        }
-                    }
-                    ColumnStateEntry::SingleMail(mail_id)
-                    | ColumnStateEntry::CollapsedThread(mail_id, _)
-                    | ColumnStateEntry::ThreadStart { mail_id, .. }
-                    | ColumnStateEntry::ThreadChild(mail_id, _)
-                    | ColumnStateEntry::ThreadEnd(mail_id, _) => {
-                        match b.prefetch_mail_attachments(&mail_id).await {
-                            Ok(()) => {}
-                            Err(err) => {
-                                error!("Couldn't fetch mail attachments:\n{err}");
-                            }
-                        }
-                    }
-                }
-            }
+            init_mailfs(columns2, backend2).await;
         });
 
         Self {
@@ -1018,6 +971,59 @@ fn move_mailbox(
                                 }
                             }
                         })
+                }
+            }
+        }
+    }
+}
+
+async fn init_mailfs(columns: Columns, backend: Arc<Backend>) {
+    match op_init_mailbox(TOP_PARENT_MAILBOX_ID, columns.clone(), backend.clone()).await {
+        Ok(()) => {}
+        Err(err) => {
+            error!("Couldn't initialise root mailbox:\n{err}");
+            return;
+        }
+    }
+
+    let selected_entry = {
+        let columns = columns.lock().unwrap();
+        columns
+            .get(&TOP_PARENT_MAILBOX_ID)
+            .unwrap()
+            .selected_entry()
+            .cloned()
+    };
+
+    if let Some(entry) = selected_entry {
+        match entry {
+            ColumnStateEntry::Mailbox(id) => {
+                let right_column_not_loaded = {
+                    let columns = columns.lock().unwrap();
+                    !columns.contains_key(&Some(id.clone()))
+                };
+
+                if right_column_not_loaded {
+                    match op_init_mailbox(Some(id), columns, backend).await {
+                        Ok(()) => {}
+                        Err(err) => {
+                            error!(
+                                "Couldn't initialize mailbox (the column will be empty):\n{err}"
+                            );
+                        }
+                    }
+                }
+            }
+            ColumnStateEntry::SingleMail(mail_id)
+            | ColumnStateEntry::CollapsedThread(mail_id, _)
+            | ColumnStateEntry::ThreadStart { mail_id, .. }
+            | ColumnStateEntry::ThreadChild(mail_id, _)
+            | ColumnStateEntry::ThreadEnd(mail_id, _) => {
+                match backend.prefetch_mail_attachments(&mail_id).await {
+                    Ok(()) => {}
+                    Err(err) => {
+                        error!("Couldn't fetch mail attachments:\n{err}");
+                    }
                 }
             }
         }

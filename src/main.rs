@@ -51,7 +51,6 @@ async fn main() -> eyre::Result<()> {
 }
 
 enum Layer {
-    // Composer(composer::ui::State),
     MailViewer(mail_viewer::Model),
     LogViewer(log_viewer::Model),
     Mailfs(mailfs::Model),
@@ -65,7 +64,6 @@ pub enum Action {
     OpenLogViewer,
     OpenPalette { entries: Vec<palette::PaletteEntry> },
     OpenPrompt { description: String },
-    // OpenComposer,
     Redraw,
     Back,
     Quit,
@@ -139,9 +137,6 @@ impl App {
 
         match self.layers.last_mut().unwrap() {
             Layer::Mailfs(model) => frame.render_stateful_widget(mailfs::Mailfs, layer, model),
-            // Screen::Composer(state) => {
-            //     frame.render_stateful_widget(composer::ui::Composer::default(), screen, state);
-            // }
             Layer::MailViewer(state) => {
                 frame.render_stateful_widget(mail_viewer::MailViewer, layer, state);
             }
@@ -188,14 +183,6 @@ impl App {
                 self.statusbar.set_layer(&next_layer);
                 self.layers.push(next_layer);
             }
-            // Action::OpenComposer => {
-            //     // let next_layer =
-            //     //     Screen::Composer(composer::ui::State::new(self.account.clone()));
-            //     todo!()
-
-            //     // self.statusbar.set_screen(&next_layer);
-            //     // self.screens.push(next_layer);
-            // }
             Action::Redraw => {
                 self.needs_full_redraw = true;
             }
@@ -234,7 +221,6 @@ impl App {
     fn sync_throbber(&mut self) {
         let top_screen_has_tasks_running =
             match self.layers.last().expect("There's at least one screen") {
-                // Screen::Composer(_) => todo!(),
                 Layer::MailViewer(_) | Layer::Mailfs(_) => self.task_manager.has_tasks_running(),
                 Layer::LogViewer(_) | Layer::Palette(_) | Layer::Prompt(_) => false,
             };

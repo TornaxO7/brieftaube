@@ -1,7 +1,6 @@
+use crate::palette::PaletteEntry;
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator};
-
-use crate::palette::PaletteEntry;
 
 #[derive(
     Serialize,
