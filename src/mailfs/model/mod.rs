@@ -233,7 +233,7 @@ impl<'a> Model {
         }
     }
 
-    fn normalize_mailbox_sort_order(&self) {
+    fn _normalize_mailbox_sort_order(&self) {
         let ids: Vec<MailboxId> = {
             let columns = self.columns.lock().unwrap();
             let Some(center) = columns.get(self.center_column_mailbox()) else {
