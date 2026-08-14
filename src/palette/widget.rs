@@ -2,7 +2,10 @@ use crate::palette::Model;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
-    style::Style,
+    style::{
+        Style,
+        palette::material::{BLUE, BLUE_GRAY, CYAN, INDIGO, LIGHT_BLUE},
+    },
     text::{Line, Span},
     widgets::{Block, List, ListDirection, ListItem, Paragraph, StatefulWidget, Widget, Wrap},
 };
@@ -92,7 +95,7 @@ impl StatefulWidget for Palette {
             StatefulWidget::render(
                 List::new(options_content)
                     .block(Block::bordered())
-                    .highlight_style(Style::new().blue())
+                    .highlight_style(Style::new().bg(BLUE.c900))
                     .direction(ListDirection::TopToBottom),
                 options,
                 buf,
