@@ -21,7 +21,7 @@ use crossterm::event::Event;
 use futures::{FutureExt, StreamExt};
 use ratatui::{
     DefaultTerminal, Frame,
-    layout::{Constraint, Layout},
+    layout::{Constraint, Layout, Rect},
     widgets::Clear,
 };
 use std::{
@@ -117,13 +117,13 @@ impl App {
             }
 
             self.sync_throbber();
-            terminal.draw(|frame| self.draw_layer(frame))?;
+            terminal.draw(|frame| self.draw(frame))?;
         }
 
         Ok(())
     }
 
-    fn draw_layer(&mut self, frame: &mut Frame) {
+    fn draw(&mut self, frame: &mut Frame) {
         let area = frame.area();
 
         if self.needs_full_redraw {
@@ -135,17 +135,17 @@ impl App {
             Layout::vertical([Constraint::Length(3), Constraint::Fill(0)]).areas(area);
         frame.render_stateful_widget(Statusbar::default(), statusbar, &mut self.statusbar);
 
-        match self.layers.last_mut().unwrap() {
-            Layer::Mailfs(model) => frame.render_stateful_widget(mailfs::Mailfs, layer, model),
-            Layer::MailViewer(state) => {
-                frame.render_stateful_widget(mail_viewer::MailViewer, layer, state);
-            }
-            Layer::LogViewer(state) => {
-                frame.render_stateful_widget(log_viewer::LogViewer, layer, state);
-            }
-            Layer::Palette(model) => frame.render_stateful_widget(palette::Palette, layer, model),
-            Layer::Prompt(model) => frame.render_stateful_widget(prompt::Prompt, layer, model),
-        };
+        let is_overlay = matches!(
+            self.layers.last().unwrap(),
+            Layer::Palette(_) | Layer::Prompt(_)
+        );
+
+        if is_overlay {
+            let len = self.layers.len();
+            draw_layer(self.layers.get_mut(len - 2).unwrap(), frame, layer);
+        }
+
+        draw_layer(self.layers.last_mut().unwrap(), frame, layer);
     }
 
     fn handle_event(&mut self, event: Event) -> Option<Action> {
@@ -273,4 +273,36 @@ fn get_xdg() -> &'static BaseDirectories {
 
 fn get_log_file_path() -> io::Result<PathBuf> {
     get_xdg().place_state_file(&format!("{}.log", APP_NAME))
+}
+
+fn draw_layer(layer: &mut Layer, frame: &mut Frame, area: Rect) {
+    match layer {
+        Layer::Mailfs(model) => frame.render_stateful_widget(mailfs::Mailfs, area, model),
+        Layer::MailViewer(state) => {
+            frame.render_stateful_widget(mail_viewer::MailViewer, area, state);
+        }
+        Layer::LogViewer(state) => {
+            frame.render_stateful_widget(log_viewer::LogViewer, area, state);
+        }
+        Layer::Palette(model) => {
+            let area = {
+                let [_top, center, _bottom] =
+                    Layout::vertical([Constraint::Max(4), Constraint::Fill(1), Constraint::Max(4)])
+                        .areas(area);
+
+                let [_left, center, _right] = Layout::horizontal([
+                    Constraint::Max(20),
+                    Constraint::Fill(1),
+                    Constraint::Max(20),
+                ])
+                .areas(center);
+
+                center
+            };
+
+            frame.render_widget(Clear, area);
+            frame.render_stateful_widget(palette::Palette, area, model);
+        }
+        Layer::Prompt(model) => frame.render_stateful_widget(prompt::Prompt, area, model),
+    }
 }

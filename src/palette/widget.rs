@@ -3,7 +3,7 @@ use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
-    widgets::{Block, List, ListDirection, Padding, Paragraph, StatefulWidget, Widget, Wrap},
+    widgets::{Block, List, ListDirection, Paragraph, StatefulWidget, Widget, Wrap},
 };
 
 pub struct Palette;
@@ -12,9 +12,6 @@ impl StatefulWidget for Palette {
     type State = Model;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let command_palette_block = Block::default().padding(Padding::symmetric(1, 1));
-        let area = command_palette_block.inner(area);
-
         let [left, description] = area.layout(
             &Layout::default()
                 .direction(Direction::Horizontal)
@@ -26,6 +23,8 @@ impl StatefulWidget for Palette {
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Length(3), Constraint::Fill(0)]),
         );
+
+        // refresh state
         state.nucleo.tick(10);
         let snapshot = state.nucleo.snapshot();
         let matches: Vec<_> = snapshot.matched_items(..).collect();
@@ -52,6 +51,7 @@ impl StatefulWidget for Palette {
             state.input.render(search, buf);
         }
 
+        // options
         {
             let options_content: Vec<&str> = matches
                 .iter()
