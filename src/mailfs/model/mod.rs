@@ -23,6 +23,7 @@ use crate::{
 use std::{
     collections::HashMap,
     rc::Rc,
+    str::FromStr,
     sync::{Arc, Mutex},
 };
 use tracing::{debug, error, warn};
@@ -30,6 +31,10 @@ use tracing::{debug, error, warn};
 const NORMALIZE_SORT_ORDER_SIZE: u32 = 32;
 
 pub type Columns = Arc<Mutex<HashMap<ParentMailboxId, ColumnState>>>;
+
+enum OverlayValue {
+    Action,
+}
 
 pub enum RightColumn {
     Mailbox(MailboxId),
@@ -39,6 +44,7 @@ pub enum RightColumn {
 pub struct Model {
     keybindings: KeybindManager<UserAction>,
     task_manager: Rc<TaskManager>,
+    overlay_value: Option<OverlayValue>,
 
     pub backend: Arc<Backend>,
     pub selection: HashMap<EntryId, SelectionType>,
@@ -58,6 +64,7 @@ impl Model {
 
         Self {
             columns,
+            overlay_value: None,
             navigation_stack: vec![TOP_PARENT_MAILBOX_ID],
             selection: HashMap::new(),
             task_manager,
@@ -124,8 +131,16 @@ impl LayerModel<UserAction> for Model {
         &mut self.keybindings
     }
 
-    fn handle_overlay<O: LayerOverlay>(&mut self, _overlay: O) -> Option<crate::Action> {
-        todo!()
+    fn handle_overlay<O: LayerOverlay>(&mut self, overlay: O) -> Option<crate::Action> {
+        let expected_type = self.overlay_value.take()?;
+        let msg = overlay.into_message()?;
+
+        match expected_type {
+            OverlayValue::Action => {
+                let action = UserAction::from_str(&msg).unwrap();
+                self.apply_action(action)
+            }
+        }
     }
 
     // fn handle_overlay_result(
@@ -347,6 +362,7 @@ impl Model {
     }
 
     fn open_command_palette(&mut self) -> Option<crate::Action> {
+        self.overlay_value = Some(OverlayValue::Action);
         let entries = UserAction::palette_options();
         Some(crate::Action::OpenPalette { entries })
     }

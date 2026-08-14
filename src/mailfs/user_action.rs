@@ -2,15 +2,17 @@ use crate::palette::PaletteEntry;
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator};
 
+// TODO: HERE
+// Need a way to identify the action from str
 #[derive(
     Serialize,
     Deserialize,
     Debug,
     Clone,
+    EnumString,
     EnumIter,
     EnumMessage,
     EnumProperty,
-    EnumString,
     strum::Display,
 )]
 #[serde(rename_all = "snake_case")]

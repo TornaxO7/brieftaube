@@ -5,29 +5,29 @@ use ratatui::{style::Style, widgets::ListState};
 use ratatui_textarea::TextArea;
 use std::sync::Arc;
 
-type EntryName = String;
+type EntryValue = String;
 type EntryDescription = String;
 
 #[derive(Debug, Clone)]
 pub struct PaletteEntry {
     /// The name which can be selected in the palette.
-    pub name: EntryName,
+    pub name: EntryValue,
     /// The description of the entry.
     pub description: EntryDescription,
 }
 
 pub struct Model {
     pub input: TextArea<'static>,
-    pub nucleo: Nucleo<(EntryName, EntryDescription)>,
+    pub nucleo: Nucleo<(EntryValue, EntryDescription)>,
 
     pub list_state: ListState,
 
-    selected_entry: Option<EntryName>,
+    selected_entry: Option<EntryValue>,
 }
 
 impl Model {
     pub fn new(entries: Vec<PaletteEntry>) -> Self {
-        let nucleo: Nucleo<(EntryName, EntryDescription)> =
+        let nucleo: Nucleo<(EntryValue, EntryDescription)> =
             Nucleo::new(nucleo::Config::DEFAULT, Arc::new(|| {}), None, 3);
 
         let inj = nucleo.injector();
@@ -73,7 +73,9 @@ impl LayerCore for Model {
 
                         if let Some(idx) = self.list_state.selected() {
                             let item = matches.nth(idx).unwrap();
-                            self.selected_entry = Some(item.data.1.clone());
+
+                            let value = item.data.0.clone();
+                            self.selected_entry = Some(value);
                         }
 
                         return Some(crate::Action::Back);
