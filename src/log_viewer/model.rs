@@ -1,6 +1,6 @@
 use crate::utils::{
     keybindmanager::KeybindManager,
-    layer::{LayerCore, LayerModel, LayerOverlay},
+    layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent, LayerOverlay},
 };
 
 use super::Action;
@@ -46,7 +46,7 @@ impl LayerCore for Model {
         event: crossterm::event::Event,
         statusbar: &mut crate::statusbar::Model,
     ) -> Option<crate::Action> {
-        <Self as LayerModel<Action>>::handle_event(self, event, statusbar)
+        <Self as LayerModelDefaultHandleEvent<Action>>::handle_event(self, event, statusbar)
     }
 }
 
@@ -63,10 +63,6 @@ impl LayerModel<Action> for Model {
         }
     }
 
-    fn keybinding_manager(&mut self) -> &mut KeybindManager<Action> {
-        &mut self.keybindings
-    }
-
     fn handle_overlay<O>(&mut self, overlay: O) -> Option<crate::Action>
     where
         O: LayerOverlay,
@@ -74,5 +70,11 @@ impl LayerModel<Action> for Model {
         let command_palette_msg = overlay.into_message().unwrap();
         let action = Action::from_str(&command_palette_msg.as_str()).unwrap();
         self.apply_action(action)
+    }
+}
+
+impl LayerModelDefaultHandleEvent<Action> for Model {
+    fn keybinding_manager(&mut self) -> &mut KeybindManager<Action> {
+        &mut self.keybindings
     }
 }

@@ -17,7 +17,7 @@ use crate::{
     task_manager::TaskManager,
     utils::{
         keybindmanager::KeybindManager,
-        layer::{LayerCore, LayerModel, LayerOverlay},
+        layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent, LayerOverlay},
     },
 };
 use std::{
@@ -93,7 +93,7 @@ impl LayerCore for Model {
         event: crossterm::event::Event,
         statusbar: &mut crate::statusbar::Model,
     ) -> Option<crate::Action> {
-        <Self as LayerModel<UserAction>>::handle_event(self, event, statusbar)
+        <Self as LayerModelDefaultHandleEvent<UserAction>>::handle_event(self, event, statusbar)
     }
 }
 
@@ -128,10 +128,6 @@ impl LayerModel<UserAction> for Model {
         }
     }
 
-    fn keybinding_manager(&mut self) -> &mut KeybindManager<UserAction> {
-        &mut self.keybindings
-    }
-
     fn handle_overlay<O: LayerOverlay>(&mut self, overlay: O) -> Option<crate::Action> {
         let expected_type = self.overlay_value.take()?;
         let msg = overlay.into_message()?;
@@ -152,6 +148,12 @@ impl LayerModel<UserAction> for Model {
                 None
             }
         }
+    }
+}
+
+impl LayerModelDefaultHandleEvent<UserAction> for Model {
+    fn keybinding_manager(&mut self) -> &mut KeybindManager<UserAction> {
+        &mut self.keybindings
     }
 }
 

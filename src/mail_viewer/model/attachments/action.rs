@@ -25,27 +25,23 @@ pub enum Action {
     Back,
 
     #[strum(message = "Scroll down")]
-    ScrollDown,
-    #[strum(message = "Scroll up")]
-    ScrollUp,
-    #[strum(message = "Scroll left")]
-    ScrollLeft,
-    #[strum(message = "Scroll right")]
-    ScrollRight,
-    #[strum(message = "Scroll to the top.")]
-    ScrollToTop,
-    #[strum(message = "Scroll to the top.")]
-    ScrollToBottom,
+    NavigateDown,
+    #[strum(message = "Navigate up")]
+    NavigateUp,
+    #[strum(message = "Navigate to the top.")]
+    NavigateToTop,
+    #[strum(message = "Navigate to the top.")]
+    NavigateToBottom,
 
-    #[strum(message = "Scroll half page down.")]
-    ScrollHalfPageDown,
-    #[strum(message = "Scroll half page up.")]
-    ScrollHalfPageUp,
+    #[strum(message = "Navigate half page down.")]
+    NavigateHalfPageDown,
+    #[strum(message = "Navigate half page up.")]
+    NavigateHalfPageUp,
 
-    #[strum(message = "Scroll half page to the right.")]
-    ScrollHalfPageRight,
-    #[strum(message = "Scroll half page to the left.")]
-    ScrollHalfPageLeft,
+    #[strum(message = "Navigate half page to the right.")]
+    NavigateHalfPageRight,
+    #[strum(message = "Navigate half page to the left.")]
+    NavigateHalfPageLeft,
 
     #[strum(message = "Display metadata of mail.")]
     OpenMetadataTab,
@@ -58,13 +54,11 @@ pub enum Action {
 
     #[strum(message = "Open next tab (to the right)")]
     OpenNextTab,
-    #[strum(message = "Open previous tab (to the  left)")]
+    #[strum(message = "Open previous tab (to the left)")]
     OpenPreviousTab,
 
     #[strum(message = "Open log viewer")]
     OpenLogs,
-    #[strum(message = "Open html mail in browser")]
-    OpenMailInBrowser,
 }
 
 pub fn palette_options() -> Vec<PaletteEntry> {

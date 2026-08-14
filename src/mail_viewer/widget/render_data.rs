@@ -1,6 +1,6 @@
 use crate::mail_viewer::{
     Model,
-    model::{AttachmentViewer, MarkdownViewer, MetadataViewer, ScrollAction, TextViewer, Viewer},
+    model::{AttachmentsViewer, MarkdownViewer, MetadataViewer, ScrollAction, TextViewer, Viewer},
     types::MailDisplay,
 };
 use ratatui::widgets::{ScrollbarState, TableState};
@@ -15,11 +15,11 @@ impl<'a> RenderData<'a> {
     pub fn new(model: &'a mut Model) -> Self {
         let mail = model.get_mail();
 
-        let viewer_state = match model.selected_viewer {
-            Viewer::Metadata => ViewerState::from(&mut model.metadata_viewer),
-            Viewer::Text => ViewerState::from(&mut model.text_viewer),
-            Viewer::Markdown => ViewerState::from(&mut model.markdown_viewer),
-            Viewer::Attachments => ViewerState::from(&mut model.attachment_viewer),
+        let viewer_state = match model.viewer {
+            Viewer::Metadata => ViewerState::from(&mut model.metadata),
+            Viewer::Text => ViewerState::from(&mut model.text),
+            Viewer::Markdown => ViewerState::from(&mut model.markdown),
+            Viewer::Attachments => ViewerState::from(&mut model.attachments),
         };
 
         Self {
@@ -45,11 +45,11 @@ pub enum ViewerState<'a> {
 
 impl<'a> From<&'a mut Model> for ViewerState<'a> {
     fn from(model: &'a mut Model) -> Self {
-        match model.selected_viewer {
-            Viewer::Metadata => Self::from(&mut model.metadata_viewer),
-            Viewer::Text => Self::from(&mut model.text_viewer),
-            Viewer::Markdown => Self::from(&mut model.markdown_viewer),
-            Viewer::Attachments => Self::from(&mut model.attachment_viewer),
+        match model.viewer {
+            Viewer::Metadata => Self::from(&mut model.metadata),
+            Viewer::Text => Self::from(&mut model.text),
+            Viewer::Markdown => Self::from(&mut model.markdown),
+            Viewer::Attachments => Self::from(&mut model.attachments),
         }
     }
 }
@@ -78,8 +78,8 @@ impl<'a> From<&'a mut MarkdownViewer> for ViewerState<'a> {
     }
 }
 
-impl<'a> From<&'a mut AttachmentViewer> for ViewerState<'a> {
-    fn from(viewer: &'a mut AttachmentViewer) -> Self {
+impl<'a> From<&'a mut AttachmentsViewer> for ViewerState<'a> {
+    fn from(viewer: &'a mut AttachmentsViewer) -> Self {
         Self::Attachments(&mut viewer.state)
     }
 }

@@ -1,37 +1,40 @@
 use super::keybindmanager::{HandleEvent, KeybindManager};
 use crossterm::event::Event;
 
-pub trait LayerCore {
+pub trait LayerCore<ParentAction = crate::Action> {
     fn handle_event(
         &mut self,
         event: Event,
         statusbar: &mut crate::statusbar::Model,
-    ) -> Option<crate::Action>;
+    ) -> Option<ParentAction>;
 }
 
 pub trait LayerOverlay: LayerCore {
     fn into_message(self) -> Option<String>;
 }
 
-pub trait LayerModel<Action>: LayerCore
+pub trait LayerModel<Action, ParentAction = crate::Action>: LayerCore<ParentAction> {
+    #[must_use]
+    fn apply_action(&mut self, action: Action) -> Option<ParentAction>;
+
+    #[must_use]
+    fn handle_overlay<O>(&mut self, overlay: O) -> Option<ParentAction>
+    where
+        O: LayerOverlay;
+}
+
+pub trait LayerModelDefaultHandleEvent<Action, ParentAction = crate::Action>:
+    LayerModel<Action, ParentAction>
 where
     Action: Clone,
 {
-    #[must_use]
-    fn apply_action(&mut self, action: Action) -> Option<crate::Action>;
-
-    #[must_use]
-    fn handle_overlay<O>(&mut self, overlay: O) -> Option<crate::Action>
-    where
-        O: LayerOverlay;
-
     fn keybinding_manager(&mut self) -> &mut KeybindManager<Action>;
 
     fn handle_event(
         &mut self,
         event: Event,
         statusbar: &mut crate::statusbar::Model,
-    ) -> Option<crate::Action> {
+    ) -> Option<ParentAction> {
         match event {
             Event::Key(event) => {
                 tracing::debug!("{:#?}", event);

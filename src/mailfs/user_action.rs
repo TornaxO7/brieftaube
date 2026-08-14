@@ -2,8 +2,6 @@ use crate::palette::PaletteEntry;
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator};
 
-// TODO: HERE
-// Need a way to identify the action from str
 #[derive(
     Serialize,
     Deserialize,

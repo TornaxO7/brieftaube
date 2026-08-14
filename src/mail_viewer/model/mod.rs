@@ -1,27 +1,25 @@
-mod attachment_viewer;
-mod markdown_viewer;
-mod metadata_viewer;
-mod text_viewer;
+mod action;
+mod attachments;
+mod markdown;
+mod metadata;
+mod text;
 
-use super::Action;
 use crate::{
     backend::{
         Backend, MailBodyType, MailData,
         mails::types::{MailId, MailKeyword, MailUpdate},
     },
     task_manager::TaskManager,
-    utils::{
-        keybindmanager::KeybindManager,
-        layer::{LayerCore, LayerModel},
-    },
+    utils::layer::{LayerCore, LayerModel},
 };
-use std::{collections::HashMap, rc::Rc, sync::Arc};
-use tracing::{debug, error};
+use action::Action;
+use std::{rc::Rc, sync::Arc};
+use tracing::error;
 
-pub use attachment_viewer::AttachmentViewer;
-pub use markdown_viewer::MarkdownViewer;
-pub use metadata_viewer::MetadataViewer;
-pub use text_viewer::TextViewer;
+pub use attachments::AttachmentsViewer;
+pub use markdown::MarkdownViewer;
+pub use metadata::MetadataViewer;
+pub use text::TextViewer;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Viewer {
@@ -46,18 +44,16 @@ pub enum ScrollAction {
 }
 
 pub struct Model {
-    keybindings: KeybindManager<Action>,
-
     id: MailId,
     backend: Arc<Backend>,
     task_manager: Rc<TaskManager>,
 
-    pub selected_viewer: Viewer,
+    pub viewer: Viewer,
 
-    pub metadata_viewer: MetadataViewer,
-    pub text_viewer: TextViewer,
-    pub markdown_viewer: MarkdownViewer,
-    pub attachment_viewer: AttachmentViewer,
+    pub metadata: MetadataViewer,
+    pub text: TextViewer,
+    pub markdown: MarkdownViewer,
+    pub attachments: AttachmentsViewer,
 
     /// Contains the scrolling action for the current, selected viewer.
     /// Since we don't know the height and width of the area where each viewer
@@ -97,31 +93,13 @@ impl Model {
             backend,
             task_manager,
             scroll_action: None,
-            keybindings: KeybindManager::new(HashMap::from([
-                ("j", Action::ScrollDown),
-                ("k", Action::ScrollUp),
-                ("h", Action::Back),
-                ("<C-d>", Action::ScrollHalfPageDown),
-                ("<C-u>", Action::ScrollHalfPageUp),
-                ("zH", Action::ScrollHalfPageLeft),
-                ("zL", Action::ScrollHalfPageRight),
-                ("zh", Action::ScrollLeft),
-                ("zl", Action::ScrollRight),
-                ("q", Action::Quit),
-                (":", Action::OpenCommandPalette),
-                ("gg", Action::ScrollToTop),
-                ("ge", Action::ScrollToBottom),
-                ("<BS>", Action::Back),
-                ("<C-l>", Action::OpenLogs),
-                ("<Tab>", Action::OpenNextTab),
-                ("<btab>", Action::OpenPreviousTab),
-            ])),
-            selected_viewer,
 
-            metadata_viewer: MetadataViewer::default(),
-            text_viewer: TextViewer::default(),
-            markdown_viewer: MarkdownViewer::default(),
-            attachment_viewer: AttachmentViewer::default(),
+            viewer: selected_viewer,
+
+            metadata: MetadataViewer::new(),
+            text: TextViewer::new(),
+            markdown: MarkdownViewer::new(),
+            attachments: AttachmentsViewer::new(),
         };
 
         model.request_body_if_absent();
@@ -136,7 +114,7 @@ impl Model {
     fn request_body_if_absent(&self) {
         let mail = self.backend.get_mail(&self.id).unwrap();
 
-        let ty = match self.selected_viewer {
+        let ty = match self.viewer {
             Viewer::Metadata | Viewer::Attachments => return,
             Viewer::Markdown => MailBodyType::Html,
             Viewer::Text => MailBodyType::Text,
@@ -173,52 +151,34 @@ impl LayerCore for Model {
         event: crossterm::event::Event,
         statusbar: &mut crate::statusbar::Model,
     ) -> Option<crate::Action> {
-        <Self as LayerModel<Action>>::handle_event(self, event, statusbar)
+        let action = match self.viewer {
+            Viewer::Metadata => LayerCore::handle_event(&mut self.metadata, event, statusbar),
+            Viewer::Text => LayerCore::handle_event(&mut self.text, event, statusbar),
+            Viewer::Markdown => LayerCore::handle_event(&mut self.markdown, event, statusbar),
+            Viewer::Attachments => LayerCore::handle_event(&mut self.attachments, event, statusbar),
+        };
+
+        action.and_then(|action| self.apply_action(action))
     }
 }
 
 impl LayerModel<Action> for Model {
     fn apply_action(&mut self, action: Action) -> Option<crate::Action> {
-        debug!("Action: {}", action);
         match action {
-            Action::Quit => return Some(crate::Action::Quit),
-            Action::OpenCommandPalette => {
-                return Some(crate::Action::OpenPalette {
-                    entries: super::action::palette_options(),
-                });
-            }
-
-            Action::ScrollUp => self.scroll_up(),
-            Action::ScrollDown => self.scroll_down(),
-            Action::ScrollLeft => self.scroll_left(),
-            Action::ScrollRight => self.scroll_right(),
-            Action::ScrollToTop => self.scroll_to_top(),
-            Action::ScrollToBottom => self.scroll_to_bottom(),
-            Action::ScrollHalfPageDown => self.scroll_half_page_down(),
-            Action::ScrollHalfPageUp => self.scroll_half_page_up(),
-            Action::ScrollHalfPageLeft => self.scroll_half_page_left(),
-            Action::ScrollHalfPageRight => self.scroll_half_page_right(),
-
-            Action::OpenMetadataTab => self.set_viewer(Viewer::Metadata),
-            Action::OpenTextTab => self.set_viewer(Viewer::Text),
-            Action::OpenMarkdownTab => self.set_viewer(Viewer::Markdown),
-            Action::OpenAttachmentsTab => self.set_viewer(Viewer::Attachments),
+            Action::Quit => self.quit(),
+            Action::OpenMetadataTab => self.open_metadata_tab(),
+            Action::OpenTextTab => self.open_text_tab(),
+            Action::OpenMarkdownTab => self.open_markdown_tab(),
+            Action::OpenAttachmentsTab => self.open_attachments_tab(),
             Action::OpenNextTab => self.open_next_tab(),
             Action::OpenPreviousTab => self.open_previous_tab(),
-
-            Action::OpenLogs => return Some(crate::Action::OpenLogViewer),
-            Action::OpenMailInBrowser => self.open_html_mail_in_browser(),
-
-            Action::Back => {
-                return Some(crate::Action::Back);
-            }
-        };
-
-        None
-    }
-
-    fn keybinding_manager(&mut self) -> &mut KeybindManager<Action> {
-        &mut self.keybindings
+            Action::OpenLogs => self.open_logs(),
+            Action::Back => self.back(),
+            Action::Metadata(_action) => todo!(),
+            Action::Text(_action) => todo!(),
+            Action::Markdown(_action) => todo!(),
+            Action::Attachments(_action) => todo!(),
+        }
     }
 
     fn handle_overlay<O: crate::utils::layer::LayerOverlay>(
@@ -230,79 +190,32 @@ impl LayerModel<Action> for Model {
 }
 
 impl Model {
-    fn scroll_down(&mut self) {
-        let action = match self.keybindings.flush_int_prefix() {
-            Some(num) => ScrollAction::ScrollDown(num),
-            None => ScrollAction::ScrollDown(1),
-        };
-
-        self.scroll_action = Some(action);
+    fn quit(&self) -> Option<crate::Action> {
+        Some(crate::Action::Quit)
     }
 
-    fn scroll_up(&mut self) {
-        let action = match self.keybindings.flush_int_prefix() {
-            Some(num) => ScrollAction::ScrollUp(num),
-            None => ScrollAction::ScrollUp(1),
-        };
-
-        self.scroll_action = Some(action);
+    fn open_metadata_tab(&mut self) -> Option<crate::Action> {
+        self.set_viewer(Viewer::Metadata);
+        None
     }
 
-    fn scroll_left(&mut self) {
-        let action = match self.keybindings.flush_int_prefix() {
-            Some(num) => ScrollAction::ScrollLeft(num),
-            None => ScrollAction::ScrollLeft(1),
-        };
-
-        self.scroll_action = Some(action);
+    fn open_text_tab(&mut self) -> Option<crate::Action> {
+        self.set_viewer(Viewer::Text);
+        None
     }
 
-    // TODO: If in attachment tab: Download the selected attachment and open the directory in it?
-    //       Maybe create an action which downloads all attachments and then opens the directory?
-    fn scroll_right(&mut self) {
-        let action = match self.keybindings.flush_int_prefix() {
-            Some(num) => ScrollAction::ScrollRight(num),
-            None => ScrollAction::ScrollRight(1),
-        };
-
-        self.scroll_action = Some(action);
+    fn open_markdown_tab(&mut self) -> Option<crate::Action> {
+        self.set_viewer(Viewer::Markdown);
+        None
     }
 
-    fn scroll_to_top(&mut self) {
-        self.scroll_action = Some(ScrollAction::SetTop);
+    fn open_attachments_tab(&mut self) -> Option<crate::Action> {
+        self.set_viewer(Viewer::Attachments);
+        None
     }
 
-    fn scroll_to_bottom(&mut self) {
-        self.scroll_action = Some(ScrollAction::SetBottom);
-    }
-
-    fn scroll_half_page_up(&mut self) {
-        self.scroll_action = Some(ScrollAction::ScrollHalfPageUp);
-    }
-
-    fn scroll_half_page_down(&mut self) {
-        self.scroll_action = Some(ScrollAction::ScrollHalfPageDown);
-    }
-
-    fn scroll_half_page_left(&mut self) {
-        self.scroll_action = Some(ScrollAction::ScrollHalfPageLeft);
-    }
-
-    fn scroll_half_page_right(&mut self) {
-        self.scroll_action = Some(ScrollAction::ScrollHalfPageRight);
-    }
-
-    fn set_viewer(&mut self, viewer: Viewer) {
-        self.selected_viewer = viewer;
-
-        match viewer {
-            Viewer::Metadata | Viewer::Attachments => {}
-            Viewer::Text | Viewer::Markdown => self.request_body_if_absent(),
-        }
-    }
-
-    fn open_next_tab(&mut self) {
-        let next = match self.selected_viewer {
+    fn open_next_tab(&mut self) -> Option<crate::Action> {
+        let next = match self.viewer {
             Viewer::Metadata => Viewer::Text,
             Viewer::Text => Viewer::Markdown,
             Viewer::Markdown => Viewer::Attachments,
@@ -310,10 +223,11 @@ impl Model {
         };
 
         self.set_viewer(next);
+        None
     }
 
-    fn open_previous_tab(&mut self) {
-        let previous = match self.selected_viewer {
+    fn open_previous_tab(&mut self) -> Option<crate::Action> {
+        let previous = match self.viewer {
             Viewer::Metadata => Viewer::Attachments,
             Viewer::Text => Viewer::Metadata,
             Viewer::Markdown => Viewer::Text,
@@ -321,9 +235,25 @@ impl Model {
         };
 
         self.set_viewer(previous);
+        None
     }
 
-    fn open_html_mail_in_browser(&self) {
-        todo!()
+    fn open_logs(&self) -> Option<crate::Action> {
+        Some(crate::Action::OpenLogViewer)
+    }
+
+    fn back(&self) -> Option<crate::Action> {
+        Some(crate::Action::Back)
+    }
+}
+
+impl Model {
+    fn set_viewer(&mut self, viewer: Viewer) {
+        self.viewer = viewer;
+
+        match viewer {
+            Viewer::Metadata | Viewer::Attachments => {}
+            Viewer::Text | Viewer::Markdown => self.request_body_if_absent(),
+        }
     }
 }
