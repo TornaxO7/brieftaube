@@ -6,7 +6,7 @@ use ratatui::{
         palette::material::{BLACK, BLUE, PINK, YELLOW},
     },
     text::Text,
-    widgets::{Block, Row, StatefulWidget, Table},
+    widgets::{Block, ListState, Row, StatefulWidget, Table, TableState},
 };
 
 use crate::mail_viewer::{model::attachments::Navigate, types::MailDisplayAttachment};
@@ -20,28 +20,7 @@ impl<'a> StatefulWidget for AttachmentsViewer<'a> {
 
     fn render(self, area: Rect, buf: &mut Buffer, model: &mut Self::State) {
         if let Some(navigate) = model.navigate.take() {
-            match navigate {
-                Navigate::Up(amount) => {
-                    model.state.scroll_up_by(amount);
-                }
-                Navigate::Down(amount) => {
-                    model.state.scroll_down_by(amount);
-                }
-                Navigate::HalfPageUp => {
-                    model.state.scroll_up_by(area.height);
-                }
-                Navigate::HalfPageDown => model.state.scroll_down_by(area.height),
-                Navigate::Top => {
-                    if !self.attachments.is_empty() {
-                        model.state.select(Some(0));
-                    }
-                }
-                Navigate::Bottom => {
-                    if !self.attachments.is_empty() {
-                        model.state.select(Some(self.attachments.len() - 1));
-                    }
-                }
-            }
+            apply_navigation(&mut model.state, navigate, &self.attachments, area);
         }
 
         let rows: Vec<Row<'_>> = self
@@ -66,5 +45,35 @@ impl<'a> StatefulWidget for AttachmentsViewer<'a> {
             buf,
             &mut model.state,
         );
+    }
+}
+
+fn apply_navigation(
+    state: &mut TableState,
+    navigate: Navigate,
+    attachments: &[MailDisplayAttachment],
+    area: Rect,
+) {
+    match navigate {
+        Navigate::Up(amount) => {
+            state.scroll_up_by(amount);
+        }
+        Navigate::Down(amount) => {
+            state.scroll_down_by(amount);
+        }
+        Navigate::HalfPageUp => {
+            state.scroll_up_by(area.height);
+        }
+        Navigate::HalfPageDown => state.scroll_down_by(area.height),
+        Navigate::Top => {
+            if !attachments.is_empty() {
+                state.select(Some(0));
+            }
+        }
+        Navigate::Bottom => {
+            if !attachments.is_empty() {
+                state.select(Some(attachments.len() - 1));
+            }
+        }
     }
 }

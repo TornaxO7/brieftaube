@@ -43,6 +43,7 @@ impl Model {
                 ("k", Action::ScrollUp),
                 ("zh", Action::ScrollLeft),
                 ("zl", Action::ScrollRight),
+                (":", Action::OpenCommandPalette),
             ])),
         }
     }
