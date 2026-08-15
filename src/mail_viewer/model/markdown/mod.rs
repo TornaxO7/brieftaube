@@ -109,7 +109,9 @@ impl MailViewerSubModel for MarkdownViewer {}
 impl MarkdownViewer {
     fn open_command_palette(&mut self) -> Option<super::Action> {
         self.expected_overlay = Some(ExpectedOverlay::Action);
-        Some(super::Action::Back)
+        Some(super::Action::OpenPalette {
+            entries: action::palette_options(),
+        })
     }
 
     fn open_mail_in_browser(&self) -> Option<super::Action> {

@@ -9,6 +9,7 @@ use crate::{
         Backend, MailBodyType, MailData,
         mails::types::{MailId, MailKeyword, MailUpdate},
     },
+    palette,
     task_manager::TaskManager,
     utils::layer::{LayerCore, LayerModel},
 };
@@ -210,6 +211,9 @@ impl LayerModel<Action> for Model {
             Action::OpenPreviousTab => self.open_previous_tab(),
             Action::OpenLogs => self.open_logs(),
             Action::Back => self.back(),
+
+            Action::OpenPalette { entries } => self.open_palette(entries),
+
             Action::Metadata(action) => self
                 .metadata
                 .apply_action(action)
@@ -299,6 +303,10 @@ impl Model {
 
     fn back(&self) -> Option<crate::Action> {
         Some(crate::Action::Back)
+    }
+
+    fn open_palette(&self, entries: Vec<palette::PaletteEntry>) -> Option<crate::Action> {
+        Some(crate::Action::OpenPalette { entries })
     }
 }
 

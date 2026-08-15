@@ -1,4 +1,7 @@
-use crate::mail_viewer::model::{attachments, markdown, metadata, text};
+use crate::{
+    mail_viewer::model::{attachments, markdown, metadata, text},
+    palette,
+};
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -11,6 +14,8 @@ pub enum Action {
     OpenNextTab,
     OpenPreviousTab,
     OpenLogs,
+
+    OpenPalette { entries: Vec<palette::PaletteEntry> },
 
     Metadata(metadata::Action),
     Text(text::Action),
