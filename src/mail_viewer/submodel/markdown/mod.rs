@@ -1,4 +1,5 @@
 mod action;
+mod widget;
 
 use super::MailViewerSubModel;
 use crate::utils::{
@@ -14,7 +15,7 @@ enum ExpectedOverlay {
     Action,
 }
 
-pub struct MarkdownViewer {
+pub struct Model {
     pub vertical: ScrollbarState,
     pub horizontal: ScrollbarState,
 
@@ -23,7 +24,7 @@ pub struct MarkdownViewer {
     expected_overlay: Option<ExpectedOverlay>,
 }
 
-impl MarkdownViewer {
+impl Model {
     pub fn new() -> Self {
         Self {
             vertical: ScrollbarState::default(),
@@ -41,7 +42,7 @@ impl MarkdownViewer {
     }
 }
 
-impl LayerCore<super::Action> for MarkdownViewer {
+impl LayerCore<super::Action> for Model {
     fn handle_event(
         &mut self,
         event: crossterm::event::Event,
@@ -53,7 +54,7 @@ impl LayerCore<super::Action> for MarkdownViewer {
     }
 }
 
-impl LayerModel<Action, super::Action> for MarkdownViewer {
+impl LayerModel<Action, super::Action> for Model {
     fn apply_action(&mut self, action: Action) -> Option<super::Action> {
         match action {
             Action::OpenCommandPalette => self.open_command_palette(),
@@ -96,15 +97,15 @@ impl LayerModel<Action, super::Action> for MarkdownViewer {
     }
 }
 
-impl LayerModelDefaultHandleEvent<Action, super::Action> for MarkdownViewer {
+impl LayerModelDefaultHandleEvent<Action, super::Action> for Model {
     fn keybinding_manager(&mut self) -> &mut KeybindManager<Action> {
         &mut self.keybindings
     }
 }
 
-impl MailViewerSubModel for MarkdownViewer {}
+impl MailViewerSubModel for Model {}
 
-impl MarkdownViewer {
+impl Model {
     fn open_command_palette(&mut self) -> Option<super::Action> {
         self.expected_overlay = Some(ExpectedOverlay::Action);
         Some(super::Action::OpenPalette {

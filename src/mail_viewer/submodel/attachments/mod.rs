@@ -14,14 +14,14 @@ enum ExpectedOverlay {
     Action,
 }
 
-pub struct AttachmentsViewer {
+pub struct Model {
     pub state: TableState,
     pub keybindings: KeybindManager<Action>,
 
     expected_overlay: Option<ExpectedOverlay>,
 }
 
-impl AttachmentsViewer {
+impl Model {
     pub fn new() -> Self {
         Self {
             state: TableState::new(),
@@ -35,7 +35,7 @@ impl AttachmentsViewer {
     }
 }
 
-impl LayerCore<super::Action> for AttachmentsViewer {
+impl LayerCore<super::Action> for Model {
     fn handle_event(
         &mut self,
         event: crossterm::event::Event,
@@ -47,7 +47,7 @@ impl LayerCore<super::Action> for AttachmentsViewer {
     }
 }
 
-impl LayerModel<Action, super::Action> for AttachmentsViewer {
+impl LayerModel<Action, super::Action> for Model {
     fn apply_action(&mut self, action: Action) -> Option<super::Action> {
         match action {
             Action::OpenCommandPalette => self.open_command_palette(),
@@ -85,15 +85,15 @@ impl LayerModel<Action, super::Action> for AttachmentsViewer {
     }
 }
 
-impl LayerModelDefaultHandleEvent<Action, super::Action> for AttachmentsViewer {
+impl LayerModelDefaultHandleEvent<Action, super::Action> for Model {
     fn keybinding_manager(&mut self) -> &mut KeybindManager<Action> {
         &mut self.keybindings
     }
 }
 
-impl MailViewerSubModel for AttachmentsViewer {}
+impl MailViewerSubModel for Model {}
 
-impl AttachmentsViewer {
+impl Model {
     fn open_command_palette(&mut self) -> Option<super::Action> {
         self.expected_overlay = Some(ExpectedOverlay::Action);
         Some(super::Action::OpenPalette {

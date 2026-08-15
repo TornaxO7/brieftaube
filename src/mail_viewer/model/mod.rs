@@ -12,10 +12,10 @@ use crate::{
 use std::{rc::Rc, sync::Arc};
 use tracing::error;
 
-pub use super::submodel::attachments::AttachmentsViewer;
-pub use super::submodel::markdown::MarkdownViewer;
-pub use super::submodel::metadata::MetadataViewer;
-pub use super::submodel::text::TextViewer;
+pub use super::submodel::attachments;
+pub use super::submodel::markdown;
+pub use super::submodel::metadata;
+pub use super::submodel::text;
 pub use action::Action;
 
 #[derive(Debug, Clone, Copy)]
@@ -47,10 +47,10 @@ pub struct Model {
 
     pub viewer: Viewer,
 
-    pub metadata: MetadataViewer,
-    pub text: TextViewer,
-    pub markdown: MarkdownViewer,
-    pub attachments: AttachmentsViewer,
+    pub metadata: metadata::Model,
+    pub text: text::Model,
+    pub markdown: markdown::Model,
+    pub attachments: attachments::Model,
     // /// Contains the scrolling action for the current, selected viewer.
     // /// Since we don't know the height and width of the area where each viewer
     // /// gets rendered to, we have to apply the scroll action _later_ during the rendering...
@@ -91,10 +91,10 @@ impl Model {
 
             viewer: selected_viewer,
 
-            metadata: MetadataViewer::new(),
-            text: TextViewer::new(),
-            markdown: MarkdownViewer::new(),
-            attachments: AttachmentsViewer::new(),
+            metadata: metadata::Model::new(),
+            text: text::Model::new(),
+            markdown: markdown::Model::new(),
+            attachments: attachments::Model::new(),
         };
 
         model.request_body_if_absent();

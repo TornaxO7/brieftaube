@@ -14,7 +14,7 @@ enum ExpectedOverlay {
     Action,
 }
 
-pub struct TextViewer {
+pub struct Model {
     pub vertical: ScrollbarState,
     pub horizontal: ScrollbarState,
 
@@ -23,7 +23,7 @@ pub struct TextViewer {
     expected_overlay: Option<ExpectedOverlay>,
 }
 
-impl TextViewer {
+impl Model {
     pub fn new() -> Self {
         Self {
             vertical: ScrollbarState::default(),
@@ -40,7 +40,7 @@ impl TextViewer {
     }
 }
 
-impl LayerCore<super::Action> for TextViewer {
+impl LayerCore<super::Action> for Model {
     fn handle_event(
         &mut self,
         event: crossterm::event::Event,
@@ -52,7 +52,7 @@ impl LayerCore<super::Action> for TextViewer {
     }
 }
 
-impl LayerModel<Action, super::Action> for TextViewer {
+impl LayerModel<Action, super::Action> for Model {
     fn apply_action(&mut self, action: Action) -> Option<super::Action> {
         match action {
             Action::OpenCommandPalette => self.open_command_palette(),
@@ -94,15 +94,15 @@ impl LayerModel<Action, super::Action> for TextViewer {
     }
 }
 
-impl LayerModelDefaultHandleEvent<Action, super::Action> for TextViewer {
+impl LayerModelDefaultHandleEvent<Action, super::Action> for Model {
     fn keybinding_manager(&mut self) -> &mut KeybindManager<Action> {
         &mut self.keybindings
     }
 }
 
-impl MailViewerSubModel for TextViewer {}
+impl MailViewerSubModel for Model {}
 
-impl TextViewer {
+impl Model {
     fn open_command_palette(&mut self) -> Option<super::Action> {
         self.expected_overlay = Some(ExpectedOverlay::Action);
         Some(super::Action::OpenPalette {
