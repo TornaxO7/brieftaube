@@ -26,20 +26,6 @@ pub enum Viewer {
     Attachments,
 }
 
-// #[derive(Debug, Clone, Copy)]
-// pub enum ScrollAction {
-//     ScrollDown(usize),
-//     ScrollUp(usize),
-//     ScrollHalfPageDown,
-//     ScrollHalfPageUp,
-//     ScrollHalfPageRight,
-//     ScrollHalfPageLeft,
-//     ScrollLeft(usize),
-//     ScrollRight(usize),
-//     SetTop,
-//     SetBottom,
-// }
-
 pub struct Model {
     id: MailId,
     backend: Arc<Backend>,

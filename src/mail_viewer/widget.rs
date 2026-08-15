@@ -101,52 +101,7 @@ fn render_viewer(area: Rect, buf: &mut Buffer, data: &mut RenderData) {
         ViewerState::Markdown {
             vertical,
             horizontal,
-        } => {
-            let Some(html) = data.mail.html_body.clone() else {
-                Widget::render(
-                    Paragraph::new("Fetching html body...").block(Block::bordered()),
-                    area,
-                    buf,
-                );
-
-                return;
-            };
-            let markdown = html_to_markdown_rs::convert(&html.0, None).unwrap();
-            let content = markdown.content.unwrap();
-
-            let renderer = Renderer::new(RenderOptions::default().width(area.width));
-            let text = renderer.text_from_str(&content).unwrap();
-
-            let (content_area, vertical_scrollbar_area, horizontal_scrollbar_area) =
-                adjust_scrollbars(&text, area, vertical, horizontal, data.scroll_action);
-
-            Widget::render(
-                Paragraph::new(text).block(Block::bordered()).scroll((
-                    vertical.get_position() as u16,
-                    horizontal.get_position() as u16,
-                )),
-                content_area,
-                buf,
-            );
-
-            if let Some(area) = vertical_scrollbar_area {
-                StatefulWidget::render(
-                    Scrollbar::new(ScrollbarOrientation::VerticalRight),
-                    area,
-                    buf,
-                    vertical,
-                );
-            }
-
-            if let Some(area) = horizontal_scrollbar_area {
-                StatefulWidget::render(
-                    Scrollbar::new(ScrollbarOrientation::HorizontalBottom),
-                    area,
-                    buf,
-                    horizontal,
-                );
-            }
-        }
+        } => {}
         ViewerState::Text {
             vertical,
             horizontal,

@@ -2,14 +2,18 @@ mod action;
 mod widget;
 
 use super::MailViewerSubModel;
-use crate::utils::{
-    keybindmanager::KeybindManager,
-    layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent, LayerOverlay},
+use crate::{
+    mail_viewer::submodel::{MailViewerPager, ScrollAction},
+    utils::{
+        keybindmanager::KeybindManager,
+        layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent, LayerOverlay},
+    },
 };
 use ratatui::widgets::ScrollbarState;
 use std::{collections::HashMap, str::FromStr};
 
 pub use action::Action;
+pub use widget::MarkdownViewer;
 
 enum ExpectedOverlay {
     Action,
@@ -22,6 +26,7 @@ pub struct Model {
     pub keybindings: KeybindManager<Action>,
 
     expected_overlay: Option<ExpectedOverlay>,
+    scroll_action: Option<ScrollAction>,
 }
 
 impl Model {
@@ -30,6 +35,7 @@ impl Model {
             vertical: ScrollbarState::default(),
             horizontal: ScrollbarState::default(),
             expected_overlay: None,
+            scroll_action: None,
 
             keybindings: KeybindManager::new(HashMap::from([
                 ("h", Action::Back),
@@ -104,6 +110,12 @@ impl LayerModelDefaultHandleEvent<Action, super::Action> for Model {
 }
 
 impl MailViewerSubModel for Model {}
+
+impl MailViewerPager<Action> for Model {
+    fn set_scroll_action(&mut self, scroll: ScrollAction) {
+        self.scroll_action = Some(scroll);
+    }
+}
 
 impl Model {
     fn open_command_palette(&mut self) -> Option<super::Action> {
