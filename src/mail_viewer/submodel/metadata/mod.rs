@@ -1,11 +1,9 @@
 mod action;
 
-use crate::{
-    mail_viewer::model::MailViewerSubModel,
-    utils::{
-        keybindmanager::KeybindManager,
-        layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent},
-    },
+use super::MailViewerSubModel;
+use crate::utils::{
+    keybindmanager::KeybindManager,
+    layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent},
 };
 use ratatui::widgets::TableState;
 use std::{collections::HashMap, str::FromStr};
@@ -16,28 +14,28 @@ enum ExpectedOverlay {
     Action,
 }
 
-pub struct AttachmentsViewer {
+pub struct MetadataViewer {
     pub state: TableState,
     pub keybindings: KeybindManager<Action>,
 
     expected_overlay: Option<ExpectedOverlay>,
 }
 
-impl AttachmentsViewer {
+impl MetadataViewer {
     pub fn new() -> Self {
         Self {
             state: TableState::new(),
             expected_overlay: None,
             keybindings: KeybindManager::new(HashMap::from([
-                ("j", Action::NavigateDown),
-                ("k", Action::NavigateUp),
+                ("j", Action::ScrollDown),
+                ("k", Action::ScrollUp),
                 (":", Action::OpenCommandPalette),
             ])),
         }
     }
 }
 
-impl LayerCore<super::Action> for AttachmentsViewer {
+impl LayerCore<super::Action> for MetadataViewer {
     fn handle_event(
         &mut self,
         event: crossterm::event::Event,
@@ -49,18 +47,22 @@ impl LayerCore<super::Action> for AttachmentsViewer {
     }
 }
 
-impl LayerModel<Action, super::Action> for AttachmentsViewer {
+impl LayerModel<Action, super::Action> for MetadataViewer {
     fn apply_action(&mut self, action: Action) -> Option<super::Action> {
         match action {
             Action::OpenCommandPalette => self.open_command_palette(),
             Action::Quit => self.quit(),
             Action::Back => self.back(),
-            Action::NavigateDown => todo!(),
-            Action::NavigateUp => todo!(),
-            Action::NavigateToTop => todo!(),
-            Action::NavigateToBottom => todo!(),
-            Action::NavigateHalfPageDown => todo!(),
-            Action::NavigateHalfPageUp => todo!(),
+            Action::ScrollDown => todo!(),
+            Action::ScrollUp => todo!(),
+            Action::ScrollLeft => todo!(),
+            Action::ScrollRight => todo!(),
+            Action::ScrollToTop => todo!(),
+            Action::ScrollToBottom => todo!(),
+            Action::ScrollHalfPageDown => todo!(),
+            Action::ScrollHalfPageUp => todo!(),
+            Action::ScrollHalfPageRight => todo!(),
+            Action::ScrollHalfPageLeft => todo!(),
             Action::OpenMetadataTab => self.open_metadata_tab(),
             Action::OpenTextTab => self.open_text_tab(),
             Action::OpenMarkdownTab => self.open_markdown_tab(),
@@ -87,15 +89,15 @@ impl LayerModel<Action, super::Action> for AttachmentsViewer {
     }
 }
 
-impl LayerModelDefaultHandleEvent<Action, super::Action> for AttachmentsViewer {
+impl LayerModelDefaultHandleEvent<Action, super::Action> for MetadataViewer {
     fn keybinding_manager(&mut self) -> &mut KeybindManager<Action> {
         &mut self.keybindings
     }
 }
 
-impl MailViewerSubModel for AttachmentsViewer {}
+impl MailViewerSubModel for MetadataViewer {}
 
-impl AttachmentsViewer {
+impl MetadataViewer {
     fn open_command_palette(&mut self) -> Option<super::Action> {
         self.expected_overlay = Some(ExpectedOverlay::Action);
         Some(super::Action::OpenPalette {

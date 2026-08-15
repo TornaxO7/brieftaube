@@ -1,8 +1,4 @@
 mod action;
-mod attachments;
-mod markdown;
-mod metadata;
-mod text;
 
 use crate::{
     backend::{
@@ -13,52 +9,14 @@ use crate::{
     task_manager::TaskManager,
     utils::layer::{LayerCore, LayerModel},
 };
-use action::Action;
 use std::{rc::Rc, sync::Arc};
 use tracing::error;
 
-pub use attachments::AttachmentsViewer;
-pub use markdown::MarkdownViewer;
-pub use metadata::MetadataViewer;
-pub use text::TextViewer;
-
-trait MailViewerSubModel {
-    fn quit(&self) -> Option<Action> {
-        Some(Action::Quit)
-    }
-
-    fn back(&self) -> Option<Action> {
-        Some(Action::Back)
-    }
-
-    fn open_metadata_tab(&self) -> Option<Action> {
-        Some(Action::OpenMetadataTab)
-    }
-
-    fn open_text_tab(&self) -> Option<Action> {
-        Some(Action::OpenTextTab)
-    }
-
-    fn open_markdown_tab(&self) -> Option<Action> {
-        Some(Action::OpenMarkdownTab)
-    }
-
-    fn open_attachments_tab(&self) -> Option<Action> {
-        Some(Action::OpenAttachmentsTab)
-    }
-
-    fn open_next_tab(&self) -> Option<Action> {
-        Some(Action::OpenNextTab)
-    }
-
-    fn open_previous_tab(&self) -> Option<Action> {
-        Some(Action::OpenPreviousTab)
-    }
-
-    fn open_logs(&self) -> Option<Action> {
-        Some(Action::OpenLogs)
-    }
-}
+pub use super::submodel::attachments::AttachmentsViewer;
+pub use super::submodel::markdown::MarkdownViewer;
+pub use super::submodel::metadata::MetadataViewer;
+pub use super::submodel::text::TextViewer;
+pub use action::Action;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Viewer {

@@ -1,11 +1,9 @@
 mod action;
 
-use crate::{
-    mail_viewer::model::MailViewerSubModel,
-    utils::{
-        keybindmanager::KeybindManager,
-        layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent, LayerOverlay},
-    },
+use super::MailViewerSubModel;
+use crate::utils::{
+    keybindmanager::KeybindManager,
+    layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent, LayerOverlay},
 };
 use ratatui::widgets::ScrollbarState;
 use std::{collections::HashMap, str::FromStr};
