@@ -3,15 +3,13 @@ pub mod markdown;
 pub mod metadata;
 pub mod text;
 
+use super::Action;
+use crate::utils::layer::LayerModelDefaultHandleEvent;
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     text::Text,
     widgets::ScrollbarState,
 };
-
-use crate::utils::layer::LayerModelDefaultHandleEvent;
-
-use super::Action;
 
 #[derive(Debug, Clone, Copy)]
 enum ScrollAction {
@@ -138,20 +136,27 @@ where
     }
 }
 
-// TODO: Split into two functions:
-// - one accepts only integers and returns an integer (the bounding values)
-// - the other computes the rects
+fn new_pos(pos: u16, inner_max: u16, area_max: u16, offset: u16, inc: bool) -> u16 {
+    let unseen_lines_or_columns = inner_max.saturating_sub(area_max);
+
+    if inc {
+        (pos + offset).min(unseen_lines_or_columns)
+    } else {
+        pos.saturating_sub(offset).min(unseen_lines_or_columns)
+    }
+}
+
 fn adjust_scrollbars(
     text: &Text,
     area: Rect,
     vertical: &mut ScrollbarState,
     horizontal: &mut ScrollbarState,
-    queue: &mut Option<ScrollAction>,
+    scroll_action: Option<ScrollAction>,
 ) -> (Rect, Option<Rect>, Option<Rect>) {
     let amount_unseen_lines = text.height().saturating_sub(area.height as usize);
     let amount_unseen_columns = text.width().saturating_sub(area.width as usize);
 
-    if let Some(action) = queue.take() {
+    if let Some(action) = scroll_action {
         match action {
             ScrollAction::ScrollUp(amount) => {
                 let pos = vertical.get_position();

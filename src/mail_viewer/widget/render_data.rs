@@ -1,8 +1,3 @@
-use crate::mail_viewer::{
-    Model,
-    model::{AttachmentsViewer, MarkdownViewer, MetadataViewer, ScrollAction, TextViewer, Viewer},
-    types::MailDisplay,
-};
 use ratatui::widgets::{ScrollbarState, TableState};
 
 pub struct RenderData<'a> {

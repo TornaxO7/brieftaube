@@ -1,4 +1,5 @@
 mod action;
+mod widget;
 
 use super::MailViewerSubModel;
 use crate::utils::{
@@ -9,6 +10,7 @@ use ratatui::widgets::TableState;
 use std::{collections::HashMap, str::FromStr};
 
 pub use action::Action;
+pub use widget::MetadataViewer;
 
 enum ExpectedOverlay {
     Action,

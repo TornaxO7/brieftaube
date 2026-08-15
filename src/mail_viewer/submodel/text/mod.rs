@@ -1,4 +1,5 @@
 mod action;
+mod widget;
 
 use super::MailViewerSubModel;
 use crate::{
@@ -12,6 +13,7 @@ use ratatui::widgets::ScrollbarState;
 use std::{collections::HashMap, str::FromStr};
 
 pub use action::Action;
+pub use widget::TextViewer;
 
 enum ExpectedOverlay {
     Action,

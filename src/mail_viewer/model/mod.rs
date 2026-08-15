@@ -37,10 +37,6 @@ pub struct Model {
     pub text: text::Model,
     pub markdown: markdown::Model,
     pub attachments: attachments::Model,
-    // /// Contains the scrolling action for the current, selected viewer.
-    // /// Since we don't know the height and width of the area where each viewer
-    // /// gets rendered to, we have to apply the scroll action _later_ during the rendering...
-    // pub scroll_action: Option<ScrollAction>,
 }
 
 impl Model {

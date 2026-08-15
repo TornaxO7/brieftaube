@@ -1,4 +1,5 @@
 mod action;
+mod widget;
 
 use super::MailViewerSubModel;
 use crate::utils::{
@@ -9,9 +10,19 @@ use ratatui::widgets::TableState;
 use std::{collections::HashMap, str::FromStr};
 
 pub use action::Action;
+pub use widget::AttachmentsViewer;
 
 enum ExpectedOverlay {
     Action,
+}
+
+enum Navigate {
+    Up(u16),
+    Down(u16),
+    HalfPageUp,
+    HalfPageDown,
+    Top,
+    Bottom,
 }
 
 pub struct Model {
@@ -19,6 +30,7 @@ pub struct Model {
     pub keybindings: KeybindManager<Action>,
 
     expected_overlay: Option<ExpectedOverlay>,
+    navigate: Option<Navigate>,
 }
 
 impl Model {
@@ -26,6 +38,7 @@ impl Model {
         Self {
             state: TableState::new(),
             expected_overlay: None,
+            navigate: None,
             keybindings: KeybindManager::new(HashMap::from([
                 ("j", Action::NavigateDown),
                 ("k", Action::NavigateUp),
@@ -99,5 +112,37 @@ impl Model {
         Some(super::Action::OpenPalette {
             entries: action::palette_options(),
         })
+    }
+
+    fn navigate_down(&mut self) -> Option<crate::Action> {
+        let amount = self.keybindings.flush_int_prefix().unwrap_or(1);
+        self.navigate = Some(Navigate::Down(amount as u16));
+        None
+    }
+
+    fn navigate_up(&mut self) -> Option<crate::Action> {
+        let amount = self.keybindings.flush_int_prefix().unwrap_or(1);
+        self.navigate = Some(Navigate::Up(amount as u16));
+        None
+    }
+
+    fn navigate_to_top(&mut self) -> Option<super::Action> {
+        self.navigate = Some(Navigate::Top);
+        None
+    }
+
+    fn navigate_to_bottom(&mut self) -> Option<crate::Action> {
+        self.navigate = Some(Navigate::Bottom);
+        None
+    }
+
+    fn navigate_half_page_down(&mut self) -> Option<crate::Action> {
+        self.navigate = Some(Navigate::HalfPageDown);
+        None
+    }
+
+    fn navigate_half_page_up(&mut self) -> Option<crate::Action> {
+        self.navigate = Some(Navigate::HalfPageUp);
+        None
     }
 }
