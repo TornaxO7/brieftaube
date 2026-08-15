@@ -21,6 +21,44 @@ pub use markdown::MarkdownViewer;
 pub use metadata::MetadataViewer;
 pub use text::TextViewer;
 
+trait MailViewerSubModel {
+    fn quit(&self) -> Option<Action> {
+        Some(Action::Quit)
+    }
+
+    fn back(&self) -> Option<Action> {
+        Some(Action::Back)
+    }
+
+    fn open_metadata_tab(&self) -> Option<Action> {
+        Some(Action::OpenMetadataTab)
+    }
+
+    fn open_text_tab(&self) -> Option<Action> {
+        Some(Action::OpenTextTab)
+    }
+
+    fn open_markdown_tab(&self) -> Option<Action> {
+        Some(Action::OpenMarkdownTab)
+    }
+
+    fn open_attachments_tab(&self) -> Option<Action> {
+        Some(Action::OpenAttachmentsTab)
+    }
+
+    fn open_next_tab(&self) -> Option<Action> {
+        Some(Action::OpenNextTab)
+    }
+
+    fn open_previous_tab(&self) -> Option<Action> {
+        Some(Action::OpenPreviousTab)
+    }
+
+    fn open_logs(&self) -> Option<Action> {
+        Some(Action::OpenLogs)
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum Viewer {
     Metadata,
@@ -29,19 +67,19 @@ pub enum Viewer {
     Attachments,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum ScrollAction {
-    ScrollDown(usize),
-    ScrollUp(usize),
-    ScrollHalfPageDown,
-    ScrollHalfPageUp,
-    ScrollHalfPageRight,
-    ScrollHalfPageLeft,
-    ScrollLeft(usize),
-    ScrollRight(usize),
-    SetTop,
-    SetBottom,
-}
+// #[derive(Debug, Clone, Copy)]
+// pub enum ScrollAction {
+//     ScrollDown(usize),
+//     ScrollUp(usize),
+//     ScrollHalfPageDown,
+//     ScrollHalfPageUp,
+//     ScrollHalfPageRight,
+//     ScrollHalfPageLeft,
+//     ScrollLeft(usize),
+//     ScrollRight(usize),
+//     SetTop,
+//     SetBottom,
+// }
 
 pub struct Model {
     id: MailId,
@@ -54,11 +92,10 @@ pub struct Model {
     pub text: TextViewer,
     pub markdown: MarkdownViewer,
     pub attachments: AttachmentsViewer,
-
-    /// Contains the scrolling action for the current, selected viewer.
-    /// Since we don't know the height and width of the area where each viewer
-    /// gets rendered to, we have to apply the scroll action _later_ during the rendering...
-    pub scroll_action: Option<ScrollAction>,
+    // /// Contains the scrolling action for the current, selected viewer.
+    // /// Since we don't know the height and width of the area where each viewer
+    // /// gets rendered to, we have to apply the scroll action _later_ during the rendering...
+    // pub scroll_action: Option<ScrollAction>,
 }
 
 impl Model {
@@ -92,7 +129,6 @@ impl Model {
             id,
             backend,
             task_manager,
-            scroll_action: None,
 
             viewer: selected_viewer,
 
@@ -174,18 +210,37 @@ impl LayerModel<Action> for Model {
             Action::OpenPreviousTab => self.open_previous_tab(),
             Action::OpenLogs => self.open_logs(),
             Action::Back => self.back(),
-            Action::Metadata(_action) => todo!(),
-            Action::Text(_action) => todo!(),
-            Action::Markdown(_action) => todo!(),
-            Action::Attachments(_action) => todo!(),
+            Action::Metadata(action) => self
+                .metadata
+                .apply_action(action)
+                .and_then(|a| self.apply_action(a)),
+            Action::Text(action) => self
+                .text
+                .apply_action(action)
+                .and_then(|a| self.apply_action(a)),
+            Action::Markdown(action) => self
+                .markdown
+                .apply_action(action)
+                .and_then(|a| self.apply_action(a)),
+            Action::Attachments(action) => self
+                .attachments
+                .apply_action(action)
+                .and_then(|a| self.apply_action(a)),
         }
     }
 
     fn handle_overlay<O: crate::utils::layer::LayerOverlay>(
         &mut self,
-        _overlay: O,
+        overlay: O,
     ) -> Option<crate::Action> {
-        todo!()
+        let action = match self.viewer {
+            Viewer::Metadata => self.metadata.handle_overlay(overlay),
+            Viewer::Text => self.text.handle_overlay(overlay),
+            Viewer::Markdown => self.markdown.handle_overlay(overlay),
+            Viewer::Attachments => self.attachments.handle_overlay(overlay),
+        };
+
+        action.and_then(|a| self.apply_action(a))
     }
 }
 
