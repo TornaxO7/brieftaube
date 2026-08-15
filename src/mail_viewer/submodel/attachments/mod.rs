@@ -66,12 +66,12 @@ impl LayerModel<Action, super::Action> for Model {
             Action::OpenCommandPalette => self.open_command_palette(),
             Action::Quit => self.quit(),
             Action::Back => self.back(),
-            Action::NavigateDown => todo!(),
-            Action::NavigateUp => todo!(),
-            Action::NavigateToTop => todo!(),
-            Action::NavigateToBottom => todo!(),
-            Action::NavigateHalfPageDown => todo!(),
-            Action::NavigateHalfPageUp => todo!(),
+            Action::NavigateDown => self.navigate_down(),
+            Action::NavigateUp => self.navigate_up(),
+            Action::NavigateToTop => self.navigate_to_top(),
+            Action::NavigateToBottom => self.navigate_to_bottom(),
+            Action::NavigateHalfPageDown => self.navigate_half_page_down(),
+            Action::NavigateHalfPageUp => self.navigate_half_page_up(),
             Action::OpenMetadataTab => self.open_metadata_tab(),
             Action::OpenTextTab => self.open_text_tab(),
             Action::OpenMarkdownTab => self.open_markdown_tab(),
@@ -114,13 +114,13 @@ impl Model {
         })
     }
 
-    fn navigate_down(&mut self) -> Option<crate::Action> {
+    fn navigate_down(&mut self) -> Option<super::Action> {
         let amount = self.keybindings.flush_int_prefix().unwrap_or(1);
         self.navigate = Some(Navigate::Down(amount as u16));
         None
     }
 
-    fn navigate_up(&mut self) -> Option<crate::Action> {
+    fn navigate_up(&mut self) -> Option<super::Action> {
         let amount = self.keybindings.flush_int_prefix().unwrap_or(1);
         self.navigate = Some(Navigate::Up(amount as u16));
         None
@@ -131,17 +131,17 @@ impl Model {
         None
     }
 
-    fn navigate_to_bottom(&mut self) -> Option<crate::Action> {
+    fn navigate_to_bottom(&mut self) -> Option<super::Action> {
         self.navigate = Some(Navigate::Bottom);
         None
     }
 
-    fn navigate_half_page_down(&mut self) -> Option<crate::Action> {
+    fn navigate_half_page_down(&mut self) -> Option<super::Action> {
         self.navigate = Some(Navigate::HalfPageDown);
         None
     }
 
-    fn navigate_half_page_up(&mut self) -> Option<crate::Action> {
+    fn navigate_half_page_up(&mut self) -> Option<super::Action> {
         self.navigate = Some(Navigate::HalfPageUp);
         None
     }
