@@ -10,19 +10,10 @@ use ratatui::widgets::TableState;
 use std::{collections::HashMap, str::FromStr};
 
 pub use action::Action;
-pub use widget::AttachmentsViewer;
+pub use widget::MetadataReader;
 
 enum ExpectedOverlay {
     Action,
-}
-
-enum Navigate {
-    Up(u16),
-    Down(u16),
-    HalfPageUp,
-    HalfPageDown,
-    Top,
-    Bottom,
 }
 
 pub struct Model {
@@ -30,7 +21,6 @@ pub struct Model {
     pub keybindings: KeybindManager<Action>,
 
     expected_overlay: Option<ExpectedOverlay>,
-    navigate: Option<Navigate>,
 }
 
 impl Model {
@@ -38,10 +28,9 @@ impl Model {
         Self {
             state: TableState::new(),
             expected_overlay: None,
-            navigate: None,
             keybindings: KeybindManager::new(HashMap::from([
-                ("j", Action::NavigateDown),
-                ("k", Action::NavigateUp),
+                ("j", Action::ScrollDown),
+                ("k", Action::ScrollUp),
                 (":", Action::OpenCommandPalette),
             ])),
         }
@@ -66,12 +55,16 @@ impl LayerModel<Action, super::Action> for Model {
             Action::OpenCommandPalette => self.open_command_palette(),
             Action::Quit => self.quit(),
             Action::Back => self.back(),
-            Action::NavigateDown => self.navigate_down(),
-            Action::NavigateUp => self.navigate_up(),
-            Action::NavigateToTop => self.navigate_to_top(),
-            Action::NavigateToBottom => self.navigate_to_bottom(),
-            Action::NavigateHalfPageDown => self.navigate_half_page_down(),
-            Action::NavigateHalfPageUp => self.navigate_half_page_up(),
+            Action::ScrollDown => todo!(),
+            Action::ScrollUp => todo!(),
+            Action::ScrollLeft => todo!(),
+            Action::ScrollRight => todo!(),
+            Action::ScrollToTop => todo!(),
+            Action::ScrollToBottom => todo!(),
+            Action::ScrollHalfPageDown => todo!(),
+            Action::ScrollHalfPageUp => todo!(),
+            Action::ScrollHalfPageRight => todo!(),
+            Action::ScrollHalfPageLeft => todo!(),
             Action::OpenMetadataTab => self.open_metadata_tab(),
             Action::OpenTextTab => self.open_text_tab(),
             Action::OpenMarkdownTab => self.open_markdown_tab(),
@@ -112,37 +105,5 @@ impl Model {
         Some(super::Action::OpenPalette {
             entries: action::palette_options(),
         })
-    }
-
-    fn navigate_down(&mut self) -> Option<super::Action> {
-        let amount = self.keybindings.flush_int_prefix().unwrap_or(1);
-        self.navigate = Some(Navigate::Down(amount as u16));
-        None
-    }
-
-    fn navigate_up(&mut self) -> Option<super::Action> {
-        let amount = self.keybindings.flush_int_prefix().unwrap_or(1);
-        self.navigate = Some(Navigate::Up(amount as u16));
-        None
-    }
-
-    fn navigate_to_top(&mut self) -> Option<super::Action> {
-        self.navigate = Some(Navigate::Top);
-        None
-    }
-
-    fn navigate_to_bottom(&mut self) -> Option<super::Action> {
-        self.navigate = Some(Navigate::Bottom);
-        None
-    }
-
-    fn navigate_half_page_down(&mut self) -> Option<super::Action> {
-        self.navigate = Some(Navigate::HalfPageDown);
-        None
-    }
-
-    fn navigate_half_page_up(&mut self) -> Option<super::Action> {
-        self.navigate = Some(Navigate::HalfPageUp);
-        None
     }
 }

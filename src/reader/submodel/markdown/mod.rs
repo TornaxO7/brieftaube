@@ -3,7 +3,7 @@ mod widget;
 
 use super::MailViewerSubModel;
 use crate::{
-    mail_viewer::submodel::{MailViewerPager, ScrollAction},
+    reader::submodel::{MailViewerPager, ScrollAction},
     utils::{
         keybindmanager::KeybindManager,
         layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent, LayerOverlay},
@@ -13,7 +13,7 @@ use ratatui::widgets::ScrollbarState;
 use std::{collections::HashMap, str::FromStr};
 
 pub use action::Action;
-pub use widget::MarkdownViewer;
+pub use widget::MarkdownReader;
 
 enum ExpectedOverlay {
     Action,

@@ -19,7 +19,7 @@ pub use super::submodel::text;
 pub use action::Action;
 
 #[derive(Debug, Clone, Copy)]
-pub enum Viewer {
+pub enum Mode {
     Metadata,
     Text,
     Markdown,
@@ -31,7 +31,7 @@ pub struct Model {
     backend: Arc<Backend>,
     task_manager: Rc<TaskManager>,
 
-    pub viewer: Viewer,
+    pub mode: Mode,
 
     pub metadata: metadata::Model,
     pub text: text::Model,
@@ -41,11 +41,11 @@ pub struct Model {
 
 impl Model {
     pub fn new(id: MailId, backend: Arc<Backend>, task_manager: Rc<TaskManager>) -> Self {
-        let selected_viewer = match backend.config().mail_viewer.default_tab {
-            crate::config::DefaultTab::Metadata => Viewer::Metadata,
-            crate::config::DefaultTab::Attachments => Viewer::Attachments,
-            crate::config::DefaultTab::Text => Viewer::Text,
-            crate::config::DefaultTab::Markdown => Viewer::Markdown,
+        let mode = match backend.config().reader.default_tab {
+            crate::config::DefaultTab::Metadata => Mode::Metadata,
+            crate::config::DefaultTab::Attachments => Mode::Attachments,
+            crate::config::DefaultTab::Text => Mode::Text,
+            crate::config::DefaultTab::Markdown => Mode::Markdown,
         };
 
         let id2 = id.clone();
@@ -71,7 +71,7 @@ impl Model {
             backend,
             task_manager,
 
-            viewer: selected_viewer,
+            mode,
 
             metadata: metadata::Model::new(),
             text: text::Model::new(),
@@ -91,10 +91,10 @@ impl Model {
     fn request_body_if_absent(&self) {
         let mail = self.backend.get_mail(&self.id).unwrap();
 
-        let ty = match self.viewer {
-            Viewer::Metadata | Viewer::Attachments => return,
-            Viewer::Markdown => MailBodyType::Html,
-            Viewer::Text => MailBodyType::Text,
+        let ty = match self.mode {
+            Mode::Metadata | Mode::Attachments => return,
+            Mode::Markdown => MailBodyType::Html,
+            Mode::Text => MailBodyType::Text,
         };
 
         let body_is_missing = match ty {
@@ -128,11 +128,11 @@ impl LayerCore for Model {
         event: crossterm::event::Event,
         statusbar: &mut crate::statusbar::Model,
     ) -> Option<crate::Action> {
-        let action = match self.viewer {
-            Viewer::Metadata => LayerCore::handle_event(&mut self.metadata, event, statusbar),
-            Viewer::Text => LayerCore::handle_event(&mut self.text, event, statusbar),
-            Viewer::Markdown => LayerCore::handle_event(&mut self.markdown, event, statusbar),
-            Viewer::Attachments => LayerCore::handle_event(&mut self.attachments, event, statusbar),
+        let action = match self.mode {
+            Mode::Metadata => LayerCore::handle_event(&mut self.metadata, event, statusbar),
+            Mode::Text => LayerCore::handle_event(&mut self.text, event, statusbar),
+            Mode::Markdown => LayerCore::handle_event(&mut self.markdown, event, statusbar),
+            Mode::Attachments => LayerCore::handle_event(&mut self.attachments, event, statusbar),
         };
 
         action.and_then(|action| self.apply_action(action))
@@ -177,11 +177,11 @@ impl LayerModel<Action> for Model {
         &mut self,
         overlay: O,
     ) -> Option<crate::Action> {
-        let action = match self.viewer {
-            Viewer::Metadata => self.metadata.handle_overlay(overlay),
-            Viewer::Text => self.text.handle_overlay(overlay),
-            Viewer::Markdown => self.markdown.handle_overlay(overlay),
-            Viewer::Attachments => self.attachments.handle_overlay(overlay),
+        let action = match self.mode {
+            Mode::Metadata => self.metadata.handle_overlay(overlay),
+            Mode::Text => self.text.handle_overlay(overlay),
+            Mode::Markdown => self.markdown.handle_overlay(overlay),
+            Mode::Attachments => self.attachments.handle_overlay(overlay),
         };
 
         action.and_then(|a| self.apply_action(a))
@@ -194,46 +194,46 @@ impl Model {
     }
 
     fn open_metadata_tab(&mut self) -> Option<crate::Action> {
-        self.set_viewer(Viewer::Metadata);
+        self.set_mode(Mode::Metadata);
         None
     }
 
     fn open_text_tab(&mut self) -> Option<crate::Action> {
-        self.set_viewer(Viewer::Text);
+        self.set_mode(Mode::Text);
         None
     }
 
     fn open_markdown_tab(&mut self) -> Option<crate::Action> {
-        self.set_viewer(Viewer::Markdown);
+        self.set_mode(Mode::Markdown);
         None
     }
 
     fn open_attachments_tab(&mut self) -> Option<crate::Action> {
-        self.set_viewer(Viewer::Attachments);
+        self.set_mode(Mode::Attachments);
         None
     }
 
     fn open_next_tab(&mut self) -> Option<crate::Action> {
-        let next = match self.viewer {
-            Viewer::Metadata => Viewer::Text,
-            Viewer::Text => Viewer::Markdown,
-            Viewer::Markdown => Viewer::Attachments,
-            Viewer::Attachments => Viewer::Metadata,
+        let next = match self.mode {
+            Mode::Metadata => Mode::Text,
+            Mode::Text => Mode::Markdown,
+            Mode::Markdown => Mode::Attachments,
+            Mode::Attachments => Mode::Metadata,
         };
 
-        self.set_viewer(next);
+        self.set_mode(next);
         None
     }
 
     fn open_previous_tab(&mut self) -> Option<crate::Action> {
-        let previous = match self.viewer {
-            Viewer::Metadata => Viewer::Attachments,
-            Viewer::Text => Viewer::Metadata,
-            Viewer::Markdown => Viewer::Text,
-            Viewer::Attachments => Viewer::Markdown,
+        let previous = match self.mode {
+            Mode::Metadata => Mode::Attachments,
+            Mode::Text => Mode::Metadata,
+            Mode::Markdown => Mode::Text,
+            Mode::Attachments => Mode::Markdown,
         };
 
-        self.set_viewer(previous);
+        self.set_mode(previous);
         None
     }
 
@@ -251,12 +251,12 @@ impl Model {
 }
 
 impl Model {
-    fn set_viewer(&mut self, viewer: Viewer) {
-        self.viewer = viewer;
+    fn set_mode(&mut self, viewer: Mode) {
+        self.mode = viewer;
 
         match viewer {
-            Viewer::Metadata | Viewer::Attachments => {}
-            Viewer::Text | Viewer::Markdown => self.request_body_if_absent(),
+            Mode::Metadata | Mode::Attachments => {}
+            Mode::Text | Mode::Markdown => self.request_body_if_absent(),
         }
     }
 }

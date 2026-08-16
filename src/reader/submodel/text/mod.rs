@@ -2,35 +2,45 @@ mod action;
 mod widget;
 
 use super::MailViewerSubModel;
-use crate::utils::{
-    keybindmanager::KeybindManager,
-    layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent},
+use crate::{
+    reader::submodel::{MailViewerPager, ScrollAction},
+    utils::{
+        keybindmanager::KeybindManager,
+        layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent, LayerOverlay},
+    },
 };
-use ratatui::widgets::TableState;
+use ratatui::widgets::ScrollbarState;
 use std::{collections::HashMap, str::FromStr};
 
 pub use action::Action;
-pub use widget::MetadataViewer;
+pub use widget::TextReader;
 
 enum ExpectedOverlay {
     Action,
 }
 
 pub struct Model {
-    pub state: TableState,
+    pub vertical: ScrollbarState,
+    pub horizontal: ScrollbarState,
+
     pub keybindings: KeybindManager<Action>,
 
     expected_overlay: Option<ExpectedOverlay>,
+    scroll_action: Option<ScrollAction>,
 }
 
 impl Model {
     pub fn new() -> Self {
         Self {
-            state: TableState::new(),
+            vertical: ScrollbarState::default(),
+            horizontal: ScrollbarState::default(),
             expected_overlay: None,
+            scroll_action: None,
             keybindings: KeybindManager::new(HashMap::from([
                 ("j", Action::ScrollDown),
                 ("k", Action::ScrollUp),
+                ("zl", Action::ScrollRight),
+                ("zh", Action::ScrollLeft),
                 (":", Action::OpenCommandPalette),
             ])),
         }
@@ -55,18 +65,18 @@ impl LayerModel<Action, super::Action> for Model {
             Action::OpenCommandPalette => self.open_command_palette(),
             Action::Quit => self.quit(),
             Action::Back => self.back(),
-            Action::ScrollDown => todo!(),
-            Action::ScrollUp => todo!(),
-            Action::ScrollLeft => todo!(),
-            Action::ScrollRight => todo!(),
-            Action::ScrollToTop => todo!(),
-            Action::ScrollToBottom => todo!(),
-            Action::ScrollHalfPageDown => todo!(),
-            Action::ScrollHalfPageUp => todo!(),
-            Action::ScrollHalfPageRight => todo!(),
-            Action::ScrollHalfPageLeft => todo!(),
+            Action::ScrollDown => self.scroll_down(),
+            Action::ScrollUp => self.scroll_up(),
+            Action::ScrollLeft => self.scroll_left(),
+            Action::ScrollRight => self.scroll_right(),
+            Action::ScrollToTop => self.scroll_to_top(),
+            Action::ScrollToBottom => self.scroll_to_bottom(),
+            Action::ScrollHalfPageDown => self.scroll_half_page_down(),
+            Action::ScrollHalfPageUp => self.scroll_half_page_up(),
+            Action::ScrollHalfPageRight => self.scroll_half_page_right(),
+            Action::ScrollHalfPageLeft => self.scroll_half_page_left(),
             Action::OpenMetadataTab => self.open_metadata_tab(),
-            Action::OpenTextTab => self.open_text_tab(),
+            Action::OpenTextTab => self.open_next_tab(),
             Action::OpenMarkdownTab => self.open_markdown_tab(),
             Action::OpenAttachmentsTab => self.open_attachments_tab(),
             Action::OpenNextTab => self.open_next_tab(),
@@ -77,7 +87,7 @@ impl LayerModel<Action, super::Action> for Model {
 
     fn handle_overlay<O>(&mut self, overlay: O) -> Option<super::Action>
     where
-        O: crate::utils::layer::LayerOverlay,
+        O: LayerOverlay,
     {
         let expected_overlay = self.expected_overlay.take()?;
         let msg = overlay.into_message()?;
@@ -98,6 +108,12 @@ impl LayerModelDefaultHandleEvent<Action, super::Action> for Model {
 }
 
 impl MailViewerSubModel for Model {}
+
+impl MailViewerPager<Action> for Model {
+    fn set_scroll_action(&mut self, scroll: super::ScrollAction) {
+        self.scroll_action = Some(scroll);
+    }
+}
 
 impl Model {
     fn open_command_palette(&mut self) -> Option<super::Action> {

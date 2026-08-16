@@ -6,4 +6,4 @@ mod widget;
 use model::Action;
 
 pub use model::Model;
-pub use widget::MailViewer;
+pub use widget::Reader;

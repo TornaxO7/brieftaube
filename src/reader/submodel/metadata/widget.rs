@@ -6,13 +6,13 @@ use ratatui::{
     widgets::{Block, Row, StatefulWidget, Table, Widget},
 };
 
-use crate::mail_viewer::types::MailDisplay;
+use crate::reader::types::MailDisplay;
 
-pub struct MetadataViewer<'a> {
+pub struct MetadataReader<'a> {
     pub mail: &'a MailDisplay,
 }
 
-impl<'a> StatefulWidget for MetadataViewer<'a> {
+impl<'a> StatefulWidget for MetadataReader<'a> {
     type State = super::Model;
 
     fn render(self, area: Rect, buf: &mut Buffer, _model: &mut Self::State) {

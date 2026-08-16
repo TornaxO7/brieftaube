@@ -3,10 +3,10 @@ mod task_manager;
 // mod composer;
 mod config;
 mod log_viewer;
-mod mail_viewer;
 mod mailfs;
 mod palette;
 mod prompt;
+mod reader;
 mod statusbar;
 mod utils;
 
@@ -51,7 +51,7 @@ async fn main() -> eyre::Result<()> {
 }
 
 enum Layer {
-    MailViewer(mail_viewer::Model),
+    Reader(reader::Model),
     LogViewer(log_viewer::Model),
     Mailfs(mailfs::Model),
 
@@ -150,7 +150,7 @@ impl App {
 
     fn handle_event(&mut self, event: Event) -> Option<Action> {
         match self.layers.last_mut().unwrap() {
-            Layer::MailViewer(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
+            Layer::Reader(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
             Layer::Mailfs(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
             Layer::LogViewer(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
             Layer::Palette(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
@@ -163,8 +163,7 @@ impl App {
             Action::OpenMailViewer(id) => {
                 let backend = self.backend.clone();
                 let task_manager = self.task_manager.clone();
-                let next_layer =
-                    Layer::MailViewer(mail_viewer::Model::new(id, backend, task_manager));
+                let next_layer = Layer::Reader(reader::Model::new(id, backend, task_manager));
 
                 self.statusbar.set_layer(&next_layer);
                 self.layers.push(next_layer);
@@ -194,13 +193,13 @@ impl App {
 
                 let next_action = match last_layer {
                     Layer::Palette(palette) => match current_layer {
-                        Layer::MailViewer(model) => model.handle_overlay(palette),
+                        Layer::Reader(model) => model.handle_overlay(palette),
                         Layer::LogViewer(model) => model.handle_overlay(palette),
                         Layer::Mailfs(model) => model.handle_overlay(palette),
                         Layer::Palette(_) | Layer::Prompt(_) => unreachable!(),
                     },
                     Layer::Prompt(prompt) => match current_layer {
-                        Layer::MailViewer(model) => model.handle_overlay(prompt),
+                        Layer::Reader(model) => model.handle_overlay(prompt),
                         Layer::LogViewer(model) => model.handle_overlay(prompt),
                         Layer::Mailfs(model) => model.handle_overlay(prompt),
                         Layer::Palette(_) | Layer::Prompt(_) => unreachable!(),
@@ -221,7 +220,7 @@ impl App {
     fn sync_throbber(&mut self) {
         let top_screen_has_tasks_running =
             match self.layers.last().expect("There's at least one screen") {
-                Layer::MailViewer(_) | Layer::Mailfs(_) => self.task_manager.has_tasks_running(),
+                Layer::Reader(_) | Layer::Mailfs(_) => self.task_manager.has_tasks_running(),
                 Layer::LogViewer(_) | Layer::Palette(_) | Layer::Prompt(_) => false,
             };
 
@@ -278,8 +277,8 @@ fn get_log_file_path() -> io::Result<PathBuf> {
 fn draw_layer(layer: &mut Layer, frame: &mut Frame, area: Rect) {
     match layer {
         Layer::Mailfs(model) => frame.render_stateful_widget(mailfs::Mailfs, area, model),
-        Layer::MailViewer(state) => {
-            frame.render_stateful_widget(mail_viewer::MailViewer, area, state);
+        Layer::Reader(state) => {
+            frame.render_stateful_widget(reader::Reader, area, state);
         }
         Layer::LogViewer(state) => {
             frame.render_stateful_widget(log_viewer::LogViewer, area, state);

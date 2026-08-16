@@ -1,31 +1,35 @@
+use pulldown_cmark_mdcat::ratatui::{RenderOptions, Renderer};
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    text::Text,
     widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, StatefulWidget, Widget},
 };
 
-pub struct TextViewer<'a> {
-    pub text_body: Option<&'a str>,
+pub struct MarkdownReader<'a> {
+    pub html_body: Option<&'a str>,
 }
 
-impl<'a> StatefulWidget for TextViewer<'a> {
+impl<'a> StatefulWidget for MarkdownReader<'a> {
     type State = super::Model;
 
     fn render(self, area: Rect, buf: &mut Buffer, model: &mut Self::State) {
-        let Some(content) = self.text_body else {
+        let Some(html) = self.html_body else {
             Widget::render(
-                Paragraph::new("Fetching text body part of mail...").block(Block::bordered()),
+                Paragraph::new("Fetching html body...").block(Block::bordered()),
                 area,
                 buf,
             );
+
             return;
         };
+        let markdown = html_to_markdown_rs::convert(&html, None).unwrap();
+        let content = markdown.content.unwrap();
 
-        let text = Text::from(content);
+        let renderer = Renderer::new(RenderOptions::default().width(area.width));
+        let text = renderer.text_from_str(&content).unwrap();
 
         let (content_area, vertical_scrollbar_area, horizontal_scrollbar_area) =
-            crate::mail_viewer::submodel::adjust_scrollbars(
+            crate::reader::submodel::adjust_scrollbars(
                 &text,
                 area,
                 &mut model.vertical,

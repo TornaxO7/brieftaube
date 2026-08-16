@@ -1,6 +1,6 @@
 use crate::{
-    mail_viewer::model::{attachments, markdown, metadata, text},
     palette,
+    reader::model::{attachments, markdown, metadata, text},
 };
 
 #[derive(Debug, Clone)]

@@ -6,16 +6,16 @@ use ratatui::{
         palette::material::{BLACK, BLUE, PINK, YELLOW},
     },
     text::Text,
-    widgets::{Block, ListState, Row, StatefulWidget, Table, TableState},
+    widgets::{Block, Row, StatefulWidget, Table, TableState},
 };
 
-use crate::mail_viewer::{model::attachments::Navigate, types::MailDisplayAttachment};
+use crate::reader::{model::attachments::Navigate, types::MailDisplayAttachment};
 
-pub struct AttachmentsViewer<'a> {
+pub struct AttachmentsReader<'a> {
     pub attachments: &'a [MailDisplayAttachment],
 }
 
-impl<'a> StatefulWidget for AttachmentsViewer<'a> {
+impl<'a> StatefulWidget for AttachmentsReader<'a> {
     type State = super::Model;
 
     fn render(self, area: Rect, buf: &mut Buffer, model: &mut Self::State) {

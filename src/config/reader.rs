@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct MailViewer {
+pub struct Reader {
     pub default_tab: DefaultTab,
 }
 

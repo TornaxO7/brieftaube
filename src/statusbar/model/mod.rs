@@ -33,7 +33,7 @@ impl Model {
     pub fn set_layer(&mut self, layer: &Layer) {
         self.screen_name = match layer {
             Layer::Mailfs(_) => "Mail Filesystem".to_string(),
-            Layer::MailViewer(_) => "Mail-Viewer".to_string(),
+            Layer::Reader(_) => "Mail-Viewer".to_string(),
             Layer::LogViewer(_) => "Log-Viewer".to_string(),
             Layer::Palette(_) => "Palette".to_string(),
             Layer::Prompt(model) => model.desc.clone(),

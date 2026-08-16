@@ -2,45 +2,46 @@ mod action;
 mod widget;
 
 use super::MailViewerSubModel;
-use crate::{
-    mail_viewer::submodel::{MailViewerPager, ScrollAction},
-    utils::{
-        keybindmanager::KeybindManager,
-        layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent, LayerOverlay},
-    },
+use crate::utils::{
+    keybindmanager::KeybindManager,
+    layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent},
 };
-use ratatui::widgets::ScrollbarState;
+use ratatui::widgets::TableState;
 use std::{collections::HashMap, str::FromStr};
 
 pub use action::Action;
-pub use widget::TextViewer;
+pub use widget::AttachmentsReader;
 
 enum ExpectedOverlay {
     Action,
 }
 
-pub struct Model {
-    pub vertical: ScrollbarState,
-    pub horizontal: ScrollbarState,
+enum Navigate {
+    Up(u16),
+    Down(u16),
+    HalfPageUp,
+    HalfPageDown,
+    Top,
+    Bottom,
+}
 
+pub struct Model {
+    pub state: TableState,
     pub keybindings: KeybindManager<Action>,
 
     expected_overlay: Option<ExpectedOverlay>,
-    scroll_action: Option<ScrollAction>,
+    navigate: Option<Navigate>,
 }
 
 impl Model {
     pub fn new() -> Self {
         Self {
-            vertical: ScrollbarState::default(),
-            horizontal: ScrollbarState::default(),
+            state: TableState::new(),
             expected_overlay: None,
-            scroll_action: None,
+            navigate: None,
             keybindings: KeybindManager::new(HashMap::from([
-                ("j", Action::ScrollDown),
-                ("k", Action::ScrollUp),
-                ("zl", Action::ScrollRight),
-                ("zh", Action::ScrollLeft),
+                ("j", Action::NavigateDown),
+                ("k", Action::NavigateUp),
                 (":", Action::OpenCommandPalette),
             ])),
         }
@@ -65,18 +66,14 @@ impl LayerModel<Action, super::Action> for Model {
             Action::OpenCommandPalette => self.open_command_palette(),
             Action::Quit => self.quit(),
             Action::Back => self.back(),
-            Action::ScrollDown => self.scroll_down(),
-            Action::ScrollUp => self.scroll_up(),
-            Action::ScrollLeft => self.scroll_left(),
-            Action::ScrollRight => self.scroll_right(),
-            Action::ScrollToTop => self.scroll_to_top(),
-            Action::ScrollToBottom => self.scroll_to_bottom(),
-            Action::ScrollHalfPageDown => self.scroll_half_page_down(),
-            Action::ScrollHalfPageUp => self.scroll_half_page_up(),
-            Action::ScrollHalfPageRight => self.scroll_half_page_right(),
-            Action::ScrollHalfPageLeft => self.scroll_half_page_left(),
+            Action::NavigateDown => self.navigate_down(),
+            Action::NavigateUp => self.navigate_up(),
+            Action::NavigateToTop => self.navigate_to_top(),
+            Action::NavigateToBottom => self.navigate_to_bottom(),
+            Action::NavigateHalfPageDown => self.navigate_half_page_down(),
+            Action::NavigateHalfPageUp => self.navigate_half_page_up(),
             Action::OpenMetadataTab => self.open_metadata_tab(),
-            Action::OpenTextTab => self.open_next_tab(),
+            Action::OpenTextTab => self.open_text_tab(),
             Action::OpenMarkdownTab => self.open_markdown_tab(),
             Action::OpenAttachmentsTab => self.open_attachments_tab(),
             Action::OpenNextTab => self.open_next_tab(),
@@ -87,7 +84,7 @@ impl LayerModel<Action, super::Action> for Model {
 
     fn handle_overlay<O>(&mut self, overlay: O) -> Option<super::Action>
     where
-        O: LayerOverlay,
+        O: crate::utils::layer::LayerOverlay,
     {
         let expected_overlay = self.expected_overlay.take()?;
         let msg = overlay.into_message()?;
@@ -109,17 +106,43 @@ impl LayerModelDefaultHandleEvent<Action, super::Action> for Model {
 
 impl MailViewerSubModel for Model {}
 
-impl MailViewerPager<Action> for Model {
-    fn set_scroll_action(&mut self, scroll: super::ScrollAction) {
-        self.scroll_action = Some(scroll);
-    }
-}
-
 impl Model {
     fn open_command_palette(&mut self) -> Option<super::Action> {
         self.expected_overlay = Some(ExpectedOverlay::Action);
         Some(super::Action::OpenPalette {
             entries: action::palette_options(),
         })
+    }
+
+    fn navigate_down(&mut self) -> Option<super::Action> {
+        let amount = self.keybindings.flush_int_prefix().unwrap_or(1);
+        self.navigate = Some(Navigate::Down(amount as u16));
+        None
+    }
+
+    fn navigate_up(&mut self) -> Option<super::Action> {
+        let amount = self.keybindings.flush_int_prefix().unwrap_or(1);
+        self.navigate = Some(Navigate::Up(amount as u16));
+        None
+    }
+
+    fn navigate_to_top(&mut self) -> Option<super::Action> {
+        self.navigate = Some(Navigate::Top);
+        None
+    }
+
+    fn navigate_to_bottom(&mut self) -> Option<super::Action> {
+        self.navigate = Some(Navigate::Bottom);
+        None
+    }
+
+    fn navigate_half_page_down(&mut self) -> Option<super::Action> {
+        self.navigate = Some(Navigate::HalfPageDown);
+        None
+    }
+
+    fn navigate_half_page_up(&mut self) -> Option<super::Action> {
+        self.navigate = Some(Navigate::HalfPageUp);
+        None
     }
 }
