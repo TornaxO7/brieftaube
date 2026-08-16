@@ -81,7 +81,7 @@ impl LayerModel<Action, super::Action> for Model {
             Action::OpenTextTab => self.open_text_tab(),
             Action::OpenMarkdownTab => self.open_markdown_tab(),
             Action::OpenAttachmentsTab => self.open_attachments_tab(),
-            Action::OpenNextTab => self.open_text_tab(),
+            Action::OpenNextTab => self.open_next_tab(),
             Action::OpenPreviousTab => self.open_previous_tab(),
             Action::OpenLogs => self.open_logs(),
             Action::OpenMailInBrowser => self.open_mail_in_browser(),
