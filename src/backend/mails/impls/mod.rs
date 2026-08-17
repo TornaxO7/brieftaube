@@ -1,3 +1,4 @@
+mod attachments;
 mod mail;
 mod mail_attachments;
 mod mail_body;

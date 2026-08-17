@@ -140,7 +140,7 @@ pub struct MailDataAttachment {
     pub name: String,
     pub content_type: String,
     pub size: usize,
-    pub blob_id: Option<String>,
+    pub blob_id: String,
 }
 
 impl From<&EmailBodyPart> for MailDataAttachment {
@@ -149,7 +149,7 @@ impl From<&EmailBodyPart> for MailDataAttachment {
             name: part.name().unwrap().to_string(),
             content_type: part.content_type().unwrap().to_string(),
             size: part.size(),
-            blob_id: part.blob_id().map(ToString::to_string),
+            blob_id: part.blob_id().unwrap().to_string(),
         }
     }
 }
