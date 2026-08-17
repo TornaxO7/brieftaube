@@ -44,6 +44,8 @@ impl Model {
                 ("k", Action::ScrollUp),
                 ("zh", Action::ScrollLeft),
                 ("zl", Action::ScrollRight),
+                ("<C-d>", Action::ScrollHalfPageDown),
+                ("<C-u>", Action::ScrollHalfPageUp),
                 (":", Action::OpenCommandPalette),
             ])),
         }

@@ -22,8 +22,7 @@ impl<'a> StatefulWidget for MarkdownReader<'a> {
 
             return;
         };
-        let markdown = html_to_markdown_rs::convert(&html, None).unwrap();
-        let content = markdown.content.unwrap();
+        let content = htmd::convert(html).unwrap();
 
         let renderer = Renderer::new(RenderOptions::default().width(area.width));
         let text = renderer.text_from_str(&content).unwrap();
