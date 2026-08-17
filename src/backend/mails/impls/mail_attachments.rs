@@ -1,19 +1,20 @@
-use crate::backend::{Backend, MailDataAttachment, MailId};
+use crate::backend::{Backend, MailDataAttachment, MailId, types::Loadable};
 
 impl Backend {
     pub async fn get_or_request_mail_attachments(
         &self,
         id: &MailId,
-    ) -> Result<Vec<MailDataAttachment>, jmap_client::Error> {
+    ) -> Result<Loadable<Vec<MailDataAttachment>>, jmap_client::Error> {
         match self.get_mail_attachments(id) {
             Some(attachments) => Ok(attachments),
             None => {
-                let id = id.clone();
-                let store = self.store.clone();
-                let client = self.client.clone();
+                {
+                    let mut store = self.store.lock().unwrap();
+                    store.mails.init_attachments(id);
+                }
 
                 let mut response = {
-                    let mut request = client.build();
+                    let mut request = self.client.build();
 
                     request
                         .get_email()
@@ -23,7 +24,7 @@ impl Backend {
                     request.send_get_email().await?
                 };
 
-                let mut store = store.lock().unwrap();
+                let mut store = self.store.lock().unwrap();
                 store.mails.set_state(response.take_state());
 
                 let mail = response.list()[0].clone();
@@ -36,7 +37,7 @@ impl Backend {
 
                 store.mails.set_attachments(&id, attachments.clone());
 
-                Ok(attachments)
+                Ok(Loadable::Loaded(attachments))
             }
         }
     }
@@ -46,12 +47,12 @@ impl Backend {
         Ok(())
     }
 
-    pub fn get_mail_attachments(&self, id: &MailId) -> Option<Vec<MailDataAttachment>> {
+    fn get_mail_attachments(&self, id: &MailId) -> Option<Loadable<Vec<MailDataAttachment>>> {
         let store = self.store.lock().unwrap();
 
         store
             .mails
             .get(id)
-            .and_then(|mail| mail.attachments.clone())
+            .and_then(|mail| mail.attachments.get().cloned())
     }
 }

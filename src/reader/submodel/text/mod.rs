@@ -1,7 +1,7 @@
 mod action;
 mod widget;
 
-use super::MailReaderSubModel;
+use super::SubModel;
 use crate::{
     backend::{Backend, MailBodyType, MailId},
     reader::submodel::{MailContentReader, ScrollAction},
@@ -123,17 +123,11 @@ impl LayerModelDefaultHandleEvent<Action, super::Action> for Model {
     }
 }
 
-impl MailReaderSubModel for Model {}
-
-impl MailContentReader<Action> for Model {
-    fn set_scroll_action(&mut self, scroll: super::ScrollAction) {
-        self.scroll_action = Some(scroll);
-    }
-
-    fn request_body_if_absent(&self) {
+impl SubModel for Model {
+    fn request_if_missing(&self) {
         let mail = self.backend.get_mail(&self.id).unwrap();
 
-        if mail.text_body.is_none() {
+        if mail.text_body.get().is_none() {
             let id = self.id.clone();
             let backend = self.backend.clone();
             self.task_manager.spawn(async move {
@@ -145,6 +139,12 @@ impl MailContentReader<Action> for Model {
                 }
             })
         }
+    }
+}
+
+impl MailContentReader<Action> for Model {
+    fn set_scroll_action(&mut self, scroll: super::ScrollAction) {
+        self.scroll_action = Some(scroll);
     }
 }
 

@@ -43,7 +43,7 @@ fn render_tabs(area: Rect, buf: &mut Buffer, mode: Mode) {
 
 /// Rendering implementations
 fn render_viewer(area: Rect, buf: &mut Buffer, model: &mut super::Model) {
-    let mail = model.get_display_mail();
+    let mut mail = model.get_display_mail();
 
     match model.mode {
         Mode::Metadata => StatefulWidget::render(
@@ -55,7 +55,7 @@ fn render_viewer(area: Rect, buf: &mut Buffer, model: &mut super::Model) {
 
         Mode::Text => StatefulWidget::render(
             TextReader {
-                text_body: mail.text_body.as_ref().map(|body| body.0.as_str()),
+                text_body: &mut mail.text_body,
             },
             area,
             buf,
@@ -63,7 +63,7 @@ fn render_viewer(area: Rect, buf: &mut Buffer, model: &mut super::Model) {
         ),
         Mode::Markdown => StatefulWidget::render(
             MarkdownReader {
-                html_body: mail.html_body.as_ref().map(|body| body.0.as_str()),
+                html_body: &mut mail.html_body,
             },
             area,
             buf,
@@ -71,7 +71,7 @@ fn render_viewer(area: Rect, buf: &mut Buffer, model: &mut super::Model) {
         ),
         Mode::Attachments => StatefulWidget::render(
             AttachmentsReader {
-                attachments: mail.attachments.as_ref(),
+                attachments: &mut mail.attachments,
             },
             area,
             buf,

@@ -25,7 +25,7 @@ enum ScrollAction {
     SetBottom,
 }
 
-trait MailReaderSubModel {
+pub trait SubModel {
     fn quit(&self) -> Option<Action> {
         Some(Action::Quit)
     }
@@ -61,15 +61,14 @@ trait MailReaderSubModel {
     fn open_logs(&self) -> Option<Action> {
         Some(Action::OpenLogs)
     }
+
+    fn request_if_missing(&self);
 }
 
-pub trait MailContentReader<SubmoduleAction>:
-    LayerModelDefaultHandleEvent<SubmoduleAction, Action>
+trait MailContentReader<SubModelAction>: LayerModelDefaultHandleEvent<SubModelAction, Action>
 where
-    SubmoduleAction: Clone,
+    SubModelAction: Clone,
 {
-    fn request_body_if_absent(&self);
-
     fn set_scroll_action(&mut self, scroll: ScrollAction);
 
     fn scroll_down(&mut self) -> Option<Action> {
@@ -136,16 +135,6 @@ where
     fn scroll_half_page_left(&mut self) -> Option<Action> {
         self.set_scroll_action(ScrollAction::ScrollHalfPageLeft);
         None
-    }
-}
-
-fn new_pos(pos: u16, inner_max: u16, area_max: u16, offset: u16, inc: bool) -> u16 {
-    let unseen_lines_or_columns = inner_max.saturating_sub(area_max);
-
-    if inc {
-        (pos + offset).min(unseen_lines_or_columns)
-    } else {
-        pos.saturating_sub(offset).min(unseen_lines_or_columns)
     }
 }
 

@@ -1,7 +1,7 @@
 mod action;
 mod widget;
 
-use super::MailReaderSubModel;
+use super::SubModel;
 use crate::{
     backend::{Backend, MailId},
     task_manager::TaskManager,
@@ -114,7 +114,9 @@ impl LayerModelDefaultHandleEvent<Action, super::Action> for Model {
     }
 }
 
-impl MailReaderSubModel for Model {}
+impl SubModel for Model {
+    fn request_if_missing(&self) {}
+}
 
 impl Model {
     fn open_command_palette(&mut self) -> Option<super::Action> {

@@ -1,7 +1,7 @@
 mod action;
 mod widget;
 
-use super::MailReaderSubModel;
+use super::SubModel;
 use crate::{
     backend::{Backend, MailId},
     task_manager::TaskManager,
@@ -127,7 +127,9 @@ impl LayerModelDefaultHandleEvent<Action, super::Action> for Model {
     }
 }
 
-impl MailReaderSubModel for Model {}
+impl SubModel for Model {
+    fn request_if_missing(&self) {}
+}
 
 impl Model {
     fn open_command_palette(&mut self) -> Option<super::Action> {
@@ -172,7 +174,13 @@ impl Model {
     fn download_attachment(&self) -> Option<super::Action> {
         let attachment_idx = self.state.selected()?;
         let mail = self.backend.get_mail(&self.id)?;
-        let attachment = mail.attachments?.get(attachment_idx)?.clone();
+
+        let attachment = mail
+            .attachments
+            .get()?
+            .loaded()?
+            .get(attachment_idx)?
+            .clone();
 
         let backend = self.backend.clone();
         self.task_manager.spawn(async move {
@@ -190,8 +198,13 @@ impl Model {
         let mail = self.backend.get_mail(&self.id).unwrap();
         let attachment_idx = self.state.selected()?;
 
-        let Some(attachments) = mail.attachments.as_ref() else {
-            warn!("Mail attachments aren't downloaded yet.");
+        let Some(attachments) = mail.attachments.get() else {
+            warn!("Mail attachments haven't been loaded yet.");
+            return None;
+        };
+
+        let Some(attachments) = attachments.loaded() else {
+            warn!("Mail attachments haven't arrived yet.");
             return None;
         };
 

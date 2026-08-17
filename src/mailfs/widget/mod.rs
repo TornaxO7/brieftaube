@@ -5,9 +5,13 @@ mod selection_type;
 
 pub use column_data::{ColumnDisplay, ColumnDisplayEntryData, MailEntryType};
 pub use mail_preview::MailPreview;
+use throbber_widgets_tui::Throbber;
 
 use super::Model;
-use crate::mailfs::{model::RightColumn, widget::selection_type::DisplaySelectionType};
+use crate::{
+    backend::types::Loadable,
+    mailfs::{model::RightColumn, widget::selection_type::DisplaySelectionType},
+};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, HorizontalAlignment, Layout, Rect},
@@ -273,25 +277,23 @@ fn render_mail_preview(area: Rect, buf: &mut Buffer, mail: &mut MailPreview) {
             Constraint::Fill(1),
         ];
 
-        // TODO: Check if attachments are currently _loading_ or not...
-        //       To avoid a sudden appearence of the attachment list
         match attachments {
-            Some(a) => {
-                if a.is_empty() {
+            None | Some(Loadable::Loading(_)) => {
+                constraints.push(Constraint::Length(3));
+                let [header, preview, attachments_area] = Layout::vertical(constraints).areas(area);
+                (header, preview, Some(attachments_area))
+            }
+            Some(Loadable::Loaded(attachments)) => {
+                if attachments.is_empty() {
                     let [header, preview] = Layout::vertical(constraints).areas(area);
                     (header, preview, None)
                 } else {
-                    constraints.push(Constraint::Max(a.len() as u16 + 2));
+                    constraints.push(Constraint::Max(attachments.len() as u16 + 2));
 
                     let [header, preview, attachments_area] =
                         Layout::vertical(constraints).areas(area);
                     (header, preview, Some(attachments_area))
                 }
-            }
-            None => {
-                constraints.push(Constraint::Length(3));
-                let [header, preview, attachments_area] = Layout::vertical(constraints).areas(area);
-                (header, preview, Some(attachments_area))
             }
         }
     };
@@ -324,7 +326,19 @@ fn render_mail_preview(area: Rect, buf: &mut Buffer, mail: &mut MailPreview) {
     if let Some(area) = attachments_area {
         let block = Block::bordered().title("Attachments");
         match attachments {
-            Some(attachments) => {
+            Some(Loadable::Loading(state)) => {
+                state.calc_next();
+                StatefulWidget::render(
+                    Throbber::default()
+                        .label("Fetching mail attachments...")
+                        .block(block)
+                        .throbber_set(throbber_widgets_tui::BRAILLE_SIX),
+                    area,
+                    buf,
+                    state,
+                );
+            }
+            Some(Loadable::Loaded(attachments)) => {
                 let rows: Vec<Row> = attachments
                     .iter()
                     .map(|attachment| {
@@ -341,15 +355,7 @@ fn render_mail_preview(area: Rect, buf: &mut Buffer, mail: &mut MailPreview) {
 
                 Widget::render(Table::new(rows, widths).block(block), area, buf);
             }
-            None => {
-                Widget::render(
-                    Paragraph::new("Fetching attachments...")
-                        .style(Style::new().fg(YELLOW.c500))
-                        .block(block),
-                    area,
-                    buf,
-                );
-            }
+            None => Widget::render(Paragraph::new("Not requested yet").block(block), area, buf),
         };
     }
 }

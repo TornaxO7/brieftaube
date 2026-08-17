@@ -1,4 +1,7 @@
-use crate::backend::mails::types::{MailData, MailDataAttachment, addresses_to_string};
+use crate::backend::{
+    mails::types::{MailData, MailDataAttachment, addresses_to_string},
+    types::Loadable,
+};
 
 #[derive(Debug)]
 pub struct MailPreview {
@@ -8,7 +11,7 @@ pub struct MailPreview {
     pub subject: String,
     pub preview: String,
     pub received_at: String,
-    pub attachments: Option<Vec<MailDataAttachment>>,
+    pub attachments: Option<Loadable<Vec<MailDataAttachment>>>,
 }
 
 impl From<MailData> for MailPreview {
@@ -25,7 +28,7 @@ impl From<MailData> for MailPreview {
             .to_string();
         // let has_attachment = mail.has_attachment;
         // let keywords = mail.keywords.clone();
-        let attachments = mail.attachments.clone();
+        let attachments = mail.attachments.get().cloned();
 
         Self {
             from,

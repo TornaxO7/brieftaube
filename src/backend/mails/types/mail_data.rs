@@ -1,10 +1,12 @@
 use super::{MailAddress, MailKeyword};
-use crate::backend::{mailbox::types::MailboxId, mails::types::MailId, threads::types::ThreadId};
+use crate::backend::{
+    mailbox::types::MailboxId, mails::types::MailId, threads::types::ThreadId, types::Loadable,
+};
 use chrono::{DateTime, Local, Utc};
 use jmap_client::email::{Email, EmailBodyPart, Property};
-use std::collections::HashSet;
+use std::{cell::OnceCell, collections::HashSet};
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct MailData {
     pub id: MailId,
     pub thread_id: ThreadId,
@@ -18,9 +20,9 @@ pub struct MailData {
     pub has_attachment: bool,
     pub mailbox_ids: HashSet<MailboxId>,
 
-    pub text_body: Option<MailDataTextBody>,
-    pub html_body: Option<MailDataHtmlBody>,
-    pub attachments: Option<Vec<MailDataAttachment>>,
+    pub text_body: OnceCell<Loadable<MailDataTextBody>>,
+    pub html_body: OnceCell<Loadable<MailDataHtmlBody>>,
+    pub attachments: OnceCell<Loadable<Vec<MailDataAttachment>>>,
 }
 
 impl MailData {
@@ -37,41 +39,6 @@ impl MailData {
         Property::HasAttachment,
         Property::MailboxIds,
     ];
-
-    // pub fn new(mut mail: Email) -> Self {
-    //     Self {
-    //         id: MailId(mail.take_id()),
-    //         thread_id: ThreadId(mail.take_thread_id().unwrap()),
-    //         keywords: mail.keywords().into_iter().map(MailKeyword::from).collect(),
-    //         from: mail
-    //             .take_from()
-    //             .map(|addresses| addresses.into_iter().map(MailAddress::from).collect())
-    //             .unwrap_or(vec![]),
-    //         to: mail
-    //             .to()
-    //             .map(|addresses| addresses.into_iter().map(MailAddress::from).collect())
-    //             .unwrap_or(vec![]),
-    //         cc: mail
-    //             .take_cc()
-    //             .map(|cc| cc.into_iter().map(MailAddress::from).collect())
-    //             .unwrap_or(vec![]),
-    //         subject: mail.take_subject().unwrap(),
-    //         preview: mail.take_preview().unwrap(),
-    //         received_at: DateTime::<Utc>::from_timestamp(mail.received_at().unwrap(), 0)
-    //             .expect("Valid timestamp")
-    //             .with_timezone(&Local),
-    //         has_attachment: mail.has_attachment(),
-    //         mailbox_ids: mail
-    //             .mailbox_ids()
-    //             .into_iter()
-    //             .map(|id| MailboxId(id.to_owned()))
-    //             .collect(),
-
-    //         text_body: None,
-    //         html_body: None,
-    //         attachments: (!mail.has_attachment()).then_some(vec![]),
-    //     }
-    // }
 }
 
 impl From<jmap_client::email::Email> for MailData {
@@ -104,9 +71,13 @@ impl From<jmap_client::email::Email> for MailData {
                 .map(|id| MailboxId(id.to_owned()))
                 .collect(),
 
-            text_body: None,
-            html_body: None,
-            attachments: (!mail.has_attachment()).then_some(vec![]),
+            text_body: OnceCell::new(),
+            html_body: OnceCell::new(),
+            attachments: if !mail.has_attachment() {
+                OnceCell::from(Loadable::Loaded(vec![]))
+            } else {
+                OnceCell::new()
+            },
         }
     }
 }

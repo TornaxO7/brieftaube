@@ -27,7 +27,7 @@ pulldown-cmark-mdcat = { version = "2.13", default-features = false, features = 
 ratatui = "0.30"
 ratatui-textarea = "0.9.2"
 thiserror = "2"
-throbber-widgets-tui = "0.11"
+throbber-widgets-tui = { git = "https://github.com/TornaxO7/throbber-widgets-tui", branch = "block" }
 tui-widget-list = "0.15"
 tui-logger = { version = "0.18", features = ["tracing-support"] }
 serde = { version = "1.0", features = ["derive"] }

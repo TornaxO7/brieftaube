@@ -216,8 +216,10 @@ impl<'a> Model {
             | ColumnStateEntry::ThreadEnd(mail_id, _) => {
                 let misses_attachments = {
                     let mail = self.backend.get_mail(&mail_id).unwrap();
-                    mail.attachments.is_none()
+                    mail.attachments.get().is_none()
                 };
+
+                tracing::debug!("Hello: {}", misses_attachments);
 
                 if misses_attachments {
                     let mail_id = mail_id.clone();

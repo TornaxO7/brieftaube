@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::backend::{Backend, MailDataAttachment};
 
+#[derive(Debug, Clone)]
 pub struct MailDisplayAttachment {
     pub downloaded: bool,
     pub name: String,

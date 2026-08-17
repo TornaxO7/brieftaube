@@ -1,13 +1,11 @@
 mod action;
-
-use super::submodel::MailContentReader;
 use crate::{
     backend::{
-        Backend, MailBodyType,
+        Backend,
         mails::types::{MailId, MailKeyword, MailUpdate},
     },
     palette,
-    reader::types::MailDisplay,
+    reader::{submodel::SubModel, types::MailDisplay},
     task_manager::TaskManager,
     utils::layer::{LayerCore, LayerModel},
 };
@@ -70,7 +68,7 @@ impl Model {
         let text = {
             let text = text::Model::new(id.clone(), backend.clone(), task_manager.clone());
             if matches!(mode, Mode::Text) {
-                text.request_body_if_absent();
+                text.request_if_missing();
             }
             text
         };
@@ -78,9 +76,18 @@ impl Model {
         let markdown = {
             let markdown = markdown::Model::new(id.clone(), backend.clone(), task_manager.clone());
             if matches!(mode, Mode::Markdown) {
-                markdown.request_body_if_absent();
+                markdown.request_if_missing();
             }
             markdown
+        };
+
+        let attachments = {
+            let attachments =
+                attachments::Model::new(id.clone(), backend.clone(), task_manager.clone());
+            if matches!(mode, Mode::Attachments) {
+                attachments.request_if_missing();
+            }
+            attachments
         };
 
         Self {
@@ -91,7 +98,7 @@ impl Model {
             metadata: metadata::Model::new(id.clone(), backend.clone(), task_manager.clone()),
             text,
             markdown,
-            attachments: attachments::Model::new(id.clone(), backend.clone(), task_manager.clone()),
+            attachments,
         }
     }
 
@@ -234,9 +241,10 @@ impl Model {
         self.mode = viewer;
 
         match viewer {
-            Mode::Metadata | Mode::Attachments => {}
-            Mode::Text => self.text.request_body_if_absent(),
-            Mode::Markdown => self.markdown.request_body_if_absent(),
+            Mode::Metadata => {}
+            Mode::Attachments => {}
+            Mode::Text => self.text.request_if_missing(),
+            Mode::Markdown => self.markdown.request_if_missing(),
         }
     }
 }

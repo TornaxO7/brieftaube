@@ -4,6 +4,7 @@ use crate::backend::{
     GetState, MailData, MailId,
     mails::types::{MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailUpdate},
     threads::types::ThreadId,
+    types::Loadable,
 };
 use std::collections::HashMap;
 
@@ -38,19 +39,46 @@ impl Store {
         self.mails.get(id)
     }
 
+    pub fn init_attachments(&mut self, id: &MailId) {
+        let mail = self.mails.get_mut(id).unwrap();
+        mail.attachments.set(Loadable::loading()).unwrap();
+    }
+
     pub fn set_attachments(&mut self, id: &MailId, attachments: Vec<MailDataAttachment>) {
         let mail = self.mails.get_mut(id).unwrap();
-        mail.attachments = Some(attachments);
+        let state = mail
+            .attachments
+            .get_mut()
+            .expect("Should be set to `loading`");
+        *state = Loadable::Loaded(attachments);
+    }
+
+    pub fn init_text_body(&mut self, id: &MailId) {
+        let mail = self.mails.get_mut(id).unwrap();
+        mail.text_body.set(Loadable::loading()).unwrap();
     }
 
     pub fn set_text_body(&mut self, id: &MailId, body: MailDataTextBody) {
         let mail = self.mails.get_mut(id).unwrap();
-        mail.text_body = Some(body);
+        let state = mail
+            .text_body
+            .get_mut()
+            .expect("Should be set to `loading`");
+        *state = Loadable::Loaded(body);
+    }
+
+    pub fn init_html_body(&mut self, id: &MailId) {
+        let mail = self.mails.get_mut(id).unwrap();
+        mail.html_body.set(Loadable::loading()).unwrap();
     }
 
     pub fn set_html_body(&mut self, id: &MailId, body: MailDataHtmlBody) {
         let mail = self.mails.get_mut(id).unwrap();
-        mail.html_body = Some(body);
+        let state = mail
+            .html_body
+            .get_mut()
+            .expect("Should be set to `loading`");
+        *state = Loadable::Loaded(body);
     }
 }
 

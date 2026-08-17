@@ -4,63 +4,74 @@ use ratatui::{
     layout::Rect,
     widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, StatefulWidget, Widget},
 };
+use throbber_widgets_tui::Throbber;
+
+use crate::backend::{MailDataHtmlBody, types::Loadable};
 
 pub struct MarkdownReader<'a> {
-    pub html_body: Option<&'a str>,
+    pub html_body: &'a mut Option<Loadable<MailDataHtmlBody>>,
 }
 
 impl<'a> StatefulWidget for MarkdownReader<'a> {
     type State = super::Model;
 
     fn render(self, area: Rect, buf: &mut Buffer, model: &mut Self::State) {
-        let Some(html) = self.html_body else {
-            Widget::render(
-                Paragraph::new("Fetching html body...").block(Block::bordered()),
-                area,
-                buf,
-            );
+        match self.html_body {
+            None => {
+                Widget::render(Paragraph::new("Not requested yet"), area, buf);
+            }
+            Some(Loadable::Loading(state)) => {
+                StatefulWidget::render(
+                    Throbber::default()
+                        .label("Fetching html body part of mail...")
+                        .throbber_set(throbber_widgets_tui::BRAILLE_SIX),
+                    area,
+                    buf,
+                    state,
+                );
+            }
+            Some(Loadable::Loaded(html)) => {
+                let content = htmd::convert(html.0.as_str()).unwrap();
 
-            return;
-        };
-        let content = htmd::convert(html).unwrap();
+                let renderer = Renderer::new(RenderOptions::default().width(area.width));
+                let text = renderer.text_from_str(&content).unwrap();
 
-        let renderer = Renderer::new(RenderOptions::default().width(area.width));
-        let text = renderer.text_from_str(&content).unwrap();
+                let (content_area, vertical_scrollbar_area, horizontal_scrollbar_area) =
+                    crate::reader::submodel::adjust_scrollbars(
+                        &text,
+                        area,
+                        &mut model.vertical,
+                        &mut model.horizontal,
+                        model.scroll_action.take(),
+                    );
 
-        let (content_area, vertical_scrollbar_area, horizontal_scrollbar_area) =
-            crate::reader::submodel::adjust_scrollbars(
-                &text,
-                area,
-                &mut model.vertical,
-                &mut model.horizontal,
-                model.scroll_action.take(),
-            );
+                Widget::render(
+                    Paragraph::new(text).block(Block::bordered()).scroll((
+                        model.vertical.get_position() as u16,
+                        model.horizontal.get_position() as u16,
+                    )),
+                    content_area,
+                    buf,
+                );
 
-        Widget::render(
-            Paragraph::new(text).block(Block::bordered()).scroll((
-                model.vertical.get_position() as u16,
-                model.horizontal.get_position() as u16,
-            )),
-            content_area,
-            buf,
-        );
+                if let Some(area) = vertical_scrollbar_area {
+                    StatefulWidget::render(
+                        Scrollbar::new(ScrollbarOrientation::VerticalRight),
+                        area,
+                        buf,
+                        &mut model.vertical,
+                    );
+                }
 
-        if let Some(area) = vertical_scrollbar_area {
-            StatefulWidget::render(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight),
-                area,
-                buf,
-                &mut model.vertical,
-            );
-        }
-
-        if let Some(area) = horizontal_scrollbar_area {
-            StatefulWidget::render(
-                Scrollbar::new(ScrollbarOrientation::HorizontalBottom),
-                area,
-                buf,
-                &mut model.horizontal,
-            );
+                if let Some(area) = horizontal_scrollbar_area {
+                    StatefulWidget::render(
+                        Scrollbar::new(ScrollbarOrientation::HorizontalBottom),
+                        area,
+                        buf,
+                        &mut model.horizontal,
+                    );
+                }
+            }
         }
     }
 }
