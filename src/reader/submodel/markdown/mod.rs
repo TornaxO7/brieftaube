@@ -38,6 +38,10 @@ impl Model {
             scroll_action: None,
 
             keybindings: KeybindManager::new(HashMap::from([
+                ("gg", Action::ScrollToTop),
+                ("ge", Action::ScrollToBottom),
+                ("<tab>", Action::OpenNextTab),
+                ("<btab>", Action::OpenPreviousTab),
                 ("q", Action::Quit),
                 ("h", Action::Back),
                 ("j", Action::ScrollDown),

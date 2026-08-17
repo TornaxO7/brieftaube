@@ -40,9 +40,14 @@ impl Model {
             expected_overlay: None,
             navigate: None,
             keybindings: KeybindManager::new(HashMap::from([
+                ("gg", Action::NavigateToTop),
+                ("ge", Action::NavigateToBottom),
+                ("<tab>", Action::OpenNextTab),
+                ("<btab>", Action::OpenPreviousTab),
                 ("j", Action::NavigateDown),
                 ("k", Action::NavigateUp),
                 (":", Action::OpenCommandPalette),
+                ("q", Action::Quit),
             ])),
         }
     }

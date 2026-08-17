@@ -29,6 +29,10 @@ impl Model {
             state: TableState::new(),
             expected_overlay: None,
             keybindings: KeybindManager::new(HashMap::from([
+                ("gg", Action::ScrollToTop),
+                ("ge", Action::ScrollToBottom),
+                ("<tab>", Action::OpenNextTab),
+                ("<btab>", Action::OpenPreviousTab),
                 ("j", Action::ScrollDown),
                 ("k", Action::ScrollUp),
                 (":", Action::OpenCommandPalette),
