@@ -10,9 +10,10 @@ use crate::{
         layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent},
     },
 };
+use arboard::Clipboard;
 use ratatui::widgets::TableState;
 use std::{collections::HashMap, rc::Rc, str::FromStr, sync::Arc};
-use tracing::error;
+use tracing::{Instrument, error, warn};
 
 pub use action::Action;
 pub use widget::AttachmentsReader;
@@ -99,7 +100,7 @@ impl LayerModel<Action, super::Action> for Model {
             Action::OpenPreviousTab => self.open_previous_tab(),
             Action::OpenLogs => self.open_logs(),
             Action::DownloadAttachment => self.download_attachment(),
-            // Action::CopyPathToClipboard => self.copy_path_to_clipboard(),
+            Action::CopyPathToClipboard => self.copy_path_to_clipboard(),
         }
     }
 
@@ -181,6 +182,38 @@ impl Model {
                 }
             }
         });
+        None
+    }
+
+    fn copy_path_to_clipboard(&self) -> Option<super::Action> {
+        let mail = self.backend.get_mail(&self.id).unwrap();
+        let attachment_idx = self.state.selected()?;
+
+        let Some(attachments) = mail.attachments.as_ref() else {
+            warn!("Mail attachments aren't downloaded yet.");
+            return None;
+        };
+
+        let attachment = attachments.get(attachment_idx).unwrap();
+
+        let Some(path) = self.backend.get_attachment_path(attachment) else {
+            error!("Attachment isn't downloaded yet. Please download it first.");
+            return None;
+        };
+
+        let mut clipboard = match Clipboard::new() {
+            Ok(clipboard) => clipboard,
+            Err(err) => {
+                error!("Clipboards aren't supported:\n{err}");
+                return None;
+            }
+        };
+
+        if let Err(err) = clipboard.set_text(path.to_string_lossy()) {
+            error!("Couldn't set clipboard:\n{err}");
+            return None;
+        }
+
         None
     }
 }

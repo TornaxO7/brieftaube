@@ -57,8 +57,8 @@ pub enum Action {
 
     #[strum(message = "Download the attachment.")]
     DownloadAttachment,
-    // #[strum(message = "Copy the path to the downloaded attachment to the clipboard.")]
-    // CopyPathToClipboard,
+    #[strum(message = "Copy the path to the downloaded attachment to the clipboard.")]
+    CopyPathToClipboard,
 }
 
 pub fn palette_options() -> Vec<PaletteEntry> {
