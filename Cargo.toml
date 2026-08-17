@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+arboard = "3.6"
 chrono = "0.4"
 chumsky = "0.13"
 color-eyre = "0.6"

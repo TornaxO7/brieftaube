@@ -54,6 +54,9 @@ pub enum Action {
 
     #[strum(message = "Open log viewer")]
     OpenLogs,
+
+    #[strum(message = "Download the attachment.")]
+    DownloadAttachment,
 }
 
 pub fn palette_options() -> Vec<PaletteEntry> {

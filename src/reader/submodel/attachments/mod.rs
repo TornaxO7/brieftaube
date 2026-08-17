@@ -2,12 +2,15 @@ mod action;
 mod widget;
 
 use super::MailViewerSubModel;
-use crate::utils::{
-    keybindmanager::KeybindManager,
-    layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent},
+use crate::{
+    backend::Backend,
+    utils::{
+        keybindmanager::KeybindManager,
+        layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent},
+    },
 };
 use ratatui::widgets::TableState;
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 pub use action::Action;
 pub use widget::AttachmentsReader;
@@ -84,6 +87,7 @@ impl LayerModel<Action, super::Action> for Model {
             Action::OpenNextTab => self.open_next_tab(),
             Action::OpenPreviousTab => self.open_previous_tab(),
             Action::OpenLogs => self.open_logs(),
+            Action::DownloadAttachment => self.download_attachment(),
         }
     }
 
@@ -149,5 +153,10 @@ impl Model {
     fn navigate_half_page_up(&mut self) -> Option<super::Action> {
         self.navigate = Some(Navigate::HalfPageUp);
         None
+    }
+
+    fn download_attachment(&self) -> Option<super::Action> {
+        let attachment_idx = self.state.selected()?;
+        Some(super::Action::DownloadAtachment(attachment_idx))
     }
 }

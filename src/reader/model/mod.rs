@@ -2,7 +2,7 @@ mod action;
 
 use crate::{
     backend::{
-        Backend, MailBodyType, MailData,
+        Backend, MailBodyType,
         mails::types::{MailId, MailKeyword, MailUpdate},
     },
     palette,
@@ -156,6 +156,8 @@ impl LayerModel<Action> for Model {
 
             Action::OpenPalette { entries } => self.open_palette(entries),
 
+            Action::DownloadAtachment(attachment_idx) => self.download_attachment(attachment_idx),
+
             Action::Metadata(action) => self
                 .metadata
                 .apply_action(action)
@@ -249,6 +251,19 @@ impl Model {
 
     fn open_palette(&self, entries: Vec<palette::PaletteEntry>) -> Option<crate::Action> {
         Some(crate::Action::OpenPalette { entries })
+    }
+
+    fn download_attachment(&self, attachment_idx: usize) -> Option<crate::Action> {
+        let mail = self.backend.get_mail(&self.id)?;
+        let attachment = mail.attachments?.get(attachment_idx)?.clone();
+
+        let backend = self.backend.clone();
+        self.task_manager.spawn(async move {
+            if let Err(err) = backend.download_attachment(&attachment).await {
+                error!("Couldn't download attachment: {err}");
+            }
+        });
+        None
     }
 }
 
