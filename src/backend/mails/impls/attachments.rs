@@ -25,8 +25,10 @@ impl Backend {
         let data = self.client.download(&attachment.blob_id).await?;
 
         let mut file = File::create(path)?;
-        file.metadata()?.permissions().set_mode(0o600);
         file.write_all(&data)?;
+        let mut perms = file.metadata()?.permissions();
+        perms.set_mode(0o600);
+        file.set_permissions(perms)?;
 
         Ok(())
     }
