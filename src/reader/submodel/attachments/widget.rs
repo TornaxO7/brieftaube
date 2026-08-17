@@ -24,6 +24,10 @@ impl<'a> StatefulWidget for AttachmentsReader<'a> {
             return;
         };
 
+        if !attachments.is_empty() && model.state.selected().is_none() {
+            model.state.select(Some(0));
+        }
+
         if let Some(navigate) = model.navigate.take() {
             apply_navigation(&mut model.state, navigate, attachments, area);
         }
