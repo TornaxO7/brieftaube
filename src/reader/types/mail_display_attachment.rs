@@ -6,6 +6,10 @@ pub struct MailDisplayAttachment {
     pub size: String,
 }
 
+impl MailDisplayAttachment {
+    pub const MAX_DISPLAY_LENGTH: u16 = 5;
+}
+
 impl From<MailDataAttachment> for MailDisplayAttachment {
     fn from(attachment: MailDataAttachment) -> Self {
         let size = {

@@ -32,6 +32,14 @@ impl<'a> StatefulWidget for AttachmentsReader<'a> {
             apply_navigation(&mut model.state, navigate, attachments, area);
         }
 
+        let longest_name = attachments
+            .iter()
+            .map(|attachment| attachment.name.len())
+            .max()
+            .unwrap_or(0);
+
+        let longest_size_length = MailDisplayAttachment::MAX_DISPLAY_LENGTH;
+
         let rows: Vec<Row<'_>> = attachments
             .iter()
             .map(|a| {
@@ -43,12 +51,17 @@ impl<'a> StatefulWidget for AttachmentsReader<'a> {
             })
             .collect();
 
-        let widths = [Constraint::Max(6), Constraint::Fill(1), Constraint::Fill(1)];
+        let widths = [
+            Constraint::Length(longest_size_length),
+            Constraint::Length(longest_name as u16),
+            Constraint::Fill(1),
+        ];
 
         StatefulWidget::render(
             Table::new(rows, widths)
                 .row_highlight_style(Style::new().fg(BLACK).bg(BLUE.c500))
-                .block(Block::bordered().title("Attachments")),
+                .block(Block::bordered().title("Attachments"))
+                .column_spacing(3),
             area,
             buf,
             &mut model.state,
