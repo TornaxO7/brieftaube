@@ -1,9 +1,6 @@
-use crate::reader::{
-    model::{
-        Mode, attachments::AttachmentsReader, markdown::MarkdownReader, metadata::MetadataReader,
-        text::TextReader,
-    },
-    types::MailDisplay,
+use crate::reader::model::{
+    Mode, attachments::AttachmentsReader, markdown::MarkdownReader, metadata::MetadataReader,
+    text::TextReader,
 };
 use ratatui::{
     buffer::Buffer,

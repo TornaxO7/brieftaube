@@ -1,16 +1,19 @@
 mod action;
 mod widget;
 
-use super::MailViewerSubModel;
+use super::MailReaderSubModel;
 use crate::{
-    reader::submodel::{MailViewerPager, ScrollAction},
+    backend::{Backend, MailBodyType, MailId},
+    reader::submodel::{MailContentReader, ScrollAction},
+    task_manager::TaskManager,
     utils::{
         keybindmanager::KeybindManager,
         layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent, LayerOverlay},
     },
 };
 use ratatui::widgets::ScrollbarState;
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, rc::Rc, str::FromStr, sync::Arc};
+use tracing::error;
 
 pub use action::Action;
 pub use widget::MarkdownReader;
@@ -20,6 +23,10 @@ enum ExpectedOverlay {
 }
 
 pub struct Model {
+    id: MailId,
+    backend: Arc<Backend>,
+    task_manager: Rc<TaskManager>,
+
     pub vertical: ScrollbarState,
     pub horizontal: ScrollbarState,
 
@@ -30,8 +37,12 @@ pub struct Model {
 }
 
 impl Model {
-    pub fn new() -> Self {
+    pub fn new(id: MailId, backend: Arc<Backend>, task_manager: Rc<TaskManager>) -> Self {
         Self {
+            id,
+            backend,
+            task_manager,
+
             vertical: ScrollbarState::default(),
             horizontal: ScrollbarState::default(),
             expected_overlay: None,
@@ -117,11 +128,28 @@ impl LayerModelDefaultHandleEvent<Action, super::Action> for Model {
     }
 }
 
-impl MailViewerSubModel for Model {}
+impl MailReaderSubModel for Model {}
 
-impl MailViewerPager<Action> for Model {
+impl MailContentReader<Action> for Model {
     fn set_scroll_action(&mut self, scroll: ScrollAction) {
         self.scroll_action = Some(scroll);
+    }
+
+    fn request_body_if_absent(&self) {
+        let mail = self.backend.get_mail(&self.id).unwrap();
+
+        if mail.html_body.is_none() {
+            let id = self.id.clone();
+            let backend = self.backend.clone();
+            self.task_manager.spawn(async move {
+                match backend.prefetch_mail_body(&id, MailBodyType::Html).await {
+                    Ok(()) => {}
+                    Err(err) => {
+                        error!("Couldn't fetch html body of mail:\n{err}");
+                    }
+                }
+            });
+        }
     }
 }
 

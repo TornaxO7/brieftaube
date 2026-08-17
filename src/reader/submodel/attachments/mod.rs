@@ -1,16 +1,18 @@
 mod action;
 mod widget;
 
-use super::MailViewerSubModel;
+use super::MailReaderSubModel;
 use crate::{
-    backend::Backend,
+    backend::{Backend, MailId},
+    task_manager::TaskManager,
     utils::{
         keybindmanager::KeybindManager,
         layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent},
     },
 };
 use ratatui::widgets::TableState;
-use std::{collections::HashMap, str::FromStr, sync::Arc};
+use std::{collections::HashMap, rc::Rc, str::FromStr, sync::Arc};
+use tracing::error;
 
 pub use action::Action;
 pub use widget::AttachmentsReader;
@@ -32,16 +34,25 @@ pub struct Model {
     pub state: TableState,
     pub keybindings: KeybindManager<Action>,
 
+    id: MailId,
+    backend: Arc<Backend>,
+    task_manager: Rc<TaskManager>,
+
     expected_overlay: Option<ExpectedOverlay>,
     navigate: Option<Navigate>,
 }
 
 impl Model {
-    pub fn new() -> Self {
+    pub fn new(id: MailId, backend: Arc<Backend>, task_manager: Rc<TaskManager>) -> Self {
         Self {
             state: TableState::new(),
             expected_overlay: None,
             navigate: None,
+
+            id,
+            backend,
+            task_manager,
+
             keybindings: KeybindManager::new(HashMap::from([
                 ("gg", Action::NavigateToTop),
                 ("ge", Action::NavigateToBottom),
@@ -88,6 +99,7 @@ impl LayerModel<Action, super::Action> for Model {
             Action::OpenPreviousTab => self.open_previous_tab(),
             Action::OpenLogs => self.open_logs(),
             Action::DownloadAttachment => self.download_attachment(),
+            // Action::CopyPathToClipboard => self.copy_path_to_clipboard(),
         }
     }
 
@@ -113,7 +125,7 @@ impl LayerModelDefaultHandleEvent<Action, super::Action> for Model {
     }
 }
 
-impl MailViewerSubModel for Model {}
+impl MailReaderSubModel for Model {}
 
 impl Model {
     fn open_command_palette(&mut self) -> Option<super::Action> {
@@ -157,6 +169,18 @@ impl Model {
 
     fn download_attachment(&self) -> Option<super::Action> {
         let attachment_idx = self.state.selected()?;
-        Some(super::Action::DownloadAtachment(attachment_idx))
+        let mail = self.backend.get_mail(&self.id)?;
+        let attachment = mail.attachments?.get(attachment_idx)?.clone();
+
+        let backend = self.backend.clone();
+        self.task_manager.spawn(async move {
+            match backend.download_attachment(&attachment).await {
+                Ok(()) => {}
+                Err(err) => {
+                    error!("Couldn't download attachment: {err}");
+                }
+            }
+        });
+        None
     }
 }

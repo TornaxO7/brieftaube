@@ -17,8 +17,6 @@ pub enum Action {
 
     OpenPalette { entries: Vec<palette::PaletteEntry> },
 
-    DownloadAtachment(usize),
-
     Metadata(metadata::Action),
     Text(text::Action),
     Markdown(markdown::Action),

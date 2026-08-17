@@ -1,5 +1,6 @@
 mod action;
 
+use super::submodel::MailContentReader;
 use crate::{
     backend::{
         Backend, MailBodyType,
@@ -30,7 +31,6 @@ pub enum Mode {
 pub struct Model {
     id: MailId,
     backend: Arc<Backend>,
-    task_manager: Rc<TaskManager>,
 
     pub mode: Mode,
 
@@ -67,60 +67,37 @@ impl Model {
             }
         });
 
-        let model = Self {
-            id,
-            backend,
-            task_manager,
-
-            mode,
-
-            metadata: metadata::Model::new(),
-            text: text::Model::new(),
-            markdown: markdown::Model::new(),
-            attachments: attachments::Model::new(),
+        let text = {
+            let text = text::Model::new(id.clone(), backend.clone(), task_manager.clone());
+            if matches!(mode, Mode::Text) {
+                text.request_body_if_absent();
+            }
+            text
         };
 
-        model.request_body_if_absent();
+        let markdown = {
+            let markdown = markdown::Model::new(id.clone(), backend.clone(), task_manager.clone());
+            if matches!(mode, Mode::Markdown) {
+                markdown.request_body_if_absent();
+            }
+            markdown
+        };
 
-        model
+        Self {
+            id: id.clone(),
+            backend: backend.clone(),
+            mode,
+
+            metadata: metadata::Model::new(id.clone(), backend.clone(), task_manager.clone()),
+            text,
+            markdown,
+            attachments: attachments::Model::new(id.clone(), backend.clone(), task_manager.clone()),
+        }
     }
 
     pub fn get_display_mail(&self) -> MailDisplay {
         let mail = self.backend.get_mail(&self.id).unwrap();
         MailDisplay::new(mail, self.backend.clone())
-    }
-
-    fn request_body_if_absent(&self) {
-        let mail = self.backend.get_mail(&self.id).unwrap();
-
-        let ty = match self.mode {
-            Mode::Metadata | Mode::Attachments => return,
-            Mode::Markdown => MailBodyType::Html,
-            Mode::Text => MailBodyType::Text,
-        };
-
-        let body_is_missing = match ty {
-            MailBodyType::Text => mail.text_body.is_none(),
-            MailBodyType::Html => mail.html_body.is_none(),
-        };
-
-        if body_is_missing {
-            let id = self.id.clone();
-            let b = self.backend.clone();
-            self.task_manager.spawn(async move {
-                match b.prefetch_mail_body(&id, ty).await {
-                    Ok(()) => {}
-                    Err(err) => {
-                        let ty_name = match ty {
-                            MailBodyType::Text => "text",
-                            MailBodyType::Html => "html",
-                        };
-
-                        error!("Couldn't fetch {ty_name}-body of mail:\n{err}");
-                    }
-                }
-            });
-        }
     }
 }
 
@@ -155,8 +132,6 @@ impl LayerModel<Action> for Model {
             Action::Back => self.back(),
 
             Action::OpenPalette { entries } => self.open_palette(entries),
-
-            Action::DownloadAtachment(attachment_idx) => self.download_attachment(attachment_idx),
 
             Action::Metadata(action) => self
                 .metadata
@@ -252,19 +227,6 @@ impl Model {
     fn open_palette(&self, entries: Vec<palette::PaletteEntry>) -> Option<crate::Action> {
         Some(crate::Action::OpenPalette { entries })
     }
-
-    fn download_attachment(&self, attachment_idx: usize) -> Option<crate::Action> {
-        let mail = self.backend.get_mail(&self.id)?;
-        let attachment = mail.attachments?.get(attachment_idx)?.clone();
-
-        let backend = self.backend.clone();
-        self.task_manager.spawn(async move {
-            if let Err(err) = backend.download_attachment(&attachment).await {
-                error!("Couldn't download attachment: {err}");
-            }
-        });
-        None
-    }
 }
 
 impl Model {
@@ -273,7 +235,8 @@ impl Model {
 
         match viewer {
             Mode::Metadata | Mode::Attachments => {}
-            Mode::Text | Mode::Markdown => self.request_body_if_absent(),
+            Mode::Text => self.text.request_body_if_absent(),
+            Mode::Markdown => self.markdown.request_body_if_absent(),
         }
     }
 }

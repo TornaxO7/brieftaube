@@ -1,13 +1,17 @@
 mod action;
 mod widget;
 
-use super::MailViewerSubModel;
-use crate::utils::{
-    keybindmanager::KeybindManager,
-    layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent},
+use super::MailReaderSubModel;
+use crate::{
+    backend::{Backend, MailId},
+    task_manager::TaskManager,
+    utils::{
+        keybindmanager::KeybindManager,
+        layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent},
+    },
 };
 use ratatui::widgets::TableState;
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, rc::Rc, str::FromStr, sync::Arc};
 
 pub use action::Action;
 pub use widget::MetadataReader;
@@ -17,6 +21,10 @@ enum ExpectedOverlay {
 }
 
 pub struct Model {
+    id: MailId,
+    backend: Arc<Backend>,
+    task_manager: Rc<TaskManager>,
+
     pub state: TableState,
     pub keybindings: KeybindManager<Action>,
 
@@ -24,8 +32,12 @@ pub struct Model {
 }
 
 impl Model {
-    pub fn new() -> Self {
+    pub fn new(id: MailId, backend: Arc<Backend>, task_manager: Rc<TaskManager>) -> Self {
         Self {
+            id,
+            backend,
+            task_manager,
+
             state: TableState::new(),
             expected_overlay: None,
             keybindings: KeybindManager::new(HashMap::from([
@@ -101,7 +113,7 @@ impl LayerModelDefaultHandleEvent<Action, super::Action> for Model {
     }
 }
 
-impl MailViewerSubModel for Model {}
+impl MailReaderSubModel for Model {}
 
 impl Model {
     fn open_command_palette(&mut self) -> Option<super::Action> {

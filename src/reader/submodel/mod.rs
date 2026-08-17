@@ -25,7 +25,7 @@ enum ScrollAction {
     SetBottom,
 }
 
-trait MailViewerSubModel {
+trait MailReaderSubModel {
     fn quit(&self) -> Option<Action> {
         Some(Action::Quit)
     }
@@ -63,10 +63,13 @@ trait MailViewerSubModel {
     }
 }
 
-trait MailViewerPager<SubmoduleAction>: LayerModelDefaultHandleEvent<SubmoduleAction, Action>
+pub trait MailContentReader<SubmoduleAction>:
+    LayerModelDefaultHandleEvent<SubmoduleAction, Action>
 where
     SubmoduleAction: Clone,
 {
+    fn request_body_if_absent(&self);
+
     fn set_scroll_action(&mut self, scroll: ScrollAction);
 
     fn scroll_down(&mut self) -> Option<Action> {
