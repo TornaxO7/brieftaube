@@ -10,7 +10,7 @@ pub struct Config {
     pub address: String,
     pub password: String,
     pub host: String,
-    browser: Option<String>,
+    html_renderer: Option<String>,
     editor: Option<String>,
 
     pub reader: Reader,
@@ -30,7 +30,7 @@ impl Config {
         self.editor.clone().or_else(|| std::env::var("EDITOR").ok())
     }
 
-    pub fn browser(&self) -> String {
-        self.browser.clone().unwrap_or("xdg-open".to_string())
+    pub fn html_renderer(&self) -> String {
+        self.html_renderer.clone().unwrap_or("xdg-open".to_string())
     }
 }
