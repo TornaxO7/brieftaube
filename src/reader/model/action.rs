@@ -1,7 +1,4 @@
-use crate::{
-    palette,
-    reader::model::{attachments, markdown, metadata, text},
-};
+use crate::palette;
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -16,9 +13,4 @@ pub enum Action {
     OpenLogs,
 
     OpenPalette { entries: Vec<palette::PaletteEntry> },
-
-    Metadata(metadata::Action),
-    Text(text::Action),
-    Markdown(markdown::Action),
-    Attachments(attachments::Action),
 }

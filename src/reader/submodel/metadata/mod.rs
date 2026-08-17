@@ -21,11 +21,11 @@ enum ExpectedOverlay {
 }
 
 pub struct Model {
-    id: MailId,
-    backend: Arc<Backend>,
-    task_manager: Rc<TaskManager>,
+    _id: MailId,
+    _backend: Arc<Backend>,
+    _task_manager: Rc<TaskManager>,
 
-    pub state: TableState,
+    pub _state: TableState,
     pub keybindings: KeybindManager<Action>,
 
     expected_overlay: Option<ExpectedOverlay>,
@@ -34,11 +34,11 @@ pub struct Model {
 impl Model {
     pub fn new(id: MailId, backend: Arc<Backend>, task_manager: Rc<TaskManager>) -> Self {
         Self {
-            id,
-            backend,
-            task_manager,
+            _id: id,
+            _backend: backend,
+            _task_manager: task_manager,
 
-            state: TableState::new(),
+            _state: TableState::new(),
             expected_overlay: None,
             keybindings: KeybindManager::new(HashMap::from([
                 ("h", Action::Back),

@@ -18,7 +18,7 @@ use ratatui::{
     style::{
         Style,
         palette::material::{
-            BLUE, BLUE_GRAY, CYAN, GRAY, GREEN, LIGHT_BLUE, ORANGE, PINK, RED, TEAL, WHITE, YELLOW,
+            BLUE, BLUE_GRAY, CYAN, GRAY, GREEN, LIGHT_BLUE, ORANGE, PINK, RED, TEAL, WHITE,
         },
     },
     symbols::line::VERTICAL,

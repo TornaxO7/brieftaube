@@ -139,23 +139,6 @@ impl LayerModel<Action> for Model {
             Action::Back => self.back(),
 
             Action::OpenPalette { entries } => self.open_palette(entries),
-
-            Action::Metadata(action) => self
-                .metadata
-                .apply_action(action)
-                .and_then(|a| self.apply_action(a)),
-            Action::Text(action) => self
-                .text
-                .apply_action(action)
-                .and_then(|a| self.apply_action(a)),
-            Action::Markdown(action) => self
-                .markdown
-                .apply_action(action)
-                .and_then(|a| self.apply_action(a)),
-            Action::Attachments(action) => self
-                .attachments
-                .apply_action(action)
-                .and_then(|a| self.apply_action(a)),
         }
     }
 
