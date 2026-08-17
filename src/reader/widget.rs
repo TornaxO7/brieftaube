@@ -74,7 +74,7 @@ fn render_viewer(area: Rect, buf: &mut Buffer, model: &mut super::Model) {
         ),
         Mode::Attachments => StatefulWidget::render(
             AttachmentsReader {
-                attachments: mail.attachments.unwrap().as_slice(),
+                attachments: mail.attachments.as_ref(),
             },
             area,
             buf,

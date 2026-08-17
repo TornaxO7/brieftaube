@@ -6,25 +6,29 @@ use ratatui::{
         palette::material::{BLACK, BLUE, PINK, YELLOW},
     },
     text::Text,
-    widgets::{Block, Row, StatefulWidget, Table, TableState},
+    widgets::{Block, Paragraph, Row, StatefulWidget, Table, TableState, Widget},
 };
 
 use crate::reader::{model::attachments::Navigate, types::MailDisplayAttachment};
 
 pub struct AttachmentsReader<'a> {
-    pub attachments: &'a [MailDisplayAttachment],
+    pub attachments: Option<&'a Vec<MailDisplayAttachment>>,
 }
 
 impl<'a> StatefulWidget for AttachmentsReader<'a> {
     type State = super::Model;
 
     fn render(self, area: Rect, buf: &mut Buffer, model: &mut Self::State) {
+        let Some(attachments) = self.attachments else {
+            Widget::render(Paragraph::new("Loading attachments"), area, buf);
+            return;
+        };
+
         if let Some(navigate) = model.navigate.take() {
-            apply_navigation(&mut model.state, navigate, &self.attachments, area);
+            apply_navigation(&mut model.state, navigate, attachments, area);
         }
 
-        let rows: Vec<Row<'_>> = self
-            .attachments
+        let rows: Vec<Row<'_>> = attachments
             .iter()
             .map(|a| {
                 Row::new([
