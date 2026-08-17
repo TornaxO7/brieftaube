@@ -382,9 +382,9 @@ impl Model {
 
                     let selected_entry = {
                         let columns = self.columns.lock().unwrap();
-                        columns
-                            .get(self.center_column_mailbox())
-                            .and_then(|column| column.selected_entry().cloned())
+                        let column = columns.get(self.center_column_mailbox());
+
+                        column.and_then(|column| column.selected_entry().cloned())
                     };
 
                     if let Some(entry) = selected_entry {
@@ -744,6 +744,24 @@ async fn op_init_mailbox(
     }
 
     let created_column = ColumnState::new(id.clone(), entries);
+    if let Some(first_entry) = created_column.selected_entry() {
+        match first_entry {
+            ColumnStateEntry::Mailbox(_) => {}
+            ColumnStateEntry::SingleMail(mail_id)
+            | ColumnStateEntry::CollapsedThread(mail_id, _) => {
+                match backend.prefetch_mail_attachments(mail_id).await {
+                    Ok(()) => {}
+                    Err(err) => {
+                        error!("Couldn't prefetch mail attachments:\n{err}");
+                    }
+                }
+            }
+            ColumnStateEntry::ThreadStart { .. }
+            | ColumnStateEntry::ThreadChild(_, _)
+            | ColumnStateEntry::ThreadEnd(_, _) => unreachable!("All threads are collapsed"),
+        }
+    }
+
     let mut guard = columns.lock().unwrap();
     guard.insert(id.clone(), created_column);
 
@@ -956,17 +974,12 @@ async fn init_mailfs(columns: Columns, backend: Arc<Backend>) {
                     }
                 }
             }
-            ColumnStateEntry::SingleMail(mail_id)
-            | ColumnStateEntry::CollapsedThread(mail_id, _)
-            | ColumnStateEntry::ThreadStart { mail_id, .. }
-            | ColumnStateEntry::ThreadChild(mail_id, _)
-            | ColumnStateEntry::ThreadEnd(mail_id, _) => {
-                match backend.prefetch_mail_attachments(&mail_id).await {
-                    Ok(()) => {}
-                    Err(err) => {
-                        error!("Couldn't fetch mail attachments:\n{err}");
-                    }
-                }
+            ColumnStateEntry::SingleMail(_)
+            | ColumnStateEntry::CollapsedThread(_, _)
+            | ColumnStateEntry::ThreadStart { .. }
+            | ColumnStateEntry::ThreadChild(_, _)
+            | ColumnStateEntry::ThreadEnd(_, _) => {
+                unreachable!("Root directory can't have mails")
             }
         }
     }
