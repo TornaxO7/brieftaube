@@ -1,8 +1,11 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::Arc};
 
 use super::MailDisplayAttachment;
-use crate::backend::mails::types::{
-    MailData, MailDataHtmlBody, MailDataTextBody, MailKeyword, addresses_to_string,
+use crate::backend::{
+    Backend,
+    mails::types::{
+        MailData, MailDataHtmlBody, MailDataTextBody, MailKeyword, addresses_to_string,
+    },
 };
 
 pub struct MailDisplay {
@@ -18,8 +21,8 @@ pub struct MailDisplay {
     pub attachments: Option<Vec<MailDisplayAttachment>>,
 }
 
-impl From<MailData> for MailDisplay {
-    fn from(mail: MailData) -> Self {
+impl MailDisplay {
+    pub fn new(mail: MailData, backend: Arc<Backend>) -> Self {
         Self {
             from: addresses_to_string(&mail.from),
             to: addresses_to_string(&mail.to),
@@ -33,7 +36,7 @@ impl From<MailData> for MailDisplay {
             attachments: mail.attachments.map(|attachments| {
                 attachments
                     .into_iter()
-                    .map(MailDisplayAttachment::from)
+                    .map(|attachment| MailDisplayAttachment::new(attachment, backend.clone()))
                     .collect()
             }),
         }

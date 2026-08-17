@@ -46,7 +46,7 @@ fn render_tabs(area: Rect, buf: &mut Buffer, mode: Mode) {
 
 /// Rendering implementations
 fn render_viewer(area: Rect, buf: &mut Buffer, model: &mut super::Model) {
-    let mail = MailDisplay::from(model.get_mail());
+    let mail = model.get_display_mail();
 
     match model.mode {
         Mode::Metadata => StatefulWidget::render(

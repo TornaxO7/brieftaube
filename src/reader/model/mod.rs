@@ -6,6 +6,7 @@ use crate::{
         mails::types::{MailId, MailKeyword, MailUpdate},
     },
     palette,
+    reader::types::MailDisplay,
     task_manager::TaskManager,
     utils::layer::{LayerCore, LayerModel},
 };
@@ -84,8 +85,9 @@ impl Model {
         model
     }
 
-    pub fn get_mail(&self) -> MailData {
-        self.backend.get_mail(&self.id).unwrap()
+    pub fn get_display_mail(&self) -> MailDisplay {
+        let mail = self.backend.get_mail(&self.id).unwrap();
+        MailDisplay::new(mail, self.backend.clone())
     }
 
     fn request_body_if_absent(&self) {

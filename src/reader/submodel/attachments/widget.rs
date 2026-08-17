@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Rect},
     style::{
         Style,
-        palette::material::{BLACK, BLUE, PINK, YELLOW},
+        palette::material::{BLACK, BLUE, GREEN, PINK, YELLOW},
     },
     text::Text,
     widgets::{Block, Paragraph, Row, StatefulWidget, Table, TableState, Widget},
@@ -24,9 +24,9 @@ impl<'a> StatefulWidget for AttachmentsReader<'a> {
             return;
         };
 
-        if !attachments.is_empty() && model.state.selected().is_none() {
-            model.state.select(Some(0));
-        }
+        // if !attachments.is_empty() && model.state.selected().is_none() {
+        //     model.state.select(Some(0));
+        // }
 
         if let Some(navigate) = model.navigate.take() {
             apply_navigation(&mut model.state, navigate, attachments, area);
@@ -43,7 +43,14 @@ impl<'a> StatefulWidget for AttachmentsReader<'a> {
         let rows: Vec<Row<'_>> = attachments
             .iter()
             .map(|a| {
+                let downloaded_symbol = if a.downloaded {
+                    Text::raw("✓").style(Style::new().fg(GREEN.c500))
+                } else {
+                    Text::raw("↓").style(Style::new().fg(BLUE.c500).bold())
+                };
+
                 Row::new([
+                    downloaded_symbol,
                     Text::raw(&a.size).style(Style::new().fg(YELLOW.c500)),
                     Text::raw(&a.name),
                     Text::raw(&a.content_type).style(Style::new().fg(PINK.c500)),
@@ -52,6 +59,7 @@ impl<'a> StatefulWidget for AttachmentsReader<'a> {
             .collect();
 
         let widths = [
+            Constraint::Length(1),
             Constraint::Length(longest_size_length),
             Constraint::Length(longest_name as u16),
             Constraint::Fill(1),

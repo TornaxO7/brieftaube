@@ -1,6 +1,9 @@
-use crate::backend::MailDataAttachment;
+use std::sync::Arc;
+
+use crate::backend::{Backend, MailDataAttachment};
 
 pub struct MailDisplayAttachment {
+    pub downloaded: bool,
     pub name: String,
     pub content_type: String,
     pub size: String,
@@ -8,10 +11,8 @@ pub struct MailDisplayAttachment {
 
 impl MailDisplayAttachment {
     pub const MAX_DISPLAY_LENGTH: u16 = 5;
-}
 
-impl From<MailDataAttachment> for MailDisplayAttachment {
-    fn from(attachment: MailDataAttachment) -> Self {
+    pub fn new(attachment: MailDataAttachment, backend: Arc<Backend>) -> Self {
         let size = {
             const KB: f64 = 1024.0;
             const MB: f64 = KB * 1024.0;
@@ -29,10 +30,13 @@ impl From<MailDataAttachment> for MailDisplayAttachment {
             }
         };
 
+        let downloaded = backend.get_attachment_path(&attachment).is_some();
+
         Self {
             name: attachment.name,
             content_type: attachment.content_type,
             size,
+            downloaded,
         }
     }
 }
