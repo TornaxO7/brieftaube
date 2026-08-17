@@ -48,6 +48,7 @@ impl Model {
             expected_overlay: None,
             scroll_action: None,
             keybindings: KeybindManager::new(HashMap::from([
+                ("h", Action::Back),
                 ("gg", Action::ScrollToTop),
                 ("ge", Action::ScrollToBottom),
                 ("<tab>", Action::OpenNextTab),

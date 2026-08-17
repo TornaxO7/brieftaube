@@ -13,7 +13,7 @@ use crate::{
 use arboard::Clipboard;
 use ratatui::widgets::TableState;
 use std::{collections::HashMap, rc::Rc, str::FromStr, sync::Arc};
-use tracing::{Instrument, error, warn};
+use tracing::{error, warn};
 
 pub use action::Action;
 pub use widget::AttachmentsReader;
@@ -55,6 +55,7 @@ impl Model {
             task_manager,
 
             keybindings: KeybindManager::new(HashMap::from([
+                ("h", Action::Back),
                 ("gg", Action::NavigateToTop),
                 ("ge", Action::NavigateToBottom),
                 ("<tab>", Action::OpenNextTab),

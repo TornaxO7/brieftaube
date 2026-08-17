@@ -41,6 +41,7 @@ impl Model {
             state: TableState::new(),
             expected_overlay: None,
             keybindings: KeybindManager::new(HashMap::from([
+                ("h", Action::Back),
                 ("gg", Action::ScrollToTop),
                 ("ge", Action::ScrollToBottom),
                 ("<tab>", Action::OpenNextTab),
