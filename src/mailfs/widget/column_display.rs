@@ -15,6 +15,7 @@ use throbber_widgets_tui::ThrobberState;
 
 #[derive(Debug)]
 pub enum ColumnDisplay<'a> {
+    // TODO: Maybe just use the throbberstate from the model
     Loading(&'a mut ThrobberState),
     Loaded {
         entries: Vec<ColumnDisplayEntry>,
