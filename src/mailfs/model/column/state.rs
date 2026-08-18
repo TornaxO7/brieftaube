@@ -5,15 +5,15 @@ use ratatui::widgets::TableState;
 
 /// Internal representation of a column
 #[derive(Clone, Debug)]
-pub struct ColumnState {
+pub struct Column {
     /// The entries within the column
-    entries: Vec<ColumnStateEntry>,
+    entries: Vec<ColumnEntry>,
     /// The table state
     pub state: TableState,
 }
 
-impl ColumnState {
-    pub fn new(entries: Vec<ColumnStateEntry>) -> Self {
+impl Column {
+    pub fn new(entries: Vec<ColumnEntry>) -> Self {
         let state = if entries.is_empty() {
             TableState::new()
         } else {
@@ -27,7 +27,7 @@ impl ColumnState {
         self.state.selected()
     }
 
-    pub fn selected_entry(&self) -> Option<&ColumnStateEntry> {
+    pub fn selected_entry(&self) -> Option<&ColumnEntry> {
         self.state.selected().and_then(|idx| self.entries.get(idx))
     }
 
@@ -37,17 +37,17 @@ impl ColumnState {
     //         .and_then(|idx| self.entries.get_mut(idx))
     // }
 
-    pub fn entries(&self) -> &[ColumnStateEntry] {
+    pub fn entries(&self) -> &[ColumnEntry] {
         &self.entries
     }
 
-    pub fn entries_mut(&mut self) -> &mut Vec<ColumnStateEntry> {
+    pub fn entries_mut(&mut self) -> &mut Vec<ColumnEntry> {
         &mut self.entries
     }
 }
 
 #[derive(Clone, Debug)]
-pub enum ColumnStateEntry {
+pub enum ColumnEntry {
     Mailbox(MailboxId),
     /// Mails which are the only mail in a thread
     SingleMail(MailId),
@@ -65,7 +65,7 @@ pub enum ColumnStateEntry {
     ThreadEnd(MailId, ThreadId),
 }
 
-impl From<CollapsedMail> for ColumnStateEntry {
+impl From<CollapsedMail> for ColumnEntry {
     fn from(collapsed: CollapsedMail) -> Self {
         match collapsed {
             CollapsedMail::SingleMail(id) => Self::SingleMail(id),

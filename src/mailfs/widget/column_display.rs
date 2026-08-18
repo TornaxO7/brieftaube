@@ -5,39 +5,48 @@ use crate::{
         mails::types::{MailAddress, MailData, MailKeyword},
     },
     mailfs::{
-        model::{ColumnState, ColumnStateEntry, EntryId, SelectionType},
+        model::{ColumnEntry, ColumnState, EntryId, SelectionType},
         widget::selection_type::DisplaySelectionType,
     },
 };
 use ratatui::widgets::TableState;
 use std::{collections::HashMap, sync::Arc};
+use throbber_widgets_tui::ThrobberState;
 
 #[derive(Debug)]
-pub struct ColumnDisplay<'a> {
-    pub entries: Vec<ColumnDisplayEntry>,
-    pub state: &'a mut TableState,
+pub enum ColumnDisplay<'a> {
+    Loading(&'a mut ThrobberState),
+    Loaded {
+        entries: Vec<ColumnDisplayEntry>,
+        state: &'a mut TableState,
+    },
 }
 
 impl<'a> ColumnDisplay<'a> {
     pub fn new(
-        column: &'a mut ColumnState,
+        state: &'a mut ColumnState,
         selection_mapping: &HashMap<EntryId, SelectionType>,
         backend: Arc<Backend>,
     ) -> Self {
-        let entries: Vec<ColumnDisplayEntry> = column
-            .entries()
-            .iter()
-            .map(|entry| {
-                let id = EntryId::from(entry);
-                let selection = selection_mapping.get(&id).map(DisplaySelectionType::from);
+        match state {
+            ColumnState::Loading(throbber) => Self::Loading(throbber),
+            ColumnState::Loaded(column) => {
+                let entries: Vec<ColumnDisplayEntry> = column
+                    .entries()
+                    .iter()
+                    .map(|entry| {
+                        let id = EntryId::from(entry);
+                        let selection = selection_mapping.get(&id).map(DisplaySelectionType::from);
 
-                ColumnDisplayEntry::new(entry, selection, backend.clone())
-            })
-            .collect();
+                        ColumnDisplayEntry::new(entry, selection, backend.clone())
+                    })
+                    .collect();
 
-        Self {
-            entries,
-            state: &mut column.state,
+                Self::Loaded {
+                    entries,
+                    state: &mut column.state,
+                }
+            }
         }
     }
 }
@@ -50,32 +59,32 @@ pub struct ColumnDisplayEntry {
 
 impl ColumnDisplayEntry {
     pub fn new(
-        entry: &ColumnStateEntry,
+        entry: &ColumnEntry,
         selection_type: Option<DisplaySelectionType>,
         backend: Arc<Backend>,
     ) -> Self {
         let data = match entry {
-            ColumnStateEntry::Mailbox(id) => {
+            ColumnEntry::Mailbox(id) => {
                 let mailbox = backend.get_mailbox_data(id).unwrap();
                 ColumnDisplayEntryData::mailbox(&mailbox)
             }
-            ColumnStateEntry::SingleMail(mail_id) => {
+            ColumnEntry::SingleMail(mail_id) => {
                 let mail = backend.get_mail(mail_id).unwrap();
                 ColumnDisplayEntryData::mail(MailEntryType::Single, &mail)
             }
-            ColumnStateEntry::CollapsedThread(mail_id, _) => {
+            ColumnEntry::CollapsedThread(mail_id, _) => {
                 let mail = backend.get_mail(mail_id).unwrap();
                 ColumnDisplayEntryData::mail(MailEntryType::ThreadCollapsed, &mail)
             }
-            ColumnStateEntry::ThreadStart { mail_id, .. } => {
+            ColumnEntry::ThreadStart { mail_id, .. } => {
                 let mail = backend.get_mail(mail_id).unwrap();
                 ColumnDisplayEntryData::mail(MailEntryType::ThreadStart, &mail)
             }
-            ColumnStateEntry::ThreadChild(mail_id, _) => {
+            ColumnEntry::ThreadChild(mail_id, _) => {
                 let mail = backend.get_mail(mail_id).unwrap();
                 ColumnDisplayEntryData::mail(MailEntryType::ThreadChild, &mail)
             }
-            ColumnStateEntry::ThreadEnd(mail_id, _) => {
+            ColumnEntry::ThreadEnd(mail_id, _) => {
                 let mail = backend.get_mail(mail_id).unwrap();
                 ColumnDisplayEntryData::mail(MailEntryType::ThreadEnd, &mail)
             }

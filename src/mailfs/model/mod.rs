@@ -1,4 +1,4 @@
-mod column_state;
+mod column;
 mod selection;
 
 use super::UserAction;
@@ -26,7 +26,7 @@ use std::{
 use throbber_widgets_tui::ThrobberState;
 use tracing::{debug, error, warn};
 
-pub use column_state::{ColumnState, ColumnStateEntry};
+pub use column::{Column, ColumnEntry, ColumnState};
 pub use selection::{EntryId, SelectionType};
 
 const NORMALIZE_SORT_ORDER_SIZE: u32 = 32;
@@ -57,7 +57,10 @@ pub struct Model {
 
 impl Model {
     pub fn new(backend: Arc<Backend>, task_manager: Rc<TaskManager>) -> Self {
-        let columns = Arc::new(Mutex::new(HashMap::new()));
+        let columns = Arc::new(Mutex::new(HashMap::from([(
+            TOP_PARENT_MAILBOX_ID,
+            ColumnState::loading(),
+        )])));
         let columns2 = columns.clone();
         let backend2 = backend.clone();
 
@@ -178,32 +181,36 @@ impl<'a> Model {
 
         columns
             .get(&center)
-            .and_then(|center| center.selected_entry())
+            .and_then(|center| center.loaded()?.selected_entry())
             .map(|selected| match selected.clone() {
-                ColumnStateEntry::Mailbox(id) => RightColumn::Mailbox(id),
-                ColumnStateEntry::SingleMail(mail_id)
-                | ColumnStateEntry::CollapsedThread(mail_id, _)
-                | ColumnStateEntry::ThreadStart { mail_id, .. }
-                | ColumnStateEntry::ThreadChild(mail_id, _)
-                | ColumnStateEntry::ThreadEnd(mail_id, _) => RightColumn::MailPreview(mail_id),
+                ColumnEntry::Mailbox(id) => RightColumn::Mailbox(id),
+                ColumnEntry::SingleMail(mail_id)
+                | ColumnEntry::CollapsedThread(mail_id, _)
+                | ColumnEntry::ThreadStart { mail_id, .. }
+                | ColumnEntry::ThreadChild(mail_id, _)
+                | ColumnEntry::ThreadEnd(mail_id, _) => RightColumn::MailPreview(mail_id),
             })
     }
 
-    fn load_right_column_for(&self, entry: ColumnStateEntry) {
+    fn load_right_column_for(&self, entry: ColumnEntry) {
         match entry {
-            ColumnStateEntry::Mailbox(id) => {
-                let right_column_not_loaded = {
-                    let columns = self.columns.lock().unwrap();
-                    !columns.contains_key(&Some(id.clone()))
+            ColumnEntry::Mailbox(id) => {
+                let should_init_mailbox = {
+                    let mut columns = self.columns.lock().unwrap();
+                    columns
+                        .entry(Some(id.clone()))
+                        .or_insert(ColumnState::loading())
+                        .loaded()
+                        .is_none()
                 };
 
-                if right_column_not_loaded {
+                if should_init_mailbox {
                     let id = id.clone();
                     let columns = self.columns.clone();
                     let backend = self.backend.clone();
 
                     self.task_manager.spawn(async move {
-                        match op_init_mailbox(Some(id), columns, backend).await {
+                        match init_mailbox(Some(id), columns, backend).await {
                             Ok(()) => {}
                             Err(err) => {
                                 error!("Couldn't initialize mailbox for right column:\n{err}");
@@ -212,11 +219,11 @@ impl<'a> Model {
                     });
                 }
             }
-            ColumnStateEntry::SingleMail(mail_id)
-            | ColumnStateEntry::CollapsedThread(mail_id, _)
-            | ColumnStateEntry::ThreadStart { mail_id, .. }
-            | ColumnStateEntry::ThreadChild(mail_id, _)
-            | ColumnStateEntry::ThreadEnd(mail_id, _) => {
+            ColumnEntry::SingleMail(mail_id)
+            | ColumnEntry::CollapsedThread(mail_id, _)
+            | ColumnEntry::ThreadStart { mail_id, .. }
+            | ColumnEntry::ThreadChild(mail_id, _)
+            | ColumnEntry::ThreadEnd(mail_id, _) => {
                 let misses_attachments = {
                     let mail = self.backend.get_mail(&mail_id).unwrap();
                     mail.attachments.loaded().is_none()
@@ -243,15 +250,15 @@ impl<'a> Model {
     fn _normalize_mailbox_sort_order(&self) {
         let ids: Vec<MailboxId> = {
             let columns = self.columns.lock().unwrap();
-            let Some(center) = columns.get(self.center_column_mailbox()) else {
-                return;
-            };
+            let center = columns.get(self.center_column_mailbox()).unwrap();
 
             center
+                .loaded()
+                .unwrap()
                 .entries()
                 .iter()
                 .map_while(|entry| {
-                    if let ColumnStateEntry::Mailbox(id) = entry {
+                    if let ColumnEntry::Mailbox(id) = entry {
                         Some(id.clone())
                     } else {
                         None
@@ -296,7 +303,8 @@ impl Model {
             let mut columns = self.columns.lock().unwrap();
             columns
                 .get_mut(&self.center_column_mailbox())
-                .and_then(|center| {
+                .and_then(|state| {
+                    let center = state.loaded_mut()?;
                     let pos = center.state.selected();
                     let new_pos = pos.map(|old_pos| (old_pos + 1).min(center.entries().len() - 1));
                     center.state.select(new_pos);
@@ -315,7 +323,8 @@ impl Model {
             let mut columns = self.columns.lock().unwrap();
             columns
                 .get_mut(self.center_column_mailbox())
-                .and_then(|center| {
+                .and_then(|state| {
+                    let center = state.loaded_mut()?;
                     center.state.select_previous();
                     center.selected_entry().cloned()
                 })
@@ -333,7 +342,8 @@ impl Model {
             let mut columns = self.columns.lock().unwrap();
             columns
                 .get_mut(self.center_column_mailbox())
-                .and_then(|center| {
+                .and_then(|state| {
+                    let center = state.loaded_mut()?;
                     center.state.select_first();
                     center.selected_entry().cloned()
                 })
@@ -351,7 +361,8 @@ impl Model {
             let mut columns = self.columns.lock().unwrap();
             columns
                 .get_mut(self.center_column_mailbox())
-                .and_then(|center| {
+                .and_then(|state| {
+                    let center = state.loaded_mut()?;
                     if center.entries().is_empty() {
                         center.state.select(None);
                     } else {
@@ -375,32 +386,35 @@ impl Model {
             let columns = self.columns.lock().unwrap();
             columns
                 .get(self.center_column_mailbox())
-                .and_then(|column| column.selected_entry().cloned())
+                .and_then(|state| state.loaded()?.selected_entry().cloned())
         };
 
         if let Some(entry) = selected_entry {
             match entry {
-                ColumnStateEntry::Mailbox(id) => {
+                ColumnEntry::Mailbox(id) => {
                     self.navigation_stack.push(Some(id));
 
                     let selected_entry = {
                         let columns = self.columns.lock().unwrap();
-                        let column = columns.get(self.center_column_mailbox());
 
-                        column.and_then(|column| column.selected_entry().cloned())
+                        columns
+                            .get(self.center_column_mailbox())?
+                            .loaded()?
+                            .selected_entry()
+                            .cloned()
                     };
 
                     if let Some(entry) = selected_entry {
                         self.load_right_column_for(entry);
                     }
                 }
-                ColumnStateEntry::ThreadStart { mail_id, .. }
-                | ColumnStateEntry::ThreadChild(mail_id, _)
-                | ColumnStateEntry::ThreadEnd(mail_id, _)
-                | ColumnStateEntry::SingleMail(mail_id) => {
+                ColumnEntry::ThreadStart { mail_id, .. }
+                | ColumnEntry::ThreadChild(mail_id, _)
+                | ColumnEntry::ThreadEnd(mail_id, _)
+                | ColumnEntry::SingleMail(mail_id) => {
                     return Some(crate::Action::OpenMailViewer(mail_id));
                 }
-                ColumnStateEntry::CollapsedThread(mail_id, thread_id) => {
+                ColumnEntry::CollapsedThread(mail_id, thread_id) => {
                     let column_mailbox = self
                         .center_column_mailbox()
                         .clone()
@@ -436,21 +450,25 @@ impl Model {
             let mut columns = self.columns.lock().unwrap();
             columns
                 .get_mut(self.center_column_mailbox())
-                .and_then(|center| center.selected_entry().cloned())
+                .and_then(|state| state.loaded()?.selected_entry().cloned())
         };
 
         if let Some(entry) = selected_entry {
             match &entry {
-                ColumnStateEntry::Mailbox(_)
-                | ColumnStateEntry::SingleMail(_)
-                | ColumnStateEntry::CollapsedThread(_, _) => {
+                ColumnEntry::Mailbox(_)
+                | ColumnEntry::SingleMail(_)
+                | ColumnEntry::CollapsedThread(_, _) => {
                     self.navigate_to_parent();
                 }
-                ColumnStateEntry::ThreadStart { thread_id, .. }
-                | ColumnStateEntry::ThreadChild(_, thread_id)
-                | ColumnStateEntry::ThreadEnd(_, thread_id) => {
+                ColumnEntry::ThreadStart { thread_id, .. }
+                | ColumnEntry::ThreadChild(_, thread_id)
+                | ColumnEntry::ThreadEnd(_, thread_id) => {
                     let mut columns = self.columns.lock().unwrap();
-                    let column = columns.get_mut(self.center_column_mailbox()).unwrap();
+                    let column = columns
+                        .get_mut(self.center_column_mailbox())
+                        .expect("Left column should be there?!")
+                        .loaded_mut()
+                        .expect("Left columns should be already loaded?!");
 
                     let (start_pos, new_entry) = column
                         .entries()
@@ -458,7 +476,7 @@ impl Model {
                         .cloned()
                         .enumerate()
                         .find_map(|(idx, entry)| {
-                            if let ColumnStateEntry::ThreadStart {
+                            if let ColumnEntry::ThreadStart {
                                 thread_id: entry_thread_id,
                                 collapsed_mail_id,
                                 ..
@@ -467,7 +485,7 @@ impl Model {
                                 if &entry_thread_id == thread_id {
                                     Some((
                                         idx,
-                                        ColumnStateEntry::CollapsedThread(
+                                        ColumnEntry::CollapsedThread(
                                             collapsed_mail_id,
                                             entry_thread_id,
                                         ),
@@ -483,7 +501,7 @@ impl Model {
                             "Well... we are looking for the entry. It can't just disappear o.O",
                         );
 
-                    let end_pos = column.entries().iter().position(|entry| matches!(entry, ColumnStateEntry::ThreadEnd(_, entry_thread_id) if entry_thread_id == thread_id))
+                    let end_pos = column.entries().iter().position(|entry| matches!(entry, ColumnEntry::ThreadEnd(_, entry_thread_id) if entry_thread_id == thread_id))
                             .expect("Same as in the previous `.expect`.");
 
                     column
@@ -519,7 +537,7 @@ impl Model {
             let columns = self.columns.lock().unwrap();
             columns
                 .get(self.center_column_mailbox())
-                .and_then(|center| center.selected_entry().cloned())
+                .and_then(|state| state.loaded()?.selected_entry().cloned())
         };
 
         if let Some(entry) = selected_entry {
@@ -538,12 +556,14 @@ impl Model {
     fn cut_selected_entries(&mut self) -> Option<crate::Action> {
         if self.selection.is_empty() {
             let columns = self.columns.lock().unwrap();
-            if let Some(column) = columns.get(self.center_column_mailbox()) {
-                if let Some(entry) = column.selected_entry() {
-                    let id = EntryId::from(entry);
-                    self.selection.insert(id, SelectionType::Cut);
-                }
-            }
+            let entry = columns
+                .get(self.center_column_mailbox())?
+                .loaded()?
+                .selected_entry()?
+                .clone();
+
+            let id = EntryId::from(entry);
+            self.selection.insert(id, SelectionType::Cut);
         } else {
             for (_id, selection) in self.selection.iter_mut() {
                 *selection = SelectionType::Cut;
@@ -607,13 +627,13 @@ impl Model {
 
             let selected_entry = columns
                 .get(&current_mailbox)
-                .and_then(|center| center.selected_entry().cloned());
+                .and_then(|state| state.loaded()?.selected_entry().cloned());
 
             (selected_entry, current_mailbox)
         };
 
         if let Some(entry) = selected_entry {
-            let ColumnStateEntry::Mailbox(mailbox_id) = entry else {
+            let ColumnEntry::Mailbox(mailbox_id) = entry else {
                 warn!("You can only remove a mailbox, if you've selected it.");
                 return None;
             };
@@ -630,14 +650,17 @@ impl Model {
                 }
 
                 let mut columns = columns.lock().unwrap();
-                let column = columns.get_mut(&current_mailbox).unwrap();
-                let pos = column.entries()
-                    .iter()
-                    .position(|entry| matches!(entry, ColumnStateEntry::Mailbox(other) if other == &mailbox_id));
+                let column = columns
+                    .get_mut(&current_mailbox)
+                    .unwrap()
+                    .loaded_mut()
+                    .unwrap();
+                let pos = column.entries().iter().position(
+                    |entry| matches!(entry, ColumnEntry::Mailbox(other) if other == &mailbox_id),
+                );
 
                 if let Some(pos) = pos {
-                    column.entries_mut()
-                        .remove(pos);
+                    column.entries_mut().remove(pos);
                 }
             });
         }
@@ -680,17 +703,17 @@ impl Model {
             let columns = self.columns.lock().unwrap();
             columns
                 .get(self.center_column_mailbox())
-                .and_then(|center| center.selected_entry().cloned())
+                .and_then(|state| state.loaded()?.selected_entry().cloned())
         };
 
         if let Some(entry) = selected_entry {
             match entry {
-                ColumnStateEntry::Mailbox(_) => {}
-                ColumnStateEntry::SingleMail(mail_id)
-                | ColumnStateEntry::CollapsedThread(mail_id, _)
-                | ColumnStateEntry::ThreadStart { mail_id, .. }
-                | ColumnStateEntry::ThreadChild(mail_id, _)
-                | ColumnStateEntry::ThreadEnd(mail_id, _) => {
+                ColumnEntry::Mailbox(_) => {}
+                ColumnEntry::SingleMail(mail_id)
+                | ColumnEntry::CollapsedThread(mail_id, _)
+                | ColumnEntry::ThreadStart { mail_id, .. }
+                | ColumnEntry::ThreadChild(mail_id, _)
+                | ColumnEntry::ThreadEnd(mail_id, _) => {
                     let backend = self.backend.clone();
                     let patch = patch.to_owned();
 
@@ -717,12 +740,12 @@ impl Model {
     }
 }
 
-async fn op_init_mailbox(
+async fn init_mailbox(
     id: ParentMailboxId,
     columns: Columns,
     backend: Arc<Backend>,
 ) -> Result<(), jmap_client::Error> {
-    let mut entries: Vec<ColumnStateEntry> = Vec::new();
+    let mut entries: Vec<ColumnEntry> = Vec::new();
 
     // mailbox children
     {
@@ -733,7 +756,7 @@ async fn op_init_mailbox(
         entries.extend(
             mailboxes
                 .into_iter()
-                .map(|mailbox| ColumnStateEntry::Mailbox(mailbox.id)),
+                .map(|mailbox| ColumnEntry::Mailbox(mailbox.id)),
         );
     }
 
@@ -743,15 +766,14 @@ async fn op_init_mailbox(
             .get_or_request_mailbox_root_mails(parent_mailbox_id)
             .await?;
 
-        entries.extend(collapsed_mails.into_iter().map(ColumnStateEntry::from));
+        entries.extend(collapsed_mails.into_iter().map(ColumnEntry::from));
     }
 
-    let created_column = ColumnState::new(entries);
+    let created_column = Column::new(entries);
     if let Some(first_entry) = created_column.selected_entry() {
         match first_entry {
-            ColumnStateEntry::Mailbox(_) => {}
-            ColumnStateEntry::SingleMail(mail_id)
-            | ColumnStateEntry::CollapsedThread(mail_id, _) => {
+            ColumnEntry::Mailbox(_) => {}
+            ColumnEntry::SingleMail(mail_id) | ColumnEntry::CollapsedThread(mail_id, _) => {
                 match backend.prefetch_mail_attachments(mail_id).await {
                     Ok(()) => {}
                     Err(err) => {
@@ -759,14 +781,16 @@ async fn op_init_mailbox(
                     }
                 }
             }
-            ColumnStateEntry::ThreadStart { .. }
-            | ColumnStateEntry::ThreadChild(_, _)
-            | ColumnStateEntry::ThreadEnd(_, _) => unreachable!("All threads are collapsed"),
+            ColumnEntry::ThreadStart { .. }
+            | ColumnEntry::ThreadChild(_, _)
+            | ColumnEntry::ThreadEnd(_, _) => unreachable!("All threads are collapsed"),
         }
     }
 
     let mut guard = columns.lock().unwrap();
-    guard.insert(id.clone(), created_column);
+    guard
+        .insert(id.clone(), ColumnState::Loaded(created_column))
+        .expect("state was set to `loading` before");
 
     Ok(())
 }
@@ -783,7 +807,9 @@ async fn op_uncollapse_thread(
     let mut columns = columns.lock().unwrap();
     let column = columns
         .get_mut(&Some(column_mailbox))
-        .expect("Column exists");
+        .expect("Column exists")
+        .loaded_mut()
+        .expect("Loaded. How else can we uncollapse a thread?");
 
     debug_assert!(
         thread_mails.len() >= 2,
@@ -798,7 +824,7 @@ async fn op_uncollapse_thread(
         let (first, rest) = thread_mails.split_first().unwrap();
         let (last, inner) = rest.split_last().unwrap();
 
-        let mut new_entries = vec![ColumnStateEntry::ThreadStart {
+        let mut new_entries = vec![ColumnEntry::ThreadStart {
             mail_id: first.id.clone(),
             thread_id: thread_id.clone(),
             collapsed_mail_id: collapsed_mail_id.clone(),
@@ -807,13 +833,10 @@ async fn op_uncollapse_thread(
         new_entries.extend(
             inner
                 .iter()
-                .map(|mail| ColumnStateEntry::ThreadChild(mail.id.clone(), thread_id.clone())),
+                .map(|mail| ColumnEntry::ThreadChild(mail.id.clone(), thread_id.clone())),
         );
 
-        new_entries.push(ColumnStateEntry::ThreadEnd(
-            last.id.clone(),
-            thread_id.clone(),
-        ));
+        new_entries.push(ColumnEntry::ThreadEnd(last.id.clone(), thread_id.clone()));
 
         new_entries
     };
@@ -821,7 +844,7 @@ async fn op_uncollapse_thread(
     let thread_idx = column
             .entries()
             .iter()
-            .position(|entry| matches!(entry, ColumnStateEntry::CollapsedThread(_, entry_thread_id) if entry_thread_id == &thread_id))
+            .position(|entry| matches!(entry, ColumnEntry::CollapsedThread(_, entry_thread_id) if entry_thread_id == &thread_id))
             .expect("Thread still exists in the mailbox.");
 
     column
@@ -843,28 +866,32 @@ fn move_mailbox(
         let columns = columns.lock().unwrap();
         columns
             .get(&column_mailbox)
-            .and_then(|center| center.selected_entry().cloned())
+            .and_then(|state| state.loaded()?.selected_entry().cloned())
     };
 
     if let Some(entry) = selected_entry {
         match entry {
-            ColumnStateEntry::SingleMail(_)
-            | ColumnStateEntry::CollapsedThread(_, _)
-            | ColumnStateEntry::ThreadStart { .. }
-            | ColumnStateEntry::ThreadChild(_, _)
-            | ColumnStateEntry::ThreadEnd(_, _) => {
+            ColumnEntry::SingleMail(_)
+            | ColumnEntry::CollapsedThread(_, _)
+            | ColumnEntry::ThreadStart { .. }
+            | ColumnEntry::ThreadChild(_, _)
+            | ColumnEntry::ThreadEnd(_, _) => {
                 warn!("This action can be only applied to mailboxes.");
             }
-            ColumnStateEntry::Mailbox(mailbox_id) => {
+            ColumnEntry::Mailbox(mailbox_id) => {
                 let (idx, last_mailbox_idx) = {
-                    let columns = columns.lock().unwrap();
-                    let center = columns.get(&column_mailbox).unwrap();
+                    let mut columns = columns.lock().unwrap();
+                    let center = columns
+                        .get_mut(&column_mailbox)
+                        .unwrap()
+                        .loaded_mut()
+                        .unwrap();
 
                     let idx = center.selected_idx().unwrap();
                     let last_mailbox_idx = center
                         .entries()
                         .iter()
-                        .position(|entry| !matches!(entry, ColumnStateEntry::Mailbox(_)))
+                        .position(|entry| !matches!(entry, ColumnEntry::Mailbox(_)))
                         .unwrap_or(center.entries().len() - 1);
 
                     (idx, last_mailbox_idx)
@@ -879,12 +906,13 @@ fn move_mailbox(
                             let columns = columns.lock().unwrap();
                             columns
                                 .get(&column_mailbox)
-                                .map(|center| {
+                                .map(|state| {
+                                    let center = state.loaded().unwrap();
                                     let other_idx = if up { idx - 1 } else { idx + 1 };
                                     center.entries()[other_idx].clone()
                                 })
                                 .map(|entry| {
-                                    let ColumnStateEntry::Mailbox(id) = entry else {
+                                    let ColumnEntry::Mailbox(id) = entry else {
                                         unreachable!("Only mailboxes can be above!")
                                     };
                                     id
@@ -915,15 +943,16 @@ fn move_mailbox(
                             }
 
                             let mut columns = columns.lock().unwrap();
-                            if let Some(column) = columns.get_mut(&column_mailbox) {
+                            if let Some(state) = columns.get_mut(&column_mailbox) {
+                                let column = state.loaded_mut().unwrap();
                                 let entries = column.entries_mut();
 
                                 let pos1 = entries
                                     .iter()
-                                    .position(|entry| matches!(entry, ColumnStateEntry::Mailbox(id) if id == &update1.id)).unwrap();
+                                    .position(|entry| matches!(entry, ColumnEntry::Mailbox(id) if id == &update1.id)).unwrap();
                                 let pos2 = entries
                                     .iter()
-                                    .position(|entry| matches!(entry, ColumnStateEntry::Mailbox(id) if id == &update2.id)).unwrap();
+                                    .position(|entry| matches!(entry, ColumnEntry::Mailbox(id) if id == &update2.id)).unwrap();
 
                                 entries.swap(pos1, pos2);
 
@@ -941,7 +970,7 @@ fn move_mailbox(
 }
 
 async fn init_mailfs(columns: Columns, backend: Arc<Backend>) {
-    match op_init_mailbox(TOP_PARENT_MAILBOX_ID, columns.clone(), backend.clone()).await {
+    match init_mailbox(TOP_PARENT_MAILBOX_ID, columns.clone(), backend.clone()).await {
         Ok(()) => {}
         Err(err) => {
             error!("Couldn't initialise root mailbox:\n{err}");
@@ -953,35 +982,37 @@ async fn init_mailfs(columns: Columns, backend: Arc<Backend>) {
         let columns = columns.lock().unwrap();
         columns
             .get(&TOP_PARENT_MAILBOX_ID)
-            .unwrap()
+            .expect("Just added root mailbox")
+            .loaded()
+            .expect("`init_mailbox` should've loaded it")
             .selected_entry()
             .cloned()
     };
 
     if let Some(entry) = selected_entry {
         match entry {
-            ColumnStateEntry::Mailbox(id) => {
-                let right_column_not_loaded = {
-                    let columns = columns.lock().unwrap();
-                    !columns.contains_key(&Some(id.clone()))
-                };
+            ColumnEntry::Mailbox(id) => {
+                {
+                    let mut columns = columns.lock().unwrap();
+                    debug_assert!(
+                        columns
+                            .insert(Some(id.clone()), ColumnState::loading())
+                            .is_none()
+                    );
+                }
 
-                if right_column_not_loaded {
-                    match op_init_mailbox(Some(id), columns, backend).await {
-                        Ok(()) => {}
-                        Err(err) => {
-                            error!(
-                                "Couldn't initialize mailbox (the column will be empty):\n{err}"
-                            );
-                        }
+                match init_mailbox(Some(id), columns, backend).await {
+                    Ok(()) => {}
+                    Err(err) => {
+                        error!("Couldn't initialize mailbox (the column will be empty):\n{err}");
                     }
                 }
             }
-            ColumnStateEntry::SingleMail(_)
-            | ColumnStateEntry::CollapsedThread(_, _)
-            | ColumnStateEntry::ThreadStart { .. }
-            | ColumnStateEntry::ThreadChild(_, _)
-            | ColumnStateEntry::ThreadEnd(_, _) => {
+            ColumnEntry::SingleMail(_)
+            | ColumnEntry::CollapsedThread(_, _)
+            | ColumnEntry::ThreadStart { .. }
+            | ColumnEntry::ThreadChild(_, _)
+            | ColumnEntry::ThreadEnd(_, _) => {
                 unreachable!("Root directory can't have mails")
             }
         }
@@ -996,13 +1027,13 @@ async fn create_new_mailbox(
 ) {
     let new_mailbox = {
         let sort_order = {
-            let columns = columns.lock().unwrap();
-            let center = columns.get(&column_id).unwrap();
+            let mut columns = columns.lock().unwrap();
+            let center = columns.get_mut(&column_id).unwrap().loaded_mut().unwrap();
             center
                 .entries()
                 .iter()
                 .map_while(|entry| {
-                    if let ColumnStateEntry::Mailbox(id) = entry {
+                    if let ColumnEntry::Mailbox(id) = entry {
                         let mailbox = backend.get_mailbox_data(id).unwrap();
                         Some(mailbox)
                     } else {
@@ -1033,13 +1064,13 @@ async fn create_new_mailbox(
     };
 
     let mut columns = columns.lock().unwrap();
-    let center = columns.get_mut(&column_id).unwrap();
+    let center = columns.get_mut(&column_id).unwrap().loaded_mut().unwrap();
     let new_pos = center
         .entries()
         .iter()
-        .take_while(|entry| matches!(entry, ColumnStateEntry::Mailbox(_)))
+        .take_while(|entry| matches!(entry, ColumnEntry::Mailbox(_)))
         .position(|entry| {
-            if let ColumnStateEntry::Mailbox(other_id) = entry {
+            if let ColumnEntry::Mailbox(other_id) = entry {
                 let mailbox = backend.get_mailbox_data(other_id).unwrap();
                 mailbox.sort_order > new_mailbox.sort_order.unwrap()
             } else {
@@ -1050,11 +1081,11 @@ async fn create_new_mailbox(
             center
                 .entries()
                 .iter()
-                .position(|entry| !matches!(entry, ColumnStateEntry::Mailbox(_)))
+                .position(|entry| !matches!(entry, ColumnEntry::Mailbox(_)))
                 .unwrap_or(center.entries().len()),
         );
 
     center
         .entries_mut()
-        .insert(new_pos, ColumnStateEntry::Mailbox(new_mailbox_id));
+        .insert(new_pos, ColumnEntry::Mailbox(new_mailbox_id));
 }

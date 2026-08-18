@@ -1,9 +1,9 @@
-mod column_data;
+mod column_display;
 mod mail_preview;
 // mod render_data;
 mod selection_type;
 
-pub use column_data::{ColumnDisplay, ColumnDisplayEntryData, MailEntryType};
+pub use column_display::{ColumnDisplay, ColumnDisplayEntryData, MailEntryType};
 pub use mail_preview::MailPreview;
 use throbber_widgets_tui::{Throbber, ThrobberState};
 
@@ -69,14 +69,15 @@ impl StatefulWidget for Mailfs {
                 render_border_line(border_line1, buf, None);
             }
             Some(left_mailbox) => {
-                let column = columns.get_mut(&left_mailbox).unwrap();
-                let column_display =
-                    ColumnDisplay::new(column, &model.selection, model.backend.clone());
-
-                render_border_line(border_line1, buf, Some(&column_display));
-                render_column(left_area, buf, column_display);
+                let column = ColumnDisplay::new(
+                    columns.get_mut(&left_mailbox).unwrap(),
+                    &model.selection,
+                    model.backend.clone(),
+                );
+                render_border_line(border_line1, buf, Some(&column));
+                render_column(left_area, buf, column);
             }
-        }
+        };
 
         match columns.get_mut(model.center_column_mailbox()) {
             None => {
@@ -119,123 +120,150 @@ impl StatefulWidget for Mailfs {
     }
 }
 
-fn render_column(area: Rect, buf: &mut Buffer, data: ColumnDisplay) {
-    let widths = [
-        Constraint::Length(1),
-        Constraint::Length(1),
-        Constraint::Fill(1),
-        Constraint::Fill(1),
-        Constraint::Fill(1),
-    ];
+fn render_column(area: Rect, buf: &mut Buffer, column: ColumnDisplay) {
+    match column {
+        ColumnDisplay::Loading(throbber) => {
+            throbber.calc_next();
 
-    let rows: Vec<Row<'_>> = data
-        .entries
-        .iter()
-        .map(|entry| {
-            let mut row = Vec::with_capacity(widths.len());
+            StatefulWidget::render(
+                Throbber::default()
+                    .label("Waiting for server response of mailbox...")
+                    .throbber_set(throbber_widgets_tui::BRAILLE_SIX),
+                area,
+                buf,
+                throbber,
+            )
+        }
+        ColumnDisplay::Loaded { entries, state } => {
+            let widths = [
+                Constraint::Length(1),
+                Constraint::Length(1),
+                Constraint::Fill(1),
+                Constraint::Fill(1),
+                Constraint::Fill(1),
+            ];
 
-            match &entry.data {
-                ColumnDisplayEntryData::Mailbox {
-                    name,
-                    unread_mails,
-                    sort_order,
-                } => {
-                    // ⏺
-                    if *unread_mails > 0 {
-                        row.push(Cell::from(MAIL_UNREAD_SYMBOL).style(Style::new().fg(BLUE.c800)));
-                    } else {
-                        row.push(PLACEHOLDER.into());
-                    };
+            let rows: Vec<Row<'_>> = entries
+                .iter()
+                .map(|entry| {
+                    let mut row = Vec::with_capacity(widths.len());
 
-                    // 🖿
-                    row.push(Cell::from(FOLDER).style(Style::new().fg(BLUE.c500)));
+                    match &entry.data {
+                        ColumnDisplayEntryData::Mailbox {
+                            name,
+                            unread_mails,
+                            sort_order,
+                        } => {
+                            // ⏺
+                            if *unread_mails > 0 {
+                                row.push(
+                                    Cell::from(MAIL_UNREAD_SYMBOL)
+                                        .style(Style::new().fg(BLUE.c800)),
+                                );
+                            } else {
+                                row.push(PLACEHOLDER.into());
+                            };
 
-                    // name
-                    row.push(Cell::from(name.clone()).style(Style::new().fg(LIGHT_BLUE.c600)));
+                            // 🖿
+                            row.push(Cell::from(FOLDER).style(Style::new().fg(BLUE.c500)));
 
-                    // unread_mails
-                    {
-                        let style = if *unread_mails == 0 {
-                            Style::new().fg(GRAY.c600)
-                        } else {
-                            Style::new().fg(GREEN.c500)
-                        };
+                            // name
+                            row.push(
+                                Cell::from(name.clone()).style(Style::new().fg(LIGHT_BLUE.c600)),
+                            );
 
-                        row.push(Cell::from(format!("{}", unread_mails)).style(style));
-                    }
+                            // unread_mails
+                            {
+                                let style = if *unread_mails == 0 {
+                                    Style::new().fg(GRAY.c600)
+                                } else {
+                                    Style::new().fg(GREEN.c500)
+                                };
 
-                    // sort-order
-                    row.push(Cell::from(format!("{}", sort_order)));
-                }
-                ColumnDisplayEntryData::Mail {
-                    ty,
-                    from,
-                    subject,
-                    received_at,
-                    has_attachment,
-                    is_unread,
-                } => {
-                    // ⏺
-                    if *is_unread {
-                        row.push(Cell::from(MAIL_UNREAD_SYMBOL).style(Style::new().fg(BLUE.c800)));
-                    } else {
-                        row.push(PLACEHOLDER.into());
-                    };
+                                row.push(Cell::from(format!("{}", unread_mails)).style(style));
+                            }
 
-                    // ▸/▾
-                    match ty {
-                        MailEntryType::Single
-                        | MailEntryType::ThreadChild
-                        | MailEntryType::ThreadEnd => {
-                            row.push(Cell::from(PLACEHOLDER));
+                            // sort-order
+                            row.push(Cell::from(format!("{}", sort_order)));
                         }
-                        MailEntryType::ThreadCollapsed => row.push(Cell::from(THREAD_FOLDED)),
-                        MailEntryType::ThreadStart => row.push(Cell::from(THREAD_UNFOLDED)),
+                        ColumnDisplayEntryData::Mail {
+                            ty,
+                            from,
+                            subject,
+                            received_at,
+                            has_attachment,
+                            is_unread,
+                        } => {
+                            // ⏺
+                            if *is_unread {
+                                row.push(
+                                    Cell::from(MAIL_UNREAD_SYMBOL)
+                                        .style(Style::new().fg(BLUE.c800)),
+                                );
+                            } else {
+                                row.push(PLACEHOLDER.into());
+                            };
+
+                            // ▸/▾
+                            match ty {
+                                MailEntryType::Single
+                                | MailEntryType::ThreadChild
+                                | MailEntryType::ThreadEnd => {
+                                    row.push(Cell::from(PLACEHOLDER));
+                                }
+                                MailEntryType::ThreadCollapsed => {
+                                    row.push(Cell::from(THREAD_FOLDED))
+                                }
+                                MailEntryType::ThreadStart => row.push(Cell::from(THREAD_UNFOLDED)),
+                            };
+
+                            // Subject
+                            {
+                                // 📎
+                                let subject = if *has_attachment {
+                                    format!("{} {}", ATTACHMENT, subject)
+                                } else {
+                                    subject.to_string()
+                                };
+
+                                let subject = match ty {
+                                    MailEntryType::Single
+                                    | MailEntryType::ThreadCollapsed
+                                    | MailEntryType::ThreadStart => subject,
+                                    MailEntryType::ThreadChild => {
+                                        format!("{} {}", THREAD_BRANCH, subject)
+                                    }
+                                    MailEntryType::ThreadEnd => {
+                                        format!("{} {}", THREAD_LAST, subject)
+                                    }
+                                };
+
+                                row.push(Cell::from(subject).style(Style::new().fg(WHITE)));
+                            }
+
+                            // from
+                            row.push(Cell::from(from.clone()).style(Style::new().fg(CYAN.c800)));
+
+                            // received at
+                            row.push(
+                                Cell::from(received_at.clone()).style(Style::new().fg(PINK.c800)),
+                            );
+                        }
                     };
 
-                    // Subject
-                    {
-                        // 📎
-                        let subject = if *has_attachment {
-                            format!("{} {}", ATTACHMENT, subject)
-                        } else {
-                            subject.to_string()
-                        };
+                    Row::new(row)
+                })
+                .collect();
 
-                        let subject = match ty {
-                            MailEntryType::Single
-                            | MailEntryType::ThreadCollapsed
-                            | MailEntryType::ThreadStart => subject,
-                            MailEntryType::ThreadChild => {
-                                format!("{} {}", THREAD_BRANCH, subject)
-                            }
-                            MailEntryType::ThreadEnd => {
-                                format!("{} {}", THREAD_LAST, subject)
-                            }
-                        };
-
-                        row.push(Cell::from(subject).style(Style::new().fg(WHITE)));
-                    }
-
-                    // from
-                    row.push(Cell::from(from.clone()).style(Style::new().fg(CYAN.c800)));
-
-                    // received at
-                    row.push(Cell::from(received_at.clone()).style(Style::new().fg(PINK.c800)));
-                }
-            };
-
-            Row::new(row)
-        })
-        .collect();
-
-    StatefulWidget::render(
-        Table::new(rows, widths)
-            .row_highlight_style(Style::new().bg(LIGHT_BLUE.c500).fg(GRAY.c900)),
-        area,
-        buf,
-        data.state,
-    );
+            StatefulWidget::render(
+                Table::new(rows, widths)
+                    .row_highlight_style(Style::new().bg(LIGHT_BLUE.c500).fg(GRAY.c900)),
+                area,
+                buf,
+                state,
+            );
+        }
+    }
 }
 
 fn render_mail_preview(
@@ -377,12 +405,13 @@ fn render_headers(area: Rect, buf: &mut Buffer, headers: &[(&'static str, &str)]
     Widget::render(table, area, buf);
 }
 
-fn render_border_line(area: Rect, buf: &mut Buffer, column: Option<&ColumnDisplay>) {
-    match column {
-        None => Widget::render(List::new(vec![VERTICAL; area.height as usize]), area, buf),
-        Some(column) => {
-            let mut lines: Vec<ListItem> = column
-                .entries
+fn render_border_line(area: Rect, buf: &mut Buffer, state: Option<&ColumnDisplay>) {
+    match state {
+        None | Some(ColumnDisplay::Loading(_)) => {
+            Widget::render(List::new(vec![VERTICAL; area.height as usize]), area, buf)
+        }
+        Some(ColumnDisplay::Loaded { entries, .. }) => {
+            let mut lines: Vec<ListItem> = entries
                 .iter()
                 .map(|entry| {
                     let style = entry
