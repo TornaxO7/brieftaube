@@ -2,7 +2,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use super::MailDisplayAttachment;
 use crate::backend::{
-    Backend, MailId,
+    Backend,
     mails::types::{
         MailData, MailDataHtmlBody, MailDataTextBody, MailKeyword, addresses_to_string,
     },

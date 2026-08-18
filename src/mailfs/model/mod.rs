@@ -746,7 +746,7 @@ async fn op_init_mailbox(
         entries.extend(collapsed_mails.into_iter().map(ColumnStateEntry::from));
     }
 
-    let created_column = ColumnState::new(id.clone(), entries);
+    let created_column = ColumnState::new(entries);
     if let Some(first_entry) = created_column.selected_entry() {
         match first_entry {
             ColumnStateEntry::Mailbox(_) => {}

@@ -1,16 +1,11 @@
 use crate::backend::{
-    mailbox::types::{MailboxId, ParentMailboxId},
-    mails::types::MailId,
-    threads::types::ThreadId,
-    types::CollapsedMail,
+    mailbox::types::MailboxId, mails::types::MailId, threads::types::ThreadId, types::CollapsedMail,
 };
 use ratatui::widgets::TableState;
 
 /// Internal representation of a column
 #[derive(Clone, Debug)]
 pub struct ColumnState {
-    /// The mailbox it represents
-    mailbox: Option<MailboxId>,
     /// The entries within the column
     entries: Vec<ColumnStateEntry>,
     /// The table state
@@ -18,18 +13,14 @@ pub struct ColumnState {
 }
 
 impl ColumnState {
-    pub fn new(mailbox: ParentMailboxId, entries: Vec<ColumnStateEntry>) -> Self {
+    pub fn new(entries: Vec<ColumnStateEntry>) -> Self {
         let state = if entries.is_empty() {
             TableState::new()
         } else {
             TableState::new().with_selected(0)
         };
 
-        Self {
-            mailbox,
-            entries,
-            state,
-        }
+        Self { entries, state }
     }
 
     pub fn selected_idx(&self) -> Option<usize> {
@@ -52,10 +43,6 @@ impl ColumnState {
 
     pub fn entries_mut(&mut self) -> &mut Vec<ColumnStateEntry> {
         &mut self.entries
-    }
-
-    pub fn mailbox(&self) -> &ParentMailboxId {
-        &self.mailbox
     }
 }
 
