@@ -3,6 +3,7 @@ mod selection;
 
 pub use column_state::{ColumnState, ColumnStateEntry};
 pub use selection::{EntryId, SelectionType};
+use throbber_widgets_tui::ThrobberState;
 
 use super::UserAction;
 use crate::{
@@ -47,6 +48,7 @@ pub struct Model {
     task_manager: Rc<TaskManager>,
     overlay_value: Option<OverlayValue>,
 
+    pub throbbers: HashMap<MailId, ThrobberState>,
     pub backend: Arc<Backend>,
     pub selection: HashMap<EntryId, SelectionType>,
     pub navigation_stack: Vec<ParentMailboxId>,
@@ -66,6 +68,7 @@ impl Model {
         Self {
             columns,
             overlay_value: None,
+            throbbers: HashMap::new(),
             navigation_stack: vec![TOP_PARENT_MAILBOX_ID],
             selection: HashMap::new(),
             task_manager,
@@ -216,7 +219,7 @@ impl<'a> Model {
             | ColumnStateEntry::ThreadEnd(mail_id, _) => {
                 let misses_attachments = {
                     let mail = self.backend.get_mail(&mail_id).unwrap();
-                    mail.attachments.get().is_none()
+                    mail.attachments.loaded().is_none()
                 };
 
                 tracing::debug!("Hello: {}", misses_attachments);

@@ -9,7 +9,7 @@ use throbber_widgets_tui::Throbber;
 
 use super::Model;
 use crate::{
-    backend::types::Loadable,
+    backend::types::RemoteData,
     mailfs::{model::RightColumn, widget::selection_type::DisplaySelectionType},
 };
 use ratatui::{
@@ -278,12 +278,12 @@ fn render_mail_preview(area: Rect, buf: &mut Buffer, mail: &mut MailPreview) {
         ];
 
         match attachments {
-            None | Some(Loadable::Loading(_)) => {
+            RemoteData::NotRequested | RemoteData::Requested { .. } => {
                 constraints.push(Constraint::Length(3));
                 let [header, preview, attachments_area] = Layout::vertical(constraints).areas(area);
                 (header, preview, Some(attachments_area))
             }
-            Some(Loadable::Loaded(attachments)) => {
+            RemoteData::Loaded(attachments) => {
                 if attachments.is_empty() {
                     let [header, preview] = Layout::vertical(constraints).areas(area);
                     (header, preview, None)
@@ -326,7 +326,11 @@ fn render_mail_preview(area: Rect, buf: &mut Buffer, mail: &mut MailPreview) {
     if let Some(area) = attachments_area {
         let block = Block::bordered().title("Attachments");
         match attachments {
-            Some(Loadable::Loading(state)) => {
+            RemoteData::NotRequested => {
+                Widget::render(Paragraph::new("Not requested yet").block(block), area, buf)
+            }
+            RemoteData::Requested { .. } => {
+                // TODO: HERE
                 state.calc_next();
                 StatefulWidget::render(
                     Throbber::default()
@@ -338,7 +342,7 @@ fn render_mail_preview(area: Rect, buf: &mut Buffer, mail: &mut MailPreview) {
                     state,
                 );
             }
-            Some(Loadable::Loaded(attachments)) => {
+            RemoteData::Loaded(attachments) => {
                 let rows: Vec<Row> = attachments
                     .iter()
                     .map(|attachment| {
@@ -355,7 +359,6 @@ fn render_mail_preview(area: Rect, buf: &mut Buffer, mail: &mut MailPreview) {
 
                 Widget::render(Table::new(rows, widths).block(block), area, buf);
             }
-            None => Widget::render(Paragraph::new("Not requested yet").block(block), area, buf),
         };
     }
 }

@@ -13,6 +13,7 @@ use crate::{
 use arboard::Clipboard;
 use ratatui::widgets::TableState;
 use std::{collections::HashMap, rc::Rc, str::FromStr, sync::Arc};
+use throbber_widgets_tui::ThrobberState;
 use tracing::{error, warn};
 
 pub use action::Action;
@@ -34,6 +35,7 @@ enum Navigate {
 pub struct Model {
     pub state: TableState,
     pub keybindings: KeybindManager<Action>,
+    pub throbber: ThrobberState,
 
     id: MailId,
     backend: Arc<Backend>,
@@ -46,6 +48,7 @@ pub struct Model {
 impl Model {
     pub fn new(id: MailId, backend: Arc<Backend>, task_manager: Rc<TaskManager>) -> Self {
         Self {
+            throbber: ThrobberState::default(),
             state: TableState::new(),
             expected_overlay: None,
             navigate: None,
@@ -175,12 +178,7 @@ impl Model {
         let attachment_idx = self.state.selected()?;
         let mail = self.backend.get_mail(&self.id)?;
 
-        let attachment = mail
-            .attachments
-            .get()?
-            .loaded()?
-            .get(attachment_idx)?
-            .clone();
+        let attachment = mail.attachments.loaded()?.get(attachment_idx)?.clone();
 
         let backend = self.backend.clone();
         self.task_manager.spawn(async move {
@@ -198,13 +196,8 @@ impl Model {
         let mail = self.backend.get_mail(&self.id).unwrap();
         let attachment_idx = self.state.selected()?;
 
-        let Some(attachments) = mail.attachments.get() else {
+        let Some(attachments) = mail.attachments.loaded() else {
             warn!("Mail attachments haven't been loaded yet.");
-            return None;
-        };
-
-        let Some(attachments) = attachments.loaded() else {
-            warn!("Mail attachments haven't arrived yet.");
             return None;
         };
 

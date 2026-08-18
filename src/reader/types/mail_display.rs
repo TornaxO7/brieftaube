@@ -2,14 +2,15 @@ use std::{collections::HashSet, sync::Arc};
 
 use super::MailDisplayAttachment;
 use crate::backend::{
-    Backend,
+    Backend, MailId,
     mails::types::{
         MailData, MailDataHtmlBody, MailDataTextBody, MailKeyword, addresses_to_string,
     },
-    types::Loadable,
+    types::RemoteData,
 };
 
 pub struct MailDisplay {
+    pub id: MailId,
     pub from: String,
     pub to: String,
     pub cc: String,
@@ -17,14 +18,15 @@ pub struct MailDisplay {
     pub received_at: String,
     pub keywords: String,
 
-    pub html_body: Option<Loadable<MailDataHtmlBody>>,
-    pub text_body: Option<Loadable<MailDataTextBody>>,
-    pub attachments: Option<Loadable<Vec<MailDisplayAttachment>>>,
+    pub html_body: RemoteData<MailDataHtmlBody>,
+    pub text_body: RemoteData<MailDataTextBody>,
+    pub attachments: RemoteData<Vec<MailDisplayAttachment>>,
 }
 
 impl MailDisplay {
     pub fn new(mail: MailData, backend: Arc<Backend>) -> Self {
         Self {
+            id: mail.id,
             from: addresses_to_string(&mail.from),
             to: addresses_to_string(&mail.to),
             cc: addresses_to_string(&mail.cc),
@@ -32,18 +34,14 @@ impl MailDisplay {
             received_at: mail.received_at.format("%A, %d %B %Y %T").to_string(),
 
             keywords: convert_keywords_to_string(&mail.keywords),
-            html_body: mail.html_body.get().cloned(),
-            text_body: mail.text_body.get().cloned(),
+            html_body: mail.html_body,
+            text_body: mail.text_body,
             attachments: {
-                mail.attachments.get().cloned().map(|attachments| {
-                    attachments.map(|attachments| {
-                        attachments
-                            .into_iter()
-                            .map(|attachment| {
-                                MailDisplayAttachment::new(attachment, backend.clone())
-                            })
-                            .collect()
-                    })
+                mail.attachments.map(|attachments| {
+                    attachments
+                        .into_iter()
+                        .map(|attachment| MailDisplayAttachment::new(attachment, backend.clone()))
+                        .collect()
                 })
             },
         }

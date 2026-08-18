@@ -55,7 +55,7 @@ fn render_viewer(area: Rect, buf: &mut Buffer, model: &mut super::Model) {
 
         Mode::Text => StatefulWidget::render(
             TextReader {
-                text_body: &mut mail.text_body,
+                text_body: &mail.text_body,
             },
             area,
             buf,
