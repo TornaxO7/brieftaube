@@ -1,4 +1,4 @@
-use crate::backend::{MailDataTextBody, types::Loadable};
+use crate::backend::{MailDataTextBody, types::RemoteData};
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -8,7 +8,7 @@ use ratatui::{
 use throbber_widgets_tui::Throbber;
 
 pub struct TextReader<'a> {
-    pub text_body: &'a mut Option<Loadable<MailDataTextBody>>,
+    pub text_body: &'a RemoteData<MailDataTextBody>,
 }
 
 impl<'a> StatefulWidget for TextReader<'a> {
@@ -16,20 +16,20 @@ impl<'a> StatefulWidget for TextReader<'a> {
 
     fn render(self, area: Rect, buf: &mut Buffer, model: &mut Self::State) {
         match self.text_body {
-            None => {
+            RemoteData::NotRequested => {
                 Widget::render(Paragraph::new("Not requested yet."), area, buf);
             }
-            Some(Loadable::Loading(state)) => {
+            RemoteData::Requested { .. } => {
                 StatefulWidget::render(
                     Throbber::default()
                         .label("Fetching text body part of mail...")
                         .throbber_set(throbber_widgets_tui::BRAILLE_SIX),
                     area,
                     buf,
-                    state,
+                    &mut model.throbber,
                 );
             }
-            Some(Loadable::Loaded(text)) => {
+            RemoteData::Loaded(text) => {
                 let text = Text::from(text.0.as_str());
 
                 let (content_area, vertical_scrollbar_area, horizontal_scrollbar_area) =

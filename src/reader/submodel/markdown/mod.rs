@@ -13,6 +13,7 @@ use crate::{
 };
 use ratatui::widgets::ScrollbarState;
 use std::{collections::HashMap, rc::Rc, str::FromStr, sync::Arc};
+use throbber_widgets_tui::ThrobberState;
 use tracing::error;
 
 pub use action::Action;
@@ -29,6 +30,7 @@ pub struct Model {
 
     pub vertical: ScrollbarState,
     pub horizontal: ScrollbarState,
+    pub throbber: ThrobberState,
 
     pub keybindings: KeybindManager<Action>,
 
@@ -47,6 +49,7 @@ impl Model {
             horizontal: ScrollbarState::default(),
             expected_overlay: None,
             scroll_action: None,
+            throbber: ThrobberState::default(),
 
             keybindings: KeybindManager::new(HashMap::from([
                 ("gg", Action::ScrollToTop),
@@ -132,7 +135,7 @@ impl SubModel for Model {
     fn request_if_missing(&self) {
         let mail = self.backend.get_mail(&self.id).unwrap();
 
-        if mail.html_body.get().is_none() {
+        if mail.html_body.loaded().is_none() {
             let id = self.id.clone();
             let backend = self.backend.clone();
             self.task_manager.spawn(async move {

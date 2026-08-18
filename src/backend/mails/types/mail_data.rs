@@ -1,10 +1,12 @@
 use super::{MailAddress, MailKeyword};
 use crate::backend::{
-    mailbox::types::MailboxId, mails::types::MailId, threads::types::ThreadId, types::Loadable,
+    MailBodyType, mailbox::types::MailboxId, mails::types::MailId, threads::types::ThreadId,
+    types::RemoteData,
 };
 use chrono::{DateTime, Local, Utc};
 use jmap_client::email::{Email, EmailBodyPart, Property};
-use std::{cell::OnceCell, collections::HashSet};
+use std::collections::HashSet;
+use tokio::sync::watch;
 
 #[derive(Debug, Clone, Default)]
 pub struct MailData {
@@ -20,9 +22,9 @@ pub struct MailData {
     pub has_attachment: bool,
     pub mailbox_ids: HashSet<MailboxId>,
 
-    pub text_body: OnceCell<Loadable<MailDataTextBody>>,
-    pub html_body: OnceCell<Loadable<MailDataHtmlBody>>,
-    pub attachments: OnceCell<Loadable<Vec<MailDataAttachment>>>,
+    pub text_body: RemoteData<MailDataTextBody>,
+    pub html_body: RemoteData<MailDataHtmlBody>,
+    pub attachments: RemoteData<Vec<MailDataAttachment>>,
 }
 
 impl MailData {
@@ -39,6 +41,24 @@ impl MailData {
         Property::HasAttachment,
         Property::MailboxIds,
     ];
+
+    pub fn get_body(&self, ty: MailBodyType) -> RemoteData<&str> {
+        match ty {
+            MailBodyType::Text => self.text_body.as_ref().map(|body| body.0.as_str()),
+            MailBodyType::Html => self.html_body.as_ref().map(|body| body.0.as_str()),
+        }
+    }
+
+    pub fn init_body(&mut self, ty: MailBodyType, rx: watch::Receiver<()>) {
+        match ty {
+            MailBodyType::Text => self.text_body = RemoteData::requesting(rx),
+            MailBodyType::Html => self.html_body = RemoteData::requesting(rx),
+        }
+    }
+
+    pub fn init_attachments(&mut self, notifier: watch::Receiver<()>) {
+        self.attachments = RemoteData::Requested { notifier: notifier };
+    }
 }
 
 impl From<jmap_client::email::Email> for MailData {
@@ -71,12 +91,18 @@ impl From<jmap_client::email::Email> for MailData {
                 .map(|id| MailboxId(id.to_owned()))
                 .collect(),
 
-            text_body: OnceCell::new(),
-            html_body: OnceCell::new(),
+            text_body: match MailDataTextBody::new(&mail) {
+                Some(text) => RemoteData::Loaded(text),
+                None => RemoteData::NotRequested,
+            },
+            html_body: match MailDataHtmlBody::new(&mail) {
+                Some(html) => RemoteData::Loaded(html),
+                None => RemoteData::NotRequested,
+            },
             attachments: if !mail.has_attachment() {
-                OnceCell::from(Loadable::Loaded(vec![]))
+                RemoteData::Loaded(vec![])
             } else {
-                OnceCell::new()
+                RemoteData::NotRequested
             },
         }
     }
@@ -86,11 +112,11 @@ impl From<jmap_client::email::Email> for MailData {
 pub struct MailDataTextBody(pub String);
 
 impl MailDataTextBody {
-    pub fn new(mail: &Email) -> Self {
-        let parts = mail.text_body().unwrap();
-        let content = join_body_values(mail, parts).unwrap();
+    pub fn new(mail: &Email) -> Option<Self> {
+        let parts = mail.text_body()?;
+        let content = join_body_values(mail, parts)?;
 
-        Self(content)
+        Some(Self(content))
     }
 }
 
@@ -98,11 +124,11 @@ impl MailDataTextBody {
 pub struct MailDataHtmlBody(pub String);
 
 impl MailDataHtmlBody {
-    pub fn new(mail: &Email) -> Self {
-        let parts = mail.html_body().unwrap();
-        let content = join_body_values(mail, parts).unwrap();
+    pub fn new(mail: &Email) -> Option<Self> {
+        let parts = mail.html_body()?;
+        let content = join_body_values(mail, parts)?;
 
-        Self(content)
+        Some(Self(content))
     }
 }
 
@@ -117,10 +143,10 @@ pub struct MailDataAttachment {
 impl From<&EmailBodyPart> for MailDataAttachment {
     fn from(part: &EmailBodyPart) -> Self {
         Self {
-            name: part.name().unwrap().to_string(),
-            content_type: part.content_type().unwrap().to_string(),
+            name: part.name().unwrap().to_owned(),
+            content_type: part.content_type().unwrap().to_owned(),
             size: part.size(),
-            blob_id: part.blob_id().unwrap().to_string(),
+            blob_id: part.blob_id().unwrap().to_owned(),
         }
     }
 }
