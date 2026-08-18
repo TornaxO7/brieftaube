@@ -10,7 +10,6 @@ use crate::backend::{
 };
 
 pub struct MailDisplay {
-    pub id: MailId,
     pub from: String,
     pub to: String,
     pub cc: String,
@@ -26,7 +25,6 @@ pub struct MailDisplay {
 impl MailDisplay {
     pub fn new(mail: MailData, backend: Arc<Backend>) -> Self {
         Self {
-            id: mail.id,
             from: addresses_to_string(&mail.from),
             to: addresses_to_string(&mail.to),
             cc: addresses_to_string(&mail.cc),

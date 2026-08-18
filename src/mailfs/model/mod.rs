@@ -1,10 +1,6 @@
 mod column_state;
 mod selection;
 
-pub use column_state::{ColumnState, ColumnStateEntry};
-pub use selection::{EntryId, SelectionType};
-use throbber_widgets_tui::ThrobberState;
-
 use super::UserAction;
 use crate::{
     backend::{
@@ -27,7 +23,11 @@ use std::{
     str::FromStr,
     sync::{Arc, Mutex},
 };
+use throbber_widgets_tui::ThrobberState;
 use tracing::{debug, error, warn};
+
+pub use column_state::{ColumnState, ColumnStateEntry};
+pub use selection::{EntryId, SelectionType};
 
 const NORMALIZE_SORT_ORDER_SIZE: u32 = 32;
 
@@ -48,7 +48,7 @@ pub struct Model {
     task_manager: Rc<TaskManager>,
     overlay_value: Option<OverlayValue>,
 
-    pub throbbers: HashMap<MailId, ThrobberState>,
+    pub throbber: ThrobberState,
     pub backend: Arc<Backend>,
     pub selection: HashMap<EntryId, SelectionType>,
     pub navigation_stack: Vec<ParentMailboxId>,
@@ -68,7 +68,7 @@ impl Model {
         Self {
             columns,
             overlay_value: None,
-            throbbers: HashMap::new(),
+            throbber: ThrobberState::default(),
             navigation_stack: vec![TOP_PARENT_MAILBOX_ID],
             selection: HashMap::new(),
             task_manager,

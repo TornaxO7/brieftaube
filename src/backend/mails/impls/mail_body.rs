@@ -70,7 +70,7 @@ impl Backend {
                     }
                 };
 
-                sender.send(()).unwrap();
+                let _ = sender.send(());
 
                 Ok(body)
             }

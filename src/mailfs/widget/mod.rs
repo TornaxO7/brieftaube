@@ -5,7 +5,7 @@ mod selection_type;
 
 pub use column_data::{ColumnDisplay, ColumnDisplayEntryData, MailEntryType};
 pub use mail_preview::MailPreview;
-use throbber_widgets_tui::Throbber;
+use throbber_widgets_tui::{Throbber, ThrobberState};
 
 use super::Model;
 use crate::{
@@ -109,7 +109,7 @@ impl StatefulWidget for Mailfs {
 
                 if let Some(mail) = model.backend.get_mail(&id) {
                     let mut preview = mail.into();
-                    render_mail_preview(right_area, buf, &mut preview);
+                    render_mail_preview(right_area, buf, &mut preview, &mut model.throbber);
                 }
             }
             None => {
@@ -258,7 +258,12 @@ fn render_column(area: Rect, buf: &mut Buffer, data: ColumnDisplay) {
     );
 }
 
-fn render_mail_preview(area: Rect, buf: &mut Buffer, mail: &mut MailPreview) {
+fn render_mail_preview(
+    area: Rect,
+    buf: &mut Buffer,
+    mail: &mut MailPreview,
+    throbber: &mut ThrobberState,
+) {
     const HEADERS: [&str; 5] = ["Received at:", "From:", "To:", "Subject:", "Cc:"];
 
     let MailPreview {
@@ -330,8 +335,7 @@ fn render_mail_preview(area: Rect, buf: &mut Buffer, mail: &mut MailPreview) {
                 Widget::render(Paragraph::new("Not requested yet").block(block), area, buf)
             }
             RemoteData::Requested { .. } => {
-                // TODO: HERE
-                state.calc_next();
+                throbber.calc_next();
                 StatefulWidget::render(
                     Throbber::default()
                         .label("Fetching mail attachments...")
@@ -339,7 +343,7 @@ fn render_mail_preview(area: Rect, buf: &mut Buffer, mail: &mut MailPreview) {
                         .throbber_set(throbber_widgets_tui::BRAILLE_SIX),
                     area,
                     buf,
-                    state,
+                    throbber,
                 );
             }
             RemoteData::Loaded(attachments) => {

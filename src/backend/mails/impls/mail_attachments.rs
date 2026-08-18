@@ -59,7 +59,7 @@ impl Backend {
 
                 let mail = store.mails.get_mut(&id).unwrap();
                 mail.attachments = RemoteData::Loaded(attachments.clone());
-                sender.send(()).unwrap();
+                let _ = sender.send(());
 
                 Ok(attachments)
             }
