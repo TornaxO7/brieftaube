@@ -1,12 +1,12 @@
 use throbber_widgets_tui::ThrobberState;
 
 #[derive(Debug, Clone)]
-pub enum Loadable<T: std::fmt::Debug + Clone> {
+pub enum Loadable<T> {
     Loading(ThrobberState),
     Loaded(T),
 }
 
-impl<T: std::fmt::Debug + Clone> Loadable<T> {
+impl<T> Loadable<T> {
     pub fn loading() -> Self {
         Self::Loading(ThrobberState::default())
     }
