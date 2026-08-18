@@ -37,10 +37,6 @@ impl<T> RemoteData<T> {
         }
     }
 
-    pub fn is_loaded(&self) -> bool {
-        matches!(self, RemoteData::Loaded(_))
-    }
-
     pub fn loaded(&self) -> Option<&T> {
         match self {
             Self::NotRequested | Self::Requested { .. } => None,
