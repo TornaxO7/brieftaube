@@ -27,10 +27,6 @@ impl Backend {
         ids: &[MailboxId],
         option: RemoveMailboxOption,
     ) -> Result<(), RemoveMailboxError> {
-        for id in ids.iter() {
-            self.validate_remove_mailbox(id, option)?;
-        }
-
         let mut response = {
             let mut request = self.client.build();
 
@@ -52,35 +48,6 @@ impl Backend {
             response.destroyed(&id.0)?;
             store.mailbox.remove(id);
         }
-
-        Ok(())
-    }
-
-    fn validate_remove_mailbox(
-        &self,
-        id: &MailboxId,
-        option: RemoveMailboxOption,
-    ) -> Result<(), RemoveMailboxError> {
-        let store = self.store.lock().unwrap();
-
-        let has_child_mailboxes = !store
-            .mailbox
-            .get_children(&Some(id.clone()))
-            .unwrap()
-            .is_empty();
-        let has_mails = !store.mailbox.get_root_mails(id).unwrap().ids.is_empty();
-
-        match option {
-            RemoveMailboxOption::Empty => {
-                if has_child_mailboxes || has_mails {
-                    return Err(RemoveMailboxError::NotEmpty);
-                }
-            } // RemoveMailboxOption::Mails => {
-              //     if has_child_mailboxes {
-              //         return Err(RemoveMailboxError::HasChildMailboxes);
-              //     }
-              // }
-        };
 
         Ok(())
     }
