@@ -663,15 +663,14 @@ impl Model {
     }
 
     fn remove_mailbox(&mut self) -> Option<crate::Action> {
-        let (selected_entry, current_mailbox) = {
+        let selected_entry = {
             let columns = self.columns.lock().unwrap();
-            let current_mailbox = self.center_column_mailbox().clone();
 
             let selected_entry = columns
-                .get(&current_mailbox)
+                .get(&self.center_column_mailbox())
                 .and_then(|state| state.loaded()?.selected_entry().cloned());
 
-            (selected_entry, current_mailbox)
+            selected_entry
         };
 
         if let Some(entry) = selected_entry {
@@ -680,6 +679,7 @@ impl Model {
                 return None;
             };
 
+            let current_mailbox = self.center_column_mailbox().clone();
             let columns = self.columns.clone();
             let backend = self.backend.clone();
             self.task_manager.spawn(async move {
@@ -917,11 +917,14 @@ async fn op_uncollapse_thread(
         new_entries
     };
 
-    let thread_idx = column
-            .entries()
-            .iter()
-            .position(|entry| matches!(entry, ColumnEntry::CollapsedThread(_, entry_thread_id) if entry_thread_id == &thread_id))
-            .expect("Thread still exists in the mailbox.");
+    let Some(thread_idx) = column
+        .entries()
+        .iter()
+        .position(|entry| matches!(entry, ColumnEntry::CollapsedThread(_, entry_thread_id) if entry_thread_id == &thread_id))
+    else {
+        warn!("Thread doesn't exist in column anymore. Abort uncollapsing...");
+        return Ok(());
+    };
 
     column
         .entries_mut()
