@@ -43,4 +43,11 @@ impl<T> RemoteData<T> {
             Self::Loaded(value) => Some(value),
         }
     }
+
+    pub fn loaded_mut(&mut self) -> Option<&mut T> {
+        match self {
+            Self::NotRequested | Self::Requested { .. } => None,
+            Self::Loaded(value) => Some(value),
+        }
+    }
 }

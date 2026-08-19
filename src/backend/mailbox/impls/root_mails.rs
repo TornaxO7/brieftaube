@@ -96,7 +96,7 @@ impl Backend {
                 let root_mail = store.mails.get(&root_mail_id).expect("Requested");
                 let root_mail_thread = store
                     .threads
-                    .get_mails(&root_mail.thread_id)
+                    .get_mail_ids(&root_mail.thread_id)
                     .expect("Requested");
 
                 let thread_has_only_one_mail = root_mail_thread.len() == 1;
@@ -126,7 +126,7 @@ fn handle_thread_response(store: &mut threads::Store, mut response: ThreadGetRes
             .map(|id| MailId(id.clone()))
             .collect();
 
-        store.insert(id, mail_ids);
+        store.add(id, mail_ids);
     }
 
     store.set_state(response.take_state());

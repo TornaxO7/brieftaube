@@ -1,11 +1,13 @@
 pub mod error;
 
-use crate::backend::{GetState, MailData, MailId, MailUpdate, threads::types::ThreadId};
+use crate::backend::{
+    GetState, MailData, MailId, MailUpdate, threads::types::ThreadId, types::RemoteData,
+};
 use std::collections::HashMap;
 
 #[derive(Default)]
 pub struct Store {
-    mails: HashMap<MailId, MailData>,
+    mails: HashMap<MailId, RemoteData<MailData>>,
     state: GetState,
 }
 
@@ -18,45 +20,40 @@ impl Store {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.mails.is_empty()
-    }
-
-    pub fn get_state(&self) -> String {
-        self.state.clone()
-    }
-
     pub fn set_state(&mut self, new_state: String) {
         self.state = new_state;
     }
 
-    pub fn get(&self, id: &MailId) -> Option<&MailData> {
-        self.mails.get(id)
+    pub fn get(&mut self, id: &MailId) -> &RemoteData<MailData> {
+        self.mails
+            .entry(id.clone())
+            .or_insert(RemoteData::NotRequested)
     }
 
-    pub fn get_mut(&mut self, id: &MailId) -> Option<&mut MailData> {
-        self.mails.get_mut(id)
+    pub fn get_mut(&mut self, id: &MailId) -> &mut RemoteData<MailData> {
+        self.mails
+            .entry(id.clone())
+            .or_insert(RemoteData::NotRequested)
     }
 }
 
 impl Store {
-    pub fn flush(&mut self) {
-        self.mails.clear();
-        self.state.clear();
-    }
-
     pub fn add(&mut self, mail: MailData) {
-        self.mails.insert(mail.id.clone(), mail.clone());
+        self.mails.insert(mail.id.clone(), RemoteData::Loaded(mail));
     }
 
-    pub fn remove(&mut self, id: &MailId) -> Option<MailData> {
+    pub fn remove(&mut self, id: &MailId) -> Option<RemoteData<MailData>> {
         self.mails.remove(id)
     }
 
+    /// Panics if there's no mail with the given id to be updated.
     pub fn update(&mut self, new: MailUpdate) {
-        if let Some(patch_keywords) = new.patch_keywords {
-            let mail = self.mails.get_mut(&new.id).unwrap();
+        let mail = self
+            .get_mut(&new.id)
+            .loaded_mut()
+            .expect("Mail is already fetched");
 
+        if let Some(patch_keywords) = new.patch_keywords {
             for (keyword, set) in patch_keywords {
                 if set {
                     mail.keywords.insert(keyword.clone());
@@ -67,8 +64,6 @@ impl Store {
         }
 
         if let Some(mailbox_ids) = new.mailbox_ids {
-            let mail = self.mails.get_mut(&new.id).unwrap();
-
             for (new_mailbox, set) in mailbox_ids {
                 if set {
                     mail.mailbox_ids.insert(new_mailbox.clone());
@@ -78,15 +73,4 @@ impl Store {
             }
         }
     }
-}
-
-fn get_idx_by_received_at(
-    mails: &HashMap<MailId, MailData>,
-    mapping: &[MailId],
-    mail: &MailData,
-) -> Result<usize, usize> {
-    mapping.binary_search_by(|other_id| {
-        let other = mails.get(other_id).unwrap();
-        other.received_at.cmp(&mail.received_at)
-    })
 }

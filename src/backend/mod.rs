@@ -7,6 +7,7 @@ pub mod types;
 pub use mailbox::types::*;
 pub use mails::types::*;
 pub use threads::types::*;
+use tokio::sync::watch;
 
 use crate::config::Config;
 use jmap_client::client::Client;
@@ -15,6 +16,11 @@ use store::Store;
 
 type GetState = String;
 type QueryState = String;
+
+enum FetchRole {
+    Wait(watch::Receiver<()>),
+    Request(watch::Sender<()>),
+}
 
 /// Methods for states.
 ///

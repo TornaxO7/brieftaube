@@ -224,7 +224,7 @@ impl Column {
             })
             .ok_or(ColumnRemoveMissingEntry)?;
 
-        let thread_mails = backend.get_thread_mails(&thread_id).unwrap();
+        let thread_mails = backend.get_thread_mail_ids(&thread_id).unwrap();
 
         let next_thread_mail_in_mailbox = thread_mails.iter().rev().find(|thread_mail| {
             let is_different_mail = thread_mail.id != mail_id;

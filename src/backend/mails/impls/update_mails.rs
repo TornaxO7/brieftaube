@@ -2,17 +2,15 @@ use crate::backend::{Backend, MailUpdate};
 use tracing::{error, warn};
 
 impl Backend {
+    /// Panics if the given mail-ids haven't been fetched yet.
     pub async fn update_mails(&self, updates: Vec<MailUpdate>) -> Result<(), jmap_client::Error> {
         let updates_do_nothing = updates.iter().all(|update| update.is_empty());
         if updates.is_empty() || updates_do_nothing {
             return Ok(());
         }
 
-        let client = self.client.clone();
-        let store = self.store.clone();
         let mut response = {
-            let mut request = client.build();
-
+            let mut request = self.client.build();
             let set_mail = request.set_email();
 
             for update in updates.iter() {
@@ -36,8 +34,7 @@ impl Backend {
             request.send_set_email().await?
         };
 
-        let mut store = store.lock().unwrap();
-
+        let mut store = self.store.lock().unwrap();
         store.mails.set_state(response.take_new_state());
 
         for update in updates {
