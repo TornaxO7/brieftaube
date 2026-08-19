@@ -18,7 +18,7 @@ use crate::{
     },
 };
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     rc::Rc,
     str::FromStr,
     sync::{Arc, Mutex},
@@ -28,8 +28,6 @@ use tracing::{debug, error, warn};
 
 pub use column::{Column, ColumnEntry, ColumnState};
 pub use selection::{EntryId, SelectionType};
-
-const NORMALIZE_SORT_ORDER_SIZE: u32 = 32;
 
 pub type Columns = Arc<Mutex<HashMap<ParentMailboxId, ColumnState>>>;
 
@@ -245,44 +243,6 @@ impl<'a> Model {
                 }
             }
         }
-    }
-
-    fn _normalize_mailbox_sort_order(&self) {
-        let ids: Vec<MailboxId> = {
-            let columns = self.columns.lock().unwrap();
-            let center = columns.get(self.center_column_mailbox()).unwrap();
-
-            center
-                .loaded()
-                .unwrap()
-                .entries()
-                .iter()
-                .map_while(|entry| {
-                    if let ColumnEntry::Mailbox(id) = entry {
-                        Some(id.clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        };
-
-        let backend = self.backend.clone();
-        self.task_manager.spawn(async move {
-            let updates: Vec<MailboxUpdate> = ids
-                .into_iter()
-                .enumerate()
-                .map(|(idx, id)| MailboxUpdate {
-                    id,
-                    sort_order: Some((idx as u32 + 1) * NORMALIZE_SORT_ORDER_SIZE),
-                    ..Default::default()
-                })
-                .collect();
-
-            if let Err(err) = backend.update_mailboxes(updates).await {
-                error!("Couldn't normalize sort order of mailboxes:\n{err}");
-            }
-        });
     }
 }
 
@@ -751,7 +711,46 @@ async fn init_mailbox(
     {
         let mut mailboxes: Vec<MailboxData> = backend.get_mailbox_children(id.clone()).await?;
 
-        mailboxes.sort_by_key(|mailbox| mailbox.sort_order);
+        mailboxes.sort_by(|a, b| {
+            if a.sort_order == b.sort_order {
+                a.name.cmp(&b.name)
+            } else {
+                a.sort_order.cmp(&b.sort_order)
+            }
+        });
+
+        let all_have_unique_sort_order = {
+            let mut used_sort_orders = HashSet::new();
+            for mailbox in mailboxes.iter() {
+                used_sort_orders.insert(mailbox.sort_order);
+            }
+
+            used_sort_orders.len() == mailboxes.len()
+        };
+
+        // normalize sort order (if possible)
+        if !all_have_unique_sort_order {
+            let ids = mailboxes.iter().map(|mailbox| &mailbox.id);
+            let updates: Vec<MailboxUpdate> = ids
+                .enumerate()
+                .map(|(idx, id)| MailboxUpdate {
+                    id: id.clone(),
+                    sort_order: Some(idx as u32),
+                    ..Default::default()
+                })
+                .collect();
+
+            match backend.update_mailboxes(updates).await {
+                Ok(()) => {
+                    for (idx, mailbox) in mailboxes.iter_mut().enumerate() {
+                        mailbox.sort_order = idx as u32;
+                    }
+                }
+                Err(err) => {
+                    warn!("Couldn't save current sort order to server: {err}");
+                }
+            }
+        }
 
         entries.extend(
             mailboxes
@@ -1041,10 +1040,8 @@ async fn create_new_mailbox(
                     }
                 })
                 .max_by_key(|mailbox| mailbox.sort_order)
-                .map(|last_mailbox| {
-                    (last_mailbox.sort_order + 1).next_multiple_of(NORMALIZE_SORT_ORDER_SIZE)
-                })
-                .unwrap_or(NORMALIZE_SORT_ORDER_SIZE)
+                .map(|last_mailbox| last_mailbox.sort_order + 1)
+                .unwrap_or(0)
         };
 
         MailboxNew {

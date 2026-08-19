@@ -7,3 +7,4 @@ mod update;
 mod validate;
 
 pub use remove_mailbox::*;
+pub use update::*;
