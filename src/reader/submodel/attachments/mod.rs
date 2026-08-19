@@ -211,7 +211,7 @@ impl Model {
         let mut clipboard = match Clipboard::new() {
             Ok(clipboard) => clipboard,
             Err(err) => {
-                error!("Clipboards aren't supported:\n{err}");
+                error!("Can't open clipboard:\n{err}");
                 return None;
             }
         };

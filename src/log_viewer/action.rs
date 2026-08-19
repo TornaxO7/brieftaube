@@ -20,6 +20,9 @@ pub enum Action {
     #[strum(props(intern = true))]
     OpenCommandPalette,
 
+    #[strum(message = "Copy the file path to the log file into the clipboard.")]
+    CopyPathToClipboard,
+
     #[strum(message = "Quit the application")]
     Quit,
     #[strum(message = "Close log viewer and go back to previous panel.")]
