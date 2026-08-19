@@ -4,6 +4,7 @@ mod mail_preview;
 mod selection_type;
 
 pub use column_display::{ColumnDisplay, ColumnDisplayEntryData, MailEntryType};
+use jmap_client::mailbox::Role;
 pub use mail_preview::MailPreview;
 use throbber_widgets_tui::{Throbber, ThrobberState};
 
@@ -26,7 +27,6 @@ use ratatui::{
     widgets::{Block, Cell, List, ListItem, Paragraph, Row, StatefulWidget, Table, Widget},
 };
 
-const FOLDER: &str = "🖿";
 const PLACEHOLDER: &str = "";
 const MAIL_UNREAD_SYMBOL: &str = "⏺";
 const THREAD_BRANCH: &str = "├─";
@@ -34,6 +34,14 @@ const THREAD_LAST: &str = "╰─";
 const THREAD_FOLDED: &str = "▸";
 const THREAD_UNFOLDED: &str = "▾";
 const ATTACHMENT: &str = "📎";
+
+const MAILBOX_SENT: &str = "📤";
+const MAILBOX_ARCHIVE: &str = "🗄";
+const MAILBOX_DEFAULT: &str = "🖿";
+const MAILBOX_JUNK: &str = "⚠";
+const MAILBOX_TRASH: &str = "🗑";
+const MAILBOX_INBOX: &str = "📥";
+const MAILBOX_DRAFTS: &str = "📝";
 
 pub struct Mailfs;
 
@@ -137,7 +145,7 @@ fn render_column(area: Rect, buf: &mut Buffer, column: ColumnDisplay) {
         ColumnDisplay::Loaded { entries, state } => {
             let widths = [
                 Constraint::Length(1),
-                Constraint::Length(1),
+                Constraint::Length(2),
                 Constraint::Fill(1),
                 Constraint::Fill(1),
                 Constraint::Fill(1),
@@ -153,6 +161,7 @@ fn render_column(area: Rect, buf: &mut Buffer, column: ColumnDisplay) {
                             name,
                             unread_mails,
                             sort_order,
+                            role,
                         } => {
                             // ⏺
                             if *unread_mails > 0 {
@@ -165,7 +174,20 @@ fn render_column(area: Rect, buf: &mut Buffer, column: ColumnDisplay) {
                             };
 
                             // 🖿
-                            row.push(Cell::from(FOLDER).style(Style::new().fg(BLUE.c500)));
+                            match role {
+                                Role::Sent => row.push(Cell::from(MAILBOX_SENT)),
+                                Role::Archive => row.push(Cell::from(MAILBOX_ARCHIVE)),
+                                Role::Junk => row.push(Cell::from(MAILBOX_JUNK)),
+                                Role::Trash => row.push(Cell::from(MAILBOX_TRASH)),
+                                Role::Inbox => row.push(Cell::from(MAILBOX_INBOX)),
+                                Role::Drafts => row.push(Cell::from(MAILBOX_DRAFTS)),
+                                _ => {
+                                    row.push(
+                                        Cell::from(MAILBOX_DEFAULT)
+                                            .style(Style::new().fg(BLUE.c500)),
+                                    );
+                                }
+                            }
 
                             // name
                             row.push(

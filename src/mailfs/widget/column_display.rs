@@ -9,6 +9,7 @@ use crate::{
         widget::selection_type::DisplaySelectionType,
     },
 };
+use jmap_client::mailbox::Role;
 use ratatui::widgets::TableState;
 use std::{collections::HashMap, sync::Arc};
 use throbber_widgets_tui::ThrobberState;
@@ -104,6 +105,7 @@ pub enum ColumnDisplayEntryData {
         name: String,
         unread_mails: usize,
         sort_order: u32,
+        role: Role,
     },
     Mail {
         ty: MailEntryType,
@@ -122,6 +124,7 @@ impl ColumnDisplayEntryData {
             sort_order: mailbox.sort_order,
             name: mailbox.name.clone(),
             unread_mails: mailbox.unread_mails,
+            role: mailbox.role.clone(),
         }
     }
 
