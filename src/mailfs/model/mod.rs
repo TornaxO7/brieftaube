@@ -28,7 +28,7 @@ use throbber_widgets_tui::ThrobberState;
 use tracing::{debug, error, warn};
 
 pub use column::{Column, ColumnEntry, ColumnState};
-pub use selection::{SelectedEntry, Selection, SelectionType};
+pub use selection::{Selection, SelectionType};
 
 pub type Columns = Arc<Mutex<HashMap<ParentMailboxId, ColumnState>>>;
 
@@ -49,7 +49,7 @@ pub struct Model {
 
     pub throbber: ThrobberState,
     pub backend: Arc<Backend>,
-    pub selection: HashMap<SelectedEntry, Selection>,
+    pub selection: HashMap<ColumnEntry, Selection>,
     pub navigation_stack: Vec<ParentMailboxId>,
     pub columns: Columns,
 }
@@ -481,11 +481,9 @@ impl Model {
         };
 
         if let Some(entry) = selected_entry {
-            let id = SelectedEntry::from(entry);
-
-            if self.selection.remove(&id).is_none() {
+            if self.selection.remove(&entry).is_none() {
                 self.selection.insert(
-                    id,
+                    entry,
                     Selection {
                         mailbox: self.center_column_mailbox().clone(),
                         ty: SelectionType::Selected,
@@ -508,9 +506,8 @@ impl Model {
                 .selected_entry()?
                 .clone();
 
-            let id = SelectedEntry::from(entry);
             self.selection.insert(
-                id,
+                entry,
                 Selection {
                     mailbox: self.center_column_mailbox().clone(),
                     ty: SelectionType::Cut,
@@ -527,90 +524,89 @@ impl Model {
 
     fn paste_selected_entries(&mut self) -> Option<crate::Action> {
         let center_mailbox = self.center_column_mailbox().clone();
+        todo!();
 
         // TODO: create batch request
-        for (entry_id, selection) in self.selection.drain() {
-            match entry_id {
-                SelectedEntry::Mailbox(mailbox_id) => match selection.ty {
-                    SelectionType::Selected => {
-                        warn!("You can't copy mailboxes.");
-                    }
-                    SelectionType::Cut => {
-                        let columns = self.columns.clone();
-                        let backend = self.backend.clone();
+        // for (entry, selection) in self.selection.drain() {
+        //     match entry {
+        //         ColumnEntry::Mailbox(mailbox_id) => match selection.ty {
+        //             SelectionType::Selected => {
+        //                 warn!("You can't copy mailboxes.");
+        //             }
+        //             SelectionType::Cut => {
+        //                 let columns = self.columns.clone();
+        //                 let backend = self.backend.clone();
 
-                        let source_mailbox = selection.mailbox.clone();
-                        let destination_mailbox = center_mailbox.clone();
+        //                 let source_mailbox = selection.mailbox.clone();
+        //                 let destination_mailbox = center_mailbox.clone();
 
-                        let update = MailboxUpdate {
-                            id: mailbox_id.clone(),
-                            parent_id: Some(center_mailbox.clone()),
-                            ..Default::default()
-                        };
+        //                 let update = MailboxUpdate {
+        //                     id: mailbox_id.clone(),
+        //                     parent_id: Some(center_mailbox.clone()),
+        //                     ..Default::default()
+        //                 };
 
-                        self.task_manager.spawn(async move {
-                            if let Err(err) = backend.update_mailboxes(vec![update]).await {
-                                error!("Couldn't move mailbox: {err}");
-                            }
+        //                 self.task_manager.spawn(async move {
+        //                     if let Err(err) = backend.update_mailboxes(vec![update]).await {
+        //                         error!("Couldn't move mailbox: {err}");
+        //                     }
 
-                            let mut columns = columns.lock().unwrap();
+        //                     let mut columns = columns.lock().unwrap();
 
-                            // remove from old parent
-                            columns.entry(source_mailbox).and_modify(|state| {
-                                let column = state.loaded_mut().unwrap();
-                                column.remove_entry(ColumnEntryDiff::Mailbox(mailbox_id), backend);
-                            });
+        //                     // remove from old parent
+        //                     columns.entry(source_mailbox).and_modify(|state| {
+        //                         let column = state.loaded_mut().unwrap();
+        //                         column.remove_entry(ColumnEntryDiff::Mailbox(mailbox_id), backend);
+        //                     });
 
-                            // add to new column
-                            columns
-                                .entry(destination_mailbox.clone())
-                                .and_modify(|state| {
-                                    let column = state.loaded_mut().unwrap();
-                                    column.add_entry(
-                                        ColumnEntryDiff::Mailbox(mailbox_id),
-                                        backend.clone(),
-                                    );
-                                });
-                        });
-                    }
-                },
-                SelectedEntry::Mail(mail_id) => match selection.ty {
-                    SelectionType::Selected => {
-                        let Some(center_mailbox) = center_mailbox.clone() else {
-                            warn!("You can't put mails into the root mailbox.");
-                            continue;
-                        };
+        //                     // add to new column
+        //                     columns
+        //                         .entry(destination_mailbox.clone())
+        //                         .and_modify(|state| {
+        //                             let column = state.loaded_mut().unwrap();
+        //                             column.add_entry(entry, backend.clone());
+        //                         });
+        //                 });
+        //             }
+        //         },
+        //         ColumnEntry::Mail(mail_id) => match selection.ty {
+        //             SelectionType::Selected => {
+        //                 let Some(center_mailbox) = center_mailbox.clone() else {
+        //                     warn!("You can't put mails into the root mailbox.");
+        //                     continue;
+        //                 };
 
-                        let columns = self.columns.clone();
-                        let backend = self.backend.clone();
-                        let update = MailUpdate {
-                            id: mail_id.clone(),
-                            mailbox_ids: Some(vec![(center_mailbox.clone(), true)]),
-                            ..Default::default()
-                        };
+        //                 let columns = self.columns.clone();
+        //                 let backend = self.backend.clone();
+        //                 let update = MailUpdate {
+        //                     id: mail_id.clone(),
+        //                     mailbox_ids: Some(vec![(center_mailbox.clone(), true)]),
+        //                     ..Default::default()
+        //                 };
 
-                        self.task_manager.spawn(async move {
-                            if let Err(err) = backend.update_mails(vec![update]).await {
-                                warn!("Couldn't add mailbox to mail: {err}");
-                                return;
-                            }
+        //                 self.task_manager.spawn(async move {
+        //                     if let Err(err) = backend.update_mails(vec![update]).await {
+        //                         warn!("Couldn't add mailbox to mail: {err}");
+        //                         return;
+        //                     }
 
-                            let mut columns = columns.lock().unwrap();
+        //                     let mut columns = columns.lock().unwrap();
 
-                            columns
-                                .entry(Some(center_mailbox.clone()))
-                                .and_modify(|state| {
-                                    let column = state.loaded_mut().unwrap();
-                                    column.add_mail(&mail_id, backend.clone());
-                                });
-                        });
-                    }
-                    SelectionType::Cut => {
-                        todo!()
-                    }
-                },
-            }
-        }
+        //                     columns
+        //                         .entry(Some(center_mailbox.clone()))
+        //                         .and_modify(|state| {
+        //                             let column = state.loaded_mut().unwrap();
+        //                             todo!()
+        //                             // column.add_mail(&mail_id, backend.clone());
+        //                         });
+        //                 });
+        //             }
+        //             SelectionType::Cut => {
+        //                 todo!()
+        //             }
+        //         },
+        //     }
+        // }
 
         None
     }
@@ -680,7 +676,8 @@ impl Model {
                     .loaded_mut()
                     .unwrap();
 
-                column.remove_mailbox(&mailbox_id);
+                todo!()
+                // column.remove_entry(Columnn)
             });
         }
 
@@ -691,15 +688,25 @@ impl Model {
         if !self.selection.is_empty() {
             let mut updates = Vec::with_capacity(self.selection.len());
 
-            for (id, selection) in self.selection.drain() {
+            for (entry, selection) in self.selection.drain() {
                 if selection.ty == SelectionType::Selected {
-                    match id {
-                        SelectedEntry::Mail(id) => updates.push(MailUpdate {
-                            id,
-                            patch_keywords: Some(patch.to_vec()),
-                            ..Default::default()
-                        }),
-                        SelectedEntry::Mailbox(_) => {}
+                    match entry {
+                        // SelectedEntry::Mail(id) => updates.push(MailUpdate {
+                        //     id,
+                        //     patch_keywords: Some(patch.to_vec()),
+                        //     ..Default::default()
+                        // }),
+                        // SelectedEntry::Mailbox(_) => {}
+                        ColumnEntry::Mailbox(mailbox_id) => todo!(),
+                        ColumnEntry::SingleMail(mail_id) => todo!(),
+                        ColumnEntry::CollapsedThread(mail_id, thread_id) => todo!(),
+                        ColumnEntry::ThreadStart {
+                            mail_id,
+                            thread_id,
+                            collapsed_mail_id,
+                        } => todo!(),
+                        ColumnEntry::ThreadChild(mail_id, thread_id) => todo!(),
+                        ColumnEntry::ThreadEnd(mail_id, thread_id) => todo!(),
                     }
                 }
             }
@@ -827,7 +834,7 @@ async fn init_mailbox(
         entries.extend(collapsed_mails.into_iter().map(ColumnEntry::from));
     }
 
-    let created_column = Column::new(entries);
+    let created_column = Column::new(id.clone(), entries);
     if let Some(first_entry) = created_column.selected_entry() {
         match first_entry {
             ColumnEntry::Mailbox(_) => {}

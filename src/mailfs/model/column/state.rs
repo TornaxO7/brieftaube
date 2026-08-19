@@ -1,10 +1,9 @@
-use std::sync::Arc;
-
 use crate::backend::{
     Backend, ParentMailboxId, mailbox::types::MailboxId, mails::types::MailId,
     threads::types::ThreadId, types::CollapsedMail,
 };
 use ratatui::widgets::TableState;
+use std::sync::Arc;
 
 pub struct ColumnRemoveMissingEntry;
 
@@ -49,7 +48,7 @@ impl Column {
         &mut self.entries
     }
 
-    pub fn add_entry(&mut self, entry: ColumnEntryDiff, backend: Arc<Backend>) {
+    pub fn add_entry(&mut self, entry: ColumnEntry, backend: Arc<Backend>) {
         match entry {
             ColumnEntryDiff::Mailbox(mailbox_id) => self.add_mailbox(mailbox_id, backend),
             ColumnEntryDiff::SingleMail(mail_id) => self.add_single_mail(mail_id, backend),
@@ -59,11 +58,7 @@ impl Column {
         }
     }
 
-    pub fn remove_entry(
-        &mut self,
-        entry: ColumnEntryDiff,
-        backend: Arc<Backend>,
-    ) -> Result<(), ColumnRemoveMissingEntry> {
+    pub fn remove_entry(&mut self, backend: Arc<Backend>) -> Result<(), ColumnRemoveMissingEntry> {
         match entry {
             ColumnEntryDiff::Mailbox(mailbox_id) => self.remove_mailbox(mailbox_id),
             ColumnEntryDiff::SingleMail(mail_id) => self.remove_single_mail(mail_id),
@@ -258,7 +253,7 @@ pub enum ColumnEntryDiff {
     ThreadMail { mail: MailId, thread: ThreadId },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ColumnEntry {
     Mailbox(MailboxId),
     /// Mails which are the only mail in a thread
@@ -270,7 +265,7 @@ pub enum ColumnEntry {
         mail_id: MailId,
         thread_id: ThreadId,
         // not all mails within a thread are in the given mailbox (a response for example)
-        // this attribute should store the original mail in the collapsed-state.
+        // this attribute should store the original mail in the uncollapsed-state.
         collapsed_mail_id: MailId,
     },
     ThreadChild(MailId, ThreadId),
