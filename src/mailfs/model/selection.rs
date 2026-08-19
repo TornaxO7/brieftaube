@@ -4,18 +4,18 @@ use crate::{
 };
 
 #[derive(Hash, PartialEq, Eq)]
-pub enum EntryId {
+pub enum SelectedEntry {
     Mail(MailId),
     Mailbox(MailboxId),
 }
 
-impl From<ColumnEntry> for EntryId {
+impl From<ColumnEntry> for SelectedEntry {
     fn from(entry: ColumnEntry) -> Self {
         Self::from(&entry)
     }
 }
 
-impl From<&ColumnEntry> for EntryId {
+impl From<&ColumnEntry> for SelectedEntry {
     // TODO: If selected a collapsed thread => Select all mails from the collapsed thread
     fn from(entry: &ColumnEntry) -> Self {
         match entry {

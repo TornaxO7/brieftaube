@@ -11,6 +11,7 @@ use crate::{
         },
         mails::types::{MailKeyword, MailUpdate},
     },
+    mailfs::model::column::ColumnEntryDiff,
     task_manager::TaskManager,
     utils::{
         keybindmanager::KeybindManager,
@@ -27,7 +28,7 @@ use throbber_widgets_tui::ThrobberState;
 use tracing::{debug, error, warn};
 
 pub use column::{Column, ColumnEntry, ColumnState};
-pub use selection::{EntryId, Selection, SelectionType};
+pub use selection::{SelectedEntry, Selection, SelectionType};
 
 pub type Columns = Arc<Mutex<HashMap<ParentMailboxId, ColumnState>>>;
 
@@ -48,7 +49,7 @@ pub struct Model {
 
     pub throbber: ThrobberState,
     pub backend: Arc<Backend>,
-    pub selection: HashMap<EntryId, Selection>,
+    pub selection: HashMap<SelectedEntry, Selection>,
     pub navigation_stack: Vec<ParentMailboxId>,
     pub columns: Columns,
 }
@@ -272,9 +273,7 @@ impl Model {
                 })
         };
 
-        if let Some(entry) = selected_entry {
-            self.load_right_column_for(entry);
-        }
+        self.load_right_column_for(selected_entry?);
         None
     }
 
@@ -290,10 +289,7 @@ impl Model {
                 })
         };
 
-        if let Some(entry) = selected_entry {
-            self.load_right_column_for(entry);
-        }
-
+        self.load_right_column_for(selected_entry?);
         None
     }
 
@@ -309,10 +305,7 @@ impl Model {
                 })
         };
 
-        if let Some(entry) = selected_entry {
-            self.load_right_column_for(entry);
-        }
-
+        self.load_right_column_for(selected_entry?);
         None
     }
 
@@ -334,10 +327,7 @@ impl Model {
                 })
         };
 
-        if let Some(entry) = selected_entry {
-            self.load_right_column_for(entry);
-        }
-
+        self.load_right_column_for(selected_entry?);
         None
     }
 
@@ -349,56 +339,46 @@ impl Model {
                 .and_then(|state| state.loaded()?.selected_entry().cloned())
         };
 
-        if let Some(entry) = selected_entry {
-            match entry {
-                ColumnEntry::Mailbox(id) => {
-                    self.navigation_stack.push(Some(id));
+        match selected_entry? {
+            ColumnEntry::Mailbox(id) => {
+                self.navigation_stack.push(Some(id));
 
-                    let selected_entry = {
-                        let columns = self.columns.lock().unwrap();
+                let selected_entry = {
+                    let columns = self.columns.lock().unwrap();
 
-                        columns
-                            .get(self.center_column_mailbox())?
-                            .loaded()?
-                            .selected_entry()
-                            .cloned()
-                    };
+                    columns
+                        .get(self.center_column_mailbox())?
+                        .loaded()?
+                        .selected_entry()
+                        .cloned()
+                };
 
-                    if let Some(entry) = selected_entry {
-                        self.load_right_column_for(entry);
-                    }
-                }
-                ColumnEntry::ThreadStart { mail_id, .. }
-                | ColumnEntry::ThreadChild(mail_id, _)
-                | ColumnEntry::ThreadEnd(mail_id, _)
-                | ColumnEntry::SingleMail(mail_id) => {
-                    return Some(crate::Action::OpenMailViewer(mail_id));
-                }
-                ColumnEntry::CollapsedThread(mail_id, thread_id) => {
-                    let column_mailbox = self
-                        .center_column_mailbox()
-                        .clone()
-                        .expect("Is not root mailbox");
-                    let columns = self.columns.clone();
-                    let backend = self.backend.clone();
+                self.load_right_column_for(selected_entry?);
+            }
+            ColumnEntry::ThreadStart { mail_id, .. }
+            | ColumnEntry::ThreadChild(mail_id, _)
+            | ColumnEntry::ThreadEnd(mail_id, _)
+            | ColumnEntry::SingleMail(mail_id) => {
+                return Some(crate::Action::OpenMailViewer(mail_id));
+            }
+            ColumnEntry::CollapsedThread(mail_id, thread_id) => {
+                let column_mailbox = self
+                    .center_column_mailbox()
+                    .clone()
+                    .expect("Is not root mailbox");
+                let columns = self.columns.clone();
+                let backend = self.backend.clone();
 
-                    self.task_manager.spawn(async move {
-                        match op_uncollapse_thread(
-                            column_mailbox,
-                            mail_id,
-                            thread_id,
-                            columns,
-                            backend,
-                        )
+                self.task_manager.spawn(async move {
+                    match op_uncollapse_thread(column_mailbox, mail_id, thread_id, columns, backend)
                         .await
-                        {
-                            Ok(()) => {}
-                            Err(err) => {
-                                error!("Can't uncollapse thread:\n{err}");
-                            }
+                    {
+                        Ok(()) => {}
+                        Err(err) => {
+                            error!("Can't uncollapse thread:\n{err}");
                         }
-                    });
-                }
+                    }
+                });
             }
         }
 
@@ -501,7 +481,7 @@ impl Model {
         };
 
         if let Some(entry) = selected_entry {
-            let id = EntryId::from(entry);
+            let id = SelectedEntry::from(entry);
 
             if self.selection.remove(&id).is_none() {
                 self.selection.insert(
@@ -528,7 +508,7 @@ impl Model {
                 .selected_entry()?
                 .clone();
 
-            let id = EntryId::from(entry);
+            let id = SelectedEntry::from(entry);
             self.selection.insert(
                 id,
                 Selection {
@@ -546,13 +526,12 @@ impl Model {
     }
 
     fn paste_selected_entries(&mut self) -> Option<crate::Action> {
-        todo!("Needs some polishment");
         let center_mailbox = self.center_column_mailbox().clone();
 
         // TODO: create batch request
         for (entry_id, selection) in self.selection.drain() {
             match entry_id {
-                EntryId::Mailbox(mailbox_id) => match selection.ty {
+                SelectedEntry::Mailbox(mailbox_id) => match selection.ty {
                     SelectionType::Selected => {
                         warn!("You can't copy mailboxes.");
                     }
@@ -579,7 +558,7 @@ impl Model {
                             // remove from old parent
                             columns.entry(source_mailbox).and_modify(|state| {
                                 let column = state.loaded_mut().unwrap();
-                                column.remove_mailbox(&mailbox_id);
+                                column.remove_entry(ColumnEntryDiff::Mailbox(mailbox_id), backend);
                             });
 
                             // add to new column
@@ -587,12 +566,15 @@ impl Model {
                                 .entry(destination_mailbox.clone())
                                 .and_modify(|state| {
                                     let column = state.loaded_mut().unwrap();
-                                    column.add_mailbox(&mailbox_id, backend.clone());
+                                    column.add_entry(
+                                        ColumnEntryDiff::Mailbox(mailbox_id),
+                                        backend.clone(),
+                                    );
                                 });
                         });
                     }
                 },
-                EntryId::Mail(mail_id) => match selection.ty {
+                SelectedEntry::Mail(mail_id) => match selection.ty {
                     SelectionType::Selected => {
                         let Some(center_mailbox) = center_mailbox.clone() else {
                             warn!("You can't put mails into the root mailbox.");
@@ -712,12 +694,12 @@ impl Model {
             for (id, selection) in self.selection.drain() {
                 if selection.ty == SelectionType::Selected {
                     match id {
-                        EntryId::Mail(id) => updates.push(MailUpdate {
+                        SelectedEntry::Mail(id) => updates.push(MailUpdate {
                             id,
                             patch_keywords: Some(patch.to_vec()),
                             ..Default::default()
                         }),
-                        EntryId::Mailbox(_) => {}
+                        SelectedEntry::Mailbox(_) => {}
                     }
                 }
             }
@@ -871,13 +853,22 @@ async fn init_mailbox(
     Ok(())
 }
 
+#[derive(thiserror::Error, Debug)]
+enum UncollapseThreadError {
+    #[error("Thread doesn't exist in column anymore. Abort uncollapsing...")]
+    ThreadGone,
+
+    #[error(transparent)]
+    Jmap(#[from] jmap_client::Error),
+}
+
 async fn op_uncollapse_thread(
     column_mailbox: MailboxId,
     collapsed_mail_id: MailId,
     thread_id: ThreadId,
     columns: Columns,
     backend: Arc<Backend>,
-) -> Result<(), jmap_client::Error> {
+) -> Result<(), UncollapseThreadError> {
     let mut thread_mails = backend.get_or_request_thread_mails(&thread_id).await?;
 
     let mut columns = columns.lock().unwrap();
@@ -917,14 +908,11 @@ async fn op_uncollapse_thread(
         new_entries
     };
 
-    let Some(thread_idx) = column
+    let thread_idx = column
         .entries()
         .iter()
         .position(|entry| matches!(entry, ColumnEntry::CollapsedThread(_, entry_thread_id) if entry_thread_id == &thread_id))
-    else {
-        warn!("Thread doesn't exist in column anymore. Abort uncollapsing...");
-        return Ok(());
-    };
+        .ok_or(UncollapseThreadError::ThreadGone)?;
 
     column
         .entries_mut()

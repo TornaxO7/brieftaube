@@ -5,7 +5,7 @@ use crate::{
         mails::types::{MailAddress, MailData, MailKeyword},
     },
     mailfs::{
-        model::{ColumnEntry, ColumnState, EntryId, Selection},
+        model::{ColumnEntry, ColumnState, SelectedEntry, Selection},
         widget::selection_type::DisplaySelectionType,
     },
 };
@@ -27,7 +27,7 @@ pub enum ColumnDisplay<'a> {
 impl<'a> ColumnDisplay<'a> {
     pub fn new(
         state: &'a mut ColumnState,
-        selection_mapping: &HashMap<EntryId, Selection>,
+        selection_mapping: &HashMap<SelectedEntry, Selection>,
         backend: Arc<Backend>,
     ) -> Self {
         match state {
@@ -37,7 +37,7 @@ impl<'a> ColumnDisplay<'a> {
                     .entries()
                     .iter()
                     .map(|entry| {
-                        let id = EntryId::from(entry);
+                        let id = SelectedEntry::from(entry);
                         let selection = selection_mapping
                             .get(&id)
                             .map(|selection| DisplaySelectionType::from(&selection.ty));

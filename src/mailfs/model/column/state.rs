@@ -1,15 +1,17 @@
 use std::sync::Arc;
 
 use crate::backend::{
-    Backend, mailbox::types::MailboxId, mails::types::MailId, threads::types::ThreadId,
-    types::CollapsedMail,
+    Backend, ParentMailboxId, mailbox::types::MailboxId, mails::types::MailId,
+    threads::types::ThreadId, types::CollapsedMail,
 };
 use ratatui::widgets::TableState;
-use tracing::warn;
+
+pub struct ColumnRemoveMissingEntry;
 
 /// Internal representation of a column
 #[derive(Clone, Debug)]
 pub struct Column {
+    mailbox: ParentMailboxId,
     /// The entries within the column
     entries: Vec<ColumnEntry>,
     /// The table state
@@ -17,14 +19,18 @@ pub struct Column {
 }
 
 impl Column {
-    pub fn new(entries: Vec<ColumnEntry>) -> Self {
+    pub fn new(mailbox: ParentMailboxId, entries: Vec<ColumnEntry>) -> Self {
         let state = if entries.is_empty() {
             TableState::new()
         } else {
             TableState::new().with_selected(0)
         };
 
-        Self { entries, state }
+        Self {
+            mailbox,
+            entries,
+            state,
+        }
     }
 
     pub fn selected_idx(&self) -> Option<usize> {
@@ -35,12 +41,6 @@ impl Column {
         self.state.selected().and_then(|idx| self.entries.get(idx))
     }
 
-    // pub fn selected_entry_mut(&mut self) -> Option<&mut ColumnStateEntry> {
-    //     self.state
-    //         .selected()
-    //         .and_then(|idx| self.entries.get_mut(idx))
-    // }
-
     pub fn entries(&self) -> &[ColumnEntry] {
         &self.entries
     }
@@ -49,8 +49,35 @@ impl Column {
         &mut self.entries
     }
 
-    pub fn add_mailbox(&mut self, id: &MailboxId, backend: Arc<Backend>) {
-        let mailbox_to_add = backend.get_mailbox_data(id).unwrap();
+    pub fn add_entry(&mut self, entry: ColumnEntryDiff, backend: Arc<Backend>) {
+        match entry {
+            ColumnEntryDiff::Mailbox(mailbox_id) => self.add_mailbox(mailbox_id, backend),
+            ColumnEntryDiff::SingleMail(mail_id) => self.add_single_mail(mail_id, backend),
+            ColumnEntryDiff::ThreadMail { mail, thread } => {
+                self.add_thread_mail(mail, thread, backend)
+            }
+        }
+    }
+
+    pub fn remove_entry(
+        &mut self,
+        entry: ColumnEntryDiff,
+        backend: Arc<Backend>,
+    ) -> Result<(), ColumnRemoveMissingEntry> {
+        match entry {
+            ColumnEntryDiff::Mailbox(mailbox_id) => self.remove_mailbox(mailbox_id),
+            ColumnEntryDiff::SingleMail(mail_id) => self.remove_single_mail(mail_id),
+            ColumnEntryDiff::ThreadMail { mail, thread } => {
+                self.remove_thread_mail(mail, thread, backend)
+            }
+        }
+    }
+}
+
+// Adding entries
+impl Column {
+    fn add_mailbox(&mut self, id: MailboxId, backend: Arc<Backend>) {
+        let mailbox_to_add = backend.get_mailbox_data(&id).unwrap();
 
         let add_idx = self
             .entries
@@ -74,31 +101,161 @@ impl Column {
             .insert(add_idx, ColumnEntry::Mailbox(id.clone()));
     }
 
-    pub fn remove_mailbox(&mut self, id: &MailboxId) {
-        let Some(idx) = self
+    fn add_single_mail(&mut self, id: MailId, backend: Arc<Backend>) {
+        let mail_to_add = backend.get_mail(&id).unwrap();
+        let add_idx = self
             .entries
             .iter()
-            .position(|entry| matches!(entry, ColumnEntry::Mailbox(other) if other == id))
-        else {
-            warn!(concat![
-                "The original mailbox, which should be moved, doesn't seem to be there anymore.\n",
-                "Aborting mailbox moving."
-            ]);
-            return;
-        };
+            .position(|entry| match entry {
+                ColumnEntry::Mailbox(_)
+                | ColumnEntry::ThreadStart { .. }
+                | ColumnEntry::ThreadChild(_, _)
+                | ColumnEntry::ThreadEnd(_, _) => false,
+
+                ColumnEntry::SingleMail(mail_id) | ColumnEntry::CollapsedThread(mail_id, _) => {
+                    let other = backend.get_mail(mail_id).unwrap();
+                    other.received_at > mail_to_add.received_at
+                }
+            })
+            .unwrap_or_else(|| {
+                self.entries
+                    .iter()
+                    .position(|entry| !matches!(entry, ColumnEntry::Mailbox(_)))
+                    .unwrap_or(0)
+            });
+
+        self.entries.insert(add_idx, ColumnEntry::SingleMail(id));
+    }
+
+    fn add_thread_mail(&mut self, mail_id: MailId, thread_id: ThreadId, backend: Arc<Backend>) {
+        let mail_to_add = backend.get_mail(&mail_id).unwrap();
+        let thread_entry = self.entries.iter_mut().find_map(|entry| match entry {
+            ColumnEntry::Mailbox(_)
+            | ColumnEntry::SingleMail(_)
+            | ColumnEntry::ThreadChild(_, _)
+            | ColumnEntry::ThreadEnd(_, _) => None,
+
+            ColumnEntry::CollapsedThread(mail_id, _)
+            | ColumnEntry::ThreadStart {
+                collapsed_mail_id: mail_id,
+                ..
+            } => Some(mail_id),
+        });
+
+        match thread_entry {
+            Some(thread_mail_id) => {
+                let thread_mail = backend.get_mail(thread_mail_id).unwrap();
+
+                if mail_to_add.received_at > thread_mail.received_at {
+                    *thread_mail_id = mail_id;
+                }
+            }
+            None => {
+                let add_idx = self
+                    .entries
+                    .iter()
+                    .position(|entry| match entry {
+                        ColumnEntry::Mailbox(_)
+                        | ColumnEntry::ThreadStart { .. }
+                        | ColumnEntry::ThreadChild(_, _)
+                        | ColumnEntry::ThreadEnd(_, _) => false,
+
+                        ColumnEntry::SingleMail(mail_id)
+                        | ColumnEntry::CollapsedThread(mail_id, _) => {
+                            let other = backend.get_mail(mail_id).unwrap();
+                            mail_to_add.received_at > other.received_at
+                        }
+                    })
+                    .unwrap_or_else(|| {
+                        self.entries
+                            .iter()
+                            .position(|entry| !matches!(entry, ColumnEntry::Mailbox(_)))
+                            .unwrap_or(0)
+                    });
+
+                self.entries
+                    .insert(add_idx, ColumnEntry::CollapsedThread(mail_id, thread_id));
+            }
+        }
+    }
+}
+
+// removing entries
+impl Column {
+    fn remove_mailbox(&mut self, id: MailboxId) -> Result<(), ColumnRemoveMissingEntry> {
+        let idx = self
+            .entries
+            .iter()
+            .position(|entry| matches!(entry, ColumnEntry::Mailbox(other) if other == &id))
+            .ok_or(ColumnRemoveMissingEntry)?;
 
         self.entries.remove(idx);
+        Ok(())
     }
 
-    pub fn add_mail(&mut self, id: &MailId, backend: Arc<Backend>) {
-        todo!(
-            "if single mail -> just add; otherwise: Look for thread and replace thread entry if it's newer"
-        )
+    fn remove_single_mail(&mut self, id: MailId) -> Result<(), ColumnRemoveMissingEntry> {
+        let idx = self
+            .entries
+            .iter()
+            .position(|entry| matches!(entry, ColumnEntry::SingleMail(other) if other == &id))
+            .ok_or(ColumnRemoveMissingEntry)?;
+
+        self.entries.remove(idx);
+        Ok(())
     }
 
-    pub fn remove_mail(&mut self, id: &MailId) {
-        todo!()
+    fn remove_thread_mail(
+        &mut self,
+        mail_id: MailId,
+        thread_id: ThreadId,
+        backend: Arc<Backend>,
+    ) -> Result<(), ColumnRemoveMissingEntry> {
+        let column_mailbox = self.mailbox.as_ref().unwrap();
+
+        let (idx, old_starting_mail_id_of_thread) = self
+            .entries
+            .iter_mut()
+            .enumerate()
+            .find_map(|(idx, entry)| match entry {
+                ColumnEntry::Mailbox(_)
+                | ColumnEntry::SingleMail(_)
+                | ColumnEntry::ThreadChild(_, _)
+                | ColumnEntry::ThreadEnd(_, _) => None,
+                ColumnEntry::CollapsedThread(other_mail_id, _)
+                | ColumnEntry::ThreadStart {
+                    collapsed_mail_id: other_mail_id,
+                    ..
+                } => (other_mail_id == &mail_id).then_some((idx, other_mail_id)),
+            })
+            .ok_or(ColumnRemoveMissingEntry)?;
+
+        let thread_mails = backend.get_thread_mails(&thread_id).unwrap();
+
+        let next_thread_mail_in_mailbox = thread_mails.iter().rev().find(|thread_mail| {
+            let is_different_mail = thread_mail.id != mail_id;
+            let is_also_in_this_mailbox = thread_mail.mailbox_ids.contains(column_mailbox);
+
+            is_different_mail && is_also_in_this_mailbox
+        });
+
+        match next_thread_mail_in_mailbox {
+            Some(next) => {
+                *old_starting_mail_id_of_thread = next.id.clone();
+            }
+            None => {
+                self.entries.remove(idx);
+            }
+        };
+
+        Ok(())
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum ColumnEntryDiff {
+    Mailbox(MailboxId),
+    SingleMail(MailId),
+    ThreadMail { mail: MailId, thread: ThreadId },
 }
 
 #[derive(Clone, Debug)]
