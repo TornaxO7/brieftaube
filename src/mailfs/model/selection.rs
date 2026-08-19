@@ -1,5 +1,5 @@
 use crate::{
-    backend::{mailbox::types::MailboxId, mails::types::MailId},
+    backend::{ParentMailboxId, mailbox::types::MailboxId, mails::types::MailId},
     mailfs::model::ColumnEntry,
 };
 
@@ -16,6 +16,7 @@ impl From<ColumnEntry> for EntryId {
 }
 
 impl From<&ColumnEntry> for EntryId {
+    // TODO: If selected a collapsed thread => Select all mails from the collapsed thread
     fn from(entry: &ColumnEntry) -> Self {
         match entry {
             ColumnEntry::Mailbox(mailbox_id) => Self::Mailbox(mailbox_id.clone()),
@@ -26,6 +27,12 @@ impl From<&ColumnEntry> for EntryId {
             | ColumnEntry::ThreadEnd(mail_id, _) => Self::Mail(mail_id.clone()),
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct Selection {
+    pub mailbox: ParentMailboxId,
+    pub ty: SelectionType,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

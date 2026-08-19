@@ -1,7 +1,11 @@
+use std::sync::Arc;
+
 use crate::backend::{
-    mailbox::types::MailboxId, mails::types::MailId, threads::types::ThreadId, types::CollapsedMail,
+    Backend, mailbox::types::MailboxId, mails::types::MailId, threads::types::ThreadId,
+    types::CollapsedMail,
 };
 use ratatui::widgets::TableState;
+use tracing::warn;
 
 /// Internal representation of a column
 #[derive(Clone, Debug)]
@@ -43,6 +47,57 @@ impl Column {
 
     pub fn entries_mut(&mut self) -> &mut Vec<ColumnEntry> {
         &mut self.entries
+    }
+
+    pub fn add_mailbox(&mut self, id: &MailboxId, backend: Arc<Backend>) {
+        let mailbox_to_add = backend.get_mailbox_data(id).unwrap();
+
+        let add_idx = self
+            .entries
+            .iter()
+            .map_while(|entry| match entry {
+                ColumnEntry::Mailbox(id) => Some(id),
+                _ => None,
+            })
+            .position(|id| {
+                let other = backend.get_mailbox_data(id).unwrap();
+                other.sort_order > mailbox_to_add.sort_order
+            })
+            .unwrap_or_else(|| {
+                self.entries
+                    .iter()
+                    .position(|entry| !matches!(entry, ColumnEntry::Mailbox(_)))
+                    .unwrap_or(0)
+            });
+
+        self.entries
+            .insert(add_idx, ColumnEntry::Mailbox(id.clone()));
+    }
+
+    pub fn remove_mailbox(&mut self, id: &MailboxId) {
+        let Some(idx) = self
+            .entries
+            .iter()
+            .position(|entry| matches!(entry, ColumnEntry::Mailbox(other) if other == id))
+        else {
+            warn!(concat![
+                "The original mailbox, which should be moved, doesn't seem to be there anymore.\n",
+                "Aborting mailbox moving."
+            ]);
+            return;
+        };
+
+        self.entries.remove(idx);
+    }
+
+    pub fn add_mail(&mut self, id: &MailId, backend: Arc<Backend>) {
+        todo!(
+            "if single mail -> just add; otherwise: Look for thread and replace thread entry if it's newer"
+        )
+    }
+
+    pub fn remove_mail(&mut self, id: &MailId) {
+        todo!()
     }
 }
 
