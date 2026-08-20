@@ -1,21 +1,55 @@
-use crate::backend::{Backend, MailboxData, ParentMailboxId};
+use crate::backend::{Backend, FetchRole, MailboxData, ParentMailboxId, types::RemoteData};
+use tokio::sync::watch;
 
 impl Backend {
     pub async fn get_mailbox_children(
         &self,
         parent: ParentMailboxId,
     ) -> Result<Vec<MailboxData>, jmap_client::Error> {
-        let children = {
-            let store = self.store.lock().unwrap();
-            store
-                .mailbox
-                .get_children_data(&parent)
-                .map(|children| children.to_owned())
+        let role = {
+            let mut store = self.store.lock().unwrap();
+            let ids = store.mailbox.get_children_ids_mut(&parent);
+
+            match ids {
+                RemoteData::NotRequested => {
+                    let (tx, rx) = watch::channel(());
+                    *ids = RemoteData::Requested { notifier: rx };
+                    FetchRole::Request(tx)
+                }
+                RemoteData::Requested { notifier } => FetchRole::Wait(notifier.clone()),
+                RemoteData::Loaded(ids) => {
+                    let ids = ids.clone();
+
+                    let datas = ids
+                        .into_iter()
+                        .map(|id| store.mailbox.get_data(&id).clone())
+                        .collect();
+
+                    return Ok(datas);
+                }
+            }
         };
 
-        match children {
-            Some(cached_children) => Ok(cached_children),
-            None => {
+        match role {
+            FetchRole::Wait(mut notifier) => {
+                notifier.changed().await.unwrap();
+
+                let mut store = self.store.lock().unwrap();
+                let ids = store
+                    .mailbox
+                    .get_children_ids(&parent)
+                    .loaded()
+                    .unwrap()
+                    .clone();
+
+                let datas = ids
+                    .into_iter()
+                    .map(|id| store.mailbox.get_data(&id).clone())
+                    .collect();
+
+                Ok(datas)
+            }
+            FetchRole::Request(notifier) => {
                 let mut response = {
                     let mut request = self.client.build();
 
@@ -52,9 +86,9 @@ impl Backend {
                     .mailbox
                     .set_children_query_state(parent.clone(), mailbox_get_response.take_state());
 
-                for child_mailbox in child_mailboxes.iter().cloned() {
-                    store.mailbox.add(child_mailbox);
-                }
+                store.mailbox.add_children(&parent, child_mailboxes.clone());
+
+                let _ = notifier.send(());
 
                 Ok(child_mailboxes)
             }

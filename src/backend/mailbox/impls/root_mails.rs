@@ -1,20 +1,45 @@
 use crate::backend::{
-    Backend, MailData, MailId, MailboxId, ThreadId, mailbox, mailbox::store::RootMails, mails,
-    threads, types::CollapsedMail,
+    Backend, FetchRole, MailData, MailId, MailboxId, ThreadId,
+    mailbox::{self, store::RootMails},
+    mails, threads,
+    types::RemoteData,
 };
 use jmap_client::core::{
     query::QueryResponse,
     response::{EmailGetResponse, ThreadGetResponse},
 };
+use tokio::sync::watch;
 
 impl Backend {
-    pub async fn get_or_request_mailbox_root_mails(
+    pub async fn get_mailbox_root_mails(
         &self,
         id: &MailboxId,
-    ) -> Result<Vec<CollapsedMail>, jmap_client::Error> {
-        match self.get_mailbox_root_mails(id) {
-            Some(cached_root_mails) => Ok(cached_root_mails),
-            None => {
+    ) -> Result<Vec<MailId>, jmap_client::Error> {
+        let role = {
+            let mut store = self.store.lock().unwrap();
+            let root_mails = store.mailbox.get_root_mails_mut(id);
+
+            match root_mails {
+                RemoteData::NotRequested => {
+                    let (tx, rx) = watch::channel(());
+                    *root_mails = RemoteData::Requested { notifier: rx };
+                    FetchRole::Request(tx)
+                }
+                RemoteData::Requested { notifier } => FetchRole::Wait(notifier.clone()),
+                RemoteData::Loaded(root_mails) => {
+                    return Ok(root_mails.ids.clone());
+                }
+            }
+        };
+
+        match role {
+            FetchRole::Wait(mut notifier) => {
+                notifier.changed().await.unwrap();
+                let mut store = self.store.lock().unwrap();
+                let root_mails = store.mailbox.get_root_mails(id).loaded().unwrap();
+                Ok(root_mails.ids.clone())
+            }
+            FetchRole::Request(notifier) => {
                 let mut response = {
                     let mut request = self.client.build();
 
@@ -44,7 +69,7 @@ impl Backend {
                     request.send().await?
                 };
 
-                {
+                let root_mail_ids = {
                     let mut store = self.store.lock().unwrap();
 
                     handle_thread_response(
@@ -74,46 +99,20 @@ impl Backend {
                             .unwrap_query_email()
                             .unwrap(),
                     );
-                }
 
-                Ok(self.get_mailbox_root_mails(id).unwrap())
-            }
-        }
-    }
-
-    fn get_mailbox_root_mails(&self, id: &MailboxId) -> Option<Vec<CollapsedMail>> {
-        let store = self.store.lock().unwrap();
-        store.mailbox.get_root_mails(id).map(|root_mails| {
-            let mut collapsed_mails: Vec<CollapsedMail> = Vec::with_capacity({
-                store
-                    .mailbox
-                    .get_data(id)
-                    .map(|mailbox| mailbox.total_threads)
-                    .unwrap_or(16)
-            });
-
-            for root_mail_id in &root_mails.ids {
-                let root_mail = store.mails.get(&root_mail_id).expect("Requested");
-                let root_mail_thread = store
-                    .threads
-                    .get_mail_ids(&root_mail.thread_id)
-                    .expect("Requested");
-
-                let thread_has_only_one_mail = root_mail_thread.len() == 1;
-                let entry = if thread_has_only_one_mail {
-                    CollapsedMail::SingleMail(root_mail_id.clone())
-                } else {
-                    CollapsedMail::CollapsedThread(
-                        root_mail_id.clone(),
-                        root_mail.thread_id.clone(),
-                    )
+                    let _ = notifier.send(());
+                    store
+                        .mailbox
+                        .get_root_mails(id)
+                        .loaded()
+                        .unwrap()
+                        .ids
+                        .clone()
                 };
 
-                collapsed_mails.push(entry);
+                Ok(root_mail_ids)
             }
-
-            collapsed_mails
-        })
+        }
     }
 }
 
@@ -126,7 +125,7 @@ fn handle_thread_response(store: &mut threads::Store, mut response: ThreadGetRes
             .map(|id| MailId(id.clone()))
             .collect();
 
-        store.add(id, mail_ids);
+        store.add(&id, mail_ids);
     }
 
     store.set_state(response.take_state());

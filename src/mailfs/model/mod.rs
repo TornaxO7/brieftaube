@@ -828,7 +828,7 @@ async fn init_mailbox(
     // the first mails from the mailbox
     if let Some(parent_mailbox_id) = id.as_ref() {
         let collapsed_mails = backend
-            .get_or_request_mailbox_root_mails(parent_mailbox_id)
+            .get_mailbox_root_mails(parent_mailbox_id)
             .await?;
 
         entries.extend(collapsed_mails.into_iter().map(ColumnEntry::from));
@@ -974,7 +974,7 @@ fn move_mailbox(
                 let is_not_at_end_of_entries = if up { idx > 0 } else { idx < last_mailbox_idx };
                 let there_are_at_least_two_mailboxes = last_mailbox_idx > 0;
                 if is_not_at_end_of_entries && there_are_at_least_two_mailboxes {
-                    let mailbox = backend.get_mailbox_data(&mailbox_id).unwrap();
+                    let mailbox = backend.get_mailbox(&mailbox_id).unwrap();
                     let other_mailbox = {
                         let id = {
                             let columns = columns.lock().unwrap();
@@ -994,7 +994,7 @@ fn move_mailbox(
                                 .unwrap()
                         };
 
-                        backend.get_mailbox_data(&id).unwrap()
+                        backend.get_mailbox(&id).unwrap()
                     };
 
                     let update1 = MailboxUpdate {
@@ -1108,7 +1108,7 @@ async fn create_new_mailbox(
                 .iter()
                 .map_while(|entry| {
                     if let ColumnEntry::Mailbox(id) = entry {
-                        let mailbox = backend.get_mailbox_data(id).unwrap();
+                        let mailbox = backend.get_mailbox(id).unwrap();
                         Some(mailbox)
                     } else {
                         None
@@ -1143,7 +1143,7 @@ async fn create_new_mailbox(
         .take_while(|entry| matches!(entry, ColumnEntry::Mailbox(_)))
         .position(|entry| {
             if let ColumnEntry::Mailbox(other_id) = entry {
-                let mailbox = backend.get_mailbox_data(other_id).unwrap();
+                let mailbox = backend.get_mailbox(other_id).unwrap();
                 mailbox.sort_order > new_mailbox.sort_order.unwrap()
             } else {
                 false

@@ -72,7 +72,7 @@ impl Column {
 // Adding entries
 impl Column {
     fn add_mailbox(&mut self, id: MailboxId, backend: Arc<Backend>) {
-        let mailbox_to_add = backend.get_mailbox_data(&id).unwrap();
+        let mailbox_to_add = backend.get_mailbox(&id).unwrap();
 
         let add_idx = self
             .entries
@@ -82,7 +82,7 @@ impl Column {
                 _ => None,
             })
             .position(|id| {
-                let other = backend.get_mailbox_data(id).unwrap();
+                let other = backend.get_mailbox(id).unwrap();
                 other.sort_order > mailbox_to_add.sort_order
             })
             .unwrap_or_else(|| {

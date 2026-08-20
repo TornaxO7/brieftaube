@@ -1,40 +1,23 @@
-use jmap_client::core::query::QueryResponse;
-use tracing::instrument;
-
 use super::types::{MailboxData, MailboxId};
 use crate::backend::{
     GetState, QueryState,
     mailbox::types::{MailboxUpdate, ParentMailboxId},
     mails::types::MailId,
+    types::RemoteData,
 };
+use jmap_client::core::query::QueryResponse;
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
-pub struct RootMails {
-    pub ids: Vec<MailId>,
-    pub _state: QueryState,
-}
-
-impl RootMails {
-    pub fn new(mut response: QueryResponse) -> Self {
-        let state = response.take_query_state();
-        let ids = response.take_ids().into_iter().map(MailId).collect();
-
-        Self { ids, _state: state }
-    }
-}
-
-// IDEA: Use `Arc` insead of the actual data for cheap clones out of the cache
+/// Convention: Any available Id means that its data exists in `mailboxes`
 pub struct Store {
     mailboxes: HashMap<MailboxId, MailboxData>,
     // Each `MailboxId` has an entry in the `mailboxes` attribute.
     // `Vec` is **unsorted**
-    children_mapping: HashMap<ParentMailboxId, Vec<MailboxId>>,
+    children_mapping: HashMap<ParentMailboxId, RemoteData<Vec<MailboxId>>>,
+    root_mails: HashMap<MailboxId, RemoteData<RootMails>>,
 
     /// stores the query state of the child-mailboxes of the given parent-mailbox
     children_query_state: HashMap<ParentMailboxId, QueryState>,
-    /// stores the query state for querying the root mails of a mailbox
-    root_mails_state: HashMap<MailboxId, RootMails>,
 }
 
 impl Store {
@@ -43,49 +26,62 @@ impl Store {
             mailboxes: HashMap::new(),
             children_mapping: HashMap::new(),
             children_query_state: HashMap::new(),
-            root_mails_state: HashMap::new(),
+            root_mails: HashMap::new(),
         }
     }
 
+    pub fn get_data(&self, id: &MailboxId) -> &MailboxData {
+        self.mailboxes.get(id).unwrap()
+    }
+
+    pub fn get_data_mut(&mut self, id: &MailboxId) -> &mut MailboxData {
+        self.mailboxes.get_mut(id).unwrap()
+    }
+}
+
+// root mails
+impl Store {
+    pub fn get_root_mails(&mut self, parent: &MailboxId) -> &RemoteData<RootMails> {
+        self.get_root_mails_mut(parent)
+    }
+
+    pub fn get_root_mails_mut(&mut self, parent: &MailboxId) -> &mut RemoteData<RootMails> {
+        self.root_mails
+            .entry(parent.clone())
+            .or_insert(RemoteData::NotRequested)
+    }
+
+    pub fn set_root_mails(&mut self, parent: MailboxId, root_mails: RootMails) {
+        self.root_mails
+            .insert(parent, RemoteData::Loaded(root_mails));
+    }
+}
+
+// children ids
+impl Store {
     pub fn set_children_query_state(&mut self, parent: ParentMailboxId, new_state: GetState) {
         self.children_query_state.insert(parent, new_state);
     }
 
-    pub fn get_root_mails(&self, parent: &MailboxId) -> Option<&RootMails> {
-        self.root_mails_state.get(parent)
+    pub fn get_children_ids(&mut self, parent_id: &ParentMailboxId) -> &RemoteData<Vec<MailboxId>> {
+        self.get_children_ids_mut(parent_id)
     }
 
-    pub fn set_root_mails(&mut self, parent: MailboxId, root_mails: RootMails) {
-        self.root_mails_state.insert(parent, root_mails);
-    }
-
-    pub fn get_data(&self, id: &MailboxId) -> Option<&MailboxData> {
-        self.mailboxes.get(id)
-    }
-
-    #[instrument(skip(self))]
-    pub fn get_children(&self, parent: &ParentMailboxId) -> Option<&[MailboxId]> {
-        let children = self
-            .children_mapping
-            .get(parent)
-            .map(|children| children.as_slice());
-
-        children
-    }
-
-    pub fn get_children_data(&self, parent_id: &Option<MailboxId>) -> Option<Vec<MailboxData>> {
-        let children_ids = self.children_mapping.get(parent_id)?;
-
-        children_ids
-            .iter()
-            .map(|id| self.mailboxes.get(id).cloned())
-            .collect()
+    pub fn get_children_ids_mut(
+        &mut self,
+        parent_id: &ParentMailboxId,
+    ) -> &mut RemoteData<Vec<MailboxId>> {
+        self.children_mapping
+            .entry(parent_id.clone())
+            .or_insert(RemoteData::NotRequested)
     }
 }
 
 /// validation
 impl Store {
     /// Depth of the given parent (root = 0, its children = 1, ...).
+    ///
+    /// Panics if any of the parent mailboxes aren't loaded yet.
     pub fn depth_of(&self, parent_id: &Option<MailboxId>) -> usize {
         let mut depth = 0;
         let mut current = parent_id.clone();
@@ -101,13 +97,14 @@ impl Store {
         depth
     }
 
+    /// Panics if children haven't been loaded yet.
     pub fn contains_mailbox_name(&self, parent: &ParentMailboxId, name: &str) -> bool {
         let Some(children) = self.children_mapping.get(parent) else {
             return false;
         };
 
-        for child_id in children {
-            let child = self.mailboxes.get(child_id).unwrap();
+        for child_id in children.loaded().unwrap() {
+            let child = self.get_data(child_id);
 
             if child.name == name {
                 return true;
@@ -120,85 +117,97 @@ impl Store {
 
 // Methods altering the cache
 impl Store {
-    #[instrument(skip(self))]
-    pub fn add(&mut self, mailbox: MailboxData) {
-        let id = mailbox.id.clone();
+    pub fn add_children(&mut self, parent: &ParentMailboxId, children: Vec<MailboxData>) {
+        let children_ids: Vec<MailboxId> = children.iter().map(|data| data.id.clone()).collect();
 
         self.children_mapping
-            .entry(mailbox.parent_id.clone())
-            .and_modify(|siblings| siblings.push(id.clone()))
-            .or_insert(vec![id.clone()]);
+            .insert(parent.clone(), RemoteData::Loaded(children_ids));
 
-        self.mailboxes.insert(id.clone(), mailbox.clone());
+        for child in children {
+            self.mailboxes.insert(child.id.clone(), child);
+        }
     }
 
     pub fn remove(&mut self, id: &MailboxId) -> Option<MailboxData> {
         let mailbox = self.mailboxes.remove(id)?;
-        if let Some(siblings) = self.children_mapping.get_mut(&mailbox.parent_id) {
-            if let Some(pos) = siblings.iter().position(|other| other == id) {
-                siblings.remove(pos);
-            }
-        }
+
+        let siblings = self
+            .children_mapping
+            .get_mut(&mailbox.parent_id)
+            .expect("`add_children` only allows that we fetch all siblings, so it must exist")
+            .loaded_mut()
+            .expect("Siblings must be loaded");
+
+        let pos = siblings
+            .iter()
+            .position(|other| other == id)
+            .expect("It's stored that they are siblings...");
+
+        siblings.remove(pos);
 
         self.children_query_state.remove(&Some(id.clone()));
         self.children_mapping.remove(&Some(mailbox.id.clone()));
-        self.root_mails_state.remove(id);
+        self.root_mails.remove(id);
         Some(mailbox)
     }
 
     pub fn update(&mut self, new: MailboxUpdate) {
-        if let (Some(new_name), Some(mailbox)) = (new.name, self.mailboxes.get_mut(&new.id)) {
+        if let Some(new_name) = new.name {
+            let mailbox = self.get_data_mut(&new.id);
             mailbox.name = new_name;
         }
 
-        if let (Some(new_role), Some(mailbox)) = (new.role, self.mailboxes.get_mut(&new.id)) {
+        if let Some(new_role) = new.role {
+            let mailbox = self.get_data_mut(&new.id);
             mailbox.role = new_role;
         }
 
-        if let (Some(new_sort_order), Some(mailbox)) =
-            (new.sort_order, self.mailboxes.get_mut(&new.id))
-        {
+        if let Some(new_sort_order) = new.sort_order {
+            let mailbox = self.get_data_mut(&new.id);
             mailbox.sort_order = new_sort_order;
-
-            if let Some(siblings) = self.children_mapping.get_mut(&mailbox.parent_id) {
-                let old_pos = siblings
-                    .iter()
-                    .position(|child| child == &mailbox.id)
-                    .unwrap();
-                let child = siblings.remove(old_pos);
-
-                let new_pos = siblings.partition_point(|sibling| {
-                    self.mailboxes.get(sibling).unwrap().sort_order < new_sort_order
-                });
-                siblings.insert(new_pos, child);
-            }
         }
 
         if let Some(new_parent) = new.parent_id {
-            if let Some(mailbox) = self.mailboxes.get(&new.id) {
-                // remove from old siblings
-                if let Some(children) = self.children_mapping.get_mut(&mailbox.parent_id) {
-                    children.retain(|child| child != &mailbox.id);
-                }
+            let current_parent = {
+                let mailbox = self.get_data(&new.id);
+                mailbox.parent_id.clone()
+            };
 
-                // add to new siblings
-                self.children_mapping
-                    .entry(mailbox.parent_id.clone())
-                    .and_modify(|siblings| {
-                        let idx = siblings.partition_point(|child| {
-                            let other = self.mailboxes.get(child).unwrap();
-                            other.sort_order < mailbox.sort_order
-                        });
+            // remove from old siblings
+            {
+                let siblings = self
+                    .get_children_ids_mut(&current_parent)
+                    .loaded_mut()
+                    .unwrap();
 
-                        siblings.insert(idx, mailbox.id.clone());
-                    })
-                    .or_insert(vec![mailbox.id.clone()]);
+                let pos = siblings.iter().position(|other| other == &new.id).unwrap();
+                siblings.remove(pos);
+            }
+
+            // add to new siblings
+            {
+                let siblings = self.get_children_ids_mut(&new_parent).loaded_mut().unwrap();
+                siblings.push(new.id.clone());
             }
 
             // finally, update the parent
-            if let Some(mailbox) = self.mailboxes.get_mut(&new.id) {
-                mailbox.parent_id = new_parent;
-            }
+            let mailbox = self.get_data_mut(&new.id);
+            mailbox.parent_id = new_parent;
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RootMails {
+    pub ids: Vec<MailId>,
+    pub _state: QueryState,
+}
+
+impl RootMails {
+    pub fn new(mut response: QueryResponse) -> Self {
+        let state = response.take_query_state();
+        let ids = response.take_ids().into_iter().map(MailId).collect();
+
+        Self { ids, _state: state }
     }
 }

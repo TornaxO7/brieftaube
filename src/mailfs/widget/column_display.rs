@@ -69,7 +69,7 @@ impl ColumnDisplayEntry {
     ) -> Self {
         let data = match entry {
             ColumnEntry::Mailbox(id) => {
-                let mailbox = backend.get_mailbox_data(id).unwrap();
+                let mailbox = backend.get_mailbox(id).unwrap();
                 ColumnDisplayEntryData::mailbox(&mailbox)
             }
             ColumnEntry::SingleMail(mail_id) => {

@@ -462,7 +462,7 @@ fn render_path(area: Rect, buf: &mut Buffer, model: &Model) {
         .iter()
         .map(|id| match id {
             Some(id) => {
-                let mailbox = backend.get_mailbox_data(id).unwrap();
+                let mailbox = backend.get_mailbox(id).unwrap();
                 format!("{}/", mailbox.name)
             }
             None => String::from("/"),

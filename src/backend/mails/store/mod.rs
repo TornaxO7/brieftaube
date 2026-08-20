@@ -25,9 +25,7 @@ impl Store {
     }
 
     pub fn get(&mut self, id: &MailId) -> &RemoteData<MailData> {
-        self.mails
-            .entry(id.clone())
-            .or_insert(RemoteData::NotRequested)
+        self.get_mut(id)
     }
 
     pub fn get_mut(&mut self, id: &MailId) -> &mut RemoteData<MailData> {

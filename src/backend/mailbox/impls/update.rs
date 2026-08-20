@@ -35,6 +35,7 @@ impl Backend {
 
         let mut store = self.store.lock().unwrap();
 
+        // FIX: return the error
         for mailbox in mailboxes {
             match response.updated(mailbox.id.as_str()) {
                 Ok(None) => {}
