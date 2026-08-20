@@ -1,23 +1,26 @@
 mod column;
+// mod columns;
 mod selection;
 
 use super::UserAction;
 use crate::{
     backend::{
-        Backend, MailId, MailboxData, MailboxId, MailboxNew, MailboxUpdate, ThreadId,
+        Backend, LoadingRole, MailId, MailboxId, MailboxNew, MailboxUpdate, ThreadId,
         mailbox::{
-            RemoveMailboxOption,
+            BATCH_SIZE, RemoveMailboxOption,
             types::{ParentMailboxId, TOP_PARENT_MAILBOX_ID},
         },
         mails::types::{MailKeyword, MailUpdate},
     },
-    mailfs::model::column::ColumnEntryDiff,
+    mailfs::model::column::{MailEntry, ThreadRole},
     task_manager::TaskManager,
     utils::{
         keybindmanager::KeybindManager,
         layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent, LayerOverlay},
     },
 };
+use futures::stream;
+use futures::stream::StreamExt;
 use std::{
     collections::{HashMap, HashSet},
     rc::Rc,
@@ -25,6 +28,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use throbber_widgets_tui::ThrobberState;
+use tokio::sync::watch;
 use tracing::{debug, error, warn};
 
 pub use column::{Column, ColumnEntry, ColumnState};
@@ -56,13 +60,10 @@ pub struct Model {
 
 impl Model {
     pub fn new(backend: Arc<Backend>, task_manager: Rc<TaskManager>) -> Self {
-        let columns = Arc::new(Mutex::new(HashMap::from([(
-            TOP_PARENT_MAILBOX_ID,
-            ColumnState::loading(),
-        )])));
+        let columns = Arc::new(Mutex::new(HashMap::new()));
+
         let columns2 = columns.clone();
         let backend2 = backend.clone();
-
         task_manager.spawn(async move {
             init_mailfs(columns2, backend2).await;
         });
@@ -183,65 +184,38 @@ impl<'a> Model {
             .and_then(|center| center.loaded()?.selected_entry())
             .map(|selected| match selected.clone() {
                 ColumnEntry::Mailbox(id) => RightColumn::Mailbox(id),
-                ColumnEntry::SingleMail(mail_id)
-                | ColumnEntry::CollapsedThread(mail_id, _)
-                | ColumnEntry::ThreadStart { mail_id, .. }
-                | ColumnEntry::ThreadChild(mail_id, _)
-                | ColumnEntry::ThreadEnd(mail_id, _) => RightColumn::MailPreview(mail_id),
+                ColumnEntry::Mail(id) => RightColumn::MailPreview(id.mail_id),
             })
     }
 
     fn load_right_column_for(&self, entry: ColumnEntry) {
         match entry {
             ColumnEntry::Mailbox(id) => {
-                let should_init_mailbox = {
-                    let mut columns = self.columns.lock().unwrap();
-                    columns
-                        .entry(Some(id.clone()))
-                        .or_insert(ColumnState::loading())
-                        .loaded()
-                        .is_none()
-                };
+                let id = id.clone();
+                let columns = self.columns.clone();
+                let backend = self.backend.clone();
 
-                if should_init_mailbox {
-                    let id = id.clone();
-                    let columns = self.columns.clone();
-                    let backend = self.backend.clone();
-
-                    self.task_manager.spawn(async move {
-                        match init_mailbox(Some(id), columns, backend).await {
-                            Ok(()) => {}
-                            Err(err) => {
-                                error!("Couldn't initialize mailbox for right column:\n{err}");
-                            }
+                self.task_manager.spawn(async move {
+                    match init_mailbox(Some(id), columns, backend).await {
+                        Ok(()) => {}
+                        Err(err) => {
+                            error!("Couldn't initialize mailbox for right column:\n{err}");
+                            return;
                         }
-                    });
-                }
+                    }
+                });
             }
-            ColumnEntry::SingleMail(mail_id)
-            | ColumnEntry::CollapsedThread(mail_id, _)
-            | ColumnEntry::ThreadStart { mail_id, .. }
-            | ColumnEntry::ThreadChild(mail_id, _)
-            | ColumnEntry::ThreadEnd(mail_id, _) => {
-                let misses_attachments = {
-                    let mail = self.backend.get_mail(&mail_id).unwrap();
-                    mail.attachments.loaded().is_none()
-                };
-
-                tracing::debug!("Hello: {}", misses_attachments);
-
-                if misses_attachments {
-                    let mail_id = mail_id.clone();
-                    let backend = self.backend.clone();
-                    self.task_manager.spawn(async move {
-                        match backend.prefetch_mail_attachments(&mail_id).await {
-                            Ok(()) => {}
-                            Err(err) => {
-                                error!("Couldn't fetch mail attachments:\n{err}");
-                            }
+            ColumnEntry::Mail(mail) => {
+                let id = mail.mail_id;
+                let backend = self.backend.clone();
+                self.task_manager.spawn(async move {
+                    match backend.prefetch_mail_attachments(&id).await {
+                        Ok(()) => {}
+                        Err(err) => {
+                            error!("Couldn't fetch mail attachments:\n{err}");
                         }
-                    });
-                }
+                    }
+                });
             }
         }
     }
@@ -262,84 +236,71 @@ impl Model {
     fn navigate_down(&self) -> Option<crate::Action> {
         let selected_entry = {
             let mut columns = self.columns.lock().unwrap();
-            columns
-                .get_mut(&self.center_column_mailbox())
-                .and_then(|state| {
-                    let center = state.loaded_mut()?;
-                    let pos = center.state.selected();
-                    let new_pos = pos.map(|old_pos| (old_pos + 1).min(center.entries().len() - 1));
-                    center.state.select(new_pos);
-                    center.selected_entry().cloned()
-                })
+            let state = columns.get_mut(&self.center_column_mailbox())?;
+            let center = state.loaded_mut()?;
+            let pos = center.state.selected();
+            let new_pos = pos.map(|old_pos| (old_pos + 1).min(center.entries().len() - 1));
+            center.state.select(new_pos);
+            center.selected_entry().cloned()?
         };
 
-        self.load_right_column_for(selected_entry?);
+        self.load_right_column_for(selected_entry);
         None
     }
 
     fn navigate_up(&self) -> Option<crate::Action> {
         let selected_entry = {
             let mut columns = self.columns.lock().unwrap();
-            columns
-                .get_mut(self.center_column_mailbox())
-                .and_then(|state| {
-                    let center = state.loaded_mut()?;
-                    center.state.select_previous();
-                    center.selected_entry().cloned()
-                })
+            let state = columns.get_mut(self.center_column_mailbox())?;
+            let center = state.loaded_mut()?;
+            center.state.select_previous();
+            center.selected_entry().cloned()?
         };
 
-        self.load_right_column_for(selected_entry?);
+        self.load_right_column_for(selected_entry);
         None
     }
 
     fn navigate_to_top(&mut self) -> Option<crate::Action> {
         let selected_entry = {
             let mut columns = self.columns.lock().unwrap();
-            columns
-                .get_mut(self.center_column_mailbox())
-                .and_then(|state| {
-                    let center = state.loaded_mut()?;
-                    center.state.select_first();
-                    center.selected_entry().cloned()
-                })
+            let state = columns.get_mut(self.center_column_mailbox())?;
+            let center = state.loaded_mut()?;
+            center.state.select_first();
+            center.selected_entry().cloned()?
         };
 
-        self.load_right_column_for(selected_entry?);
+        self.load_right_column_for(selected_entry);
         None
     }
 
     fn navigate_to_bottom(&mut self) -> Option<crate::Action> {
         let selected_entry = {
             let mut columns = self.columns.lock().unwrap();
-            columns
-                .get_mut(self.center_column_mailbox())
-                .and_then(|state| {
-                    let center = state.loaded_mut()?;
-                    if center.entries().is_empty() {
-                        center.state.select(None);
-                    } else {
-                        let len = center.entries().len();
-                        center.state.select(Some(len - 1));
-                    }
+            let state = columns.get_mut(self.center_column_mailbox())?;
+            let center = state.loaded_mut()?;
+            if center.entries().is_empty() {
+                center.state.select(None);
+            } else {
+                let len = center.entries().len();
+                center.state.select(Some(len - 1));
+            }
 
-                    center.selected_entry().cloned()
-                })
+            center.selected_entry().cloned()?
         };
 
-        self.load_right_column_for(selected_entry?);
+        self.load_right_column_for(selected_entry);
         None
     }
 
     fn navigate_right(&mut self) -> Option<crate::Action> {
         let selected_entry = {
             let columns = self.columns.lock().unwrap();
-            columns
-                .get(self.center_column_mailbox())
-                .and_then(|state| state.loaded()?.selected_entry().cloned())
+            let center = columns.get(self.center_column_mailbox())?;
+            center.loaded()?.selected_entry().cloned()?
         };
 
-        match selected_entry? {
+        match selected_entry {
             ColumnEntry::Mailbox(id) => {
                 self.navigation_stack.push(Some(id));
 
@@ -350,36 +311,38 @@ impl Model {
                         .get(self.center_column_mailbox())?
                         .loaded()?
                         .selected_entry()
-                        .cloned()
+                        .cloned()?
                 };
 
-                self.load_right_column_for(selected_entry?);
+                self.load_right_column_for(selected_entry);
             }
-            ColumnEntry::ThreadStart { mail_id, .. }
-            | ColumnEntry::ThreadChild(mail_id, _)
-            | ColumnEntry::ThreadEnd(mail_id, _)
-            | ColumnEntry::SingleMail(mail_id) => {
-                return Some(crate::Action::OpenMailViewer(mail_id));
-            }
-            ColumnEntry::CollapsedThread(mail_id, thread_id) => {
-                let column_mailbox = self
-                    .center_column_mailbox()
-                    .clone()
-                    .expect("Is not root mailbox");
-                let columns = self.columns.clone();
-                let backend = self.backend.clone();
+            ColumnEntry::Mail(mail) => match mail.thread_role {
+                ThreadRole::Single
+                | ThreadRole::ThreadStart
+                | ThreadRole::ThreadChild
+                | ThreadRole::ThreadEnd => {
+                    return Some(crate::Action::OpenMailViewer(mail.mail_id));
+                }
+                ThreadRole::Collapsed => {
+                    let column_mailbox = self
+                        .center_column_mailbox()
+                        .clone()
+                        .expect("Is not root mailbox");
+                    let columns = self.columns.clone();
+                    let backend = self.backend.clone();
 
-                self.task_manager.spawn(async move {
-                    match op_uncollapse_thread(column_mailbox, mail_id, thread_id, columns, backend)
-                        .await
-                    {
-                        Ok(()) => {}
-                        Err(err) => {
-                            error!("Can't uncollapse thread:\n{err}");
+                    self.task_manager.spawn(async move {
+                        match op_uncollapse_thread(column_mailbox, mail.thread_id, columns, backend)
+                            .await
+                        {
+                            Ok(()) => {}
+                            Err(err) => {
+                                error!("Can't uncollapse thread:\n{err}");
+                            }
                         }
-                    }
-                });
-            }
+                    });
+                }
+            },
         }
 
         None
@@ -388,21 +351,15 @@ impl Model {
     fn navigate_left(&mut self) -> Option<crate::Action> {
         let selected_entry = {
             let mut columns = self.columns.lock().unwrap();
-            columns
-                .get_mut(self.center_column_mailbox())
-                .and_then(|state| state.loaded()?.selected_entry().cloned())
+            let center = columns.get_mut(self.center_column_mailbox())?;
+            center.loaded()?.selected_entry().cloned()?
         };
 
-        if let Some(entry) = selected_entry {
-            match &entry {
-                ColumnEntry::Mailbox(_)
-                | ColumnEntry::SingleMail(_)
-                | ColumnEntry::CollapsedThread(_, _) => {
-                    self.navigate_to_parent();
-                }
-                ColumnEntry::ThreadStart { thread_id, .. }
-                | ColumnEntry::ThreadChild(_, thread_id)
-                | ColumnEntry::ThreadEnd(_, thread_id) => {
+        match selected_entry {
+            ColumnEntry::Mailbox(_) => self.navigate_to_parent(),
+            ColumnEntry::Mail(mail_entry) => match mail_entry.thread_role {
+                ThreadRole::Single | ThreadRole::Collapsed => self.navigate_to_parent(),
+                ThreadRole::ThreadStart | ThreadRole::ThreadChild | ThreadRole::ThreadEnd => {
                     let mut columns = self.columns.lock().unwrap();
                     let column = columns
                         .get_mut(self.center_column_mailbox())
@@ -449,15 +406,11 @@ impl Model {
                         .splice(start_pos..=end_pos, [new_entry]);
 
                     column.state.select(Some(start_pos));
+
+                    None
                 }
-            };
-            return None;
+            },
         }
-
-        // fallback
-        self.navigate_to_parent();
-
-        None
     }
 
     fn navigate_to_parent(&mut self) -> Option<crate::Action> {
@@ -477,7 +430,9 @@ impl Model {
             let columns = self.columns.lock().unwrap();
             columns
                 .get(self.center_column_mailbox())
-                .and_then(|state| state.loaded()?.selected_entry().cloned())
+                .loaded()?
+                .selected_entry()
+                .cloned()
         };
 
         if let Some(entry) = selected_entry {
@@ -501,7 +456,7 @@ impl Model {
         if self.selection.is_empty() {
             let columns = self.columns.lock().unwrap();
             let entry = columns
-                .get(self.center_column_mailbox())?
+                .get(self.center_column_mailbox())
                 .loaded()?
                 .selected_entry()?
                 .clone();
@@ -646,7 +601,9 @@ impl Model {
 
             let selected_entry = columns
                 .get(&self.center_column_mailbox())
-                .and_then(|state| state.loaded()?.selected_entry().cloned());
+                .loaded()?
+                .selected_entry()
+                .cloned();
 
             selected_entry
         };
@@ -670,11 +627,7 @@ impl Model {
                 }
 
                 let mut columns = columns.lock().unwrap();
-                let column = columns
-                    .get_mut(&current_mailbox)
-                    .unwrap()
-                    .loaded_mut()
-                    .unwrap();
+                let column = columns.get_mut(&current_mailbox).loaded_mut().unwrap();
 
                 todo!()
                 // column.remove_entry(Columnn)
@@ -729,7 +682,9 @@ impl Model {
             let columns = self.columns.lock().unwrap();
             columns
                 .get(self.center_column_mailbox())
-                .and_then(|state| state.loaded()?.selected_entry().cloned())
+                .loaded()?
+                .selected_entry()
+                .cloned()
         };
 
         if let Some(entry) = selected_entry {
@@ -760,9 +715,8 @@ impl Model {
                     });
                 }
             }
+            None
         }
-
-        None
     }
 }
 
@@ -771,93 +725,106 @@ async fn init_mailbox(
     columns: Columns,
     backend: Arc<Backend>,
 ) -> Result<(), jmap_client::Error> {
-    let mut entries: Vec<ColumnEntry> = Vec::new();
+    let role = {
+        let mut columns = columns.lock().unwrap();
+        let state = columns.entry(id.clone()).or_insert(ColumnState::NotLoaded);
 
-    // mailbox children
-    {
-        let mut mailboxes: Vec<MailboxData> = backend.get_mailbox_children(id.clone()).await?;
-
-        mailboxes.sort_by(|a, b| {
-            if a.sort_order == b.sort_order {
-                a.name.cmp(&b.name)
-            } else {
-                a.sort_order.cmp(&b.sort_order)
+        match state {
+            ColumnState::NotLoaded => {
+                let (tx, rx) = watch::channel(());
+                *state = ColumnState::loading(rx);
+                LoadingRole::Request(tx)
             }
-        });
+            ColumnState::Loading { notifier, .. } => LoadingRole::Wait(notifier.clone()),
+            ColumnState::Loaded(_) => return Ok(()),
+        }
+    };
 
-        let all_have_unique_sort_order = {
-            let mut used_sort_orders = HashSet::new();
-            for mailbox in mailboxes.iter() {
-                used_sort_orders.insert(mailbox.sort_order);
-            }
+    match role {
+        LoadingRole::Wait(mut receiver) => {
+            receiver.changed().await.unwrap();
+            Ok(())
+        }
+        LoadingRole::Request(sender) => {
+            let mut entries: Vec<ColumnEntry> = Vec::new();
 
-            used_sort_orders.len() == mailboxes.len()
-        };
+            // mailbox children
+            {
+                let mut mailboxes = {
+                    let ids = backend.get_mailbox_children(id.clone()).await?;
+                    backend.get_mailboxes(&ids)
+                };
 
-        // normalize sort order (if possible)
-        if !all_have_unique_sort_order {
-            let ids = mailboxes.iter().map(|mailbox| &mailbox.id);
-            let updates: Vec<MailboxUpdate> = ids
-                .enumerate()
-                .map(|(idx, id)| MailboxUpdate {
-                    id: id.clone(),
-                    sort_order: Some(idx as u32),
-                    ..Default::default()
-                })
-                .collect();
+                mailboxes.sort_by(|a, b| {
+                    if a.sort_order == b.sort_order {
+                        a.name.cmp(&b.name)
+                    } else {
+                        a.sort_order.cmp(&b.sort_order)
+                    }
+                });
 
-            match backend.update_mailboxes(updates).await {
-                Ok(()) => {
-                    for (idx, mailbox) in mailboxes.iter_mut().enumerate() {
-                        mailbox.sort_order = idx as u32;
+                let all_have_unique_sort_order = {
+                    let mut used_sort_orders = HashSet::new();
+                    for mailbox in mailboxes.iter() {
+                        used_sort_orders.insert(mailbox.sort_order);
+                    }
+
+                    used_sort_orders.len() == mailboxes.len()
+                };
+
+                // normalize sort order (if possible)
+                if !all_have_unique_sort_order {
+                    let ids = mailboxes.iter().map(|mailbox| &mailbox.id);
+                    let updates: Vec<MailboxUpdate> = ids
+                        .enumerate()
+                        .map(|(idx, id)| MailboxUpdate {
+                            id: id.clone(),
+                            sort_order: Some(idx as u32),
+                            ..Default::default()
+                        })
+                        .collect();
+
+                    match backend.update_mailboxes(updates).await {
+                        Ok(()) => {
+                            for (idx, mailbox) in mailboxes.iter_mut().enumerate() {
+                                mailbox.sort_order = idx as u32;
+                            }
+                        }
+                        Err(err) => {
+                            warn!("Couldn't save current sort order to server: {err}");
+                        }
                     }
                 }
-                Err(err) => {
-                    warn!("Couldn't save current sort order to server: {err}");
-                }
+
+                entries.extend(
+                    mailboxes
+                        .into_iter()
+                        .map(|mailbox| ColumnEntry::Mailbox(mailbox.id)),
+                );
             }
-        }
 
-        entries.extend(
-            mailboxes
-                .into_iter()
-                .map(|mailbox| ColumnEntry::Mailbox(mailbox.id)),
-        );
-    }
+            // the first mails from the mailbox
+            if let Some(parent_mailbox_id) = id.as_ref() {
+                let root_mails = backend.get_mailbox_root_mails(parent_mailbox_id).await?;
+                let mail_entries: Vec<ColumnEntry> = stream::iter(root_mails)
+                    .map(|id| MailEntry::new(id, &backend))
+                    .buffered(BATCH_SIZE)
+                    .map(ColumnEntry::Mail)
+                    .collect()
+                    .await;
 
-    // the first mails from the mailbox
-    if let Some(parent_mailbox_id) = id.as_ref() {
-        let collapsed_mails = backend
-            .get_mailbox_root_mails(parent_mailbox_id)
-            .await?;
-
-        entries.extend(collapsed_mails.into_iter().map(ColumnEntry::from));
-    }
-
-    let created_column = Column::new(id.clone(), entries);
-    if let Some(first_entry) = created_column.selected_entry() {
-        match first_entry {
-            ColumnEntry::Mailbox(_) => {}
-            ColumnEntry::SingleMail(mail_id) | ColumnEntry::CollapsedThread(mail_id, _) => {
-                match backend.prefetch_mail_attachments(mail_id).await {
-                    Ok(()) => {}
-                    Err(err) => {
-                        error!("Couldn't prefetch mail attachments:\n{err}");
-                    }
-                }
+                entries.extend(mail_entries);
             }
-            ColumnEntry::ThreadStart { .. }
-            | ColumnEntry::ThreadChild(_, _)
-            | ColumnEntry::ThreadEnd(_, _) => unreachable!("All threads are collapsed"),
+
+            let created_column = Column::new(id.clone(), entries);
+            let mut columns = columns.lock().unwrap();
+            let state = columns.get_mut(&id).unwrap();
+            *state = ColumnState::Loaded(created_column);
+
+            let _ = sender.send(());
+            Ok(())
         }
     }
-
-    let mut guard = columns.lock().unwrap();
-    guard
-        .insert(id.clone(), ColumnState::Loaded(created_column))
-        .expect("state was set to `loading` before");
-
-    Ok(())
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -871,12 +838,11 @@ enum UncollapseThreadError {
 
 async fn op_uncollapse_thread(
     column_mailbox: MailboxId,
-    collapsed_mail_id: MailId,
     thread_id: ThreadId,
     columns: Columns,
     backend: Arc<Backend>,
 ) -> Result<(), UncollapseThreadError> {
-    let mut thread_mails = backend.get_or_request_thread_mails(&thread_id).await?;
+    let mut thread_mails = backend.get_thread(&thread_id);
 
     let mut columns = columns.lock().unwrap();
     let column = columns
@@ -898,32 +864,38 @@ async fn op_uncollapse_thread(
         let (first, rest) = thread_mails.split_first().unwrap();
         let (last, inner) = rest.split_last().unwrap();
 
-        let mut new_entries = vec![ColumnEntry::ThreadStart {
-            mail_id: first.id.clone(),
+        let mut new_entries = vec![ColumnEntry::Mail(MailEntry {
+            mail_id: first.clone(),
             thread_id: thread_id.clone(),
-            collapsed_mail_id: collapsed_mail_id.clone(),
-        }];
+            thread_role: ThreadRole::ThreadStart,
+        })];
 
-        new_entries.extend(
-            inner
-                .iter()
-                .map(|mail| ColumnEntry::ThreadChild(mail.id.clone(), thread_id.clone())),
-        );
+        new_entries.extend(inner.iter().map(|mail| {
+            ColumnEntry::Mail(MailEntry {
+                mail_id: mail.clone(),
+                thread_id: thread_id.clone(),
+                thread_role: ThreadRole::ThreadChild,
+            })
+        }));
 
-        new_entries.push(ColumnEntry::ThreadEnd(last.id.clone(), thread_id.clone()));
+        new_entries.push(ColumnEntry::Mail(MailEntry {
+            mail_id: last.clone(),
+            thread_id: thread_id.clone(),
+            thread_role: ThreadRole::ThreadEnd,
+        }));
 
         new_entries
     };
 
-    let thread_idx = column
+    let insert_pos = column
         .entries()
         .iter()
-        .position(|entry| matches!(entry, ColumnEntry::CollapsedThread(_, entry_thread_id) if entry_thread_id == &thread_id))
+        .position(|entry| matches!(entry, ColumnEntry::Mail(MailEntry {thread_id: entry_thread_id, ..}) if entry_thread_id == &thread_id))
         .ok_or(UncollapseThreadError::ThreadGone)?;
 
     column
         .entries_mut()
-        .splice(thread_idx..(thread_idx + 1), thread_children_entries);
+        .splice(insert_pos..(insert_pos + 1), thread_children_entries);
 
     Ok(())
 }
@@ -932,7 +904,7 @@ fn move_mailbox(
     up: bool,
     column_mailbox: ParentMailboxId,
     backend: Arc<Backend>,
-    columns: Columns,
+    columns: Arc<Mutex<Columns>>,
     task_manager: Rc<TaskManager>,
 ) {
     // TODO: Check `self.selection` so that the user can move multiple mailboxes
@@ -1056,7 +1028,7 @@ async fn init_mailfs(columns: Columns, backend: Arc<Backend>) {
         let columns = columns.lock().unwrap();
         columns
             .get(&TOP_PARENT_MAILBOX_ID)
-            .expect("Just added root mailbox")
+            .unwrap()
             .loaded()
             .expect("`init_mailbox` should've loaded it")
             .selected_entry()
@@ -1065,30 +1037,19 @@ async fn init_mailfs(columns: Columns, backend: Arc<Backend>) {
 
     if let Some(entry) = selected_entry {
         match entry {
-            ColumnEntry::Mailbox(id) => {
-                {
-                    let mut columns = columns.lock().unwrap();
-                    debug_assert!(
-                        columns
-                            .insert(Some(id.clone()), ColumnState::loading())
-                            .is_none()
-                    );
+            ColumnEntry::Mailbox(id) => match init_mailbox(Some(id), columns, backend).await {
+                Ok(()) => {}
+                Err(err) => {
+                    error!("Couldn't initialize mailbox (the column will be empty):\n{err}");
                 }
-
-                match init_mailbox(Some(id), columns, backend).await {
-                    Ok(()) => {}
-                    Err(err) => {
-                        error!("Couldn't initialize mailbox (the column will be empty):\n{err}");
-                    }
+            },
+            ColumnEntry::Mail(mail) => match backend.prefetch_mail_attachments(&mail.mail_id).await
+            {
+                Ok(()) => {}
+                Err(err) => {
+                    error!("Couldn't prefetch mail attachments:\n{err}");
                 }
-            }
-            ColumnEntry::SingleMail(_)
-            | ColumnEntry::CollapsedThread(_, _)
-            | ColumnEntry::ThreadStart { .. }
-            | ColumnEntry::ThreadChild(_, _)
-            | ColumnEntry::ThreadEnd(_, _) => {
-                unreachable!("Root directory can't have mails")
-            }
+            },
         }
     }
 }
@@ -1096,19 +1057,19 @@ async fn init_mailfs(columns: Columns, backend: Arc<Backend>) {
 async fn create_new_mailbox(
     new_mailbox_name: String,
     column_id: ParentMailboxId,
-    columns: Columns,
+    columns: Arc<Mutex<Columns>>,
     backend: Arc<Backend>,
 ) {
     let new_mailbox = {
         let sort_order = {
             let mut columns = columns.lock().unwrap();
-            let center = columns.get_mut(&column_id).unwrap().loaded_mut().unwrap();
+            let center = columns.get_mut(&column_id).loaded_mut().unwrap();
             center
                 .entries()
                 .iter()
                 .map_while(|entry| {
                     if let ColumnEntry::Mailbox(id) = entry {
-                        let mailbox = backend.get_mailbox(id).unwrap();
+                        let mailbox = backend.get_mailbox(id);
                         Some(mailbox)
                     } else {
                         None
@@ -1136,14 +1097,14 @@ async fn create_new_mailbox(
     };
 
     let mut columns = columns.lock().unwrap();
-    let center = columns.get_mut(&column_id).unwrap().loaded_mut().unwrap();
+    let center = columns.get_mut(&column_id).loaded_mut().unwrap();
     let new_pos = center
         .entries()
         .iter()
         .take_while(|entry| matches!(entry, ColumnEntry::Mailbox(_)))
         .position(|entry| {
             if let ColumnEntry::Mailbox(other_id) = entry {
-                let mailbox = backend.get_mailbox(other_id).unwrap();
+                let mailbox = backend.get_mailbox(other_id);
                 mailbox.sort_order > new_mailbox.sort_order.unwrap()
             } else {
                 false

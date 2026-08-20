@@ -1,14 +1,16 @@
 use crate::backend::{
-    Backend, FetchRole, MailData, MailId, MailboxId, ThreadId,
+    Backend, LoadingRole, MailData, MailId, MailboxId, ThreadId,
     mailbox::{self, store::RootMails},
     mails, threads,
-    types::RemoteData,
+    types::Loadable,
 };
 use jmap_client::core::{
     query::QueryResponse,
     response::{EmailGetResponse, ThreadGetResponse},
 };
 use tokio::sync::watch;
+
+pub const BATCH_SIZE: usize = 32;
 
 impl Backend {
     pub async fn get_mailbox_root_mails(
@@ -20,26 +22,26 @@ impl Backend {
             let root_mails = store.mailbox.get_root_mails_mut(id);
 
             match root_mails {
-                RemoteData::NotRequested => {
+                Loadable::NotRequested => {
                     let (tx, rx) = watch::channel(());
-                    *root_mails = RemoteData::Requested { notifier: rx };
-                    FetchRole::Request(tx)
+                    *root_mails = Loadable::Requested { notifier: rx };
+                    LoadingRole::Request(tx)
                 }
-                RemoteData::Requested { notifier } => FetchRole::Wait(notifier.clone()),
-                RemoteData::Loaded(root_mails) => {
+                Loadable::Requested { notifier } => LoadingRole::Wait(notifier.clone()),
+                Loadable::Loaded(root_mails) => {
                     return Ok(root_mails.ids.clone());
                 }
             }
         };
 
         match role {
-            FetchRole::Wait(mut notifier) => {
+            LoadingRole::Wait(mut notifier) => {
                 notifier.changed().await.unwrap();
                 let mut store = self.store.lock().unwrap();
                 let root_mails = store.mailbox.get_root_mails(id).loaded().unwrap();
                 Ok(root_mails.ids.clone())
             }
-            FetchRole::Request(notifier) => {
+            LoadingRole::Request(notifier) => {
                 let mut response = {
                     let mut request = self.client.build();
 
@@ -53,7 +55,7 @@ impl Backend {
                                 jmap_client::email::query::Comparator::received_at().descending()
                             ])
                             .position(0)
-                            .limit(10);
+                            .limit(BATCH_SIZE);
                         query_mail.arguments().collapse_threads(true);
                         query_mail.result_reference()
                     };

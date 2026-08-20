@@ -6,10 +6,10 @@ use ratatui::{
 };
 use throbber_widgets_tui::Throbber;
 
-use crate::backend::{MailDataHtmlBody, types::RemoteData};
+use crate::backend::{MailDataHtmlBody, types::Loadable};
 
 pub struct MarkdownReader<'a> {
-    pub html_body: &'a RemoteData<MailDataHtmlBody>,
+    pub html_body: &'a Loadable<MailDataHtmlBody>,
 }
 
 impl<'a> StatefulWidget for MarkdownReader<'a> {
@@ -17,10 +17,10 @@ impl<'a> StatefulWidget for MarkdownReader<'a> {
 
     fn render(self, area: Rect, buf: &mut Buffer, model: &mut Self::State) {
         match self.html_body {
-            RemoteData::NotRequested => {
+            Loadable::NotRequested => {
                 Widget::render(Paragraph::new("Not requested yet"), area, buf);
             }
-            RemoteData::Requested { .. } => {
+            Loadable::Requested { .. } => {
                 StatefulWidget::render(
                     Throbber::default()
                         .label("Fetching html body part of mail...")
@@ -30,7 +30,7 @@ impl<'a> StatefulWidget for MarkdownReader<'a> {
                     &mut model.throbber,
                 );
             }
-            RemoteData::Loaded(html) => {
+            Loadable::Loaded(html) => {
                 let content = htmd::convert(html.0.as_str()).unwrap();
 
                 let renderer = Renderer::new(RenderOptions::default().width(area.width));

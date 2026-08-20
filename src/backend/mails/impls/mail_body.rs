@@ -1,5 +1,5 @@
 use crate::backend::{
-    Backend, FetchRole, MailBodyType, MailDataHtmlBody, MailDataTextBody, MailId, types::RemoteData,
+    Backend, LoadingRole, MailBodyType, MailDataHtmlBody, MailDataTextBody, MailId, types::Loadable,
 };
 use tokio::sync::watch;
 use tracing::debug;
@@ -13,27 +13,27 @@ impl Backend {
     ) -> Result<String, jmap_client::Error> {
         let role = {
             let mut store = self.store.lock().unwrap();
-            let mail = store.mails.get_mut(id).loaded_mut().unwrap();
+            let mail = store.mails.get_or_insert_mut(id).loaded_mut().unwrap();
 
             match mail.get_body(ty) {
-                RemoteData::Loaded(body) => return Ok(body.to_string()),
-                RemoteData::Requested { notifier } => FetchRole::Wait(notifier.clone()),
-                RemoteData::NotRequested => {
+                Loadable::Loaded(body) => return Ok(body.to_string()),
+                Loadable::Requested { notifier } => LoadingRole::Wait(notifier.clone()),
+                Loadable::NotRequested => {
                     let (tx, rx) = watch::channel(());
                     mail.init_body(ty, rx);
-                    FetchRole::Request(tx)
+                    LoadingRole::Request(tx)
                 }
             }
         };
 
         match role {
-            FetchRole::Wait(mut notifier) => {
+            LoadingRole::Wait(mut notifier) => {
                 notifier.changed().await.unwrap();
                 let mut store = self.store.lock().unwrap();
-                let mail = store.mails.get_mut(id).loaded_mut().unwrap();
+                let mail = store.mails.get_or_insert_mut(id).loaded_mut().unwrap();
                 Ok(mail.get_body(ty).loaded().unwrap().to_string())
             }
-            FetchRole::Request(sender) => {
+            LoadingRole::Request(sender) => {
                 let mut response = {
                     let mut request = self.client.build();
                     let get_mail = request.get_email().ids(Some([&id.0]));
@@ -53,15 +53,15 @@ impl Backend {
                     MailBodyType::Text => {
                         debug!("Setting text body");
                         let body = MailDataTextBody::new(&mail).unwrap();
-                        let mail = store.mails.get_mut(&id).loaded_mut().unwrap();
-                        mail.text_body = RemoteData::Loaded(body.clone());
+                        let mail = store.mails.get_or_insert_mut(&id).loaded_mut().unwrap();
+                        mail.text_body = Loadable::Loaded(body.clone());
                         body.0
                     }
                     MailBodyType::Html => {
                         debug!("Setting html body");
                         let body = MailDataHtmlBody::new(&mail).unwrap();
-                        let mail = store.mails.get_mut(&id).loaded_mut().unwrap();
-                        mail.html_body = RemoteData::Loaded(body.clone());
+                        let mail = store.mails.get_or_insert_mut(&id).loaded_mut().unwrap();
+                        mail.html_body = Loadable::Loaded(body.clone());
                         body.0
                     }
                 };

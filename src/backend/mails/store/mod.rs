@@ -1,13 +1,12 @@
-pub mod error;
-
-use crate::backend::{
-    GetState, MailData, MailId, MailUpdate, threads::types::ThreadId, types::RemoteData,
+use crate::{
+    backend::{GetState, MailData, MailId, MailUpdate},
+    utils::loadable::Loadable,
 };
 use std::collections::HashMap;
 
 #[derive(Default)]
 pub struct Store {
-    mails: HashMap<MailId, RemoteData<MailData>>,
+    mails: HashMap<MailId, Loadable<MailData>>,
     state: GetState,
 }
 
@@ -24,30 +23,29 @@ impl Store {
         self.state = new_state;
     }
 
-    pub fn get(&mut self, id: &MailId) -> &RemoteData<MailData> {
-        self.get_mut(id)
+    // TODO: no side effects!
+    pub fn get(&mut self, id: &MailId) -> &Loadable<MailData> {
+        self.get_or_insert_mut(id)
     }
 
-    pub fn get_mut(&mut self, id: &MailId) -> &mut RemoteData<MailData> {
-        self.mails
-            .entry(id.clone())
-            .or_insert(RemoteData::NotRequested)
+    pub fn get_or_insert_mut(&mut self, id: &MailId) -> &mut Loadable<MailData> {
+        self.mails.entry(id.clone()).or_insert(Loadable::NotLoaded)
     }
 }
 
 impl Store {
     pub fn add(&mut self, mail: MailData) {
-        self.mails.insert(mail.id.clone(), RemoteData::Loaded(mail));
+        self.mails.insert(mail.id.clone(), Loadable::Loaded(mail));
     }
 
-    pub fn remove(&mut self, id: &MailId) -> Option<RemoteData<MailData>> {
+    pub fn remove(&mut self, id: &MailId) -> Option<Loadable<MailData>> {
         self.mails.remove(id)
     }
 
     /// Panics if there's no mail with the given id to be updated.
     pub fn update(&mut self, new: MailUpdate) {
         let mail = self
-            .get_mut(&new.id)
+            .get_or_insert_mut(&new.id)
             .loaded_mut()
             .expect("Mail is already fetched");
 

@@ -1,8 +1,8 @@
-use crate::backend::{GetState, mails::types::MailId, threads::types::ThreadId, types::RemoteData};
+use crate::backend::{GetState, mails::types::MailId, threads::types::ThreadId};
 use std::collections::HashMap;
 
 pub struct Store {
-    threads: HashMap<ThreadId, RemoteData<Vec<MailId>>>,
+    threads: HashMap<ThreadId, Vec<MailId>>,
     state: GetState,
 }
 
@@ -18,16 +18,12 @@ impl Store {
         self.state.clone()
     }
 
-    pub fn get_mail_ids(&mut self, id: &ThreadId) -> &RemoteData<Vec<MailId>> {
-        self.threads
-            .entry(id.clone())
-            .or_insert(RemoteData::NotRequested)
+    pub fn get_mails(&mut self, id: &ThreadId) -> &[MailId] {
+        self.threads.get(id).unwrap()
     }
 
-    pub fn get_mail_ids_mut(&mut self, id: &ThreadId) -> &mut RemoteData<Vec<MailId>> {
-        self.threads
-            .entry(id.clone())
-            .or_insert(RemoteData::NotRequested)
+    pub fn get_mails_mut(&mut self, id: &ThreadId) -> &mut [MailId] {
+        self.threads.get_mut(id).unwrap()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -47,11 +43,10 @@ impl Store {
     }
 
     pub fn add(&mut self, thread_id: &ThreadId, mail_ids: Vec<MailId>) {
-        self.threads
-            .insert(thread_id.clone(), RemoteData::Loaded(mail_ids));
+        self.threads.insert(thread_id.clone(), mail_ids);
     }
 
-    pub fn remove(&mut self, id: &ThreadId) -> Option<RemoteData<Vec<MailId>>> {
+    pub fn remove(&mut self, id: &ThreadId) -> Option<Vec<MailId>> {
         self.threads.remove(id)
     }
 }

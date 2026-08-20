@@ -17,7 +17,7 @@ use store::Store;
 type GetState = String;
 type QueryState = String;
 
-enum FetchRole {
+pub enum LoadingRole {
     Wait(watch::Receiver<()>),
     Request(watch::Sender<()>),
 }

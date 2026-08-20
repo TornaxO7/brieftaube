@@ -1,6 +1,6 @@
 use crate::backend::{
     mails::types::{MailData, MailDataAttachment, addresses_to_string},
-    types::RemoteData,
+    types::Loadable,
 };
 
 #[derive(Debug)]
@@ -11,7 +11,7 @@ pub struct MailPreview {
     pub subject: String,
     pub preview: String,
     pub received_at: String,
-    pub attachments: RemoteData<Vec<MailDataAttachment>>,
+    pub attachments: Loadable<Vec<MailDataAttachment>>,
 }
 
 impl From<MailData> for MailPreview {

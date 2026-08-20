@@ -11,12 +11,12 @@ use ratatui::{
 use throbber_widgets_tui::Throbber;
 
 use crate::{
-    backend::types::RemoteData,
+    backend::types::Loadable,
     reader::{model::attachments::Navigate, types::MailDisplayAttachment},
 };
 
 pub struct AttachmentsReader<'a> {
-    pub attachments: &'a mut RemoteData<Vec<MailDisplayAttachment>>,
+    pub attachments: &'a mut Loadable<Vec<MailDisplayAttachment>>,
 }
 
 impl<'a> StatefulWidget for AttachmentsReader<'a> {
@@ -24,10 +24,10 @@ impl<'a> StatefulWidget for AttachmentsReader<'a> {
 
     fn render(self, area: Rect, buf: &mut Buffer, model: &mut Self::State) {
         match self.attachments {
-            RemoteData::NotRequested => {
+            Loadable::NotRequested => {
                 Widget::render(Paragraph::new("Not requested yet"), area, buf);
             }
-            RemoteData::Requested { .. } => StatefulWidget::render(
+            Loadable::Requested { .. } => StatefulWidget::render(
                 Throbber::default()
                     .label("Fetching attachments of mail...")
                     .throbber_set(throbber_widgets_tui::BRAILLE_SIX),
@@ -35,7 +35,7 @@ impl<'a> StatefulWidget for AttachmentsReader<'a> {
                 buf,
                 &mut model.throbber,
             ),
-            RemoteData::Loaded(attachments) => {
+            Loadable::Loaded(attachments) => {
                 // if !attachments.is_empty() && model.state.selected().is_none() {
                 //     model.state.select(Some(0));
                 // }

@@ -3,7 +3,7 @@ use crate::backend::{
     GetState, QueryState,
     mailbox::types::{MailboxUpdate, ParentMailboxId},
     mails::types::MailId,
-    types::RemoteData,
+    types::Loadable,
 };
 use jmap_client::core::query::QueryResponse;
 use std::collections::HashMap;
@@ -13,8 +13,8 @@ pub struct Store {
     mailboxes: HashMap<MailboxId, MailboxData>,
     // Each `MailboxId` has an entry in the `mailboxes` attribute.
     // `Vec` is **unsorted**
-    children_mapping: HashMap<ParentMailboxId, RemoteData<Vec<MailboxId>>>,
-    root_mails: HashMap<MailboxId, RemoteData<RootMails>>,
+    children_mapping: HashMap<ParentMailboxId, Loadable<Vec<MailboxId>>>,
+    root_mails: HashMap<MailboxId, Loadable<RootMails>>,
 
     /// stores the query state of the child-mailboxes of the given parent-mailbox
     children_query_state: HashMap<ParentMailboxId, QueryState>,
@@ -41,19 +41,19 @@ impl Store {
 
 // root mails
 impl Store {
-    pub fn get_root_mails(&mut self, parent: &MailboxId) -> &RemoteData<RootMails> {
+    pub fn get_root_mails(&mut self, parent: &MailboxId) -> &Loadable<RootMails> {
         self.get_root_mails_mut(parent)
     }
 
-    pub fn get_root_mails_mut(&mut self, parent: &MailboxId) -> &mut RemoteData<RootMails> {
+    pub fn get_root_mails_mut(&mut self, parent: &MailboxId) -> &mut Loadable<RootMails> {
         self.root_mails
             .entry(parent.clone())
-            .or_insert(RemoteData::NotRequested)
+            .or_insert(Loadable::NotRequested)
     }
 
     pub fn set_root_mails(&mut self, parent: MailboxId, root_mails: RootMails) {
         self.root_mails
-            .insert(parent, RemoteData::Loaded(root_mails));
+            .insert(parent, Loadable::Loaded(root_mails));
     }
 }
 
@@ -63,17 +63,17 @@ impl Store {
         self.children_query_state.insert(parent, new_state);
     }
 
-    pub fn get_children_ids(&mut self, parent_id: &ParentMailboxId) -> &RemoteData<Vec<MailboxId>> {
+    pub fn get_children_ids(&mut self, parent_id: &ParentMailboxId) -> &Loadable<Vec<MailboxId>> {
         self.get_children_ids_mut(parent_id)
     }
 
     pub fn get_children_ids_mut(
         &mut self,
         parent_id: &ParentMailboxId,
-    ) -> &mut RemoteData<Vec<MailboxId>> {
+    ) -> &mut Loadable<Vec<MailboxId>> {
         self.children_mapping
             .entry(parent_id.clone())
-            .or_insert(RemoteData::NotRequested)
+            .or_insert(Loadable::NotRequested)
     }
 }
 
@@ -121,7 +121,7 @@ impl Store {
         let children_ids: Vec<MailboxId> = children.iter().map(|data| data.id.clone()).collect();
 
         self.children_mapping
-            .insert(parent.clone(), RemoteData::Loaded(children_ids));
+            .insert(parent.clone(), Loadable::Loaded(children_ids));
 
         for child in children {
             self.mailboxes.insert(child.id.clone(), child);

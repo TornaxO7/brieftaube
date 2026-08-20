@@ -6,7 +6,7 @@ use crate::backend::{
     mails::types::{
         MailData, MailDataHtmlBody, MailDataTextBody, MailKeyword, addresses_to_string,
     },
-    types::RemoteData,
+    types::Loadable,
 };
 
 pub struct MailDisplay {
@@ -17,9 +17,9 @@ pub struct MailDisplay {
     pub received_at: String,
     pub keywords: String,
 
-    pub html_body: RemoteData<MailDataHtmlBody>,
-    pub text_body: RemoteData<MailDataTextBody>,
-    pub attachments: RemoteData<Vec<MailDisplayAttachment>>,
+    pub html_body: Loadable<MailDataHtmlBody>,
+    pub text_body: Loadable<MailDataTextBody>,
+    pub attachments: Loadable<Vec<MailDisplayAttachment>>,
 }
 
 impl MailDisplay {

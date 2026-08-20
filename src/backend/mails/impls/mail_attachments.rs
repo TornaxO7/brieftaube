@@ -1,4 +1,4 @@
-use crate::backend::{Backend, FetchRole, MailDataAttachment, MailId, types::RemoteData};
+use crate::backend::{Backend, LoadingRole, MailDataAttachment, MailId, types::RemoteData};
 use tokio::sync::watch;
 
 impl Backend {
@@ -10,7 +10,7 @@ impl Backend {
             let mut store = self.store.lock().unwrap();
             let mail = store
                 .mails
-                .get_mut(id)
+                .get_or_insert_mut(id)
                 .loaded_mut()
                 .expect("Mail should be already fetched");
 
@@ -18,21 +18,21 @@ impl Backend {
                 RemoteData::NotRequested => {
                     let (tx, rx) = watch::channel(());
                     mail.init_attachments(rx);
-                    FetchRole::Request(tx)
+                    LoadingRole::Request(tx)
                 }
-                RemoteData::Requested { notifier } => FetchRole::Wait(notifier.clone()),
+                RemoteData::Requested { notifier } => LoadingRole::Wait(notifier.clone()),
                 RemoteData::Loaded(attachments) => return Ok(attachments.clone()),
             }
         };
 
         match next {
-            FetchRole::Wait(mut receiver) => {
+            LoadingRole::Wait(mut receiver) => {
                 receiver.changed().await.unwrap();
                 let mut store = self.store.lock().unwrap();
-                let mail = store.mails.get_mut(id).loaded_mut().unwrap();
+                let mail = store.mails.get_or_insert_mut(id).loaded_mut().unwrap();
                 Ok(mail.attachments.loaded().unwrap().clone())
             }
-            FetchRole::Request(sender) => {
+            LoadingRole::Request(sender) => {
                 let mut response = {
                     let mut request = self.client.build();
 
@@ -55,7 +55,7 @@ impl Backend {
                     .map(MailDataAttachment::from)
                     .collect();
 
-                let mail = store.mails.get_mut(&id).loaded_mut().unwrap();
+                let mail = store.mails.get_or_insert_mut(&id).loaded_mut().unwrap();
                 mail.attachments = RemoteData::Loaded(attachments.clone());
                 let _ = sender.send(());
 

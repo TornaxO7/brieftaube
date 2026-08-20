@@ -19,7 +19,7 @@ impl Backend {
             let mut store = self.store.lock().unwrap();
 
             for id in ids {
-                let mail = store.mails.get_mut(id);
+                let mail = store.mails.get_or_insert_mut(id);
 
                 match mail {
                     RemoteData::NotRequested => {
@@ -101,11 +101,10 @@ impl Backend {
             });
         }
 
-        let mut store = self.store.lock().unwrap();
+        let ids = set.join_all().await;
 
-        set.join_all()
-            .await
-            .into_iter()
+        let mut store = self.store.lock().unwrap();
+        ids.into_iter()
             .map(|id| store.mails.get(&id).loaded().unwrap().clone())
             .collect()
     }

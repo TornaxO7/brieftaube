@@ -10,7 +10,7 @@ use throbber_widgets_tui::{Throbber, ThrobberState};
 
 use super::Model;
 use crate::{
-    backend::types::RemoteData,
+    backend::types::Loadable,
     mailfs::{model::RightColumn, widget::selection_type::DisplaySelectionType},
 };
 use ratatui::{
@@ -313,12 +313,12 @@ fn render_mail_preview(
         ];
 
         match attachments {
-            RemoteData::NotRequested | RemoteData::Requested { .. } => {
+            Loadable::NotRequested | Loadable::Requested { .. } => {
                 constraints.push(Constraint::Length(3));
                 let [header, preview, attachments_area] = Layout::vertical(constraints).areas(area);
                 (header, preview, Some(attachments_area))
             }
-            RemoteData::Loaded(attachments) => {
+            Loadable::Loaded(attachments) => {
                 if attachments.is_empty() {
                     let [header, preview] = Layout::vertical(constraints).areas(area);
                     (header, preview, None)
@@ -361,10 +361,10 @@ fn render_mail_preview(
     if let Some(area) = attachments_area {
         let block = Block::bordered().title("Attachments");
         match attachments {
-            RemoteData::NotRequested => {
+            Loadable::NotRequested => {
                 Widget::render(Paragraph::new("Not requested yet").block(block), area, buf)
             }
-            RemoteData::Requested { .. } => {
+            Loadable::Requested { .. } => {
                 throbber.calc_next();
                 StatefulWidget::render(
                     Throbber::default()
@@ -376,7 +376,7 @@ fn render_mail_preview(
                     throbber,
                 );
             }
-            RemoteData::Loaded(attachments) => {
+            Loadable::Loaded(attachments) => {
                 let rows: Vec<Row> = attachments
                     .iter()
                     .map(|attachment| {

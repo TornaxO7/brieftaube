@@ -1,37 +1,30 @@
-use crate::backend::{Backend, FetchRole, MailboxData, ParentMailboxId, types::RemoteData};
+use crate::backend::{
+    Backend, LoadingRole, MailboxData, MailboxId, ParentMailboxId, types::Loadable,
+};
 use tokio::sync::watch;
 
 impl Backend {
     pub async fn get_mailbox_children(
         &self,
         parent: ParentMailboxId,
-    ) -> Result<Vec<MailboxData>, jmap_client::Error> {
+    ) -> Result<Vec<MailboxId>, jmap_client::Error> {
         let role = {
             let mut store = self.store.lock().unwrap();
             let ids = store.mailbox.get_children_ids_mut(&parent);
 
             match ids {
-                RemoteData::NotRequested => {
+                Loadable::NotRequested => {
                     let (tx, rx) = watch::channel(());
-                    *ids = RemoteData::Requested { notifier: rx };
-                    FetchRole::Request(tx)
+                    *ids = Loadable::Requested { notifier: rx };
+                    LoadingRole::Request(tx)
                 }
-                RemoteData::Requested { notifier } => FetchRole::Wait(notifier.clone()),
-                RemoteData::Loaded(ids) => {
-                    let ids = ids.clone();
-
-                    let datas = ids
-                        .into_iter()
-                        .map(|id| store.mailbox.get_data(&id).clone())
-                        .collect();
-
-                    return Ok(datas);
-                }
+                Loadable::Requested { notifier } => LoadingRole::Wait(notifier.clone()),
+                Loadable::Loaded(ids) => return Ok(ids.clone()),
             }
         };
 
         match role {
-            FetchRole::Wait(mut notifier) => {
+            LoadingRole::Wait(mut notifier) => {
                 notifier.changed().await.unwrap();
 
                 let mut store = self.store.lock().unwrap();
@@ -42,14 +35,9 @@ impl Backend {
                     .unwrap()
                     .clone();
 
-                let datas = ids
-                    .into_iter()
-                    .map(|id| store.mailbox.get_data(&id).clone())
-                    .collect();
-
-                Ok(datas)
+                Ok(ids)
             }
-            FetchRole::Request(notifier) => {
+            LoadingRole::Request(notifier) => {
                 let mut response = {
                     let mut request = self.client.build();
 
@@ -81,6 +69,8 @@ impl Backend {
                     .map(MailboxData::from)
                     .collect();
 
+                let ids = child_mailboxes.iter().map(|data| data.id.clone()).collect();
+
                 let mut store = self.store.lock().unwrap();
                 store
                     .mailbox
@@ -90,7 +80,7 @@ impl Backend {
 
                 let _ = notifier.send(());
 
-                Ok(child_mailboxes)
+                Ok(ids)
             }
         }
     }
