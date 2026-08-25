@@ -1,18 +1,18 @@
-pub mod mailbox;
-pub mod mails;
-mod store;
-pub mod threads;
-pub mod types;
+// pub mod mailbox;
+// pub mod mails;
+// mod store;
+// pub mod threads;
+// pub mod types;
 
-pub use mailbox::types::*;
-pub use mails::types::*;
-pub use threads::types::*;
+// pub use mailbox::types::*;
+// pub use mails::types::*;
+// pub use threads::types::*;
 use tokio::sync::watch;
 
 use crate::config::Config;
 use jmap_client::client::Client;
 use std::sync::{Arc, Mutex};
-use store::Store;
+// use store::Store;
 
 type GetState = String;
 type QueryState = String;
@@ -31,7 +31,7 @@ pub enum LoadingRole {
 pub struct Backend {
     config: Config,
     client: Arc<Client>,
-    store: Arc<Mutex<Store>>,
+    // store: Arc<Mutex<Store>>,
 }
 
 /// Methods needed for `main.rs`
@@ -60,7 +60,7 @@ impl Backend {
 
         Self {
             client: client.clone(),
-            store: Arc::new(Mutex::new(Store::new())),
+            // store: Arc::new(Mutex::new(Store::new())),
             config,
         }
     }

@@ -1,12 +1,15 @@
 use super::keybindmanager::{HandleEvent, KeybindManager};
 use crossterm::event::Event;
+use ratatui::{Frame, layout::Rect};
 
 pub trait LayerCore<ParentAction = crate::Action> {
-    fn handle_event(
-        &mut self,
-        event: Event,
-        statusbar: &mut crate::statusbar::Model,
-    ) -> Option<ParentAction>;
+    fn handle_event(&mut self, event: Event) -> Option<ParentAction>;
+
+    fn is_overlay(&self) -> bool {
+        false
+    }
+
+    fn draw(&mut self, frame: &mut Frame, area: Rect);
 }
 
 pub trait LayerOverlay: LayerCore {
@@ -30,27 +33,18 @@ where
 {
     fn keybinding_manager(&mut self) -> &mut KeybindManager<Action>;
 
-    fn handle_event(
-        &mut self,
-        event: Event,
-        statusbar: &mut crate::statusbar::Model,
-    ) -> Option<ParentAction> {
+    fn handle_event(&mut self, event: Event) -> Option<ParentAction> {
         match event {
             Event::Key(event) => {
                 tracing::debug!("{:#?}", event);
 
-                statusbar.push_key_press(event);
                 match self.keybinding_manager().handle_event(event) {
                     HandleEvent::Action(action) => {
                         let action = self.apply_action(action);
-                        statusbar.reset_key_press();
                         action
                     }
                     HandleEvent::Registered => None,
-                    HandleEvent::Cancel => {
-                        statusbar.reset_key_press();
-                        None
-                    }
+                    HandleEvent::Cancel => None,
                 }
             }
             Event::Mouse(_event) => None,

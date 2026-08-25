@@ -1,4 +1,4 @@
-use crate::palette::Model;
+use super::Model;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},

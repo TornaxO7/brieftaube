@@ -1,7 +1,7 @@
-use crate::utils::layer::{LayerCore, LayerOverlay};
+use crate::frontend::utils::layer::{LayerCore, LayerOverlay};
 use crossterm::event::{Event, KeyCode};
 use nucleo::Nucleo;
-use ratatui::{style::Style, widgets::ListState};
+use ratatui::{Frame, layout::Rect, style::Style, widgets::ListState};
 use ratatui_textarea::TextArea;
 use std::sync::Arc;
 
@@ -61,11 +61,7 @@ impl Model {
 }
 
 impl LayerCore for Model {
-    fn handle_event(
-        &mut self,
-        event: Event,
-        _: &mut crate::statusbar::Model,
-    ) -> Option<crate::Action> {
+    fn handle_event(&mut self, event: Event) -> Option<crate::Action> {
         match event {
             Event::Key(event) => {
                 match event.code {
@@ -109,6 +105,10 @@ impl LayerCore for Model {
         }
 
         None
+    }
+
+    fn draw(&mut self, frame: &mut Frame, area: Rect) {
+        todo!()
     }
 }
 

@@ -1,21 +1,9 @@
 mod backend;
-mod task_manager;
-// mod composer;
 mod config;
-mod log_viewer;
-mod mailfs;
-mod palette;
-mod prompt;
-mod reader;
-mod statusbar;
+mod frontend;
+mod task_manager;
 mod utils;
 
-use crate::{
-    backend::MailId,
-    statusbar::Statusbar,
-    task_manager::TaskManager,
-    utils::layer::{LayerCore, LayerModel},
-};
 use color_eyre::eyre;
 use crossterm::event::Event;
 use futures::{FutureExt, StreamExt};
@@ -41,29 +29,31 @@ static XDG: OnceLock<BaseDirectories> = OnceLock::new();
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     color_eyre::install()?;
-    let counter = init_logging()?;
+    init_logging()?;
 
     let mut terminal = ratatui::init();
-    App::new(counter).await?.run(&mut terminal).await?;
+    App::new().await?.run(&mut terminal).await?;
     ratatui::restore();
 
     Ok(())
 }
 
-enum Layer {
-    Reader(reader::Model),
-    LogViewer(log_viewer::Model),
-    Mailfs(mailfs::Model),
+enum Layer {}
 
-    Palette(palette::Model),
-    Prompt(prompt::Model),
+impl Layer {
+    pub fn is_overlay(&self) -> bool {
+        false
+    }
 }
 
 pub enum Action {
-    OpenMailViewer(MailId),
-    OpenLogViewer,
-    OpenPalette { entries: Vec<palette::PaletteEntry> },
-    OpenPrompt { description: String },
+    // OpenMailViewer(MailId),
+    OpenPalette {
+        entries: Vec<frontend::palette::PaletteEntry>,
+    },
+    OpenPrompt {
+        description: String,
+    },
     Redraw,
     Back,
     Quit,
@@ -74,39 +64,32 @@ pub struct App {
     is_running: bool,
     backend: Arc<backend::Backend>,
     layers: Vec<Layer>,
-    statusbar: statusbar::Model,
-    task_manager: Rc<TaskManager>,
-
+    // task_manager: Rc<TaskManager>,
     needs_full_redraw: bool,
 }
 
 impl App {
-    pub async fn new(counter: statusbar::Counter) -> eyre::Result<Self> {
-        let task_manager = Rc::new(TaskManager::new());
+    pub async fn new() -> eyre::Result<Self> {
+        // let task_manager = Rc::new(TaskManager::new());
         let backend = Arc::new(backend::Backend::new().await);
-        let initial_layer =
-            Layer::Mailfs(mailfs::Model::new(backend.clone(), task_manager.clone()));
-
-        let statusbar = statusbar::Model::new(&initial_layer, counter);
+        // let initial_layer =
+        //     Layer::Mailfs(mailfs::Model::new(backend.clone(), task_manager.clone()));
 
         Ok(Self {
             is_running: true,
-            task_manager,
+            // task_manager,
             backend,
-            layers: vec![initial_layer],
-            statusbar,
+            layers: vec![],
             needs_full_redraw: false,
         })
     }
 
     pub async fn run(mut self, terminal: &mut DefaultTerminal) -> eyre::Result<()> {
         let mut reader = crossterm::event::EventStream::new();
-        self.statusbar.tick();
 
         while self.is_running {
             tokio::select! {
-                _ = self.statusbar.has_changed() => { }
-                _ = self.task_manager.finish_next_task() => {}
+                // _ = self.task_manager.finish_next_task() => {}
                 maybe_event = reader.next().fuse() => match maybe_event {
                     Some(Ok(event)) => if let Some(action) = self.handle_event(event) {
                         self.apply_action(action);
@@ -116,7 +99,6 @@ impl App {
                 }
             }
 
-            self.sync_throbber();
             terminal.draw(|frame| self.draw(frame))?;
         }
 
@@ -131,108 +113,80 @@ impl App {
             frame.render_widget(Clear, area);
         }
 
-        let [statusbar, layer] =
-            Layout::vertical([Constraint::Length(3), Constraint::Fill(0)]).areas(area);
-        frame.render_stateful_widget(Statusbar::default(), statusbar, &mut self.statusbar);
-
-        let is_overlay = matches!(
-            self.layers.last().unwrap(),
-            Layer::Palette(_) | Layer::Prompt(_)
-        );
-
-        if is_overlay {
+        if self.layers.last().unwrap().is_overlay() {
             let len = self.layers.len();
-            draw_layer(self.layers.get_mut(len - 2).unwrap(), frame, layer);
+            draw_layer(self.layers.get_mut(len - 2).unwrap(), frame, area);
         }
 
-        draw_layer(self.layers.last_mut().unwrap(), frame, layer);
+        draw_layer(self.layers.last_mut().unwrap(), frame, area);
     }
 
     fn handle_event(&mut self, event: Event) -> Option<Action> {
-        match self.layers.last_mut().unwrap() {
-            Layer::Reader(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
-            Layer::Mailfs(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
-            Layer::LogViewer(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
-            Layer::Palette(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
-            Layer::Prompt(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
-        }
+        // match self.layers.last_mut().unwrap() {
+        //     Layer::Reader(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
+        //     Layer::Mailfs(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
+        //     Layer::LogViewer(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
+        //     Layer::Palette(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
+        //     Layer::Prompt(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
+        // }
+        None
     }
 
     fn apply_action(&mut self, action: Action) {
         match action {
-            Action::OpenMailViewer(id) => {
-                let backend = self.backend.clone();
-                let task_manager = self.task_manager.clone();
-                let next_layer = Layer::Reader(reader::Model::new(id, backend, task_manager));
+            // Action::OpenMailViewer(id) => {
+            //     // let backend = self.backend.clone();
+            //     // let task_manager = self.task_manager.clone();
+            //     // let next_layer = Layer::Reader(reader::Model::new(id, backend, task_manager));
 
-                self.statusbar.set_layer(&next_layer);
-                self.layers.push(next_layer);
-            }
+            //     // self.layers.push(next_layer);
+            // }
             Action::OpenPalette { entries } => {
-                let next_layer = Layer::Palette(palette::Model::new(entries));
-                self.layers.push(next_layer);
+                // let next_layer = Layer::Palette(frontend::palette::Model::new(entries));
+                // self.layers.push(next_layer);
             }
             Action::OpenPrompt { description } => {
-                let next_layer = Layer::Prompt(prompt::Model::new(description));
-                self.layers.push(next_layer);
+                // let next_layer = Layer::Prompt(prompt::Model::new(description));
+                // self.layers.push(next_layer);
             }
-            Action::OpenLogViewer => {
-                let next_layer = Layer::LogViewer(log_viewer::Model::new());
 
-                self.statusbar.set_layer(&next_layer);
-                self.layers.push(next_layer);
-            }
             Action::Redraw => {
                 self.needs_full_redraw = true;
             }
             Action::Back => {
-                let last_layer = self.layers.pop().unwrap();
+                // let last_layer = self.layers.pop().unwrap();
 
-                let current_layer = self.layers.last_mut().unwrap();
-                self.statusbar.set_layer(current_layer);
+                // let current_layer = self.layers.last_mut().unwrap();
+                // self.statusbar.set_layer(current_layer);
 
-                let next_action = match last_layer {
-                    Layer::Palette(palette) => match current_layer {
-                        Layer::Reader(model) => model.handle_overlay(palette),
-                        Layer::LogViewer(model) => model.handle_overlay(palette),
-                        Layer::Mailfs(model) => model.handle_overlay(palette),
-                        Layer::Palette(_) | Layer::Prompt(_) => unreachable!(),
-                    },
-                    Layer::Prompt(prompt) => match current_layer {
-                        Layer::Reader(model) => model.handle_overlay(prompt),
-                        Layer::LogViewer(model) => model.handle_overlay(prompt),
-                        Layer::Mailfs(model) => model.handle_overlay(prompt),
-                        Layer::Palette(_) | Layer::Prompt(_) => unreachable!(),
-                    },
-                    _ => None,
-                };
+                // let next_action = match last_layer {
+                //     Layer::Palette(palette) => match current_layer {
+                //         Layer::Reader(model) => model.handle_overlay(palette),
+                //         Layer::LogViewer(model) => model.handle_overlay(palette),
+                //         Layer::Mailfs(model) => model.handle_overlay(palette),
+                //         Layer::Palette(_) | Layer::Prompt(_) => unreachable!(),
+                //     },
+                //     Layer::Prompt(prompt) => match current_layer {
+                //         Layer::Reader(model) => model.handle_overlay(prompt),
+                //         Layer::LogViewer(model) => model.handle_overlay(prompt),
+                //         Layer::Mailfs(model) => model.handle_overlay(prompt),
+                //         Layer::Palette(_) | Layer::Prompt(_) => unreachable!(),
+                //     },
+                //     _ => None,
+                // };
 
-                if let Some(next_action) = next_action {
-                    self.apply_action(next_action);
-                }
+                // if let Some(next_action) = next_action {
+                //     self.apply_action(next_action);
+                // }
             }
             Action::Quit => {
                 self.is_running = false;
             }
         }
     }
-
-    fn sync_throbber(&mut self) {
-        let top_screen_has_tasks_running =
-            match self.layers.last().expect("There's at least one screen") {
-                Layer::Reader(_) | Layer::Mailfs(_) => self.task_manager.has_tasks_running(),
-                Layer::LogViewer(_) | Layer::Palette(_) | Layer::Prompt(_) => false,
-            };
-
-        if top_screen_has_tasks_running {
-            self.statusbar.tick();
-        } else {
-            self.statusbar.remove_throbber();
-        }
-    }
 }
 
-fn init_logging() -> eyre::Result<statusbar::Counter> {
+fn init_logging() -> eyre::Result {
     let log_file = OpenOptions::new()
         .write(true)
         .truncate(true)
@@ -252,9 +206,7 @@ fn init_logging() -> eyre::Result<statusbar::Counter> {
 
     tui_logger::init_logger(tui_logger::LevelFilter::Info)?;
 
-    let counter = statusbar::Counter::new();
     tracing_subscriber::registry()
-        .with(counter.clone())
         .with(env_filter)
         .with(fmt_layer)
         .with(tui_logger::TuiTracingSubscriberLayer)
@@ -263,7 +215,7 @@ fn init_logging() -> eyre::Result<statusbar::Counter> {
     tracing::debug!("Debug logging enabled");
     tracing::trace!("Trace logging enabled");
 
-    Ok(counter)
+    Ok(())
 }
 
 fn get_xdg() -> &'static BaseDirectories {
@@ -275,54 +227,54 @@ fn get_log_file_path() -> io::Result<PathBuf> {
 }
 
 fn draw_layer(layer: &mut Layer, frame: &mut Frame, area: Rect) {
-    match layer {
-        Layer::Mailfs(model) => frame.render_stateful_widget(mailfs::Mailfs, area, model),
-        Layer::Reader(state) => {
-            frame.render_stateful_widget(reader::Reader, area, state);
-        }
-        Layer::LogViewer(state) => {
-            frame.render_stateful_widget(log_viewer::LogViewer, area, state);
-        }
-        Layer::Palette(model) => {
-            let area = {
-                let [_top, center, _bottom] =
-                    Layout::vertical([Constraint::Max(4), Constraint::Fill(1), Constraint::Max(4)])
-                        .areas(area);
+    // match layer {
+    // Layer::Mailfs(model) => frame.render_stateful_widget(mailfs::Mailfs, area, model),
+    // Layer::Reader(model) => {
+    //     frame.render_stateful_widget(reader::Reader, area, model);
+    // }
+    // Layer::LogViewer(model) => {
+    //     frame.render_stateful_widget(log_viewer::LogViewer, area, model);
+    // }
+    // Layer::Palette(model) => {
+    //     let area = {
+    //         let [_top, center, _bottom] =
+    //             Layout::vertical([Constraint::Max(4), Constraint::Fill(1), Constraint::Max(4)])
+    //                 .areas(area);
 
-                let [_left, center, _right] = Layout::horizontal([
-                    Constraint::Max(20),
-                    Constraint::Fill(1),
-                    Constraint::Max(20),
-                ])
-                .areas(center);
+    //         let [_left, center, _right] = Layout::horizontal([
+    //             Constraint::Max(20),
+    //             Constraint::Fill(1),
+    //             Constraint::Max(20),
+    //         ])
+    //         .areas(center);
 
-                center
-            };
+    //         center
+    //     };
 
-            frame.render_widget(Clear, area);
-            frame.render_stateful_widget(palette::Palette, area, model);
-        }
-        Layer::Prompt(model) => {
-            let area = {
-                let [_top, center, _bottom] = Layout::vertical([
-                    Constraint::Fill(1),
-                    Constraint::Length(3),
-                    Constraint::Fill(1),
-                ])
-                .areas(area);
+    //     frame.render_widget(Clear, area);
+    //     frame.render_stateful_widget(palette::Palette, area, model);
+    // }
+    // Layer::Prompt(model) => {
+    //     let area = {
+    //         let [_top, center, _bottom] = Layout::vertical([
+    //             Constraint::Fill(1),
+    //             Constraint::Length(3),
+    //             Constraint::Fill(1),
+    //         ])
+    //         .areas(area);
 
-                let [_left, center, _right] = Layout::horizontal([
-                    Constraint::Fill(1),
-                    Constraint::Min(50),
-                    Constraint::Fill(1),
-                ])
-                .areas(center);
+    //         let [_left, center, _right] = Layout::horizontal([
+    //             Constraint::Fill(1),
+    //             Constraint::Min(50),
+    //             Constraint::Fill(1),
+    //         ])
+    //         .areas(center);
 
-                center
-            };
+    //         center
+    //     };
 
-            frame.render_widget(Clear, area);
-            frame.render_stateful_widget(prompt::Prompt, area, model);
-        }
-    }
+    //     frame.render_widget(Clear, area);
+    //     frame.render_stateful_widget(prompt::Prompt, area, model);
+    // }
+    // }
 }
