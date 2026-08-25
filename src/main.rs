@@ -7,16 +7,11 @@ mod utils;
 use color_eyre::eyre;
 use crossterm::event::Event;
 use futures::{FutureExt, StreamExt};
-use ratatui::{
-    DefaultTerminal, Frame,
-    layout::{Constraint, Layout, Rect},
-    widgets::Clear,
-};
+use ratatui::{DefaultTerminal, Frame, layout::Rect, widgets::Clear};
 use std::{
     fs::OpenOptions,
     io,
     path::PathBuf,
-    rc::Rc,
     sync::{Arc, OnceLock},
 };
 use tracing::{error, level_filters::LevelFilter};
