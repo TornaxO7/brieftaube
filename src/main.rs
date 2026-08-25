@@ -4,9 +4,10 @@ mod frontend;
 mod task_manager;
 mod utils;
 
-use color_eyre::eyre;
+use color_eyre::eyre::{self, Context};
 use crossterm::event::Event;
 use futures::{FutureExt, StreamExt};
+use material_theme_loader::MaterialTheme;
 use ratatui::{DefaultTerminal, Frame, layout::Rect, widgets::Clear};
 use std::{
     fs::OpenOptions,
@@ -14,17 +15,21 @@ use std::{
     path::PathBuf,
     sync::{Arc, OnceLock},
 };
-use tracing::{error, level_filters::LevelFilter};
+use tracing::{error, level_filters::LevelFilter, warn};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use xdg::BaseDirectories;
 
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
+const DEFAULT_THEME: &str = include_str!("./default-theme.json");
+
 static XDG: OnceLock<BaseDirectories> = OnceLock::new();
+static THEME: OnceLock<MaterialTheme> = OnceLock::new();
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     color_eyre::install()?;
     init_logging()?;
+    init_theme();
 
     let mut terminal = ratatui::init();
     App::new().await?.run(&mut terminal).await?;
@@ -213,12 +218,35 @@ fn init_logging() -> eyre::Result {
     Ok(())
 }
 
+fn init_theme() {
+    let theme: MaterialTheme = match try_load_custom_theme() {
+        Ok(theme) => theme,
+        Err(err) => {
+            warn!("Couldn't load theme: {err}\nFallback to default theme.");
+            serde_json::from_str(DEFAULT_THEME).unwrap()
+        }
+    };
+
+    THEME.set(theme).expect("Set theme");
+}
+
+fn try_load_custom_theme() -> eyre::Result<MaterialTheme> {
+    let path = get_theme_file_path().context("Get path to theme file")?;
+    let content = std::fs::read_to_string(path).context("Read the theme")?;
+    let theme: MaterialTheme = serde_json::from_str(content.as_str())?;
+    Ok(theme)
+}
+
 fn get_xdg() -> &'static BaseDirectories {
     XDG.get_or_init(|| BaseDirectories::with_prefix(APP_NAME))
 }
 
 fn get_log_file_path() -> io::Result<PathBuf> {
     get_xdg().place_state_file(&format!("{}.log", APP_NAME))
+}
+
+fn get_theme_file_path() -> io::Result<PathBuf> {
+    get_xdg().place_config_file("theme.json")
 }
 
 fn draw_layer(layer: &mut Layer, frame: &mut Frame, area: Rect) {

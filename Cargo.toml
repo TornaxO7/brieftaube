@@ -31,6 +31,7 @@ thiserror = "2"
 throbber-widgets-tui = { git = "https://github.com/TornaxO7/throbber-widgets-tui", branch = "block" }
 tui-logger = { version = "0.18", features = ["tracing-support"] }
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 strum = { version = "0.28.0", features = ["derive"] }
 toml = "1.1"
 tokio = { version = "1.52", features = ["full"] }
