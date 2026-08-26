@@ -2,8 +2,9 @@
 // pub mod mails;
 // mod store;
 // pub mod threads;
-// pub mod types;
+pub mod types;
 
+use ormlite::{Connection, sqlite::SqliteConnection};
 // pub use mailbox::types::*;
 // pub use mails::types::*;
 // pub use threads::types::*;
@@ -29,13 +30,15 @@ pub enum LoadingRole {
 /// - `<object>_get_or_request_<bla>`: if it's trying to fetch the data locally, otherwise creates a request to the server
 /// For combined requests
 pub struct Backend {
-    // store: Arc<Mutex<Store>>,
+    conn: SqliteConnection,
 }
 
 /// Methods needed for `main.rs`
 impl Backend {
     // TODO: Error handling
-    pub fn new() -> Self {
+    pub async fn new() -> Self {
+        let conn = SqliteConnection::connect(":memory:").await.unwrap();
+
         // let config = CONFIG.get().unwrap();
 
         // let client = Client::new()
@@ -56,8 +59,6 @@ impl Backend {
         //     session
         // );
 
-        Self {
-            // store: Arc::new(Mutex::new(Store::new())),
-        }
+        Self { conn }
     }
 }

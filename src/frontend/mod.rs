@@ -4,5 +4,5 @@
 pub mod palette;
 // pub mod prompt;
 // pub mod reader;
-// pub mod statusbar;
+pub mod statusbar;
 pub mod utils;

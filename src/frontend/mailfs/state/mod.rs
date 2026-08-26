@@ -1,5 +1,4 @@
 mod column;
-// mod columns;
 mod selection;
 
 use super::UserAction;
@@ -46,7 +45,7 @@ pub enum RightColumn {
     MailPreview(MailId),
 }
 
-pub struct Model {
+pub struct State {
     keybindings: KeybindManager<UserAction>,
     task_manager: Rc<TaskManager>,
     overlay_value: Option<OverlayValue>,
@@ -58,7 +57,7 @@ pub struct Model {
     pub columns: Columns,
 }
 
-impl Model {
+impl State {
     pub fn new(backend: Arc<Backend>, task_manager: Rc<TaskManager>) -> Self {
         let columns = Arc::new(Mutex::new(HashMap::new()));
 
@@ -93,17 +92,13 @@ impl Model {
     }
 }
 
-impl LayerCore for Model {
-    fn handle_event(
-        &mut self,
-        event: crossterm::event::Event,
-        statusbar: &mut crate::statusbar::Model,
-    ) -> Option<crate::Action> {
-        <Self as LayerModelDefaultHandleEvent<UserAction>>::handle_event(self, event, statusbar)
+impl LayerCore for State {
+    fn handle_event(&mut self, event: crossterm::event::Event) -> Option<crate::Action> {
+        <Self as LayerModelDefaultHandleEvent<UserAction>>::handle_event(self, event)
     }
 }
 
-impl LayerModel<UserAction> for Model {
+impl LayerModel<UserAction> for State {
     fn apply_action(&mut self, action: UserAction) -> Option<crate::Action> {
         debug!("{:?}", action);
 
@@ -157,14 +152,14 @@ impl LayerModel<UserAction> for Model {
     }
 }
 
-impl LayerModelDefaultHandleEvent<UserAction> for Model {
+impl LayerModelDefaultHandleEvent<UserAction> for State {
     fn keybinding_manager(&mut self) -> &mut KeybindManager<UserAction> {
         &mut self.keybindings
     }
 }
 
 /// Helper functions
-impl<'a> Model {
+impl<'a> State {
     pub fn left_column_mailbox(&self) -> Option<&ParentMailboxId> {
         (self.navigation_stack.len().checked_sub(2)).map(|idx| &self.navigation_stack[idx])
     }
@@ -222,7 +217,7 @@ impl<'a> Model {
 }
 
 /// Action implementations
-impl Model {
+impl State {
     fn quit(&self) -> Option<crate::Action> {
         Some(crate::Action::Quit)
     }
