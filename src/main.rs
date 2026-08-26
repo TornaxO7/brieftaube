@@ -19,17 +19,21 @@ use tracing::{error, level_filters::LevelFilter, warn};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use xdg::BaseDirectories;
 
+use crate::config::Config;
+
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
 const DEFAULT_THEME: &str = include_str!("./default-theme.json");
 
 static XDG: OnceLock<BaseDirectories> = OnceLock::new();
 static THEME: OnceLock<MaterialTheme> = OnceLock::new();
+static CONFIG: OnceLock<Config> = OnceLock::new();
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     color_eyre::install()?;
     init_logging()?;
     init_theme();
+    init_config()?;
 
     let mut terminal = ratatui::init();
     App::new().await?.run(&mut terminal).await?;
@@ -228,6 +232,15 @@ fn init_theme() {
     };
 
     THEME.set(theme).expect("Set theme");
+}
+
+fn init_config() -> eyre::Result<()> {
+    let path = get_xdg().place_config_file(config::FILE_NAME)?;
+    let content = std::fs::read_to_string(path)?;
+    let config: Config = toml::from_str(content.as_str())?;
+
+    CONFIG.set(config).unwrap();
+    Ok(())
 }
 
 fn try_load_custom_theme() -> eyre::Result<MaterialTheme> {

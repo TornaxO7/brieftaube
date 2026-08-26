@@ -9,7 +9,7 @@
 // pub use threads::types::*;
 use tokio::sync::watch;
 
-use crate::config::Config;
+use crate::CONFIG;
 use jmap_client::client::Client;
 use std::sync::{Arc, Mutex};
 // use store::Store;
@@ -29,7 +29,6 @@ pub enum LoadingRole {
 /// - `<object>_get_or_request_<bla>`: if it's trying to fetch the data locally, otherwise creates a request to the server
 /// For combined requests
 pub struct Backend {
-    config: Config,
     client: Arc<Client>,
     // store: Arc<Mutex<Store>>,
 }
@@ -38,7 +37,7 @@ pub struct Backend {
 impl Backend {
     // TODO: Error handling
     pub async fn new() -> Self {
-        let config = Config::load().unwrap();
+        let config = CONFIG.get().unwrap();
 
         let client = Client::new()
             .credentials((config.address.trim(), config.password.trim()))
@@ -61,11 +60,6 @@ impl Backend {
         Self {
             client: client.clone(),
             // store: Arc::new(Mutex::new(Store::new())),
-            config,
         }
-    }
-
-    pub fn config(&self) -> &Config {
-        &self.config
     }
 }
