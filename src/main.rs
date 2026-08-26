@@ -5,6 +5,7 @@ mod task_manager;
 mod utils;
 
 use color_eyre::eyre::{self, Context};
+use config::Config;
 use crossterm::event::Event;
 use futures::{FutureExt, StreamExt};
 use material_theme_loader::MaterialTheme;
@@ -15,11 +16,10 @@ use std::{
     path::PathBuf,
     sync::{Arc, OnceLock},
 };
+use tokio::runtime::Runtime;
 use tracing::{error, level_filters::LevelFilter, warn};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use xdg::BaseDirectories;
-
-use crate::config::Config;
 
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
 const DEFAULT_THEME: &str = include_str!("./default-theme.json");
@@ -28,15 +28,14 @@ static XDG: OnceLock<BaseDirectories> = OnceLock::new();
 static THEME: OnceLock<MaterialTheme> = OnceLock::new();
 static CONFIG: OnceLock<Config> = OnceLock::new();
 
-#[tokio::main]
-async fn main() -> eyre::Result<()> {
+fn main() -> eyre::Result<()> {
     color_eyre::install()?;
     init_logging()?;
     init_theme();
     init_config()?;
 
     let mut terminal = ratatui::init();
-    App::new().await?.run(&mut terminal).await?;
+    App::new()?.run(&mut terminal)?;
     ratatui::restore();
 
     Ok(())
@@ -66,16 +65,16 @@ pub enum Action {
 /// Stores the app state
 pub struct App {
     is_running: bool,
-    backend: Arc<backend::Backend>,
+    backend: backend::Backend,
     layers: Vec<Layer>,
     // task_manager: Rc<TaskManager>,
     needs_full_redraw: bool,
 }
 
 impl App {
-    pub async fn new() -> eyre::Result<Self> {
+    pub fn new() -> eyre::Result<Self> {
         // let task_manager = Rc::new(TaskManager::new());
-        let backend = Arc::new(backend::Backend::new().await);
+        let backend = backend::Backend::new();
         // let initial_layer =
         //     Layer::Mailfs(mailfs::Model::new(backend.clone(), task_manager.clone()));
 
@@ -88,20 +87,23 @@ impl App {
         })
     }
 
-    pub async fn run(mut self, terminal: &mut DefaultTerminal) -> eyre::Result<()> {
+    pub fn run(mut self, terminal: &mut DefaultTerminal) -> eyre::Result<()> {
         let mut reader = crossterm::event::EventStream::new();
+        let rt = Runtime::new()?;
 
         while self.is_running {
-            tokio::select! {
-                // _ = self.task_manager.finish_next_task() => {}
-                maybe_event = reader.next().fuse() => match maybe_event {
-                    Some(Ok(event)) => if let Some(action) = self.handle_event(event) {
-                        self.apply_action(action);
+            rt.block_on(async {
+                tokio::select! {
+                    // _ = self.task_manager.finish_next_task() => {}
+                    maybe_event = reader.next().fuse() => match maybe_event {
+                        Some(Ok(event)) => if let Some(action) = self.handle_event(event) {
+                            self.apply_action(action);
+                        }
+                        Some(Err(e)) => error!("{}", e),
+                        None => {},
                     }
-                    Some(Err(e)) => error!("{}", e),
-                    None => {},
                 }
-            }
+            });
 
             terminal.draw(|frame| self.draw(frame))?;
         }
