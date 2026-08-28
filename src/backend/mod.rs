@@ -1,4 +1,4 @@
-// pub mod mailbox;
+pub mod mailbox;
 // pub mod mails;
 // mod store;
 // pub mod threads;
@@ -8,7 +8,7 @@ use ormlite::{Connection, sqlite::SqliteConnection};
 // pub use mailbox::types::*;
 // pub use mails::types::*;
 // pub use threads::types::*;
-use tokio::sync::watch;
+use tokio::sync::{oneshot, watch};
 
 use crate::CONFIG;
 use jmap_client::client::Client;
@@ -36,7 +36,7 @@ pub struct Backend {
 /// Methods needed for `main.rs`
 impl Backend {
     // TODO: Error handling
-    pub async fn new() -> Self {
+    pub async fn run(rx: oneshot::Receiver<()>) {
         let conn = SqliteConnection::connect(":memory:").await.unwrap();
 
         // let config = CONFIG.get().unwrap();

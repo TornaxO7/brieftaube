@@ -1,9 +1,10 @@
 mod backend;
 mod config;
-mod frontend;
+mod layer;
 mod task_manager;
 mod utils;
 
+use crate::backend::Backend;
 use color_eyre::eyre::{self, Context};
 use config::Config;
 use crossterm::event::Event;
@@ -14,18 +15,11 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     widgets::Clear,
 };
-use std::{
-    fs::OpenOptions,
-    io,
-    path::PathBuf,
-    rc::Rc,
-    sync::{Arc, OnceLock},
-};
+use std::{fs::OpenOptions, io, path::PathBuf, sync::OnceLock};
+use tokio::sync::oneshot;
 use tracing::{error, level_filters::LevelFilter, warn};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use xdg::BaseDirectories;
-
-use crate::task_manager::TaskManager;
 
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
 const DEFAULT_THEME: &str = include_str!("./default-theme.json");
@@ -41,10 +35,18 @@ async fn main() -> eyre::Result<()> {
     init_theme();
     init_config()?;
 
+    let (tx, rx) = oneshot::channel();
+    let backend_handler = tokio::spawn(async move {
+        Backend::run(rx).await;
+    });
+
     let mut terminal = ratatui::init();
-    App::new().await?.run(&mut terminal).await?;
+    App::new().run(&mut terminal).await?;
+
     ratatui::restore();
 
+    tx.send(()).unwrap();
+    backend_handler.await;
     Ok(())
 }
 
@@ -59,7 +61,7 @@ impl Layer {
 pub enum Action {
     // OpenMailViewer(MailId),
     OpenPalette {
-        entries: Vec<frontend::palette::PaletteEntry>,
+        entries: Vec<layer::palette::PaletteEntry>,
     },
     OpenPrompt {
         description: String,
@@ -72,26 +74,20 @@ pub enum Action {
 /// Stores the app state
 pub struct App {
     is_running: bool,
-    backend: Arc<backend::Backend>,
     layers: Vec<Layer>,
-    task_manager: Rc<TaskManager>,
     needs_full_redraw: bool,
 }
 
 impl App {
-    pub async fn new() -> eyre::Result<Self> {
-        let task_manager = Rc::new(TaskManager::new());
-        let backend = Arc::new(backend::Backend::new().await);
+    pub fn new() -> Self {
         // let initial_layer =
         //     Layer::Mailfs(mailfs::Model::new(backend.clone(), task_manager.clone()));
 
-        Ok(Self {
+        Self {
             is_running: true,
-            task_manager,
-            backend,
             layers: vec![],
             needs_full_redraw: false,
-        })
+        }
     }
 
     pub async fn run(mut self, terminal: &mut DefaultTerminal) -> eyre::Result<()> {
@@ -152,7 +148,7 @@ impl App {
             //     // self.layers.push(next_layer);
             // }
             Action::OpenPalette { entries } => {
-                // let next_layer = Layer::Palette(frontend::palette::Model::new(entries));
+                // let next_layer = Layer::Palette(layer::palette::Model::new(entries));
                 // self.layers.push(next_layer);
             }
             Action::OpenPrompt { description } => {
@@ -271,11 +267,11 @@ fn get_theme_file_path() -> io::Result<PathBuf> {
 fn draw_layer(layer: &mut Layer, frame: &mut Frame, area: Rect) {
     let [_top, bottom] = Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(area);
 
-    frontend::statusbar::draw(
+    layer::statusbar::draw(
         "Mailfs(normal)",
-        frontend::statusbar::StatusMsg {
+        layer::statusbar::StatusMsg {
             msg: "Houston, we've got a problem",
-            ty: frontend::statusbar::StatusMsgType::Error,
+            ty: layer::statusbar::StatusMsgType::Error,
         },
         "abcdefg",
         frame,

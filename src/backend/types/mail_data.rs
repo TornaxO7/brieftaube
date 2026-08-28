@@ -1,8 +1,7 @@
-use super::{MailAddress, MailKeyword};
+use super::{MailAddress, MailId, MailKeyword, MailboxId, RemoteData, ThreadId};
 use chrono::{DateTime, Local, Utc};
 use jmap_client::email::{Email, EmailBodyPart, Property};
 use std::collections::HashSet;
-use tokio::sync::watch;
 
 #[derive(Debug, Clone, Default)]
 pub struct MailData {
@@ -18,9 +17,9 @@ pub struct MailData {
     pub has_attachment: bool,
     pub mailbox_ids: HashSet<MailboxId>,
 
-    pub text_body: Loadable<MailDataTextBody>,
-    pub html_body: Loadable<MailDataHtmlBody>,
-    pub attachments: Loadable<Vec<MailDataAttachment>>,
+    pub text_body: RemoteData<MailDataTextBody>,
+    pub html_body: RemoteData<MailDataHtmlBody>,
+    pub attachments: RemoteData<Vec<MailDataAttachment>>,
 }
 
 impl MailData {
@@ -37,24 +36,6 @@ impl MailData {
         Property::HasAttachment,
         Property::MailboxIds,
     ];
-
-    pub fn get_body(&self, ty: MailBodyType) -> Loadable<&str> {
-        match ty {
-            MailBodyType::Text => self.text_body.as_ref().map(|body| body.0.as_str()),
-            MailBodyType::Html => self.html_body.as_ref().map(|body| body.0.as_str()),
-        }
-    }
-
-    pub fn init_body(&mut self, ty: MailBodyType, rx: watch::Receiver<()>) {
-        match ty {
-            MailBodyType::Text => self.text_body = Loadable::requesting(rx),
-            MailBodyType::Html => self.html_body = Loadable::requesting(rx),
-        }
-    }
-
-    pub fn init_attachments(&mut self, notifier: watch::Receiver<()>) {
-        self.attachments = Loadable::Requested { notifier: notifier };
-    }
 }
 
 impl From<jmap_client::email::Email> for MailData {
@@ -88,17 +69,17 @@ impl From<jmap_client::email::Email> for MailData {
                 .collect(),
 
             text_body: match MailDataTextBody::new(&mail) {
-                Some(text) => Loadable::Loaded(text),
-                None => Loadable::NotRequested,
+                Some(text) => RemoteData::Loaded(text),
+                None => RemoteData::NotRequested,
             },
             html_body: match MailDataHtmlBody::new(&mail) {
-                Some(html) => Loadable::Loaded(html),
-                None => Loadable::NotRequested,
+                Some(html) => RemoteData::Loaded(html),
+                None => RemoteData::NotRequested,
             },
             attachments: if !mail.has_attachment() {
-                Loadable::Loaded(vec![])
+                RemoteData::Loaded(vec![])
             } else {
-                Loadable::NotRequested
+                RemoteData::NotRequested
             },
         }
     }

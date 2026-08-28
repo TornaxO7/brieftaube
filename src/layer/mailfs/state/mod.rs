@@ -1,39 +1,32 @@
-mod column;
 mod selection;
 
 use super::UserAction;
 use crate::{
     backend::{
-        Backend, LoadingRole, MailId, MailboxId, MailboxNew, MailboxUpdate, ThreadId,
-        mailbox::{
-            BATCH_SIZE, RemoveMailboxOption,
-            types::{ParentMailboxId, TOP_PARENT_MAILBOX_ID},
-        },
-        mails::types::{MailKeyword, MailUpdate},
+        Backend, LoadingRole,
+        types::{MailId, MailboxId, ParentMailboxId, TOP_PARENT_MAILBOX_ID, ThreadId},
     },
-    mailfs::model::column::{MailEntry, ThreadRole},
+    layer::{
+        LayerCore, LayerState,
+        mailfs::backend::{MailfsMessage, MailfsSnapshot},
+        utils::keybindmanager::KeybindManager,
+    },
     task_manager::TaskManager,
-    utils::{
-        keybindmanager::KeybindManager,
-        layer::{LayerCore, LayerModel, LayerModelDefaultHandleEvent, LayerOverlay},
-    },
 };
 use futures::stream;
 use futures::stream::StreamExt;
+use ratatui::{Frame, layout::Rect, widgets::ListState};
 use std::{
     collections::{HashMap, HashSet},
     rc::Rc,
     str::FromStr,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, mpsc},
 };
 use throbber_widgets_tui::ThrobberState;
 use tokio::sync::watch;
 use tracing::{debug, error, warn};
 
-pub use column::{Column, ColumnEntry, ColumnState};
 pub use selection::{Selection, SelectionType};
-
-pub type Columns = Arc<Mutex<HashMap<ParentMailboxId, ColumnState>>>;
 
 enum OverlayValue {
     Action,
@@ -47,35 +40,31 @@ pub enum RightColumn {
 
 pub struct State {
     keybindings: KeybindManager<UserAction>,
-    task_manager: Rc<TaskManager>,
     overlay_value: Option<OverlayValue>,
 
-    pub throbber: ThrobberState,
-    pub backend: Arc<Backend>,
-    pub selection: HashMap<ColumnEntry, Selection>,
-    pub navigation_stack: Vec<ParentMailboxId>,
-    pub columns: Columns,
+    tx: mpsc::Sender<MailfsMessage>,
+    snapshot: watch::Receiver<MailfsSnapshot>,
+
+    throbber: ThrobberState,
+    // pub selection: HashMap<ColumnEntry, Selection>,
+    account_column: ListState,
+    mailbox_stack: Vec<ParentMailboxId>,
+    mailboxes: HashMap<ParentMailboxId, ListState>,
 }
 
 impl State {
-    pub fn new(backend: Arc<Backend>, task_manager: Rc<TaskManager>) -> Self {
+    pub fn new(snapshot: watch::Receiver<MailfsSnapshot>, tx: mpsc::Sender<MailfsMessage>) -> Self {
         let columns = Arc::new(Mutex::new(HashMap::new()));
 
-        let columns2 = columns.clone();
-        let backend2 = backend.clone();
-        task_manager.spawn(async move {
-            init_mailfs(columns2, backend2).await;
-        });
-
         Self {
-            columns,
             overlay_value: None,
             throbber: ThrobberState::default(),
-            navigation_stack: vec![TOP_PARENT_MAILBOX_ID],
-            selection: HashMap::new(),
-            task_manager,
-
-            backend,
+            account_column: ListState::new(),
+            mailbox_stack: vec![],
+            mailboxes: HashMap::new(),
+            // selection: HashMap::new(),
+            tx,
+            snapshot,
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", UserAction::Quit),
                 ("j", UserAction::NavigateDown),
@@ -94,11 +83,15 @@ impl State {
 
 impl LayerCore for State {
     fn handle_event(&mut self, event: crossterm::event::Event) -> Option<crate::Action> {
-        <Self as LayerModelDefaultHandleEvent<UserAction>>::handle_event(self, event)
+        todo!()
+    }
+
+    fn draw(&mut self, frame: &mut Frame, area: Rect) {
+        todo!()
     }
 }
 
-impl LayerModel<UserAction> for State {
+impl LayerState<UserAction> for State {
     fn apply_action(&mut self, action: UserAction) -> Option<crate::Action> {
         debug!("{:?}", action);
 
@@ -161,11 +154,11 @@ impl LayerModelDefaultHandleEvent<UserAction> for State {
 /// Helper functions
 impl<'a> State {
     pub fn left_column_mailbox(&self) -> Option<&ParentMailboxId> {
-        (self.navigation_stack.len().checked_sub(2)).map(|idx| &self.navigation_stack[idx])
+        (self.mailbox_stack.len().checked_sub(2)).map(|idx| &self.mailbox_stack[idx])
     }
 
     pub fn center_column_mailbox(&self) -> &ParentMailboxId {
-        self.navigation_stack.last().unwrap()
+        self.mailbox_stack.last().unwrap()
     }
 
     pub fn right_column(
@@ -297,7 +290,7 @@ impl State {
 
         match selected_entry {
             ColumnEntry::Mailbox(id) => {
-                self.navigation_stack.push(Some(id));
+                self.mailbox_stack.push(Some(id));
 
                 let selected_entry = {
                     let columns = self.columns.lock().unwrap();
@@ -409,8 +402,8 @@ impl State {
     }
 
     fn navigate_to_parent(&mut self) -> Option<crate::Action> {
-        if self.navigation_stack.len() > 1 {
-            self.navigation_stack.pop();
+        if self.mailbox_stack.len() > 1 {
+            self.mailbox_stack.pop();
         }
 
         None
