@@ -4,14 +4,14 @@ pub type GetState = String;
 pub type QueryState = String;
 
 pub struct QueryWindow {
-    pub position: i32,
-    pub limit: u32,
+    pub start: usize,
+    pub limit: usize,
 }
 
 pub struct QueryResponse<Id> {
-    pub loaded: Vec<Vec<Id>>,
+    pub values: Vec<Vec<Id>>,
     pub missing: Vec<Range<usize>>,
-    pub query_state: QueryState,
+    pub query_state: Option<QueryState>,
 }
 
 pub enum Coverage {
@@ -23,6 +23,22 @@ pub enum Coverage {
 pub struct GetResult<T> {
     pub value: T,
     pub state: GetState,
+}
+
+impl<T> GetResult<T> {
+    pub fn as_ref(&self) -> GetResult<&T> {
+        GetResult {
+            value: &self.value,
+            state: self.state.clone(),
+        }
+    }
+
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> GetResult<U> {
+        GetResult {
+            value: f(self.value),
+            state: self.state,
+        }
+    }
 }
 
 pub struct SetResult<T> {

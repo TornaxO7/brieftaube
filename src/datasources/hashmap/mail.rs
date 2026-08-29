@@ -1,22 +1,10 @@
-#[derive(thiserror::Error, Debug, Clone)]
-pub enum QueryError {
-    #[error("")]
-    NoRootMails,
-
-    #[error("")]
-    AnchorNotFound,
-}
-
 use crate::{
     datasources::{
-        MailCache, MailDataSource,
-        hashmap::{Error, HashMapDataSource},
-        types::{Coverage, GetResult, GetState, QueryResponse, QueryState, QueryWindow, SetResult},
+        MailCache, MailDataSource, MailboxDataSource,
+        hashmap::{HashMapDataSource, utils::root_mails::RootMails},
+        types::{GetResult, GetState, QueryResponse, QueryState, QueryWindow},
     },
-    types::{
-        MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailUpdate,
-        MailboxId,
-    },
+    types::{MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailboxId},
 };
 
 impl MailDataSource for HashMapDataSource {
@@ -24,76 +12,116 @@ impl MailDataSource for HashMapDataSource {
         &self,
         ids: &[MailId],
     ) -> Result<GetResult<Vec<Option<MailData>>>, Self::Error> {
-        todo!()
+        let inner = self.inner.read().unwrap();
+
+        let datas = ids.iter().map(|id| inner.mails.get(id).cloned()).collect();
+
+        Ok(GetResult {
+            value: datas,
+            state: inner.mail_get_state.clone().unwrap(),
+        })
     }
 
     async fn get_mail_text_body(
         &self,
         id: &MailId,
-    ) -> Result<GetResult<MailDataTextBody>, Self::Error> {
-        todo!()
+    ) -> Result<GetResult<Option<MailDataTextBody>>, Self::Error> {
+        let inner = self.inner.read().unwrap();
+        let body = inner.mail_text_body.get(id).cloned();
+
+        Ok(GetResult {
+            value: body,
+            state: inner.mail_get_state.clone().unwrap(),
+        })
     }
 
     async fn get_mail_html_body(
         &self,
         id: &MailId,
-    ) -> Result<GetResult<MailDataHtmlBody>, Self::Error> {
-        todo!()
+    ) -> Result<GetResult<Option<MailDataHtmlBody>>, Self::Error> {
+        let inner = self.inner.read().unwrap();
+        let body = inner.mail_html_body.get(id).cloned();
+
+        Ok(GetResult {
+            value: body,
+            state: inner.mail_get_state.clone().unwrap(),
+        })
     }
 
     async fn get_mail_attachments(
         &self,
         id: &MailId,
-    ) -> Result<GetResult<Vec<MailDataAttachment>>, Self::Error> {
-        todo!()
-    }
+    ) -> Result<GetResult<Option<Vec<MailDataAttachment>>>, Self::Error> {
+        let inner = self.inner.read().unwrap();
+        let attachments = inner.mail_attachments.get(id).cloned();
 
-    async fn create_mail(&self) -> Result<SetResult<MailData>, Self::Error> {
-        todo!()
-    }
-
-    async fn update_mail(&self, update: MailUpdate) -> Result<SetResult<()>, Self::Error> {
-        todo!()
-    }
-
-    async fn destroy_mail(&self, id: &MailId) -> Result<SetResult<()>, Self::Error> {
-        todo!()
+        Ok(GetResult {
+            value: attachments,
+            state: inner.mail_get_state.clone().unwrap(),
+        })
     }
 
     async fn query_root_mails(
         &self,
         mailbox: &MailboxId,
-        window: QueryWindow<MailId>,
+        window: QueryWindow,
     ) -> Result<QueryResponse<MailId>, Self::Error> {
         let inner = self.inner.read().unwrap();
         let root_mails = inner
             .root_mails
             .get(mailbox)
-            .ok_or(QueryError::NoRootMails)?;
+            .expect("each mailbox has `RootMails`");
 
-        todo!();
+        Ok(root_mails.query(window))
     }
 }
 
 impl MailCache for HashMapDataSource {
     async fn upsert_mails(
         &self,
-        mails: &[MailData],
+        mails: Vec<MailData>,
         new_state: GetState,
     ) -> Result<(), Self::Error> {
-        todo!()
+        let mut inner = self.inner.write().unwrap();
+
+        for mail in mails.into_iter() {
+            let id = mail.id.clone();
+            inner.mails.insert(id, mail);
+        }
+
+        inner.mail_get_state = Some(new_state);
+        Ok(())
     }
 
     async fn evict_mails(&self, mails: &[MailId], new_state: GetState) -> Result<(), Self::Error> {
-        todo!()
+        let mut inner = self.inner.write().unwrap();
+
+        for id in mails {
+            inner.mail_text_body.remove(id);
+            inner.mail_html_body.remove(id);
+            inner.mail_attachments.remove(id);
+            if let Some(mail) = inner.mails.remove(id) {}
+        }
+
+        inner.mail_get_state = Some(new_state);
+        Ok(())
     }
 
     async fn upsert_query_mails(
         &self,
-        mailbox: &MailboxId,
-        ids: &[MailId],
+        id: &MailboxId,
+        start: usize,
+        ids: Vec<MailId>,
         new_state: QueryState,
     ) -> Result<(), Self::Error> {
-        todo!()
+        let mut inner = self.inner.write().unwrap();
+
+        inner
+            .root_mails
+            .entry(id.clone())
+            .and_modify(|root_mails| root_mails.set(start, ids.clone(), new_state.clone()))
+            .or_insert(RootMails::new(start, ids, new_state));
+
+        Ok(())
     }
 }

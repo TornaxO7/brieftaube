@@ -1,4 +1,4 @@
-use super::{MailAddress, MailId, MailKeyword, MailboxId, RemoteData, ThreadId};
+use super::{MailAddress, MailId, MailKeyword, MailboxId, ThreadId};
 use chrono::{DateTime, Local, Utc};
 use jmap_client::email::{Email, EmailBodyPart, Property};
 use std::collections::HashSet;

@@ -25,35 +25,29 @@ pub trait MailDataSource: BaseDataSource {
     async fn get_mail_text_body(
         &self,
         id: &MailId,
-    ) -> Result<GetResult<MailDataTextBody>, Self::Error>;
+    ) -> Result<GetResult<Option<MailDataTextBody>>, Self::Error>;
 
     async fn get_mail_html_body(
         &self,
         id: &MailId,
-    ) -> Result<GetResult<MailDataHtmlBody>, Self::Error>;
+    ) -> Result<GetResult<Option<MailDataHtmlBody>>, Self::Error>;
 
     async fn get_mail_attachments(
         &self,
         id: &MailId,
-    ) -> Result<GetResult<Vec<MailDataAttachment>>, Self::Error>;
-
-    async fn create_mail(&self) -> Result<SetResult<MailData>, Self::Error>;
-
-    async fn update_mail(&self, update: MailUpdate) -> Result<SetResult<()>, Self::Error>;
-
-    async fn destroy_mail(&self, id: &MailId) -> Result<SetResult<()>, Self::Error>;
+    ) -> Result<GetResult<Option<Vec<MailDataAttachment>>>, Self::Error>;
 
     async fn query_root_mails(
         &self,
         mailbox: &MailboxId,
-        window: QueryWindow<MailId>,
+        window: QueryWindow,
     ) -> Result<QueryResponse<MailId>, Self::Error>;
 }
 
 pub trait MailCache: BaseDataSource {
     async fn upsert_mails(
         &self,
-        mails: &[MailData],
+        mails: Vec<MailData>,
         new_state: GetState,
     ) -> Result<(), Self::Error>;
 
@@ -62,12 +56,19 @@ pub trait MailCache: BaseDataSource {
     async fn upsert_query_mails(
         &self,
         mailbox: &MailboxId,
-        ids: &[MailId],
+        start: usize,
+        ids: Vec<MailId>,
         new_state: QueryState,
     ) -> Result<(), Self::Error>;
 }
 
 pub trait MailRemote: BaseDataSource {
+    async fn create_mail(&self) -> Result<SetResult<MailData>, Self::Error>;
+
+    async fn update_mail(&self, update: MailUpdate) -> Result<SetResult<()>, Self::Error>;
+
+    async fn destroy_mail(&self, id: &MailId) -> Result<SetResult<()>, Self::Error>;
+
     async fn get_mail_changes(
         &self,
         since: &GetState,
@@ -80,7 +81,15 @@ pub trait MailRemote: BaseDataSource {
 }
 
 pub trait MailboxDataSource: BaseDataSource {
-    async fn get_mailboxes(&self) -> Result<GetResult<Vec<MailboxData>>, Self::Error>;
+    async fn get_mailbox(&self, id: &MailboxId) -> Result<GetResult<MailboxData>, Self::Error> {
+        let result = self.get_mailboxes(Some(&[id.clone()])).await?;
+        Ok(result.map(|mailboxes| mailboxes[0].clone()))
+    }
+
+    async fn get_mailboxes(
+        &self,
+        ids: Option<&[MailboxId]>,
+    ) -> Result<GetResult<Vec<MailboxData>>, Self::Error>;
 
     async fn create_mailbox(&self, new: MailboxNew) -> Result<SetResult<MailboxData>, Self::Error>;
 
@@ -92,7 +101,7 @@ pub trait MailboxDataSource: BaseDataSource {
 pub trait MailboxCache: BaseDataSource {
     async fn upsert_mailboxes(
         &self,
-        mailboxes: &[MailboxData],
+        mailboxes: Vec<MailboxData>,
         state: GetState,
     ) -> Result<(), Self::Error>;
 
