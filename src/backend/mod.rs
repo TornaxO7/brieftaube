@@ -2,7 +2,6 @@ pub mod mailbox;
 // pub mod mails;
 // mod store;
 // pub mod threads;
-pub mod types;
 
 use ormlite::{Connection, sqlite::SqliteConnection};
 // pub use mailbox::types::*;

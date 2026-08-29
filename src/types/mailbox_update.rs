@@ -1,4 +1,6 @@
-use super::{MailboxId, SortOrder};
+use crate::backend::types::ParentMailboxId;
+
+use super::MailboxId;
 use jmap_client::{
     Set,
     core::set::SetRequest,
@@ -10,8 +12,8 @@ pub struct MailboxUpdate {
     pub id: MailboxId,
     pub name: Option<String>,
     pub role: Option<Role>,
-    pub sort_order: Option<SortOrder>,
-    pub parent_id: Option<Option<MailboxId>>,
+    pub sort_order: Option<u32>,
+    pub parent_id: Option<ParentMailboxId>,
 }
 
 impl MailboxUpdate {
