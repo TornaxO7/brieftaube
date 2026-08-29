@@ -20,16 +20,11 @@ pub enum LoadingRole {
 /// - `<object>_get_<bla>`: if it's only trying to fetch the data locally
 /// - `<object>_get_or_request_<bla>`: if it's trying to fetch the data locally, otherwise creates a request to the server
 /// For combined requests
-pub struct Backend {
-    conn: SqliteConnection,
-}
+pub struct Backend {}
 
 /// Methods needed for `main.rs`
 impl Backend {
-    // TODO: Error handling
-    pub async fn run(rx: oneshot::Receiver<()>) {
-        let conn = SqliteConnection::connect(":memory:").await.unwrap();
-
+    pub async fn run() {
         // let config = CONFIG.get().unwrap();
 
         // let client = Client::new()
@@ -49,7 +44,5 @@ impl Backend {
         //     "Hold up! Your server doesn't seem to support email capabilities?! Eh... That's funny... here are the information of the session: {:#?}",
         //     session
         // );
-
-        Self { conn }
     }
 }

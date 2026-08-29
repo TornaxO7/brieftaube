@@ -1,4 +1,4 @@
-use crate::backend::types::{
+use crate::types::{
     MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailUpdate,
     MailboxData, MailboxId, ThreadId,
 };

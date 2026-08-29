@@ -1,6 +1,4 @@
-use crate::backend::types::ParentMailboxId;
-
-use super::MailboxId;
+use super::{MailboxId, ParentMailboxId};
 use jmap_client::{
     Set,
     core::set::SetRequest,

@@ -180,17 +180,17 @@ fn get_theme_file_path() -> io::Result<PathBuf> {
     get_xdg().place_config_file("theme.json")
 }
 
-fn draw_layer(layer: &mut Layer, frame: &mut Frame, area: Rect) {
-    let [_top, bottom] = Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(area);
+// fn draw_layer(layer: &mut Layer, frame: &mut Frame, area: Rect) {
+//     let [_top, bottom] = Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(area);
 
-    layer::statusbar::draw(
-        "Mailfs(normal)",
-        layer::statusbar::StatusMsg {
-            msg: "Houston, we've got a problem",
-            ty: layer::statusbar::StatusMsgType::Error,
-        },
-        "abcdefg",
-        frame,
-        bottom,
-    );
-}
+//     layer::statusbar::draw(
+//         "Mailfs(normal)",
+//         layer::statusbar::StatusMsg {
+//             msg: "Houston, we've got a problem",
+//             ty: layer::statusbar::StatusMsgType::Error,
+//         },
+//         "abcdefg",
+//         frame,
+//         bottom,
+//     );
+// }

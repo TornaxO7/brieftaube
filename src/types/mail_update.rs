@@ -1,5 +1,4 @@
-use super::{MailId, MailKeyword};
-use crate::backend::mailbox::types::MailboxId;
+use super::{MailId, MailKeyword, MailboxId};
 
 #[derive(Debug, Clone, Default)]
 pub struct MailUpdate {
