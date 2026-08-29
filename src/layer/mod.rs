@@ -1,11 +1,11 @@
 // pub mod composer;
 // pub mod log_viewer;
-pub mod mailfs;
-pub mod palette;
+// pub mod mailfs;
+// pub mod palette;
 // pub mod prompt;
 // pub mod reader;
-pub mod statusbar;
-mod utils;
+// pub mod statusbar;
+// mod utils;
 
 use crossterm::event::Event;
 use ratatui::{Frame, layout::Rect};

@@ -6,7 +6,6 @@ mod task_manager;
 mod types;
 mod utils;
 
-use crate::backend::Backend;
 use color_eyre::eyre::{self, Context};
 use config::Config;
 use crossterm::event::Event;
@@ -15,10 +14,8 @@ use material_theme_loader::MaterialTheme;
 use ratatui::{
     DefaultTerminal, Frame,
     layout::{Constraint, Layout, Rect},
-    widgets::Clear,
 };
 use std::{fs::OpenOptions, io, path::PathBuf, sync::OnceLock};
-use tokio::sync::oneshot;
 use tracing::{error, level_filters::LevelFilter, warn};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use xdg::BaseDirectories;
@@ -37,18 +34,9 @@ async fn main() -> eyre::Result<()> {
     init_theme();
     init_config()?;
 
-    let (tx, rx) = oneshot::channel();
-    let backend_handler = tokio::spawn(async move {
-        Backend::run(rx).await;
-    });
-
     let mut terminal = ratatui::init();
     App::new().run(&mut terminal).await?;
-
     ratatui::restore();
-
-    tx.send(()).unwrap();
-    backend_handler.await;
     Ok(())
 }
 
@@ -61,15 +49,7 @@ impl Layer {
 }
 
 pub enum Action {
-    // OpenMailViewer(MailId),
-    OpenPalette {
-        entries: Vec<layer::palette::PaletteEntry>,
-    },
-    OpenPrompt {
-        description: String,
-    },
     Redraw,
-    Back,
     Quit,
 }
 
@@ -82,9 +62,6 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
-        // let initial_layer =
-        //     Layer::Mailfs(mailfs::Model::new(backend.clone(), task_manager.clone()));
-
         Self {
             is_running: true,
             layers: vec![],
@@ -97,7 +74,6 @@ impl App {
 
         while self.is_running {
             tokio::select! {
-                _ = self.task_manager.finish_next_task() => {}
                 maybe_event = reader.next().fuse() => match maybe_event {
                     Some(Ok(event)) => if let Some(action) = self.handle_event(event) {
                         self.apply_action(action);
@@ -113,80 +89,18 @@ impl App {
         Ok(())
     }
 
-    fn draw(&mut self, frame: &mut Frame) {
-        let area = frame.area();
-
-        if self.needs_full_redraw {
-            self.needs_full_redraw = false;
-            frame.render_widget(Clear, area);
-        }
-
-        if self.layers.last().unwrap().is_overlay() {
-            let len = self.layers.len();
-            draw_layer(self.layers.get_mut(len - 2).unwrap(), frame, area);
-        }
-
-        draw_layer(self.layers.last_mut().unwrap(), frame, area);
-    }
+    fn draw(&mut self, frame: &mut Frame) {}
 
     fn handle_event(&mut self, event: Event) -> Option<Action> {
-        // match self.layers.last_mut().unwrap() {
-        //     Layer::Reader(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
-        //     Layer::Mailfs(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
-        //     Layer::LogViewer(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
-        //     Layer::Palette(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
-        //     Layer::Prompt(model) => LayerCore::handle_event(model, event, &mut self.statusbar),
-        // }
         None
     }
 
     fn apply_action(&mut self, action: Action) {
         match action {
-            // Action::OpenMailViewer(id) => {
-            //     // let backend = self.backend.clone();
-            //     // let task_manager = self.task_manager.clone();
-            //     // let next_layer = Layer::Reader(reader::Model::new(id, backend, task_manager));
-
-            //     // self.layers.push(next_layer);
-            // }
-            Action::OpenPalette { entries } => {
-                // let next_layer = Layer::Palette(layer::palette::Model::new(entries));
-                // self.layers.push(next_layer);
-            }
-            Action::OpenPrompt { description } => {
-                // let next_layer = Layer::Prompt(prompt::Model::new(description));
-                // self.layers.push(next_layer);
-            }
-
             Action::Redraw => {
                 self.needs_full_redraw = true;
             }
-            Action::Back => {
-                // let last_layer = self.layers.pop().unwrap();
 
-                // let current_layer = self.layers.last_mut().unwrap();
-                // self.statusbar.set_layer(current_layer);
-
-                // let next_action = match last_layer {
-                //     Layer::Palette(palette) => match current_layer {
-                //         Layer::Reader(model) => model.handle_overlay(palette),
-                //         Layer::LogViewer(model) => model.handle_overlay(palette),
-                //         Layer::Mailfs(model) => model.handle_overlay(palette),
-                //         Layer::Palette(_) | Layer::Prompt(_) => unreachable!(),
-                //     },
-                //     Layer::Prompt(prompt) => match current_layer {
-                //         Layer::Reader(model) => model.handle_overlay(prompt),
-                //         Layer::LogViewer(model) => model.handle_overlay(prompt),
-                //         Layer::Mailfs(model) => model.handle_overlay(prompt),
-                //         Layer::Palette(_) | Layer::Prompt(_) => unreachable!(),
-                //     },
-                //     _ => None,
-                // };
-
-                // if let Some(next_action) = next_action {
-                //     self.apply_action(next_action);
-                // }
-            }
             Action::Quit => {
                 self.is_running = false;
             }

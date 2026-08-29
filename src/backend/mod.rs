@@ -1,12 +1,4 @@
-pub mod mailbox;
-// pub mod mails;
-// mod store;
-// pub mod threads;
-
 use ormlite::{Connection, sqlite::SqliteConnection};
-// pub use mailbox::types::*;
-// pub use mails::types::*;
-// pub use threads::types::*;
 use tokio::sync::{oneshot, watch};
 
 use crate::CONFIG;
