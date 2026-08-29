@@ -72,7 +72,9 @@ impl MailDataSource for HashMapDataSource {
             .get(mailbox)
             .expect("each mailbox has `RootMails`");
 
-        Ok(root_mails.query(window))
+        let range = window.start..(window.start + window.limit);
+
+        Ok(root_mails.query(range))
     }
 }
 

@@ -8,16 +8,17 @@ pub struct QueryWindow {
     pub limit: usize,
 }
 
-pub struct QueryResponse<Id> {
-    pub values: Vec<Vec<Id>>,
-    pub missing: Vec<Range<usize>>,
-    pub query_state: Option<QueryState>,
+#[derive(Debug, PartialEq, Eq)]
+pub struct QueryResponseSection<Id> {
+    pub start: usize,
+    pub ids: Vec<Id>, // consecutive ids
 }
 
-pub enum Coverage {
-    Complete,
-    // contains the missing start position and length
-    Partial { start: usize, len: usize },
+#[derive(Debug, PartialEq, Eq)]
+pub struct QueryResponse<Id> {
+    pub values: Vec<QueryResponseSection<Id>>,
+    pub missing: Vec<Range<usize>>,
+    pub query_state: QueryState,
 }
 
 pub struct GetResult<T> {

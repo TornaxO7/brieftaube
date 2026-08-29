@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use crate::{
-    datasources::types::{QueryResponse, QueryState, QueryWindow},
+    datasources::types::{QueryResponse, QueryResponseSection, QueryState, QueryWindow},
     types::MailId,
 };
 
@@ -68,8 +68,47 @@ impl RootMails {
         self.state = new_state;
     }
 
-    pub fn query(&self, window: QueryWindow) -> QueryResponse<MailId> {
-        todo!()
+    pub fn query(&self, range: Range<usize>) -> QueryResponse<MailId> {
+        let mut sections = Vec::new();
+        let mut missing = Vec::new();
+        let mut cursor = range.start;
+        let start_section = self
+            .sections
+            .partition_point(|section| section.end() <= cursor);
+
+        for section in &self.sections[start_section..] {
+            if section.start >= range.end {
+                break;
+            }
+
+            if cursor < section.start {
+                missing.push(cursor..section.start);
+                cursor = section.start;
+            }
+
+            let section_range = {
+                let start = cursor - section.start;
+                let end = (range.end - section.start).min(section.ids.len());
+                start..end
+            };
+
+            sections.push(QueryResponseSection {
+                start: cursor,
+                ids: section.ids[section_range.clone()].to_vec(),
+            });
+
+            cursor = section.start + section_range.end;
+        }
+
+        if cursor < range.end {
+            missing.push(cursor..range.end);
+        }
+
+        QueryResponse {
+            values: sections,
+            missing,
+            query_state: self.state.clone(),
+        }
     }
 }
 
@@ -201,6 +240,96 @@ mod tests {
                 root.sections,
                 vec![Section::new_test(0..10), Section::new_test(30..50)]
             );
+        }
+    }
+
+    mod query {
+        use super::*;
+
+        #[test]
+        fn full_find() {
+            let root = RootMails {
+                sections: vec![Section::new_test(0..10)],
+                state: "1".into(),
+            };
+
+            assert_eq!(
+                root.query(2..5),
+                QueryResponse {
+                    values: vec![QueryResponseSection {
+                        start: 2,
+                        ids: new_mail_ids(2..5),
+                    }],
+                    missing: vec![],
+                    query_state: "1".into()
+                }
+            )
+        }
+
+        #[test]
+        fn missing_first() {
+            let root = RootMails {
+                sections: vec![Section::new_test(10..20)],
+                state: "1".into(),
+            };
+
+            assert_eq!(
+                root.query(5..15),
+                QueryResponse {
+                    values: vec![QueryResponseSection {
+                        start: 10,
+                        ids: new_mail_ids(10..15),
+                    }],
+                    missing: vec![5..10],
+                    query_state: "1".into()
+                }
+            );
+        }
+
+        #[test]
+        fn missing_end() {
+            let root = RootMails {
+                sections: vec![Section::new_test(10..20)],
+                state: "1".into(),
+            };
+
+            assert_eq!(
+                root.query(15..25),
+                QueryResponse {
+                    values: vec![QueryResponseSection {
+                        start: 15,
+                        ids: new_mail_ids(15..20),
+                    }],
+                    missing: vec![20..25],
+                    query_state: "1".into()
+                }
+            );
+        }
+
+        #[test]
+        fn get_multiple() {
+            let root = RootMails {
+                sections: vec![Section::new_test(10..20), Section::new_test(30..40)],
+                state: "1".into(),
+            };
+
+            assert_eq!(
+                root.query(15..35),
+                QueryResponse {
+                    values: vec![
+                        QueryResponseSection {
+                            start: 15,
+                            ids: new_mail_ids(15..20)
+                        },
+                        QueryResponseSection {
+                            start: 30,
+                            ids: new_mail_ids(30..35)
+                        }
+                    ],
+                    missing: vec![20..30],
+                    query_state: "1".into()
+                }
+            )
         }
     }
 }
