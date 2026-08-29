@@ -1,6 +1,6 @@
 mod backend;
 mod config;
-mod data_sources;
+mod datasources;
 mod layer;
 mod task_manager;
 mod types;

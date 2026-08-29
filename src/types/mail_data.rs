@@ -16,10 +16,9 @@ pub struct MailData {
     pub received_at: DateTime<Local>,
     pub has_attachment: bool,
     pub mailbox_ids: HashSet<MailboxId>,
-
-    pub text_body: RemoteData<MailDataTextBody>,
-    pub html_body: RemoteData<MailDataHtmlBody>,
-    pub attachments: RemoteData<Vec<MailDataAttachment>>,
+    // pub text_body: RemoteData<MailDataTextBody>,
+    // pub html_body: RemoteData<MailDataHtmlBody>,
+    // pub attachments: RemoteData<Vec<MailDataAttachment>>,
 }
 
 impl MailData {
@@ -67,20 +66,19 @@ impl From<jmap_client::email::Email> for MailData {
                 .into_iter()
                 .map(|id| MailboxId(id.to_owned()))
                 .collect(),
-
-            text_body: match MailDataTextBody::new(&mail) {
-                Some(text) => RemoteData::Loaded(text),
-                None => RemoteData::NotRequested,
-            },
-            html_body: match MailDataHtmlBody::new(&mail) {
-                Some(html) => RemoteData::Loaded(html),
-                None => RemoteData::NotRequested,
-            },
-            attachments: if !mail.has_attachment() {
-                RemoteData::Loaded(vec![])
-            } else {
-                RemoteData::NotRequested
-            },
+            // text_body: match MailDataTextBody::new(&mail) {
+            //     Some(text) => RemoteData::Loaded(text),
+            //     None => RemoteData::NotRequested,
+            // },
+            // html_body: match MailDataHtmlBody::new(&mail) {
+            //     Some(html) => RemoteData::Loaded(html),
+            //     None => RemoteData::NotRequested,
+            // },
+            // attachments: if !mail.has_attachment() {
+            //     RemoteData::Loaded(vec![])
+            // } else {
+            //     RemoteData::NotRequested
+            // },
         }
     }
 }

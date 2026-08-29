@@ -25,7 +25,7 @@ htmd = "0.5"
 pulldown-cmark-mdcat = { version = "2.13", default-features = false, features = [
   "ratatui",
 ] }
-ormlite = { version = "0.24", features = ["sqlite"] }
+# ormlite = { version = "0.24", features = ["sqlite"] }
 ratatui = "0.30"
 ratatui-textarea = "0.9.2"
 thiserror = "2"

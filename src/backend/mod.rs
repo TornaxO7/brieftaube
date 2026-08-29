@@ -1,18 +1,9 @@
-use ormlite::{Connection, sqlite::SqliteConnection};
 use tokio::sync::{oneshot, watch};
 
 use crate::CONFIG;
 use jmap_client::client::Client;
 use std::sync::{Arc, Mutex};
 // use store::Store;
-
-type GetState = String;
-type QueryState = String;
-
-pub enum LoadingRole {
-    Wait(watch::Receiver<()>),
-    Request(watch::Sender<()>),
-}
 
 /// Methods for states.
 ///
