@@ -115,7 +115,7 @@ pub trait MailRemote: BaseDataSource {
     ) -> Result<remote::QueryChangeResult<MailId>, Self::Error>;
 }
 
-pub trait MailboxDataSource: BaseDataSource {
+pub trait MailboxCache: BaseDataSource {
     async fn get_mailbox(
         &self,
         id: &MailboxId,
@@ -130,9 +130,7 @@ pub trait MailboxDataSource: BaseDataSource {
         &self,
         ids: &[MailboxId],
     ) -> Result<cache::GetResult<Vec<Option<MailboxData>>>, Self::Error>;
-}
 
-pub trait MailboxCache: BaseDataSource {
     async fn upsert_mailboxes(
         &self,
         mailboxes: Vec<MailboxData>,

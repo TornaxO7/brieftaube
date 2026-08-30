@@ -1,13 +1,13 @@
 use crate::{
     datasources::{
-        MailboxCache, MailboxDataSource,
+        MailboxCache,
         hashmap::HashMapDataSource,
         types::{GetState, cache},
     },
     types::{MailboxData, MailboxId},
 };
 
-impl MailboxDataSource for HashMapDataSource {
+impl MailboxCache for HashMapDataSource {
     async fn get_mailboxes(
         &self,
         ids: &[MailboxId],
@@ -34,9 +34,7 @@ impl MailboxDataSource for HashMapDataSource {
             state: inner.mailboxes_get_state.clone(),
         })
     }
-}
 
-impl MailboxCache for HashMapDataSource {
     async fn upsert_mailboxes(
         &self,
         mailboxes: Vec<MailboxData>,
