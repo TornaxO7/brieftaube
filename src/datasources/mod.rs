@@ -160,6 +160,7 @@ pub trait MailboxRemote: BaseDataSource {
     async fn update_mailboxes(
         &self,
         updates: Vec<(MailboxData, MailboxUpdate)>,
+        since: &GetState,
     ) -> Result<remote::UpdateResult<MailboxId, MailboxData>, Self::Error>;
 
     async fn destroy_mailboxes(

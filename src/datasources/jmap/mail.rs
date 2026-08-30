@@ -299,8 +299,14 @@ impl MailRemote for Jmap {
                     data.update(update);
                     updated.push(data);
                 }
-                Ok(Some(_extra)) => {
-                    todo!("This case is unhandled...");
+                Ok(Some(extra)) => {
+                    tracing::warn!(
+                        "Server responded with additional changes:{:#?}\nNot implemented yet :/\nPlease create an issue!",
+                        extra
+                    );
+
+                    data.update(update);
+                    updated.push(data);
                 }
                 Err(err) => {
                     let jmap_client::Error::Set(error) = err else {

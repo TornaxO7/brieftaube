@@ -73,10 +73,11 @@ impl MailboxRemote for Jmap {
     async fn update_mailboxes(
         &self,
         updates: Vec<(MailboxData, MailboxUpdate)>,
+        since: &GetState,
     ) -> Result<remote::UpdateResult<MailboxId, MailboxData>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
-            let set = request.set_mailbox();
+            let set = request.set_mailbox().if_in_state(since.as_ref());
 
             for (data, update) in &updates {
                 let u = set.update(&data.id);
@@ -112,6 +113,11 @@ impl MailboxRemote for Jmap {
                     updated.push(data);
                 }
                 Ok(Some(extra)) => {
+                    tracing::warn!(
+                        "The server responded with extra data to be updated:{:#?}\nMight not take everything :/",
+                        extra
+                    );
+
                     data.update(update);
 
                     if let Some(my_rights) = extra.my_rights() {
