@@ -214,19 +214,19 @@ impl MailRemote for Jmap {
             create.keywords(new.keywords);
 
             if let Some(from) = new.from {
-                create.from(from);
+                create.from(from.0);
             }
 
             if let Some(to) = new.to {
-                create.to(to);
+                create.to(to.0);
             }
 
             if let Some(cc) = new.cc {
-                create.cc(cc);
+                create.cc(cc.0);
             }
 
             if let Some(bcc) = new.bcc {
-                create.bcc(bcc);
+                create.bcc(bcc.0);
             }
 
             if let Some(subject) = new.subject {

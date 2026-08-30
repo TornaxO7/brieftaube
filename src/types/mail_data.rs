@@ -1,5 +1,5 @@
-use super::{MailAddress, MailId, MailKeyword, MailboxId, ThreadId};
-use crate::types::MailNew;
+use super::{MailId, MailKeyword, MailboxId, ThreadId};
+use crate::types::{MailAddresses, MailNew};
 use chrono::{DateTime, Local, Utc};
 use jmap_client::email::{Email, EmailBodyPart, Property};
 use std::collections::HashSet;
@@ -11,10 +11,10 @@ pub struct MailData {
     pub message_id: Option<String>,
     pub thread_id: ThreadId,
     pub keywords: HashSet<MailKeyword>,
-    pub from: Option<Vec<MailAddress>>,
-    pub to: Option<Vec<MailAddress>>,
-    pub cc: Option<Vec<MailAddress>>,
-    pub bcc: Option<Vec<MailAddress>>,
+    pub from: Option<MailAddresses>,
+    pub to: Option<MailAddresses>,
+    pub cc: Option<MailAddresses>,
+    pub bcc: Option<MailAddresses>,
     pub subject: Option<String>,
     pub preview: String,
     pub received_at: DateTime<Local>,
@@ -73,18 +73,10 @@ impl MailData {
                 .flatten(),
             thread_id: ThreadId(mail.take_thread_id().unwrap()),
             keywords: mail.keywords().into_iter().map(MailKeyword::from).collect(),
-            from: mail
-                .take_from()
-                .map(|addresses| addresses.into_iter().map(MailAddress::from).collect()),
-            to: mail
-                .to()
-                .map(|addresses| addresses.into_iter().map(MailAddress::from).collect()),
-            cc: mail
-                .take_cc()
-                .map(|cc| cc.into_iter().map(MailAddress::from).collect()),
-            bcc: mail
-                .take_bcc()
-                .map(|bcc| bcc.into_iter().map(MailAddress::from).collect()),
+            from: mail.take_from().map(MailAddresses::from),
+            to: mail.to().map(MailAddresses::from),
+            cc: mail.take_cc().map(MailAddresses::from),
+            bcc: mail.take_bcc().map(MailAddresses::from),
             subject: mail.take_subject(),
             preview: mail.take_preview().unwrap_or_default(),
             received_at: DateTime::<Utc>::from_timestamp(mail.received_at().unwrap(), 0)

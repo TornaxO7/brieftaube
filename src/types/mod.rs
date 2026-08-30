@@ -1,6 +1,9 @@
 mod mail_address;
 pub use mail_address::*;
 
+mod mail_addresses;
+pub use mail_addresses::*;
+
 mod mail_data;
 pub use mail_data::*;
 
