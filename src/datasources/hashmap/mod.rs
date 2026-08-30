@@ -17,6 +17,15 @@ pub struct HashMapDataSource {
     inner: RwLock<Inner>,
 }
 
+impl HashMapDataSource {
+    pub fn new() -> Self {
+        Self {
+            inner: RwLock::new(Inner::default()),
+        }
+    }
+}
+
+#[derive(Default)]
 struct Inner {
     mails: HashMap<MailId, MailData>,
     mailboxes: HashMap<MailboxId, MailboxData>,
