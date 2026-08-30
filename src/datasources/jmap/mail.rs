@@ -193,12 +193,16 @@ impl MailRemote for Jmap {
                 create.keywords(keywords);
             }
 
+            for (header, value) in new.headers {
+                create.header(header, value);
+            }
+
             let tmp_id = create.create_id().unwrap();
             (request.send_set_email().await?, tmp_id)
         };
 
         let _state = response.take_new_state();
-        todo!("think about options")
+        todo!("think about this thorough")
     }
 
     async fn update_mail(
