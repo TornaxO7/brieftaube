@@ -2,32 +2,37 @@ use crate::{
     datasources::{
         MailboxCache, MailboxDataSource,
         hashmap::HashMapDataSource,
-        types::{GetResult, GetState, SetResult},
+        types::{GetResult, GetState},
     },
-    types::{MailboxData, MailboxId, MailboxUpdate},
+    types::{MailboxData, MailboxId},
 };
 
 impl MailboxDataSource for HashMapDataSource {
     async fn get_mailboxes(
         &self,
-        ids: Option<&[MailboxId]>,
-    ) -> Result<GetResult<Vec<MailboxData>>, Self::Error> {
-        todo!()
+        ids: &[MailboxId],
+    ) -> Result<GetResult<Vec<Option<MailboxData>>>, Self::Error> {
+        let inner = self.inner.read().unwrap();
+
+        let mailboxes: Vec<Option<MailboxData>> = ids
+            .iter()
+            .map(|id| inner.mailboxes.get(id).cloned())
+            .collect();
+
+        Ok(GetResult {
+            value: mailboxes,
+            state: inner.mailboxes_get_state.clone(),
+        })
     }
 
-    async fn create_mailbox(
-        &self,
-        new: crate::types::MailboxNew,
-    ) -> Result<SetResult<MailboxData>, Self::Error> {
-        todo!()
-    }
+    async fn get_all_mailboxes(&self) -> Result<GetResult<Vec<MailboxData>>, Self::Error> {
+        let inner = self.inner.read().unwrap();
+        let mailboxes = inner.mailboxes.values().cloned().collect();
 
-    async fn update_mailbox(&self, update: MailboxUpdate) -> Result<SetResult<()>, Self::Error> {
-        todo!()
-    }
-
-    async fn destroy_mailbox(&self, id: &MailboxId) -> Result<SetResult<()>, Self::Error> {
-        todo!()
+        Ok(GetResult {
+            value: mailboxes,
+            state: inner.mailboxes_get_state.clone(),
+        })
     }
 }
 
@@ -35,9 +40,17 @@ impl MailboxCache for HashMapDataSource {
     async fn upsert_mailboxes(
         &self,
         mailboxes: Vec<MailboxData>,
-        state: GetState,
+        new_state: GetState,
     ) -> Result<(), Self::Error> {
-        todo!()
+        let mut inner = self.inner.write().unwrap();
+
+        for mailbox in mailboxes {
+            let id = mailbox.id.clone();
+            inner.mailboxes.insert(id, mailbox);
+        }
+
+        inner.mailboxes_get_state = Some(new_state);
+        Ok(())
     }
 
     async fn evict_mailboxes(
@@ -45,6 +58,14 @@ impl MailboxCache for HashMapDataSource {
         ids: &[MailboxId],
         new_state: GetState,
     ) -> Result<(), Self::Error> {
-        todo!()
+        let mut inner = self.inner.write().unwrap();
+
+        for id in ids {
+            inner.mailboxes.remove(id);
+            inner.root_mails.remove(id);
+        }
+
+        inner.mailboxes_get_state = Some(new_state);
+        Ok(())
     }
 }

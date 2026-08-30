@@ -14,7 +14,10 @@ use std::{collections::HashMap, sync::RwLock};
 use utils::root_mails::RootMails;
 
 #[derive(thiserror::Error, Debug, Clone)]
-pub enum Error {}
+pub enum Error {
+    #[error("The")]
+    NoMailSync,
+}
 
 pub struct HashMapDataSource {
     inner: RwLock<Inner>,

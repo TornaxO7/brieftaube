@@ -81,21 +81,20 @@ pub trait MailRemote: BaseDataSource {
 }
 
 pub trait MailboxDataSource: BaseDataSource {
-    async fn get_mailbox(&self, id: &MailboxId) -> Result<GetResult<MailboxData>, Self::Error> {
-        let result = self.get_mailboxes(Some(&[id.clone()])).await?;
-        Ok(result.map(|mailboxes| mailboxes[0].clone()))
+    async fn get_mailbox(
+        &self,
+        id: &MailboxId,
+    ) -> Result<GetResult<Option<MailboxData>>, Self::Error> {
+        let result = self.get_mailboxes(&[id.clone()]).await?;
+        Ok(result.map(|mailboxes| mailboxes.into_iter().next().flatten()))
     }
+
+    async fn get_all_mailboxes(&self) -> Result<GetResult<Vec<MailboxData>>, Self::Error>;
 
     async fn get_mailboxes(
         &self,
-        ids: Option<&[MailboxId]>,
-    ) -> Result<GetResult<Vec<MailboxData>>, Self::Error>;
-
-    async fn create_mailbox(&self, new: MailboxNew) -> Result<SetResult<MailboxData>, Self::Error>;
-
-    async fn update_mailbox(&self, update: MailboxUpdate) -> Result<SetResult<()>, Self::Error>;
-
-    async fn destroy_mailbox(&self, id: &MailboxId) -> Result<SetResult<()>, Self::Error>;
+        ids: &[MailboxId],
+    ) -> Result<GetResult<Vec<Option<MailboxData>>>, Self::Error>;
 }
 
 pub trait MailboxCache: BaseDataSource {
@@ -117,6 +116,12 @@ pub trait MailboxRemote: BaseDataSource {
         &self,
         since: &GetState,
     ) -> Result<GetChangeResult<MailboxId>, Self::Error>;
+
+    async fn create_mailbox(&self, new: MailboxNew) -> Result<SetResult<MailboxData>, Self::Error>;
+
+    async fn update_mailbox(&self, update: MailboxUpdate) -> Result<SetResult<()>, Self::Error>;
+
+    async fn destroy_mailbox(&self, id: &MailboxId) -> Result<SetResult<()>, Self::Error>;
 }
 
 pub trait ThreadDataSource: BaseDataSource {
