@@ -66,14 +66,16 @@ impl MailDataSource for HashMapDataSource {
         window: QueryWindow,
     ) -> Result<QueryResponse<MailId>, Self::Error> {
         let inner = self.inner.read().unwrap();
-        let root_mails = inner
-            .root_mails
-            .get(mailbox)
-            .expect("each mailbox has `RootMails`");
+        let range = window.as_range();
 
-        let range = window.start..(window.start + window.limit);
-
-        Ok(root_mails.query(range))
+        match inner.root_mails.get(mailbox) {
+            None => Ok(QueryResponse {
+                values: vec![],
+                missing: vec![range],
+                query_state: None,
+            }),
+            Some(root_mails) => Ok(root_mails.query(range)),
+        }
     }
 }
 
@@ -106,10 +108,9 @@ impl MailCache for HashMapDataSource {
                 for mailbox in mail.mailbox_ids {
                     // removing leads to position changes, mail changes (in a thread) etc.
                     // => Just clear it.
-                    inner
-                        .root_mails
-                        .entry(mailbox)
-                        .and_modify(|root_mails| root_mails.flush());
+                    if let Some(root_mails) = inner.root_mails.get_mut(&mailbox) {
+                        root_mails.flush();
+                    }
                 }
             }
         }
@@ -127,11 +128,15 @@ impl MailCache for HashMapDataSource {
     ) -> Result<(), Self::Error> {
         let mut inner = self.inner.write().unwrap();
 
-        inner
-            .root_mails
-            .entry(id.clone())
-            .and_modify(|root_mails| root_mails.set(start, ids.clone(), new_state.clone()))
-            .or_insert(RootMails::new(start, ids, new_state));
+        match inner.root_mails.entry(id.clone()) {
+            std::collections::hash_map::Entry::Occupied(mut entry) => {
+                let root_mails = entry.get_mut();
+                root_mails.set(start, ids, new_state);
+            }
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(RootMails::new(start, ids, new_state));
+            }
+        }
 
         Ok(())
     }

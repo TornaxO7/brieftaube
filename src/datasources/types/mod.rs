@@ -8,6 +8,23 @@ pub struct QueryWindow {
     pub limit: usize,
 }
 
+impl QueryWindow {
+    pub fn as_range(&self) -> Range<usize> {
+        let start = self.start;
+        let end = start + self.limit;
+        start..end
+    }
+}
+
+impl From<Range<usize>> for QueryWindow {
+    fn from(range: Range<usize>) -> Self {
+        let start = range.start;
+        let limit = range.len();
+
+        Self { start, limit }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct QueryResponseSection<Id> {
     pub start: usize,
@@ -18,7 +35,7 @@ pub struct QueryResponseSection<Id> {
 pub struct QueryResponse<Id> {
     pub values: Vec<QueryResponseSection<Id>>,
     pub missing: Vec<Range<usize>>,
-    pub query_state: QueryState,
+    pub query_state: Option<QueryState>,
 }
 
 pub struct GetResult<T> {
