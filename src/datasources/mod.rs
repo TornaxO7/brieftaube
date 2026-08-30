@@ -61,22 +61,22 @@ pub trait MailRemote: BaseDataSource {
     async fn fetch_mails(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetResult<MailId, MailData>, Self::Error>;
+    ) -> Result<remote::GetResult<MailId, Vec<MailData>>, Self::Error>;
 
     async fn fetch_mails_text_body(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetResult<MailId, MailDataTextBody>, Self::Error>;
+    ) -> Result<remote::GetResult<MailId, Vec<(MailId, MailDataTextBody)>>, Self::Error>;
 
     async fn fetch_mails_html_body(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetResult<MailId, MailDataHtmlBody>, Self::Error>;
+    ) -> Result<remote::GetResult<MailId, Vec<(MailId, MailDataHtmlBody)>>, Self::Error>;
 
     async fn fetch_mails_attachments(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetResult<MailId, Vec<MailDataAttachment>>, Self::Error>;
+    ) -> Result<remote::GetResult<MailId, Vec<(MailId, Vec<MailDataAttachment>)>>, Self::Error>;
 
     async fn fetch_root_mails(
         &self,
@@ -168,7 +168,7 @@ pub trait MailboxRemote: BaseDataSource {
     ) -> Result<remote::DestroyResult<MailboxId>, Self::Error>;
 }
 
-pub trait ThreadDataSource: BaseDataSource {
+pub trait ThreadCache: BaseDataSource {
     async fn get_thread(
         &self,
         id: &ThreadId,
@@ -181,9 +181,7 @@ pub trait ThreadDataSource: BaseDataSource {
         &self,
         ids: &[ThreadId],
     ) -> Result<cache::GetResult<Vec<Option<Vec<MailId>>>>, Self::Error>;
-}
 
-pub trait ThreadCache: BaseDataSource {
     async fn upsert_thread(
         &self,
         id: &ThreadId,
@@ -195,9 +193,13 @@ pub trait ThreadCache: BaseDataSource {
 }
 
 pub trait ThreadRemote: BaseDataSource {
-    async fn get_thread_changes(
+    async fn fetch_threads(
         &self,
-        id: &ThreadId,
+        ids: &[ThreadId],
+    ) -> Result<remote::GetResult<ThreadId, Vec<(ThreadId, Vec<MailId>)>>, Self::Error>;
+
+    async fn fetch_thread_changes(
+        &self,
         since: &GetState,
-    ) -> Result<remote::GetChangeResult<MailId>, Self::Error>;
+    ) -> Result<remote::GetChangeResult<ThreadId>, Self::Error>;
 }

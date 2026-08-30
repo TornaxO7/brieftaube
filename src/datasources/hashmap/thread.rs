@@ -1,13 +1,13 @@
 use crate::{
     datasources::{
-        ThreadCache, ThreadDataSource,
+        ThreadCache,
         hashmap::HashMapDataSource,
         types::{GetState, cache},
     },
     types::{MailId, ThreadId},
 };
 
-impl ThreadDataSource for HashMapDataSource {
+impl ThreadCache for HashMapDataSource {
     async fn get_threads(
         &self,
         ids: &[ThreadId],
@@ -24,10 +24,7 @@ impl ThreadDataSource for HashMapDataSource {
             state: inner.threads_get_state.clone(),
         })
     }
-}
 
-// TODO: add `upsert_threads`
-impl ThreadCache for HashMapDataSource {
     async fn upsert_thread(
         &self,
         id: &ThreadId,

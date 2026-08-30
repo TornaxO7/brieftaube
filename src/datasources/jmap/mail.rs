@@ -15,7 +15,7 @@ impl MailRemote for Jmap {
     async fn fetch_mails(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetResult<MailId, MailData>, Self::Error> {
+    ) -> Result<remote::GetResult<MailId, Vec<MailData>>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
 
@@ -30,12 +30,7 @@ impl MailRemote for Jmap {
         let values = response
             .take_list()
             .into_iter()
-            .map(|remote_mail| {
-                let mail = MailData::from_get_request(remote_mail);
-                let id = mail.id.clone();
-
-                (id, mail)
-            })
+            .map(MailData::from_get_request)
             .collect();
 
         let not_found = response.take_not_found().into_iter().map(MailId).collect();
@@ -50,7 +45,7 @@ impl MailRemote for Jmap {
     async fn fetch_mails_text_body(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetResult<MailId, MailDataTextBody>, Self::Error> {
+    ) -> Result<remote::GetResult<MailId, Vec<(MailId, MailDataTextBody)>>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
 
@@ -90,7 +85,7 @@ impl MailRemote for Jmap {
     async fn fetch_mails_html_body(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetResult<MailId, MailDataHtmlBody>, Self::Error> {
+    ) -> Result<remote::GetResult<MailId, Vec<(MailId, MailDataHtmlBody)>>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
 
@@ -130,7 +125,8 @@ impl MailRemote for Jmap {
     async fn fetch_mails_attachments(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetResult<MailId, Vec<MailDataAttachment>>, Self::Error> {
+    ) -> Result<remote::GetResult<MailId, Vec<(MailId, Vec<MailDataAttachment>)>>, Self::Error>
+    {
         let mut response = {
             let mut request = self.client.build();
 

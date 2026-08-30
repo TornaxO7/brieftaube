@@ -7,9 +7,19 @@ pub struct QueryResponse<Id> {
 }
 
 pub struct GetResult<Id, T> {
-    pub values: Vec<(Id, T)>,
+    pub values: T,
     pub not_found: Vec<Id>,
     pub state: GetState,
+}
+
+impl<Id, T> GetResult<Id, T> {
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> GetResult<Id, U> {
+        GetResult {
+            values: f(self.values),
+            not_found: self.not_found,
+            state: self.state,
+        }
+    }
 }
 
 pub struct CreateResult<T> {
