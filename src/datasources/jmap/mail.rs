@@ -302,14 +302,14 @@ impl MailRemote for Jmap {
                     {
                         let update_keywords = update.patch_keywords.get_or_insert_default();
                         for extra_keyword in extra.keywords() {
-                            update_keywords.push((extra_keyword.into(), true));
+                            update_keywords.insert(extra_keyword.into(), true);
                         }
                     }
 
                     {
                         let mailbox_ids = update.mailbox_ids.get_or_insert_default();
                         for extra_mailbox in extra.mailbox_ids() {
-                            mailbox_ids.push((MailboxId(extra_mailbox.to_string()), true));
+                            mailbox_ids.insert(MailboxId(extra_mailbox.to_string()), true);
                         }
                     }
 
