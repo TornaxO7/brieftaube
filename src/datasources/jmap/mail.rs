@@ -1,5 +1,3 @@
-use jmap_client::core::set::SetObject;
-
 use super::Jmap;
 use crate::{
     datasources::{
@@ -14,6 +12,7 @@ use crate::{
         MailUpdate, MailboxId,
     },
 };
+use jmap_client::core::set::SetObject;
 
 impl MailRemote for Jmap {
     async fn fetch_mails(
@@ -246,7 +245,12 @@ impl MailRemote for Jmap {
             request.send_set_email().await?
         };
 
-        todo!()
+        response.unwrap_destroy_errors()?;
+
+        Ok(RemoteSetResult {
+            value: (),
+            state: response.take_new_state(),
+        })
     }
 
     async fn fetch_mail_changes(
