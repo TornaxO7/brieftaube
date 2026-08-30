@@ -4,7 +4,7 @@ use crate::{
         hashmap::HashMapDataSource,
         types::{GetState, cache},
     },
-    types::{MailboxData, MailboxId},
+    types::{MailboxData, MailboxId, ParentMailboxId},
 };
 
 impl MailboxCache for HashMapDataSource {
@@ -65,5 +65,24 @@ impl MailboxCache for HashMapDataSource {
 
         inner.mailboxes_get_state = Some(new_state);
         Ok(())
+    }
+
+    async fn get_mailbox_children(
+        &self,
+        parent: &ParentMailboxId,
+    ) -> Result<cache::GetResult<Vec<MailboxData>>, Self::Error> {
+        let inner = self.inner.read().unwrap();
+
+        let children = inner
+            .mailboxes
+            .values()
+            .filter(|mailbox| &mailbox.parent_id == parent)
+            .cloned()
+            .collect();
+
+        Ok(cache::GetResult {
+            value: children,
+            state: inner.mailboxes_get_state.clone(),
+        })
     }
 }

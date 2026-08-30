@@ -5,7 +5,7 @@ pub mod types;
 
 use crate::types::{
     MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailNew, MailUpdate,
-    MailboxData, MailboxId, MailboxNew, MailboxUpdate, ThreadId,
+    MailboxData, MailboxId, MailboxNew, MailboxUpdate, ParentMailboxId, ThreadId,
 };
 use types::{GetState, QueryState, QueryWindow, cache, remote};
 
@@ -132,6 +132,11 @@ pub trait MailboxCache: BaseDataSource {
         &self,
         ids: &[MailboxId],
     ) -> Result<cache::GetResult<Vec<Option<MailboxData>>>, Self::Error>;
+
+    async fn get_mailbox_children(
+        &self,
+        parent: &ParentMailboxId,
+    ) -> Result<cache::GetResult<Vec<MailboxData>>, Self::Error>;
 
     async fn upsert_mailboxes(
         &self,
