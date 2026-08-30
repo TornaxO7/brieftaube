@@ -4,10 +4,7 @@ mod thread;
 mod utils;
 
 use crate::{
-    datasources::{
-        BaseDataSource,
-        types::{GetState, QueryState},
-    },
+    datasources::{BaseDataSource, types::GetState},
     types::{
         MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailboxData,
         MailboxId, ThreadId,

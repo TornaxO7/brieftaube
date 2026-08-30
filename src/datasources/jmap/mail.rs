@@ -2,10 +2,7 @@ use super::Jmap;
 use crate::{
     datasources::{
         MailRemote,
-        types::{
-            GetChangeResult, GetState, QueryChangeResult, QueryState, QueryWindow, RemoteGetResult,
-            RemoteQueryResponse, RemoteSetResult,
-        },
+        types::{GetState, QueryState, QueryWindow, remote},
     },
     types::{
         MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailNew,
@@ -18,7 +15,7 @@ impl MailRemote for Jmap {
     async fn fetch_mails(
         &self,
         ids: &[MailId],
-    ) -> Result<RemoteGetResult<MailId, Vec<MailData>>, Self::Error> {
+    ) -> Result<remote::GetResult<MailId, Vec<MailData>>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
 
@@ -38,7 +35,7 @@ impl MailRemote for Jmap {
 
         let not_found = response.take_not_found().into_iter().map(MailId).collect();
 
-        Ok(RemoteGetResult {
+        Ok(remote::GetResult {
             values,
             not_found,
             state: response.take_state(),
@@ -48,7 +45,7 @@ impl MailRemote for Jmap {
     async fn fetch_mail_text_body(
         &self,
         id: &MailId,
-    ) -> Result<RemoteGetResult<MailId, MailDataTextBody>, Self::Error> {
+    ) -> Result<remote::GetResult<MailId, MailDataTextBody>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
 
@@ -72,7 +69,7 @@ impl MailRemote for Jmap {
 
         let state = response.take_state();
 
-        Ok(RemoteGetResult {
+        Ok(remote::GetResult {
             values: body,
             not_found: vec![],
             state,
@@ -82,7 +79,7 @@ impl MailRemote for Jmap {
     async fn fetch_mail_html_body(
         &self,
         id: &MailId,
-    ) -> Result<RemoteGetResult<MailId, MailDataHtmlBody>, Self::Error> {
+    ) -> Result<remote::GetResult<MailId, MailDataHtmlBody>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
 
@@ -106,7 +103,7 @@ impl MailRemote for Jmap {
 
         let state = response.take_state();
 
-        Ok(RemoteGetResult {
+        Ok(remote::GetResult {
             values: body,
             not_found: vec![],
             state,
@@ -116,7 +113,7 @@ impl MailRemote for Jmap {
     async fn fetch_mail_attachments(
         &self,
         id: &MailId,
-    ) -> Result<RemoteGetResult<MailId, Vec<MailDataAttachment>>, Self::Error> {
+    ) -> Result<remote::GetResult<MailId, Vec<MailDataAttachment>>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
 
@@ -139,7 +136,7 @@ impl MailRemote for Jmap {
 
         let state = response.take_state();
 
-        Ok(RemoteGetResult {
+        Ok(remote::GetResult {
             values,
             not_found: vec![],
             state,
@@ -150,7 +147,7 @@ impl MailRemote for Jmap {
         &self,
         mailbox: &MailboxId,
         window: QueryWindow,
-    ) -> Result<RemoteQueryResponse<MailId>, Self::Error> {
+    ) -> Result<remote::QueryResponse<MailId>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
 
@@ -171,14 +168,14 @@ impl MailRemote for Jmap {
         let state = response.take_query_state();
         let ids = response.take_ids().into_iter().map(MailId).collect();
 
-        Ok(RemoteQueryResponse { ids, state })
+        Ok(remote::QueryResponse { ids, state })
     }
 
     async fn create_mail(
         &self,
         new: MailNew,
         since: GetState,
-    ) -> Result<RemoteSetResult<MailData>, Self::Error> {
+    ) -> Result<remote::SetResult<MailData>, Self::Error> {
         let (mut response, _tmp_id) = {
             let mut request = self.client.build();
 
@@ -188,7 +185,6 @@ impl MailRemote for Jmap {
                 .create()
                 .mailbox_ids(new.mailbox_ids);
 
-            // TODO: extend the options
             if let Some(keywords) = new.keywords {
                 create.keywords(keywords);
             }
@@ -207,14 +203,14 @@ impl MailRemote for Jmap {
 
     async fn update_mails(
         &self,
-        updates: Vec<MailUpdate>,
+        updates: &[MailUpdate],
         since: GetState,
-    ) -> Result<RemoteSetResult<()>, Self::Error> {
+    ) -> Result<remote::UpdateResult, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
             let set_mail = request.set_email().if_in_state(since);
 
-            for update in &updates {
+            for update in updates {
                 let u = set_mail.update(&update.id);
 
                 if let Some(patches) = &update.patch_keywords {
@@ -233,20 +229,28 @@ impl MailRemote for Jmap {
             request.send_set_email().await?
         };
 
-        // TODO: Error handling
-        response.unwrap_update_errors().unwrap();
+        for update in updates {
+            match response.updated(update.id.as_str()) {
+                Ok(None) => {}
+                Ok(Some(extra)) => {
+                    todo!()
+                }
+                Err(err) => {
+                    todo!()
+                }
+            }
+        }
 
-        Ok(RemoteSetResult {
-            value: (),
-            state: response.take_new_state(),
-        })
+        let new_state = response.take_new_state();
+
+        Ok(remote::UpdateResult { new_state })
     }
 
     async fn destroy_mails(
         &self,
         ids: Vec<MailId>,
         since: GetState,
-    ) -> Result<RemoteSetResult<()>, Self::Error> {
+    ) -> Result<remote::SetResult<()>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
             request.set_email().if_in_state(since).destroy(ids);
@@ -256,7 +260,7 @@ impl MailRemote for Jmap {
         // TODO: Error handling
         response.unwrap_destroy_errors().unwrap();
 
-        Ok(RemoteSetResult {
+        Ok(remote::SetResult {
             value: (),
             state: response.take_new_state(),
         })
@@ -265,7 +269,7 @@ impl MailRemote for Jmap {
     async fn fetch_mail_changes(
         &self,
         since: &GetState,
-    ) -> Result<GetChangeResult<MailId>, Self::Error> {
+    ) -> Result<remote::GetChangeResult<MailId>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
             request.changes_email(since);
@@ -284,7 +288,7 @@ impl MailRemote for Jmap {
         let updated = response.take_updated().into_iter().map(MailId).collect();
         let destroyed = response.take_destroyed().into_iter().map(MailId).collect();
 
-        Ok(GetChangeResult {
+        Ok(remote::GetChangeResult {
             new_state,
             has_more_changes,
             created,
@@ -297,7 +301,7 @@ impl MailRemote for Jmap {
         &self,
         mailbox: &MailboxId,
         since: &QueryState,
-    ) -> Result<QueryChangeResult<MailId>, Self::Error> {
+    ) -> Result<remote::QueryChangeResult<MailId>, Self::Error> {
         let response = {
             let mut request = self.client.build();
             request
@@ -333,7 +337,7 @@ impl MailRemote for Jmap {
             })
             .collect();
 
-        Ok(QueryChangeResult {
+        Ok(remote::QueryChangeResult {
             new_state,
             removed,
             added,

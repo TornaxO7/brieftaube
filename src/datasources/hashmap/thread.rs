@@ -2,7 +2,7 @@ use crate::{
     datasources::{
         ThreadCache, ThreadDataSource,
         hashmap::HashMapDataSource,
-        types::{LocalGetResult, GetState},
+        types::{GetState, cache},
     },
     types::{MailId, ThreadId},
 };
@@ -11,7 +11,7 @@ impl ThreadDataSource for HashMapDataSource {
     async fn get_threads(
         &self,
         ids: &[ThreadId],
-    ) -> Result<LocalGetResult<Vec<Option<Vec<MailId>>>>, Self::Error> {
+    ) -> Result<cache::GetResult<Vec<Option<Vec<MailId>>>>, Self::Error> {
         let inner = self.inner.read().unwrap();
 
         let threads = ids
@@ -19,7 +19,7 @@ impl ThreadDataSource for HashMapDataSource {
             .map(|id| inner.threads.get(id).cloned())
             .collect();
 
-        Ok(LocalGetResult {
+        Ok(cache::GetResult {
             value: threads,
             state: inner.threads_get_state.clone(),
         })

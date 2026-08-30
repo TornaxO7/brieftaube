@@ -2,7 +2,7 @@ use crate::{
     datasources::{
         MailCache,
         hashmap::{HashMapDataSource, utils::root_mails::RootMails},
-        types::{GetState, LocalGetResult, LocalQueryResponse, QueryState, QueryWindow},
+        types::{GetState, QueryState, QueryWindow, cache},
     },
     types::{MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailboxId},
 };
@@ -11,11 +11,11 @@ impl MailCache for HashMapDataSource {
     async fn get_mails(
         &self,
         ids: &[MailId],
-    ) -> Result<LocalGetResult<Vec<Option<MailData>>>, Self::Error> {
+    ) -> Result<cache::GetResult<Vec<Option<MailData>>>, Self::Error> {
         let inner = self.inner.read().unwrap();
         let datas = ids.iter().map(|id| inner.mails.get(id).cloned()).collect();
 
-        Ok(LocalGetResult {
+        Ok(cache::GetResult {
             value: datas,
             state: inner.mail_get_state.clone(),
         })
@@ -24,11 +24,11 @@ impl MailCache for HashMapDataSource {
     async fn get_mail_text_body(
         &self,
         id: &MailId,
-    ) -> Result<LocalGetResult<Option<MailDataTextBody>>, Self::Error> {
+    ) -> Result<cache::GetResult<Option<MailDataTextBody>>, Self::Error> {
         let inner = self.inner.read().unwrap();
         let body = inner.mail_text_body.get(id).cloned();
 
-        Ok(LocalGetResult {
+        Ok(cache::GetResult {
             value: body,
             state: inner.mail_get_state.clone(),
         })
@@ -37,11 +37,11 @@ impl MailCache for HashMapDataSource {
     async fn get_mail_html_body(
         &self,
         id: &MailId,
-    ) -> Result<LocalGetResult<Option<MailDataHtmlBody>>, Self::Error> {
+    ) -> Result<cache::GetResult<Option<MailDataHtmlBody>>, Self::Error> {
         let inner = self.inner.read().unwrap();
         let body = inner.mail_html_body.get(id).cloned();
 
-        Ok(LocalGetResult {
+        Ok(cache::GetResult {
             value: body,
             state: inner.mail_get_state.clone(),
         })
@@ -50,11 +50,11 @@ impl MailCache for HashMapDataSource {
     async fn get_mail_attachments(
         &self,
         id: &MailId,
-    ) -> Result<LocalGetResult<Option<Vec<MailDataAttachment>>>, Self::Error> {
+    ) -> Result<cache::GetResult<Option<Vec<MailDataAttachment>>>, Self::Error> {
         let inner = self.inner.read().unwrap();
         let attachments = inner.mail_attachments.get(id).cloned();
 
-        Ok(LocalGetResult {
+        Ok(cache::GetResult {
             value: attachments,
             state: inner.mail_get_state.clone(),
         })
@@ -64,12 +64,12 @@ impl MailCache for HashMapDataSource {
         &self,
         mailbox: &MailboxId,
         window: QueryWindow,
-    ) -> Result<LocalQueryResponse<MailId>, Self::Error> {
+    ) -> Result<cache::QueryResponse<MailId>, Self::Error> {
         let inner = self.inner.read().unwrap();
         let range = window.as_range();
 
         match inner.root_mails.get(mailbox) {
-            None => Ok(LocalQueryResponse {
+            None => Ok(cache::QueryResponse {
                 values: vec![],
                 missing: vec![range],
                 query_state: None,

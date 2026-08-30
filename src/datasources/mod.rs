@@ -3,17 +3,11 @@ mod hashmap;
 mod jmap;
 pub mod types;
 
-use crate::{
-    datasources::types::{RemoteGetResult, RemoteQueryResponse},
-    types::{
-        MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailNew,
-        MailUpdate, MailboxData, MailboxId, MailboxNew, MailboxUpdate, ThreadId,
-    },
+use crate::types::{
+    MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailNew, MailUpdate,
+    MailboxData, MailboxId, MailboxNew, MailboxUpdate, ThreadId,
 };
-use types::{
-    GetChangeResult, GetState, LocalGetResult, LocalQueryResponse, QueryChangeResult, QueryState,
-    QueryWindow, RemoteSetResult,
-};
+use types::{GetState, QueryState, QueryWindow, cache, remote};
 
 pub trait BaseDataSource {
     type Error;
@@ -23,28 +17,28 @@ pub trait MailCache: BaseDataSource {
     async fn get_mails(
         &self,
         ids: &[MailId],
-    ) -> Result<LocalGetResult<Vec<Option<MailData>>>, Self::Error>;
+    ) -> Result<cache::GetResult<Vec<Option<MailData>>>, Self::Error>;
 
     async fn get_mail_text_body(
         &self,
         id: &MailId,
-    ) -> Result<LocalGetResult<Option<MailDataTextBody>>, Self::Error>;
+    ) -> Result<cache::GetResult<Option<MailDataTextBody>>, Self::Error>;
 
     async fn get_mail_html_body(
         &self,
         id: &MailId,
-    ) -> Result<LocalGetResult<Option<MailDataHtmlBody>>, Self::Error>;
+    ) -> Result<cache::GetResult<Option<MailDataHtmlBody>>, Self::Error>;
 
     async fn get_mail_attachments(
         &self,
         id: &MailId,
-    ) -> Result<LocalGetResult<Option<Vec<MailDataAttachment>>>, Self::Error>;
+    ) -> Result<cache::GetResult<Option<Vec<MailDataAttachment>>>, Self::Error>;
 
     async fn query_root_mails(
         &self,
         mailbox: &MailboxId,
         window: QueryWindow,
-    ) -> Result<LocalQueryResponse<MailId>, Self::Error>;
+    ) -> Result<cache::QueryResponse<MailId>, Self::Error>;
 
     async fn upsert_mails(
         &self,
@@ -67,75 +61,75 @@ pub trait MailRemote: BaseDataSource {
     async fn fetch_mails(
         &self,
         ids: &[MailId],
-    ) -> Result<RemoteGetResult<MailId, Vec<MailData>>, Self::Error>;
+    ) -> Result<remote::GetResult<MailId, Vec<MailData>>, Self::Error>;
 
     async fn fetch_mail_text_body(
         &self,
         id: &MailId,
-    ) -> Result<RemoteGetResult<MailId, MailDataTextBody>, Self::Error>;
+    ) -> Result<remote::GetResult<MailId, MailDataTextBody>, Self::Error>;
 
     async fn fetch_mail_html_body(
         &self,
         id: &MailId,
-    ) -> Result<RemoteGetResult<MailId, MailDataHtmlBody>, Self::Error>;
+    ) -> Result<remote::GetResult<MailId, MailDataHtmlBody>, Self::Error>;
 
     async fn fetch_mail_attachments(
         &self,
         id: &MailId,
-    ) -> Result<RemoteGetResult<MailId, Vec<MailDataAttachment>>, Self::Error>;
+    ) -> Result<remote::GetResult<MailId, Vec<MailDataAttachment>>, Self::Error>;
 
     async fn fetch_root_mails(
         &self,
         mailbox: &MailboxId,
         window: QueryWindow,
-    ) -> Result<RemoteQueryResponse<MailId>, Self::Error>;
+    ) -> Result<remote::QueryResponse<MailId>, Self::Error>;
 
     async fn create_mail(
         &self,
         new: MailNew,
         since: GetState,
-    ) -> Result<RemoteSetResult<MailData>, Self::Error>;
+    ) -> Result<remote::SetResult<MailData>, Self::Error>;
 
     // TODO: Allow batches
     async fn update_mails(
         &self,
-        updates: Vec<MailUpdate>,
+        updates: &[MailUpdate],
         since: GetState,
-    ) -> Result<RemoteSetResult<()>, Self::Error>;
+    ) -> Result<remote::UpdateResult, Self::Error>;
 
     async fn destroy_mails(
         &self,
         ids: Vec<MailId>,
         since: GetState,
-    ) -> Result<RemoteSetResult<()>, Self::Error>;
+    ) -> Result<remote::SetResult<()>, Self::Error>;
 
     async fn fetch_mail_changes(
         &self,
         since: &GetState,
-    ) -> Result<GetChangeResult<MailId>, Self::Error>;
+    ) -> Result<remote::GetChangeResult<MailId>, Self::Error>;
 
     async fn fetch_root_mail_changes(
         &self,
         mailbox: &MailboxId,
         since: &QueryState,
-    ) -> Result<QueryChangeResult<MailId>, Self::Error>;
+    ) -> Result<remote::QueryChangeResult<MailId>, Self::Error>;
 }
 
 pub trait MailboxDataSource: BaseDataSource {
     async fn get_mailbox(
         &self,
         id: &MailboxId,
-    ) -> Result<LocalGetResult<Option<MailboxData>>, Self::Error> {
+    ) -> Result<cache::GetResult<Option<MailboxData>>, Self::Error> {
         let result = self.get_mailboxes(&[id.clone()]).await?;
         Ok(result.map(|mailboxes| mailboxes.into_iter().next().flatten()))
     }
 
-    async fn get_all_mailboxes(&self) -> Result<LocalGetResult<Vec<MailboxData>>, Self::Error>;
+    async fn get_all_mailboxes(&self) -> Result<cache::GetResult<Vec<MailboxData>>, Self::Error>;
 
     async fn get_mailboxes(
         &self,
         ids: &[MailboxId],
-    ) -> Result<LocalGetResult<Vec<Option<MailboxData>>>, Self::Error>;
+    ) -> Result<cache::GetResult<Vec<Option<MailboxData>>>, Self::Error>;
 }
 
 pub trait MailboxCache: BaseDataSource {
@@ -156,26 +150,26 @@ pub trait MailboxRemote: BaseDataSource {
     async fn get_mailbox_changes(
         &self,
         since: &GetState,
-    ) -> Result<GetChangeResult<MailboxId>, Self::Error>;
+    ) -> Result<remote::GetChangeResult<MailboxId>, Self::Error>;
 
     async fn create_mailbox(
         &self,
         new: MailboxNew,
-    ) -> Result<RemoteSetResult<MailboxData>, Self::Error>;
+    ) -> Result<remote::SetResult<MailboxData>, Self::Error>;
 
     async fn update_mailbox(
         &self,
         update: MailboxUpdate,
-    ) -> Result<RemoteSetResult<()>, Self::Error>;
+    ) -> Result<remote::SetResult<()>, Self::Error>;
 
-    async fn destroy_mailbox(&self, id: &MailboxId) -> Result<RemoteSetResult<()>, Self::Error>;
+    async fn destroy_mailbox(&self, id: &MailboxId) -> Result<remote::SetResult<()>, Self::Error>;
 }
 
 pub trait ThreadDataSource: BaseDataSource {
     async fn get_thread(
         &self,
         id: &ThreadId,
-    ) -> Result<LocalGetResult<Option<Vec<MailId>>>, Self::Error> {
+    ) -> Result<cache::GetResult<Option<Vec<MailId>>>, Self::Error> {
         let threads = self.get_threads(&[id.clone()]).await?;
         Ok(threads.map(|mails| mails.into_iter().next().flatten()))
     }
@@ -183,7 +177,7 @@ pub trait ThreadDataSource: BaseDataSource {
     async fn get_threads(
         &self,
         ids: &[ThreadId],
-    ) -> Result<LocalGetResult<Vec<Option<Vec<MailId>>>>, Self::Error>;
+    ) -> Result<cache::GetResult<Vec<Option<Vec<MailId>>>>, Self::Error>;
 }
 
 pub trait ThreadCache: BaseDataSource {
@@ -202,5 +196,5 @@ pub trait ThreadRemote: BaseDataSource {
         &self,
         id: &ThreadId,
         since: &GetState,
-    ) -> Result<GetChangeResult<MailId>, Self::Error>;
+    ) -> Result<remote::GetChangeResult<MailId>, Self::Error>;
 }

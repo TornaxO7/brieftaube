@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use crate::{
-    datasources::types::{LocalQueryResponse, LocalQueryResponseSection, QueryState},
+    datasources::types::{QueryState, cache},
     types::MailId,
 };
 
@@ -65,7 +65,7 @@ impl RootMails {
         self.state = new_state;
     }
 
-    pub fn query(&self, range: Range<usize>) -> LocalQueryResponse<MailId> {
+    pub fn query(&self, range: Range<usize>) -> cache::QueryResponse<MailId> {
         let mut sections = Vec::new();
         let mut missing = Vec::new();
         let mut cursor = range.start;
@@ -89,7 +89,7 @@ impl RootMails {
                 start..end
             };
 
-            sections.push(LocalQueryResponseSection {
+            sections.push(cache::QueryResponseSection {
                 start: cursor,
                 ids: section.ids[section_range.clone()].to_vec(),
             });
@@ -101,7 +101,7 @@ impl RootMails {
             missing.push(cursor..range.end);
         }
 
-        LocalQueryResponse {
+        cache::QueryResponse {
             values: sections,
             missing,
             query_state: Some(self.state.clone()),
@@ -262,7 +262,7 @@ mod tests {
 
             assert_eq!(
                 query.values,
-                vec![LocalQueryResponseSection {
+                vec![cache::QueryResponseSection {
                     start: 2,
                     ids: new_mail_ids(2..5),
                 }]
@@ -282,7 +282,7 @@ mod tests {
 
             assert_eq!(
                 query.values,
-                vec![LocalQueryResponseSection {
+                vec![cache::QueryResponseSection {
                     start: 10,
                     ids: new_mail_ids(10..15),
                 }],
@@ -302,7 +302,7 @@ mod tests {
 
             assert_eq!(
                 query.values,
-                vec![LocalQueryResponseSection {
+                vec![cache::QueryResponseSection {
                     start: 15,
                     ids: new_mail_ids(15..20),
                 }],
@@ -349,11 +349,11 @@ mod tests {
             assert_eq!(
                 query.values,
                 vec![
-                    LocalQueryResponseSection {
+                    cache::QueryResponseSection {
                         start: 15,
                         ids: new_mail_ids(15..20)
                     },
-                    LocalQueryResponseSection {
+                    cache::QueryResponseSection {
                         start: 30,
                         ids: new_mail_ids(30..35)
                     }

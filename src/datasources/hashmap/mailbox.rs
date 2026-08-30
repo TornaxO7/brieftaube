@@ -2,7 +2,7 @@ use crate::{
     datasources::{
         MailboxCache, MailboxDataSource,
         hashmap::HashMapDataSource,
-        types::{LocalGetResult, GetState},
+        types::{GetState, cache},
     },
     types::{MailboxData, MailboxId},
 };
@@ -11,7 +11,7 @@ impl MailboxDataSource for HashMapDataSource {
     async fn get_mailboxes(
         &self,
         ids: &[MailboxId],
-    ) -> Result<LocalGetResult<Vec<Option<MailboxData>>>, Self::Error> {
+    ) -> Result<cache::GetResult<Vec<Option<MailboxData>>>, Self::Error> {
         let inner = self.inner.read().unwrap();
 
         let mailboxes: Vec<Option<MailboxData>> = ids
@@ -19,17 +19,17 @@ impl MailboxDataSource for HashMapDataSource {
             .map(|id| inner.mailboxes.get(id).cloned())
             .collect();
 
-        Ok(LocalGetResult {
+        Ok(cache::GetResult {
             value: mailboxes,
             state: inner.mailboxes_get_state.clone(),
         })
     }
 
-    async fn get_all_mailboxes(&self) -> Result<LocalGetResult<Vec<MailboxData>>, Self::Error> {
+    async fn get_all_mailboxes(&self) -> Result<cache::GetResult<Vec<MailboxData>>, Self::Error> {
         let inner = self.inner.read().unwrap();
         let mailboxes = inner.mailboxes.values().cloned().collect();
 
-        Ok(LocalGetResult {
+        Ok(cache::GetResult {
             value: mailboxes,
             state: inner.mailboxes_get_state.clone(),
         })
