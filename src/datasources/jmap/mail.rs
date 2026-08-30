@@ -15,7 +15,7 @@ impl MailRemote for Jmap {
     async fn fetch_mails(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetResult<MailId, Vec<MailData>>, Self::Error> {
+    ) -> Result<remote::GetResult<MailId, MailData>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
 
@@ -30,7 +30,12 @@ impl MailRemote for Jmap {
         let values = response
             .take_list()
             .into_iter()
-            .map(MailData::from)
+            .map(|remote_mail| {
+                let mail = MailData::from(remote_mail);
+                let id = mail.id.clone();
+
+                (id, mail)
+            })
             .collect();
 
         let not_found = response.take_not_found().into_iter().map(MailId).collect();
@@ -42,17 +47,20 @@ impl MailRemote for Jmap {
         })
     }
 
-    async fn fetch_mail_text_body(
+    async fn fetch_mails_text_body(
         &self,
-        id: &MailId,
+        ids: &[MailId],
     ) -> Result<remote::GetResult<MailId, MailDataTextBody>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
 
             request
                 .get_email()
-                .ids(Some([id]))
-                .properties(MailDataTextBody::PROPERTIES)
+                .ids(Some(ids))
+                .properties([
+                    jmap_client::email::Property::Id,
+                    jmap_client::email::Property::TextBody,
+                ])
                 .arguments()
                 .fetch_text_body_values(true);
 
@@ -62,61 +70,74 @@ impl MailRemote for Jmap {
         let body = response
             .list()
             .into_iter()
-            .next()
-            .map(MailDataTextBody::new)
-            .flatten()
-            .unwrap();
+            .map(|server_mail| {
+                let id: MailId = server_mail.id().unwrap().into();
+                let body = MailDataTextBody::new(server_mail).unwrap();
+
+                (id, body)
+            })
+            .collect();
+
+        let not_found = response.take_not_found().into_iter().map(MailId).collect();
 
         Ok(remote::GetResult {
             values: body,
-            not_found: vec![],
+            not_found,
             state: response.take_state().into(),
         })
     }
 
-    async fn fetch_mail_html_body(
+    async fn fetch_mails_html_body(
         &self,
-        id: &MailId,
+        ids: &[MailId],
     ) -> Result<remote::GetResult<MailId, MailDataHtmlBody>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
 
             request
                 .get_email()
-                .ids(Some([id]))
-                .properties(MailDataHtmlBody::PROPERTIES)
+                .ids(Some(ids))
+                .properties([
+                    jmap_client::email::Property::Id,
+                    jmap_client::email::Property::HtmlBody,
+                ])
                 .arguments()
                 .fetch_html_body_values(true);
 
             request.send_get_email().await?
         };
 
-        let body = response
+        let values = response
             .list()
             .into_iter()
-            .next()
-            .map(MailDataHtmlBody::new)
-            .flatten()
-            .unwrap();
+            .map(|server_mail| {
+                let id: MailId = server_mail.id().unwrap().into();
+                let body = MailDataHtmlBody::new(server_mail).unwrap();
+
+                (id, body)
+            })
+            .collect();
+
+        let not_found = response.take_not_found().into_iter().map(MailId).collect();
 
         Ok(remote::GetResult {
-            values: body,
-            not_found: vec![],
+            values,
+            not_found,
             state: response.take_state().into(),
         })
     }
 
-    async fn fetch_mail_attachments(
+    async fn fetch_mails_attachments(
         &self,
-        id: &MailId,
+        ids: &[MailId],
     ) -> Result<remote::GetResult<MailId, Vec<MailDataAttachment>>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
 
-            request
-                .get_email()
-                .ids(Some([id]))
-                .properties([jmap_client::email::Property::Attachments]);
+            request.get_email().ids(Some(ids)).properties([
+                jmap_client::email::Property::Id,
+                jmap_client::email::Property::Attachments,
+            ]);
 
             request.send_get_email().await?
         };
@@ -124,15 +145,24 @@ impl MailRemote for Jmap {
         let values = response
             .take_list()
             .into_iter()
-            .next()
-            .expect("Mail arrived")
-            .attachments()
-            .map(|attachments| attachments.iter().map(MailDataAttachment::from).collect())
-            .expect("Attachments have been requested");
+            .map(|server_mail| {
+                let id: MailId = server_mail.id().expect("Requested").into();
+                let attachments = server_mail
+                    .attachments()
+                    .expect("Requested")
+                    .iter()
+                    .map(MailDataAttachment::from)
+                    .collect();
+
+                (id, attachments)
+            })
+            .collect();
+
+        let not_found = response.take_not_found().into_iter().map(MailId).collect();
 
         Ok(remote::GetResult {
             values,
-            not_found: vec![],
+            not_found,
             state: response.take_state().into(),
         })
     }
@@ -148,7 +178,7 @@ impl MailRemote for Jmap {
             request
                 .query_email()
                 .filter(jmap_client::email::query::Filter::InMailbox {
-                    value: mailbox.0.clone(),
+                    value: mailbox.as_str().to_string(),
                 })
                 .sort([jmap_client::email::query::Comparator::received_at().descending()])
                 .position(window.start as i32)

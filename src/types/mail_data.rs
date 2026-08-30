@@ -16,9 +16,6 @@ pub struct MailData {
     pub received_at: DateTime<Local>,
     pub has_attachment: bool,
     pub mailbox_ids: HashSet<MailboxId>,
-    // pub text_body: RemoteData<MailDataTextBody>,
-    // pub html_body: RemoteData<MailDataHtmlBody>,
-    // pub attachments: RemoteData<Vec<MailDataAttachment>>,
 }
 
 impl MailData {
@@ -74,8 +71,6 @@ impl From<jmap_client::email::Email> for MailData {
 pub struct MailDataTextBody(pub String);
 
 impl MailDataTextBody {
-    pub const PROPERTIES: [Property; 1] = [Property::TextBody];
-
     pub fn new(mail: &Email) -> Option<Self> {
         let parts = mail.text_body()?;
         let content = join_body_values(mail, parts)?;
@@ -88,8 +83,6 @@ impl MailDataTextBody {
 pub struct MailDataHtmlBody(pub String);
 
 impl MailDataHtmlBody {
-    pub const PROPERTIES: [Property; 1] = [Property::HtmlBody];
-
     pub fn new(mail: &Email) -> Option<Self> {
         let parts = mail.html_body()?;
         let content = join_body_values(mail, parts)?;

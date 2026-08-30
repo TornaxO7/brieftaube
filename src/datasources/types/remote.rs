@@ -6,7 +6,7 @@ pub struct QueryResponse<Id> {
 }
 
 pub struct GetResult<Id, T> {
-    pub values: T,
+    pub values: Vec<(Id, T)>,
     pub not_found: Vec<Id>,
     pub state: GetState,
 }

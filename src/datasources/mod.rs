@@ -61,21 +61,21 @@ pub trait MailRemote: BaseDataSource {
     async fn fetch_mails(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetResult<MailId, Vec<MailData>>, Self::Error>;
+    ) -> Result<remote::GetResult<MailId, MailData>, Self::Error>;
 
-    async fn fetch_mail_text_body(
+    async fn fetch_mails_text_body(
         &self,
-        id: &MailId,
+        ids: &[MailId],
     ) -> Result<remote::GetResult<MailId, MailDataTextBody>, Self::Error>;
 
-    async fn fetch_mail_html_body(
+    async fn fetch_mails_html_body(
         &self,
-        id: &MailId,
+        ids: &[MailId],
     ) -> Result<remote::GetResult<MailId, MailDataHtmlBody>, Self::Error>;
 
-    async fn fetch_mail_attachments(
+    async fn fetch_mails_attachments(
         &self,
-        id: &MailId,
+        ids: &[MailId],
     ) -> Result<remote::GetResult<MailId, Vec<MailDataAttachment>>, Self::Error>;
 
     async fn fetch_root_mails(
