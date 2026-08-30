@@ -1,5 +1,7 @@
 use std::ops::Range;
 
+use jmap_client::{core::changes::ChangesResponse, email::Email};
+
 pub type GetState = String;
 pub type QueryState = String;
 
@@ -86,5 +88,5 @@ pub struct GetChangeResult<Id> {
 pub struct QueryChangeResult<Id> {
     pub new_state: QueryState,
     pub removed: Vec<Id>,
-    pub added: Vec<Id>,
+    pub added: Vec<(Id, usize)>,
 }

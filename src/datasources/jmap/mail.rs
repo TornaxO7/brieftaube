@@ -202,35 +202,39 @@ impl MailRemote for Jmap {
         };
 
         let _state = response.take_new_state();
-        todo!("think about this thorough")
+        todo!("think about this thorough: How to handle errors and what else should be set-able")
     }
 
-    async fn update_mail(
+    async fn update_mails(
         &self,
-        update: MailUpdate,
+        updates: Vec<MailUpdate>,
         since: GetState,
     ) -> Result<RemoteSetResult<()>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
+            let set_mail = request.set_email().if_in_state(since);
 
-            let u = request.set_email().if_in_state(since).update(update.id);
+            for update in &updates {
+                let u = set_mail.update(&update.id);
 
-            if let Some(patches) = update.patch_keywords {
-                for (keyword, set) in patches {
-                    u.keyword(keyword.as_str(), set);
+                if let Some(patches) = &update.patch_keywords {
+                    for (keyword, set) in patches {
+                        u.keyword(keyword.as_str(), *set);
+                    }
                 }
-            }
 
-            if let Some(mailbox_ids) = update.mailbox_ids {
-                for (id, set) in mailbox_ids {
-                    u.mailbox_id(id.as_str(), set);
+                if let Some(mailbox_ids) = &update.mailbox_ids {
+                    for (id, set) in mailbox_ids {
+                        u.mailbox_id(id.as_str(), *set);
+                    }
                 }
             }
 
             request.send_set_email().await?
         };
 
-        response.unwrap_update_errors()?;
+        // TODO: Error handling
+        response.unwrap_update_errors().unwrap();
 
         Ok(RemoteSetResult {
             value: (),
@@ -238,18 +242,19 @@ impl MailRemote for Jmap {
         })
     }
 
-    async fn destroy_mail(
+    async fn destroy_mails(
         &self,
-        id: &MailId,
+        ids: Vec<MailId>,
         since: GetState,
     ) -> Result<RemoteSetResult<()>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
-            request.set_email().if_in_state(since).destroy([id]);
+            request.set_email().if_in_state(since).destroy(ids);
             request.send_set_email().await?
         };
 
-        response.unwrap_destroy_errors()?;
+        // TODO: Error handling
+        response.unwrap_destroy_errors().unwrap();
 
         Ok(RemoteSetResult {
             value: (),
@@ -261,13 +266,77 @@ impl MailRemote for Jmap {
         &self,
         since: &GetState,
     ) -> Result<GetChangeResult<MailId>, Self::Error> {
-        todo!()
+        let mut response = {
+            let mut request = self.client.build();
+            request.changes_email(since);
+            request.send_changes_email().await?
+        };
+
+        debug_assert_eq!(
+            response.old_state(),
+            since.as_str(),
+            "TODO: Return custom error"
+        );
+
+        let new_state = response.take_new_state();
+        let has_more_changes = response.has_more_changes();
+        let created = response.take_created().into_iter().map(MailId).collect();
+        let updated = response.take_updated().into_iter().map(MailId).collect();
+        let destroyed = response.take_destroyed().into_iter().map(MailId).collect();
+
+        Ok(GetChangeResult {
+            new_state,
+            has_more_changes,
+            created,
+            updated,
+            destroyed,
+        })
     }
 
     async fn fetch_root_mail_changes(
         &self,
+        mailbox: &MailboxId,
         since: &QueryState,
     ) -> Result<QueryChangeResult<MailId>, Self::Error> {
-        todo!()
+        let response = {
+            let mut request = self.client.build();
+            request
+                .query_email_changes(since)
+                .filter(jmap_client::email::query::Filter::InMailbox {
+                    value: mailbox.0.clone(),
+                })
+                .sort([jmap_client::email::query::Comparator::received_at().descending()]);
+            request.send_query_email_changes().await?
+        };
+
+        debug_assert_eq!(
+            response.old_query_state(),
+            since.as_str(),
+            "TODO: Refresh query"
+        );
+
+        let new_state = response.new_query_state().to_string();
+        let removed = response
+            .removed()
+            .iter()
+            .map(|id| MailId(id.clone()))
+            .collect();
+
+        let added = response
+            .added()
+            .into_iter()
+            .map(|added| {
+                let id = MailId::from(added.id());
+                let idx = added.index();
+
+                (id, idx)
+            })
+            .collect();
+
+        Ok(QueryChangeResult {
+            new_state,
+            removed,
+            added,
+        })
     }
 }

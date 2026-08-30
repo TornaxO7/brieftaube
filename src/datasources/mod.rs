@@ -97,15 +97,15 @@ pub trait MailRemote: BaseDataSource {
     ) -> Result<RemoteSetResult<MailData>, Self::Error>;
 
     // TODO: Allow batches
-    async fn update_mail(
+    async fn update_mails(
         &self,
-        update: MailUpdate,
+        updates: Vec<MailUpdate>,
         since: GetState,
     ) -> Result<RemoteSetResult<()>, Self::Error>;
 
-    async fn destroy_mail(
+    async fn destroy_mails(
         &self,
-        id: &MailId,
+        ids: Vec<MailId>,
         since: GetState,
     ) -> Result<RemoteSetResult<()>, Self::Error>;
 
@@ -116,6 +116,7 @@ pub trait MailRemote: BaseDataSource {
 
     async fn fetch_root_mail_changes(
         &self,
+        mailbox: &MailboxId,
         since: &QueryState,
     ) -> Result<QueryChangeResult<MailId>, Self::Error>;
 }
