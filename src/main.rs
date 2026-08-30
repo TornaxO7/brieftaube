@@ -1,9 +1,9 @@
-mod backend;
 mod config;
-mod layer;
+mod datasource;
 mod repository;
 mod task_manager;
 mod types;
+mod ui;
 mod utils;
 
 use color_eyre::eyre::{self, Context};
@@ -16,6 +16,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
 };
 use std::{fs::OpenOptions, io, path::PathBuf, sync::OnceLock};
+use tokio::sync::mpsc;
 use tracing::{error, level_filters::LevelFilter, warn};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use xdg::BaseDirectories;

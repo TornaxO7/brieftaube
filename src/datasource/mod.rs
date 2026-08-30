@@ -1,6 +1,6 @@
 // mod database;
-mod hashmap;
-mod jmap;
+pub mod hashmap;
+pub mod jmap;
 pub mod types;
 
 use crate::types::{
@@ -12,6 +12,9 @@ use types::{GetState, QueryState, QueryWindow, cache, remote};
 pub trait BaseDataSource {
     type Error;
 }
+
+pub trait Cache: MailCache + MailboxCache + ThreadCache {}
+pub trait Remote: MailRemote + MailboxRemote + ThreadRemote {}
 
 pub trait MailCache: BaseDataSource {
     async fn get_mails(

@@ -1,13 +1,12 @@
-use jmap_client::core::set::SetObject;
-
 use crate::{
-    repository::datasource::{
+    datasource::{
         MailboxRemote,
         jmap::Jmap,
         types::{GetState, remote},
     },
     types::{MailboxData, MailboxId, MailboxNew, MailboxUpdate},
 };
+use jmap_client::core::set::SetObject;
 
 impl MailboxRemote for Jmap {
     async fn fetch_mailbox_changes(
