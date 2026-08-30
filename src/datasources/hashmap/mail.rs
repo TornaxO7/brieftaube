@@ -108,6 +108,7 @@ impl MailCache for HashMapDataSource {
                 for mailbox in mail.mailbox_ids {
                     // removing leads to position changes, mail changes (in a thread) etc.
                     // => Just clear it.
+                    // TODO: Maybe... try first to use the data from the cache (thread check etc.)
                     if let Some(root_mails) = inner.root_mails.get_mut(&mailbox) {
                         root_mails.flush();
                     }

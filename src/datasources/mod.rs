@@ -125,7 +125,18 @@ pub trait MailboxRemote: BaseDataSource {
 }
 
 pub trait ThreadDataSource: BaseDataSource {
-    async fn get_thread(&self, id: &ThreadId) -> Result<GetResult<Vec<MailId>>, Self::Error>;
+    async fn get_thread(
+        &self,
+        id: &ThreadId,
+    ) -> Result<GetResult<Option<Vec<MailId>>>, Self::Error> {
+        let threads = self.get_threads(&[id.clone()]).await?;
+        Ok(threads.map(|mails| mails.into_iter().next().flatten()))
+    }
+
+    async fn get_threads(
+        &self,
+        ids: &[ThreadId],
+    ) -> Result<GetResult<Vec<Option<Vec<MailId>>>>, Self::Error>;
 }
 
 pub trait ThreadCache: BaseDataSource {
