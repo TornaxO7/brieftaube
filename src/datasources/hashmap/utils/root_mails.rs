@@ -1,12 +1,9 @@
 use std::ops::Range;
 
 use crate::{
-    datasources::types::{QueryResponse, QueryResponseSection, QueryState, QueryWindow},
+    datasources::types::{QueryResponse, QueryResponseSection, QueryState},
     types::MailId,
 };
-
-#[derive(thiserror::Error, Debug, Clone)]
-pub enum Error {}
 
 pub struct RootMails {
     sections: Vec<Section>,
@@ -19,7 +16,7 @@ impl RootMails {
 
         Self {
             sections: vec![section],
-            state,
+            state: state,
         }
     }
 
@@ -109,6 +106,10 @@ impl RootMails {
             missing,
             query_state: self.state.clone(),
         }
+    }
+
+    pub fn flush(&mut self) {
+        self.sections.clear();
     }
 }
 

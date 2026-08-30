@@ -53,7 +53,7 @@ pub trait MailCache: BaseDataSource {
 
     async fn evict_mails(&self, mails: &[MailId], new_state: GetState) -> Result<(), Self::Error>;
 
-    async fn upsert_query_mails(
+    async fn upsert_root_mails(
         &self,
         mailbox: &MailboxId,
         start: usize,

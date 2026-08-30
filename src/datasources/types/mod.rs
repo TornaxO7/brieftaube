@@ -23,7 +23,7 @@ pub struct QueryResponse<Id> {
 
 pub struct GetResult<T> {
     pub value: T,
-    pub state: GetState,
+    pub state: Option<GetState>,
 }
 
 impl<T> GetResult<T> {

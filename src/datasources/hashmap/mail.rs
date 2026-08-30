@@ -1,6 +1,6 @@
 use crate::{
     datasources::{
-        MailCache, MailDataSource, MailboxDataSource,
+        MailCache, MailDataSource,
         hashmap::{HashMapDataSource, utils::root_mails::RootMails},
         types::{GetResult, GetState, QueryResponse, QueryState, QueryWindow},
     },
@@ -13,12 +13,11 @@ impl MailDataSource for HashMapDataSource {
         ids: &[MailId],
     ) -> Result<GetResult<Vec<Option<MailData>>>, Self::Error> {
         let inner = self.inner.read().unwrap();
-
         let datas = ids.iter().map(|id| inner.mails.get(id).cloned()).collect();
 
         Ok(GetResult {
             value: datas,
-            state: inner.mail_get_state.clone().unwrap(),
+            state: inner.mail_get_state.clone(),
         })
     }
 
@@ -31,7 +30,7 @@ impl MailDataSource for HashMapDataSource {
 
         Ok(GetResult {
             value: body,
-            state: inner.mail_get_state.clone().unwrap(),
+            state: inner.mail_get_state.clone(),
         })
     }
 
@@ -44,7 +43,7 @@ impl MailDataSource for HashMapDataSource {
 
         Ok(GetResult {
             value: body,
-            state: inner.mail_get_state.clone().unwrap(),
+            state: inner.mail_get_state.clone(),
         })
     }
 
@@ -57,7 +56,7 @@ impl MailDataSource for HashMapDataSource {
 
         Ok(GetResult {
             value: attachments,
-            state: inner.mail_get_state.clone().unwrap(),
+            state: inner.mail_get_state.clone(),
         })
     }
 
@@ -102,14 +101,24 @@ impl MailCache for HashMapDataSource {
             inner.mail_text_body.remove(id);
             inner.mail_html_body.remove(id);
             inner.mail_attachments.remove(id);
-            if let Some(mail) = inner.mails.remove(id) {}
+
+            if let Some(mail) = inner.mails.remove(id) {
+                for mailbox in mail.mailbox_ids {
+                    // removing leads to position changes, mail changes (in a thread) etc.
+                    // => Just clear it.
+                    inner
+                        .root_mails
+                        .entry(mailbox)
+                        .and_modify(|root_mails| root_mails.flush());
+                }
+            }
         }
 
         inner.mail_get_state = Some(new_state);
         Ok(())
     }
 
-    async fn upsert_query_mails(
+    async fn upsert_root_mails(
         &self,
         id: &MailboxId,
         start: usize,
