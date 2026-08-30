@@ -17,14 +17,6 @@ use types::{
 
 pub trait BaseDataSource {
     type Error;
-
-    fn mail_get_state(&self) -> Option<GetState>;
-
-    fn mailboxes_get_state(&self) -> Option<GetState>;
-
-    fn threads_get_state(&self) -> Option<GetState>;
-
-    fn root_mails_query_state(&self, id: &MailboxId) -> Option<QueryState>;
 }
 
 pub trait MailCache: BaseDataSource {
@@ -98,11 +90,23 @@ pub trait MailRemote: BaseDataSource {
         window: QueryWindow,
     ) -> Result<RemoteQueryResponse<MailId>, Self::Error>;
 
-    async fn create_mail(&self, new: MailNew) -> Result<RemoteSetResult<MailData>, Self::Error>;
+    async fn create_mail(
+        &self,
+        new: MailNew,
+        since: GetState,
+    ) -> Result<RemoteSetResult<MailData>, Self::Error>;
 
-    async fn update_mail(&self, update: MailUpdate) -> Result<RemoteSetResult<()>, Self::Error>;
+    async fn update_mail(
+        &self,
+        update: MailUpdate,
+        since: GetState,
+    ) -> Result<RemoteSetResult<()>, Self::Error>;
 
-    async fn destroy_mail(&self, id: &MailId) -> Result<RemoteSetResult<()>, Self::Error>;
+    async fn destroy_mail(
+        &self,
+        id: &MailId,
+        since: GetState,
+    ) -> Result<RemoteSetResult<()>, Self::Error>;
 
     async fn fetch_mail_changes(
         &self,

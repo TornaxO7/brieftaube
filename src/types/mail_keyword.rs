@@ -20,9 +20,9 @@ pub enum MailKeyword {
     Other(String),
 }
 
-impl std::fmt::Display for MailKeyword {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
+impl MailKeyword {
+    pub fn as_str(&self) -> &str {
+        match self {
             Self::Draft => DRAFT,
             Self::Seen => SEEN,
             Self::Flagged => FLAGGED,
@@ -32,9 +32,13 @@ impl std::fmt::Display for MailKeyword {
             Self::Junk => JUNK,
             Self::Notjunk => NOTJUNK,
             Self::Other(other) => other.as_str(),
-        };
+        }
+    }
+}
 
-        write!(f, "{}", s)
+impl std::fmt::Display for MailKeyword {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 

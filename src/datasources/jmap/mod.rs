@@ -1,14 +1,6 @@
 mod mail;
 
-use std::collections::HashMap;
-
-use crate::{
-    datasources::{
-        BaseDataSource,
-        types::{GetState, QueryState},
-    },
-    types::MailboxId,
-};
+use crate::datasources::BaseDataSource;
 use jmap_client::client::{Client, Credentials};
 
 #[derive(thiserror::Error, Debug)]
@@ -28,23 +20,11 @@ pub struct JmapDescriptor {
 
 pub struct Jmap {
     client: Client,
-
-    mail_get_state: Option<GetState>,
-    mailboxes_get_state: Option<GetState>,
-    threads_get_state: Option<GetState>,
-    root_mails_query_state: HashMap<MailboxId, QueryState>,
 }
 
 impl Jmap {
     pub fn new(client: Client) -> Self {
-        Self {
-            client,
-
-            mail_get_state: None,
-            mailboxes_get_state: None,
-            threads_get_state: None,
-            root_mails_query_state: HashMap::new(),
-        }
+        Self { client }
     }
 
     pub async fn connect(desc: JmapDescriptor) -> Result<Self, Error> {
@@ -63,22 +43,6 @@ impl Jmap {
 
 impl BaseDataSource for Jmap {
     type Error = jmap_client::Error;
-
-    fn mail_get_state(&self) -> Option<GetState> {
-        self.mail_get_state.clone()
-    }
-
-    fn mailboxes_get_state(&self) -> Option<GetState> {
-        self.mailboxes_get_state.clone()
-    }
-
-    fn threads_get_state(&self) -> Option<GetState> {
-        self.threads_get_state.clone()
-    }
-
-    fn root_mails_query_state(&self, id: &MailboxId) -> Option<QueryState> {
-        self.root_mails_query_state.get(id).cloned()
-    }
 }
 
 fn get_host_from_url<'a>(url: &'a str) -> Option<&'a str> {

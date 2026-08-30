@@ -5,13 +5,13 @@ use crate::{
     datasources::{
         MailRemote,
         types::{
-            GetChangeResult, GetState, LocalQueryResponse, QueryChangeResult, QueryState,
-            QueryWindow, RemoteGetResult, RemoteQueryResponse, RemoteSetResult,
+            GetChangeResult, GetState, QueryChangeResult, QueryState, QueryWindow, RemoteGetResult,
+            RemoteQueryResponse, RemoteSetResult,
         },
     },
     types::{
         MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailNew,
-        MailboxId,
+        MailUpdate, MailboxId,
     },
 };
 
@@ -175,11 +175,19 @@ impl MailRemote for Jmap {
         Ok(RemoteQueryResponse { ids, state })
     }
 
-    async fn create_mail(&self, new: MailNew) -> Result<RemoteSetResult<MailData>, Self::Error> {
+    async fn create_mail(
+        &self,
+        new: MailNew,
+        since: GetState,
+    ) -> Result<RemoteSetResult<MailData>, Self::Error> {
         let (mut response, _tmp_id) = {
             let mut request = self.client.build();
 
-            let create = request.set_email().create().mailbox_ids(new.mailbox_ids);
+            let create = request
+                .set_email()
+                .if_in_state(since)
+                .create()
+                .mailbox_ids(new.mailbox_ids);
 
             // TODO: extend the options
             if let Some(keywords) = new.keywords {
@@ -196,12 +204,48 @@ impl MailRemote for Jmap {
 
     async fn update_mail(
         &self,
-        update: crate::types::MailUpdate,
+        update: MailUpdate,
+        since: GetState,
     ) -> Result<RemoteSetResult<()>, Self::Error> {
-        todo!()
+        let mut response = {
+            let mut request = self.client.build();
+
+            let u = request.set_email().if_in_state(since).update(update.id);
+
+            if let Some(patches) = update.patch_keywords {
+                for (keyword, set) in patches {
+                    u.keyword(keyword.as_str(), set);
+                }
+            }
+
+            if let Some(mailbox_ids) = update.mailbox_ids {
+                for (id, set) in mailbox_ids {
+                    u.mailbox_id(id.as_str(), set);
+                }
+            }
+
+            request.send_set_email().await?
+        };
+
+        response.unwrap_update_errors()?;
+
+        Ok(RemoteSetResult {
+            value: (),
+            state: response.take_new_state(),
+        })
     }
 
-    async fn destroy_mail(&self, id: &MailId) -> Result<RemoteSetResult<()>, Self::Error> {
+    async fn destroy_mail(
+        &self,
+        id: &MailId,
+        since: GetState,
+    ) -> Result<RemoteSetResult<()>, Self::Error> {
+        let mut response = {
+            let mut request = self.client.build();
+            request.set_email().if_in_state(since).destroy([id]);
+            request.send_set_email().await?
+        };
+
         todo!()
     }
 
