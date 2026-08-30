@@ -2,7 +2,7 @@ mod mail;
 mod mailbox;
 mod thread;
 
-use crate::datasources::BaseDataSource;
+use super::BaseDataSource;
 use jmap_client::client::{Client, Credentials};
 
 #[derive(thiserror::Error, Debug)]

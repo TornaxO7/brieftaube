@@ -3,12 +3,10 @@ mod mailbox;
 mod thread;
 mod utils;
 
-use crate::{
-    datasources::{BaseDataSource, types::GetState},
-    types::{
-        MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailboxData,
-        MailboxId, ThreadId,
-    },
+use super::{BaseDataSource, types::GetState};
+use crate::types::{
+    MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailboxData,
+    MailboxId, ThreadId,
 };
 use std::{collections::HashMap, sync::RwLock};
 use utils::root_mails::RootMails;

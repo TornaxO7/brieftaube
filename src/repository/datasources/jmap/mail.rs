@@ -1,6 +1,6 @@
 use super::Jmap;
 use crate::{
-    datasources::{
+    repository::datasources::{
         MailRemote,
         types::{GetState, QueryState, QueryWindow, remote},
     },

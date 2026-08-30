@@ -1,9 +1,8 @@
-use std::ops::Range;
-
 use crate::{
-    datasources::types::{QueryState, cache},
+    repository::datasources::types::{QueryState, cache},
     types::MailId,
 };
+use std::ops::Range;
 
 pub struct RootMails {
     sections: Vec<Section>,
