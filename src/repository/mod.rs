@@ -1,6 +1,9 @@
 pub mod types;
 
-use crate::types::MailboxId;
+use crate::{
+    datasource::{Cache, Remote},
+    types::MailboxId,
+};
 use tokio::sync::{mpsc, oneshot};
 use types::*;
 
@@ -17,8 +20,8 @@ pub enum Command {
 
 pub struct Repository<C, R>
 where
-    C: datasource::Cache,
-    R: datasource::Remote,
+    C: Cache,
+    R: Remote,
 {
     cache: C,
     remote: R,
@@ -27,8 +30,8 @@ where
 
 impl<C, R> Repository<C, R>
 where
-    C: datasource::Cache,
-    R: datasource::Remote,
+    C: Cache,
+    R: Remote,
 {
     pub fn new(cache: C, remote: R, receiver: mpsc::Receiver<Command>) -> Self {
         Self {
