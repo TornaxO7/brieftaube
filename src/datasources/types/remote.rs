@@ -31,6 +31,12 @@ pub struct UpdateResult {
     pub new_state: GetState,
 }
 
+pub struct DestroyResult<Id> {
+    pub destroyed: Vec<Id>,
+    pub failed: Vec<(Id, SetError<String>)>,
+    pub new_state: GetState,
+}
+
 pub struct GetChangeResult<Id> {
     pub new_state: GetState,
     pub has_more_changes: bool,

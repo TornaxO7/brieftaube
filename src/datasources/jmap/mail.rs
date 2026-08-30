@@ -338,19 +338,32 @@ impl MailRemote for Jmap {
         &self,
         ids: Vec<MailId>,
         since: GetState,
-    ) -> Result<remote::SetResult<()>, Self::Error> {
+    ) -> Result<remote::DestroyResult<MailId>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
-            request.set_email().if_in_state(since).destroy(ids);
+            request.set_email().if_in_state(since).destroy(&ids);
             request.send_set_email().await?
         };
 
-        // TODO: Error handling
-        response.unwrap_destroy_errors().unwrap();
+        let mut destroyed = Vec::new();
+        let mut failed = Vec::new();
 
-        Ok(remote::SetResult {
-            value: (),
-            state: response.take_new_state().into(),
+        for id in ids {
+            match response.destroyed(id.as_str()) {
+                Ok(()) => destroyed.push(id),
+                Err(err) => {
+                    let jmap_client::Error::Set(error) = err else {
+                        unreachable!("Unknown error return for destroying");
+                    };
+                    failed.push((id, error));
+                }
+            }
+        }
+
+        Ok(remote::DestroyResult {
+            destroyed,
+            failed,
+            new_state: response.take_new_state().into(),
         })
     }
 

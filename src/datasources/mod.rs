@@ -101,7 +101,7 @@ pub trait MailRemote: BaseDataSource {
         &self,
         ids: Vec<MailId>,
         since: GetState,
-    ) -> Result<remote::SetResult<()>, Self::Error>;
+    ) -> Result<remote::DestroyResult<MailId>, Self::Error>;
 
     async fn fetch_mail_changes(
         &self,
