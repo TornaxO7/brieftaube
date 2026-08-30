@@ -93,9 +93,9 @@ pub trait MailRemote: BaseDataSource {
     // TODO: Allow batches
     async fn update_mails(
         &self,
-        updates: Vec<MailUpdate>,
+        updates: Vec<(MailData, MailUpdate)>,
         since: GetState,
-    ) -> Result<remote::UpdateResult, Self::Error>;
+    ) -> Result<remote::UpdateResult<MailId, MailData>, Self::Error>;
 
     async fn destroy_mails(
         &self,
@@ -147,7 +147,7 @@ pub trait MailboxCache: BaseDataSource {
 }
 
 pub trait MailboxRemote: BaseDataSource {
-    async fn get_mailbox_changes(
+    async fn fetch_mailbox_changes(
         &self,
         since: &GetState,
     ) -> Result<remote::GetChangeResult<MailboxId>, Self::Error>;
@@ -155,14 +155,18 @@ pub trait MailboxRemote: BaseDataSource {
     async fn create_mailbox(
         &self,
         new: MailboxNew,
-    ) -> Result<remote::SetResult<MailboxData>, Self::Error>;
+    ) -> Result<remote::CreateResult<MailboxData>, Self::Error>;
 
-    async fn update_mailbox(
+    async fn update_mailboxes(
         &self,
-        update: MailboxUpdate,
-    ) -> Result<remote::SetResult<()>, Self::Error>;
+        updates: Vec<(MailboxData, MailboxUpdate)>,
+    ) -> Result<remote::UpdateResult<MailboxId, MailboxData>, Self::Error>;
 
-    async fn destroy_mailbox(&self, id: &MailboxId) -> Result<remote::SetResult<()>, Self::Error>;
+    async fn destroy_mailboxes(
+        &self,
+        ids: &[MailboxId],
+        on_destroy_remove_emails: bool,
+    ) -> Result<remote::DestroyResult<MailboxId>, Self::Error>;
 }
 
 pub trait ThreadDataSource: BaseDataSource {

@@ -10,6 +10,12 @@ impl MailboxId {
     }
 }
 
+impl From<String> for MailboxId {
+    fn from(id: String) -> Self {
+        Self(id)
+    }
+}
+
 impl From<MailboxId> for String {
     fn from(id: MailboxId) -> Self {
         id.0

@@ -263,15 +263,15 @@ impl MailRemote for Jmap {
 
     async fn update_mails(
         &self,
-        updates: Vec<MailUpdate>,
+        updates: Vec<(MailData, MailUpdate)>,
         since: GetState,
-    ) -> Result<remote::UpdateResult, Self::Error> {
+    ) -> Result<remote::UpdateResult<MailId, MailData>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
             let set_mail = request.set_email().if_in_state(since);
 
-            for update in updates.iter() {
-                let u = set_mail.update(&update.id);
+            for (data, update) in updates.iter() {
+                let u = set_mail.update(&data.id);
 
                 if let Some(patches) = &update.patch_keywords {
                     for (keyword, set) in patches {
@@ -292,36 +292,21 @@ impl MailRemote for Jmap {
         let mut updated = Vec::new();
         let mut failed = Vec::new();
 
-        for mut update in updates {
-            match response.updated(update.id.as_str()) {
+        for (mut data, update) in updates {
+            let id = data.id.clone();
+            match response.updated(id.as_str()) {
                 Ok(None) => {
-                    let id = update.id.clone();
-                    updated.push((id, update));
+                    data.update(update);
+                    updated.push(data);
                 }
-                Ok(Some(extra)) => {
-                    {
-                        let update_keywords = update.patch_keywords.get_or_insert_default();
-                        for extra_keyword in extra.keywords() {
-                            update_keywords.insert(extra_keyword.into(), true);
-                        }
-                    }
-
-                    {
-                        let mailbox_ids = update.mailbox_ids.get_or_insert_default();
-                        for extra_mailbox in extra.mailbox_ids() {
-                            mailbox_ids.insert(MailboxId(extra_mailbox.to_string()), true);
-                        }
-                    }
-
-                    let id = update.id.clone();
-                    updated.push((id, update));
+                Ok(Some(_extra)) => {
+                    todo!("This case is unhandled...");
                 }
                 Err(err) => {
                     let jmap_client::Error::Set(error) = err else {
                         unreachable!("Why... are we getting another error???");
                     };
 
-                    let id = update.id.clone();
                     failed.push((id, error));
                 }
             }

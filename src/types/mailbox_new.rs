@@ -1,11 +1,10 @@
-use super::MailboxId;
+use crate::types::ParentMailboxId;
 use jmap_client::mailbox::Role;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MailboxNew {
-    pub id: Option<MailboxId>,
     pub name: String,
-    pub role: Option<Role>,
-    pub sort_order: Option<u32>,
-    pub parent_id: Option<MailboxId>,
+    pub role: Role,
+    pub sort_order: u32,
+    pub parent_id: ParentMailboxId,
 }

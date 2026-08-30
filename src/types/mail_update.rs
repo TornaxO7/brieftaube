@@ -4,7 +4,6 @@ use super::{MailId, MailKeyword, MailboxId};
 
 #[derive(Debug, Clone, Default)]
 pub struct MailUpdate {
-    pub id: MailId,
     pub patch_keywords: Option<HashMap<MailKeyword, bool>>,
     pub mailbox_ids: Option<HashMap<MailboxId, bool>>,
 }

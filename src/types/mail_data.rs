@@ -1,10 +1,9 @@
 use super::{MailId, MailKeyword, MailboxId, ThreadId};
-use crate::types::{MailAddresses, MailNew};
+use crate::types::{MailAddresses, MailNew, MailUpdate};
 use chrono::{DateTime, Local, Utc};
 use jmap_client::email::{Email, EmailBodyPart, Property};
 use std::collections::HashSet;
 
-// TODO: Create `MailAddresses`
 #[derive(Debug, Clone, Default)]
 pub struct MailData {
     pub id: MailId,
@@ -88,6 +87,28 @@ impl MailData {
                 .into_iter()
                 .map(|id| MailboxId(id.to_owned()))
                 .collect(),
+        }
+    }
+
+    pub fn update(&mut self, update: MailUpdate) {
+        if let Some(new_keywords) = update.patch_keywords {
+            for (keyword, set) in new_keywords {
+                if set {
+                    self.keywords.insert(keyword);
+                } else {
+                    self.keywords.remove(&keyword);
+                }
+            }
+        }
+
+        if let Some(mailbox_ids) = update.mailbox_ids {
+            for (mailbox_id, set) in mailbox_ids {
+                if set {
+                    self.mailbox_ids.insert(mailbox_id);
+                } else {
+                    self.mailbox_ids.remove(&mailbox_id);
+                }
+            }
         }
     }
 }

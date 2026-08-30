@@ -1,4 +1,5 @@
 mod mail;
+mod mailbox;
 
 use crate::datasources::BaseDataSource;
 use jmap_client::client::{Client, Credentials};
