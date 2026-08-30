@@ -1,19 +1,28 @@
+use jmap_client::core::set::SetObject;
+
 use super::Jmap;
 use crate::{
     datasources::{
-        MailDataSource,
-        types::{GetResult, QueryResponse, QueryWindow},
+        MailRemote,
+        types::{
+            GetChangeResult, GetState, LocalQueryResponse, QueryChangeResult, QueryState,
+            QueryWindow, RemoteGetResult, RemoteQueryResponse, RemoteSetResult,
+        },
     },
-    types::{MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailboxId},
+    types::{
+        MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailNew,
+        MailboxId,
+    },
 };
 
-impl MailDataSource for Jmap {
-    async fn get_mails(
+impl MailRemote for Jmap {
+    async fn fetch_mails(
         &self,
         ids: &[MailId],
-    ) -> Result<GetResult<Vec<Option<MailData>>>, Self::Error> {
+    ) -> Result<RemoteGetResult<MailId, Vec<MailData>>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
+
             request
                 .get_email()
                 .ids(Some(ids))
@@ -22,36 +31,191 @@ impl MailDataSource for Jmap {
             request.send_get_email().await?
         };
 
+        let values = response
+            .take_list()
+            .into_iter()
+            .map(MailData::from)
+            .collect();
+
+        let not_found = response.take_not_found().into_iter().map(MailId).collect();
+
+        Ok(RemoteGetResult {
+            values,
+            not_found,
+            state: response.take_state(),
+        })
+    }
+
+    async fn fetch_mail_text_body(
+        &self,
+        id: &MailId,
+    ) -> Result<RemoteGetResult<MailId, MailDataTextBody>, Self::Error> {
+        let mut response = {
+            let mut request = self.client.build();
+
+            request
+                .get_email()
+                .ids(Some([id]))
+                .properties(MailDataTextBody::PROPERTIES)
+                .arguments()
+                .fetch_text_body_values(true);
+
+            request.send_get_email().await?
+        };
+
+        let body = response
+            .list()
+            .into_iter()
+            .next()
+            .map(MailDataTextBody::new)
+            .flatten()
+            .unwrap();
+
         let state = response.take_state();
-        todo!()
+
+        Ok(RemoteGetResult {
+            values: body,
+            not_found: vec![],
+            state,
+        })
     }
 
-    async fn get_mail_text_body(
+    async fn fetch_mail_html_body(
         &self,
         id: &MailId,
-    ) -> Result<GetResult<Option<MailDataTextBody>>, Self::Error> {
-        todo!()
+    ) -> Result<RemoteGetResult<MailId, MailDataHtmlBody>, Self::Error> {
+        let mut response = {
+            let mut request = self.client.build();
+
+            request
+                .get_email()
+                .ids(Some([id]))
+                .properties(MailDataHtmlBody::PROPERTIES)
+                .arguments()
+                .fetch_html_body_values(true);
+
+            request.send_get_email().await?
+        };
+
+        let body = response
+            .list()
+            .into_iter()
+            .next()
+            .map(MailDataHtmlBody::new)
+            .flatten()
+            .unwrap();
+
+        let state = response.take_state();
+
+        Ok(RemoteGetResult {
+            values: body,
+            not_found: vec![],
+            state,
+        })
     }
 
-    async fn get_mail_html_body(
+    async fn fetch_mail_attachments(
         &self,
         id: &MailId,
-    ) -> Result<GetResult<Option<MailDataHtmlBody>>, Self::Error> {
-        todo!()
+    ) -> Result<RemoteGetResult<MailId, Vec<MailDataAttachment>>, Self::Error> {
+        let mut response = {
+            let mut request = self.client.build();
+
+            request
+                .get_email()
+                .ids(Some([id]))
+                .properties([jmap_client::email::Property::Attachments]);
+
+            request.send_get_email().await?
+        };
+
+        let values = response
+            .take_list()
+            .into_iter()
+            .next()
+            .expect("Mail arrived")
+            .attachments()
+            .map(|attachments| attachments.iter().map(MailDataAttachment::from).collect())
+            .expect("Attachments have been requested");
+
+        let state = response.take_state();
+
+        Ok(RemoteGetResult {
+            values,
+            not_found: vec![],
+            state,
+        })
     }
 
-    async fn get_mail_attachments(
-        &self,
-        id: &MailId,
-    ) -> Result<GetResult<Option<Vec<MailDataAttachment>>>, Self::Error> {
-        todo!()
-    }
-
-    async fn query_root_mails(
+    async fn fetch_root_mails(
         &self,
         mailbox: &MailboxId,
         window: QueryWindow,
-    ) -> Result<QueryResponse<MailId>, Self::Error> {
+    ) -> Result<RemoteQueryResponse<MailId>, Self::Error> {
+        let mut response = {
+            let mut request = self.client.build();
+
+            request
+                .query_email()
+                .filter(jmap_client::email::query::Filter::InMailbox {
+                    value: mailbox.0.clone(),
+                })
+                .sort([jmap_client::email::query::Comparator::received_at().descending()])
+                .position(window.start as i32)
+                .limit(window.limit)
+                .arguments()
+                .collapse_threads(true);
+
+            request.send_query_email().await?
+        };
+
+        let state = response.take_query_state();
+        let ids = response.take_ids().into_iter().map(MailId).collect();
+
+        Ok(RemoteQueryResponse { ids, state })
+    }
+
+    async fn create_mail(&self, new: MailNew) -> Result<RemoteSetResult<MailData>, Self::Error> {
+        let (mut response, _tmp_id) = {
+            let mut request = self.client.build();
+
+            let create = request.set_email().create().mailbox_ids(new.mailbox_ids);
+
+            // TODO: extend the options
+            if let Some(keywords) = new.keywords {
+                create.keywords(keywords);
+            }
+
+            let tmp_id = create.create_id().unwrap();
+            (request.send_set_email().await?, tmp_id)
+        };
+
+        let _state = response.take_new_state();
+        todo!("think about options")
+    }
+
+    async fn update_mail(
+        &self,
+        update: crate::types::MailUpdate,
+    ) -> Result<RemoteSetResult<()>, Self::Error> {
+        todo!()
+    }
+
+    async fn destroy_mail(&self, id: &MailId) -> Result<RemoteSetResult<()>, Self::Error> {
+        todo!()
+    }
+
+    async fn fetch_mail_changes(
+        &self,
+        since: &GetState,
+    ) -> Result<GetChangeResult<MailId>, Self::Error> {
+        todo!()
+    }
+
+    async fn fetch_root_mail_changes(
+        &self,
+        since: &QueryState,
+    ) -> Result<QueryChangeResult<MailId>, Self::Error> {
         todo!()
     }
 }

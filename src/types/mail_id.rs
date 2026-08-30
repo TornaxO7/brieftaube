@@ -12,3 +12,9 @@ impl From<&MailId> for String {
         id.0.clone()
     }
 }
+
+impl From<String> for MailId {
+    fn from(id: String) -> Self {
+        Self(id)
+    }
+}

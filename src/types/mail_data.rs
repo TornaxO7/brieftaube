@@ -66,19 +66,6 @@ impl From<jmap_client::email::Email> for MailData {
                 .into_iter()
                 .map(|id| MailboxId(id.to_owned()))
                 .collect(),
-            // text_body: match MailDataTextBody::new(&mail) {
-            //     Some(text) => RemoteData::Loaded(text),
-            //     None => RemoteData::NotRequested,
-            // },
-            // html_body: match MailDataHtmlBody::new(&mail) {
-            //     Some(html) => RemoteData::Loaded(html),
-            //     None => RemoteData::NotRequested,
-            // },
-            // attachments: if !mail.has_attachment() {
-            //     RemoteData::Loaded(vec![])
-            // } else {
-            //     RemoteData::NotRequested
-            // },
         }
     }
 }
@@ -87,6 +74,8 @@ impl From<jmap_client::email::Email> for MailData {
 pub struct MailDataTextBody(pub String);
 
 impl MailDataTextBody {
+    pub const PROPERTIES: [Property; 1] = [Property::TextBody];
+
     pub fn new(mail: &Email) -> Option<Self> {
         let parts = mail.text_body()?;
         let content = join_body_values(mail, parts)?;
@@ -99,6 +88,8 @@ impl MailDataTextBody {
 pub struct MailDataHtmlBody(pub String);
 
 impl MailDataHtmlBody {
+    pub const PROPERTIES: [Property; 1] = [Property::HtmlBody];
+
     pub fn new(mail: &Email) -> Option<Self> {
         let parts = mail.html_body()?;
         let content = join_body_values(mail, parts)?;

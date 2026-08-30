@@ -3,48 +3,57 @@ mod hashmap;
 mod jmap;
 pub mod types;
 
-use crate::types::{
-    MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailUpdate,
-    MailboxData, MailboxId, MailboxNew, MailboxUpdate, ThreadId,
+use crate::{
+    datasources::types::{RemoteGetResult, RemoteQueryResponse},
+    types::{
+        MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailNew,
+        MailUpdate, MailboxData, MailboxId, MailboxNew, MailboxUpdate, ThreadId,
+    },
 };
 use types::{
-    GetChangeResult, GetResult, GetState, QueryChangeResult, QueryResponse, QueryState,
-    QueryWindow, SetResult,
+    GetChangeResult, GetState, LocalGetResult, LocalQueryResponse, QueryChangeResult, QueryState,
+    QueryWindow, RemoteSetResult,
 };
 
 pub trait BaseDataSource {
     type Error;
+
+    fn mail_get_state(&self) -> Option<GetState>;
+
+    fn mailboxes_get_state(&self) -> Option<GetState>;
+
+    fn threads_get_state(&self) -> Option<GetState>;
+
+    fn root_mails_query_state(&self, id: &MailboxId) -> Option<QueryState>;
 }
 
-pub trait MailDataSource: BaseDataSource {
+pub trait MailCache: BaseDataSource {
     async fn get_mails(
         &self,
         ids: &[MailId],
-    ) -> Result<GetResult<Vec<Option<MailData>>>, Self::Error>;
+    ) -> Result<LocalGetResult<Vec<Option<MailData>>>, Self::Error>;
 
     async fn get_mail_text_body(
         &self,
         id: &MailId,
-    ) -> Result<GetResult<Option<MailDataTextBody>>, Self::Error>;
+    ) -> Result<LocalGetResult<Option<MailDataTextBody>>, Self::Error>;
 
     async fn get_mail_html_body(
         &self,
         id: &MailId,
-    ) -> Result<GetResult<Option<MailDataHtmlBody>>, Self::Error>;
+    ) -> Result<LocalGetResult<Option<MailDataHtmlBody>>, Self::Error>;
 
     async fn get_mail_attachments(
         &self,
         id: &MailId,
-    ) -> Result<GetResult<Option<Vec<MailDataAttachment>>>, Self::Error>;
+    ) -> Result<LocalGetResult<Option<Vec<MailDataAttachment>>>, Self::Error>;
 
     async fn query_root_mails(
         &self,
         mailbox: &MailboxId,
         window: QueryWindow,
-    ) -> Result<QueryResponse<MailId>, Self::Error>;
-}
+    ) -> Result<LocalQueryResponse<MailId>, Self::Error>;
 
-pub trait MailCache: BaseDataSource {
     async fn upsert_mails(
         &self,
         mails: Vec<MailData>,
@@ -63,18 +72,44 @@ pub trait MailCache: BaseDataSource {
 }
 
 pub trait MailRemote: BaseDataSource {
-    async fn create_mail(&self) -> Result<SetResult<MailData>, Self::Error>;
+    async fn fetch_mails(
+        &self,
+        ids: &[MailId],
+    ) -> Result<RemoteGetResult<MailId, Vec<MailData>>, Self::Error>;
 
-    async fn update_mail(&self, update: MailUpdate) -> Result<SetResult<()>, Self::Error>;
+    async fn fetch_mail_text_body(
+        &self,
+        id: &MailId,
+    ) -> Result<RemoteGetResult<MailId, MailDataTextBody>, Self::Error>;
 
-    async fn destroy_mail(&self, id: &MailId) -> Result<SetResult<()>, Self::Error>;
+    async fn fetch_mail_html_body(
+        &self,
+        id: &MailId,
+    ) -> Result<RemoteGetResult<MailId, MailDataHtmlBody>, Self::Error>;
 
-    async fn get_mail_changes(
+    async fn fetch_mail_attachments(
+        &self,
+        id: &MailId,
+    ) -> Result<RemoteGetResult<MailId, Vec<MailDataAttachment>>, Self::Error>;
+
+    async fn fetch_root_mails(
+        &self,
+        mailbox: &MailboxId,
+        window: QueryWindow,
+    ) -> Result<RemoteQueryResponse<MailId>, Self::Error>;
+
+    async fn create_mail(&self, new: MailNew) -> Result<RemoteSetResult<MailData>, Self::Error>;
+
+    async fn update_mail(&self, update: MailUpdate) -> Result<RemoteSetResult<()>, Self::Error>;
+
+    async fn destroy_mail(&self, id: &MailId) -> Result<RemoteSetResult<()>, Self::Error>;
+
+    async fn fetch_mail_changes(
         &self,
         since: &GetState,
     ) -> Result<GetChangeResult<MailId>, Self::Error>;
 
-    async fn get_root_mail_changes(
+    async fn fetch_root_mail_changes(
         &self,
         since: &QueryState,
     ) -> Result<QueryChangeResult<MailId>, Self::Error>;
@@ -84,17 +119,17 @@ pub trait MailboxDataSource: BaseDataSource {
     async fn get_mailbox(
         &self,
         id: &MailboxId,
-    ) -> Result<GetResult<Option<MailboxData>>, Self::Error> {
+    ) -> Result<LocalGetResult<Option<MailboxData>>, Self::Error> {
         let result = self.get_mailboxes(&[id.clone()]).await?;
         Ok(result.map(|mailboxes| mailboxes.into_iter().next().flatten()))
     }
 
-    async fn get_all_mailboxes(&self) -> Result<GetResult<Vec<MailboxData>>, Self::Error>;
+    async fn get_all_mailboxes(&self) -> Result<LocalGetResult<Vec<MailboxData>>, Self::Error>;
 
     async fn get_mailboxes(
         &self,
         ids: &[MailboxId],
-    ) -> Result<GetResult<Vec<Option<MailboxData>>>, Self::Error>;
+    ) -> Result<LocalGetResult<Vec<Option<MailboxData>>>, Self::Error>;
 }
 
 pub trait MailboxCache: BaseDataSource {
@@ -117,18 +152,24 @@ pub trait MailboxRemote: BaseDataSource {
         since: &GetState,
     ) -> Result<GetChangeResult<MailboxId>, Self::Error>;
 
-    async fn create_mailbox(&self, new: MailboxNew) -> Result<SetResult<MailboxData>, Self::Error>;
+    async fn create_mailbox(
+        &self,
+        new: MailboxNew,
+    ) -> Result<RemoteSetResult<MailboxData>, Self::Error>;
 
-    async fn update_mailbox(&self, update: MailboxUpdate) -> Result<SetResult<()>, Self::Error>;
+    async fn update_mailbox(
+        &self,
+        update: MailboxUpdate,
+    ) -> Result<RemoteSetResult<()>, Self::Error>;
 
-    async fn destroy_mailbox(&self, id: &MailboxId) -> Result<SetResult<()>, Self::Error>;
+    async fn destroy_mailbox(&self, id: &MailboxId) -> Result<RemoteSetResult<()>, Self::Error>;
 }
 
 pub trait ThreadDataSource: BaseDataSource {
     async fn get_thread(
         &self,
         id: &ThreadId,
-    ) -> Result<GetResult<Option<Vec<MailId>>>, Self::Error> {
+    ) -> Result<LocalGetResult<Option<Vec<MailId>>>, Self::Error> {
         let threads = self.get_threads(&[id.clone()]).await?;
         Ok(threads.map(|mails| mails.into_iter().next().flatten()))
     }
@@ -136,7 +177,7 @@ pub trait ThreadDataSource: BaseDataSource {
     async fn get_threads(
         &self,
         ids: &[ThreadId],
-    ) -> Result<GetResult<Vec<Option<Vec<MailId>>>>, Self::Error>;
+    ) -> Result<LocalGetResult<Vec<Option<Vec<MailId>>>>, Self::Error>;
 }
 
 pub trait ThreadCache: BaseDataSource {

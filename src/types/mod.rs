@@ -13,6 +13,9 @@ pub use mail_keyword::*;
 mod mail_update;
 pub use mail_update::*;
 
+mod mail_new;
+pub use mail_new::*;
+
 // mailbox
 
 mod mailbox_data;
