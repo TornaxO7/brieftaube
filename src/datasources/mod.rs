@@ -93,7 +93,7 @@ pub trait MailRemote: BaseDataSource {
     // TODO: Allow batches
     async fn update_mails(
         &self,
-        updates: &[MailUpdate],
+        updates: Vec<MailUpdate>,
         since: GetState,
     ) -> Result<remote::UpdateResult, Self::Error>;
 

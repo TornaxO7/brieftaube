@@ -55,7 +55,7 @@ impl MailData {
             cc: new.cc,
             bcc: new.bcc,
             subject: new.subject,
-            preview: server_mail.take_preview().unwrap(),
+            preview: server_mail.take_preview().unwrap_or_default(),
             received_at: DateTime::<Utc>::from_timestamp(server_mail.received_at().unwrap(), 0)
                 .unwrap()
                 .with_timezone(&Local),

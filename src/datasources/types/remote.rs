@@ -1,5 +1,7 @@
 use jmap_client::core::set::SetError;
 
+use crate::types::{MailId, MailUpdate};
+
 use super::{GetState, QueryState};
 
 pub struct QueryResponse<Id> {
@@ -24,6 +26,8 @@ pub struct CreateResult<T> {
 }
 
 pub struct UpdateResult {
+    pub updated: Vec<(MailId, MailUpdate)>,
+    pub failed: Vec<(MailId, SetError<String>)>,
     pub new_state: GetState,
 }
 

@@ -233,6 +233,14 @@ impl MailRemote for Jmap {
                 create.subject(subject);
             }
 
+            if let Some(in_reply_to) = new.in_reply_to {
+                create.in_reply_to(in_reply_to);
+            }
+
+            if let Some(references) = new.references {
+                create.references(references);
+            }
+
             let tmp_id = create.create_id().unwrap();
             (request.send_set_email().await?, tmp_id)
         };
@@ -241,7 +249,7 @@ impl MailRemote for Jmap {
             Ok(server_mail) => Ok(MailData::from_new(new2, server_mail)),
             Err(err) => {
                 let jmap_client::Error::Set(error) = err else {
-                    unreachable!("Why... are we gettign another error???");
+                    unreachable!("Why... are we getting another error???");
                 };
                 Err(error)
             }
@@ -255,14 +263,14 @@ impl MailRemote for Jmap {
 
     async fn update_mails(
         &self,
-        updates: &[MailUpdate],
+        updates: Vec<MailUpdate>,
         since: GetState,
     ) -> Result<remote::UpdateResult, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
             let set_mail = request.set_email().if_in_state(since);
 
-            for update in updates {
+            for update in updates.iter() {
                 let u = set_mail.update(&update.id);
 
                 if let Some(patches) = &update.patch_keywords {
@@ -281,19 +289,47 @@ impl MailRemote for Jmap {
             request.send_set_email().await?
         };
 
-        for update in updates {
+        let mut updated = Vec::new();
+        let mut failed = Vec::new();
+
+        for mut update in updates {
             match response.updated(update.id.as_str()) {
-                Ok(None) => {}
+                Ok(None) => {
+                    let id = update.id.clone();
+                    updated.push((id, update));
+                }
                 Ok(Some(extra)) => {
-                    todo!()
+                    {
+                        let update_keywords = update.patch_keywords.get_or_insert_default();
+                        for extra_keyword in extra.keywords() {
+                            update_keywords.push((extra_keyword.into(), true));
+                        }
+                    }
+
+                    {
+                        let mailbox_ids = update.mailbox_ids.get_or_insert_default();
+                        for extra_mailbox in extra.mailbox_ids() {
+                            mailbox_ids.push((MailboxId(extra_mailbox.to_string()), true));
+                        }
+                    }
+
+                    let id = update.id.clone();
+                    updated.push((id, update));
                 }
                 Err(err) => {
-                    todo!()
+                    let jmap_client::Error::Set(error) = err else {
+                        unreachable!("Why... are we getting another error???");
+                    };
+
+                    let id = update.id.clone();
+                    failed.push((id, error));
                 }
             }
         }
 
         Ok(remote::UpdateResult {
+            updated,
+            failed,
             new_state: response.take_new_state().into(),
         })
     }
