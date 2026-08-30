@@ -1,5 +1,5 @@
 use crate::{
-    repository::datasources::{
+    repository::datasource::{
         MailCache,
         hashmap::{HashMapDataSource, utils::root_mails::RootMails},
         types::{GetState, QueryState, QueryWindow, cache},

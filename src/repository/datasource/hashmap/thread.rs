@@ -1,5 +1,5 @@
 use crate::{
-    repository::datasources::{
+    repository::datasource::{
         ThreadCache,
         hashmap::HashMapDataSource,
         types::{GetState, cache},

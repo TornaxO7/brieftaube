@@ -1,7 +1,7 @@
 use jmap_client::core::set::SetObject;
 
 use crate::{
-    repository::datasources::{
+    repository::datasource::{
         MailboxRemote,
         jmap::Jmap,
         types::{GetState, remote},

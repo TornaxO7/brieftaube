@@ -1,5 +1,5 @@
 use crate::{
-    repository::datasources::types::{QueryState, cache},
+    repository::datasource::types::{QueryState, cache},
     types::MailId,
 };
 use std::ops::Range;

@@ -1,5 +1,5 @@
 use crate::{
-    repository::datasources::{
+    repository::datasource::{
         ThreadRemote,
         jmap::Jmap,
         types::{GetState, remote},
