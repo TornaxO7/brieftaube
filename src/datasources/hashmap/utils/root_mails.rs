@@ -264,7 +264,7 @@ mod tests {
                 }]
             );
 
-            assert_eq!(query.missing, Vec::<Range<usize>>::new());
+            assert!(query.missing.is_empty());
         }
 
         #[test]
