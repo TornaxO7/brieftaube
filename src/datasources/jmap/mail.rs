@@ -38,7 +38,7 @@ impl MailRemote for Jmap {
         Ok(remote::GetResult {
             values,
             not_found,
-            state: response.take_state(),
+            state: response.take_state().into(),
         })
     }
 
@@ -67,12 +67,10 @@ impl MailRemote for Jmap {
             .flatten()
             .unwrap();
 
-        let state = response.take_state();
-
         Ok(remote::GetResult {
             values: body,
             not_found: vec![],
-            state,
+            state: response.take_state().into(),
         })
     }
 
@@ -101,12 +99,10 @@ impl MailRemote for Jmap {
             .flatten()
             .unwrap();
 
-        let state = response.take_state();
-
         Ok(remote::GetResult {
             values: body,
             not_found: vec![],
-            state,
+            state: response.take_state().into(),
         })
     }
 
@@ -134,12 +130,10 @@ impl MailRemote for Jmap {
             .map(|attachments| attachments.iter().map(MailDataAttachment::from).collect())
             .expect("Attachments have been requested");
 
-        let state = response.take_state();
-
         Ok(remote::GetResult {
             values,
             not_found: vec![],
-            state,
+            state: response.take_state().into(),
         })
     }
 
@@ -164,11 +158,12 @@ impl MailRemote for Jmap {
 
             request.send_query_email().await?
         };
-
-        let state = response.take_query_state();
         let ids = response.take_ids().into_iter().map(MailId).collect();
 
-        Ok(remote::QueryResponse { ids, state })
+        Ok(remote::QueryResponse {
+            ids,
+            state: response.take_query_state().into(),
+        })
     }
 
     async fn create_mail(
@@ -241,9 +236,9 @@ impl MailRemote for Jmap {
             }
         }
 
-        let new_state = response.take_new_state();
-
-        Ok(remote::UpdateResult { new_state })
+        Ok(remote::UpdateResult {
+            new_state: response.take_new_state().into(),
+        })
     }
 
     async fn destroy_mails(
@@ -262,7 +257,7 @@ impl MailRemote for Jmap {
 
         Ok(remote::SetResult {
             value: (),
-            state: response.take_new_state(),
+            state: response.take_new_state().into(),
         })
     }
 
@@ -272,24 +267,23 @@ impl MailRemote for Jmap {
     ) -> Result<remote::GetChangeResult<MailId>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
-            request.changes_email(since);
+            request.changes_email(since.as_ref());
             request.send_changes_email().await?
         };
 
         debug_assert_eq!(
             response.old_state(),
-            since.as_str(),
+            since.0.as_str(),
             "TODO: Return custom error"
         );
 
-        let new_state = response.take_new_state();
         let has_more_changes = response.has_more_changes();
         let created = response.take_created().into_iter().map(MailId).collect();
         let updated = response.take_updated().into_iter().map(MailId).collect();
         let destroyed = response.take_destroyed().into_iter().map(MailId).collect();
 
         Ok(remote::GetChangeResult {
-            new_state,
+            new_state: response.take_new_state().into(),
             has_more_changes,
             created,
             updated,
@@ -305,7 +299,7 @@ impl MailRemote for Jmap {
         let response = {
             let mut request = self.client.build();
             request
-                .query_email_changes(since)
+                .query_email_changes(since.as_ref())
                 .filter(jmap_client::email::query::Filter::InMailbox {
                     value: mailbox.0.clone(),
                 })
@@ -315,11 +309,10 @@ impl MailRemote for Jmap {
 
         debug_assert_eq!(
             response.old_query_state(),
-            since.as_str(),
+            since.as_ref(),
             "TODO: Refresh query"
         );
 
-        let new_state = response.new_query_state().to_string();
         let removed = response
             .removed()
             .iter()
@@ -338,7 +331,7 @@ impl MailRemote for Jmap {
             .collect();
 
         Ok(remote::QueryChangeResult {
-            new_state,
+            new_state: response.new_query_state().to_string().into(),
             removed,
             added,
         })

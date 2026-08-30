@@ -3,8 +3,47 @@ pub mod remote;
 
 use std::ops::Range;
 
-pub type GetState = String;
-pub type QueryState = String;
+#[derive(Debug, Clone)]
+pub struct GetState(pub String);
+
+impl From<String> for GetState {
+    fn from(state: String) -> Self {
+        Self(state)
+    }
+}
+
+impl AsRef<str> for GetState {
+    fn as_ref(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl From<GetState> for String {
+    fn from(state: GetState) -> Self {
+        state.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QueryState(pub String);
+
+impl From<String> for QueryState {
+    fn from(state: String) -> Self {
+        Self(state)
+    }
+}
+
+impl AsRef<str> for QueryState {
+    fn as_ref(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl From<QueryState> for String {
+    fn from(state: QueryState) -> Self {
+        state.0
+    }
+}
 
 pub struct QueryWindow {
     pub start: u32,
