@@ -1,17 +1,21 @@
 use super::{MailAddress, MailId, MailKeyword, MailboxId, ThreadId};
+use crate::types::MailNew;
 use chrono::{DateTime, Local, Utc};
 use jmap_client::email::{Email, EmailBodyPart, Property};
 use std::collections::HashSet;
 
+// TODO: Create `MailAddresses`
 #[derive(Debug, Clone, Default)]
 pub struct MailData {
     pub id: MailId,
+    pub message_id: Option<String>,
     pub thread_id: ThreadId,
     pub keywords: HashSet<MailKeyword>,
-    pub from: Vec<MailAddress>,
-    pub to: Vec<MailAddress>,
-    pub cc: Vec<MailAddress>,
-    pub subject: String,
+    pub from: Option<Vec<MailAddress>>,
+    pub to: Option<Vec<MailAddress>>,
+    pub cc: Option<Vec<MailAddress>>,
+    pub bcc: Option<Vec<MailAddress>>,
+    pub subject: Option<String>,
     pub preview: String,
     pub received_at: DateTime<Local>,
     pub has_attachment: bool,
@@ -19,8 +23,9 @@ pub struct MailData {
 }
 
 impl MailData {
-    pub const PROPERTIES: [Property; 11] = [
+    pub const PROPERTIES: [Property; 12] = [
         Property::Id,
+        Property::MessageId,
         Property::ThreadId,
         Property::Keywords,
         Property::From,
@@ -32,28 +37,56 @@ impl MailData {
         Property::HasAttachment,
         Property::MailboxIds,
     ];
-}
 
-impl From<jmap_client::email::Email> for MailData {
-    fn from(mut mail: jmap_client::email::Email) -> Self {
+    pub fn from_new(new: MailNew, mut server_mail: Email) -> Self {
+        Self {
+            id: server_mail.take_id().into(),
+            message_id: server_mail
+                .message_id()
+                .map(|ids| ids.iter().next().cloned())
+                .flatten(),
+            thread_id: server_mail
+                .thread_id()
+                .expect("Server returns thread id")
+                .into(),
+            keywords: new.keywords,
+            from: new.from,
+            to: new.to,
+            cc: new.cc,
+            bcc: new.bcc,
+            subject: new.subject,
+            preview: server_mail.take_preview().unwrap(),
+            received_at: DateTime::<Utc>::from_timestamp(server_mail.received_at().unwrap(), 0)
+                .unwrap()
+                .with_timezone(&Local),
+            mailbox_ids: new.mailbox_ids,
+            has_attachment: false,
+        }
+    }
+
+    pub fn from_get_request(mut mail: Email) -> Self {
         Self {
             id: MailId(mail.take_id()),
+            message_id: mail
+                .message_id()
+                .map(|ids| ids.iter().next().cloned())
+                .flatten(),
             thread_id: ThreadId(mail.take_thread_id().unwrap()),
             keywords: mail.keywords().into_iter().map(MailKeyword::from).collect(),
             from: mail
                 .take_from()
-                .map(|addresses| addresses.into_iter().map(MailAddress::from).collect())
-                .unwrap_or(vec![]),
+                .map(|addresses| addresses.into_iter().map(MailAddress::from).collect()),
             to: mail
                 .to()
-                .map(|addresses| addresses.into_iter().map(MailAddress::from).collect())
-                .unwrap_or(vec![]),
+                .map(|addresses| addresses.into_iter().map(MailAddress::from).collect()),
             cc: mail
                 .take_cc()
-                .map(|cc| cc.into_iter().map(MailAddress::from).collect())
-                .unwrap_or(vec![]),
-            subject: mail.take_subject().unwrap(),
-            preview: mail.take_preview().unwrap(),
+                .map(|cc| cc.into_iter().map(MailAddress::from).collect()),
+            bcc: mail
+                .take_bcc()
+                .map(|bcc| bcc.into_iter().map(MailAddress::from).collect()),
+            subject: mail.take_subject(),
+            preview: mail.take_preview().unwrap_or_default(),
             received_at: DateTime::<Utc>::from_timestamp(mail.received_at().unwrap(), 0)
                 .expect("Valid timestamp")
                 .with_timezone(&Local),

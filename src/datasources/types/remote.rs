@@ -1,3 +1,5 @@
+use jmap_client::core::set::SetError;
+
 use super::{GetState, QueryState};
 
 pub struct QueryResponse<Id> {
@@ -13,6 +15,11 @@ pub struct GetResult<Id, T> {
 
 pub struct SetResult<T> {
     pub value: T,
+    pub state: GetState,
+}
+
+pub struct CreateResult<T> {
+    pub value: Result<T, SetError<String>>,
     pub state: GetState,
 }
 

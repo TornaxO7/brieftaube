@@ -1,3 +1,5 @@
+use jmap_client::email::EmailAddress;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MailAddress {
     pub name: Option<String>,
@@ -24,17 +26,26 @@ impl std::fmt::Display for MailAddress {
     }
 }
 
-impl From<jmap_client::email::EmailAddress> for MailAddress {
-    fn from(addr: jmap_client::email::EmailAddress) -> Self {
+impl From<EmailAddress> for MailAddress {
+    fn from(addr: EmailAddress) -> Self {
         Self::from(&addr)
     }
 }
 
-impl From<&jmap_client::email::EmailAddress> for MailAddress {
-    fn from(addr: &jmap_client::email::EmailAddress) -> Self {
+impl From<&EmailAddress> for MailAddress {
+    fn from(addr: &EmailAddress) -> Self {
         Self {
             name: addr.name().map(|name| name.to_string()).clone(),
             address: addr.email().to_string(),
+        }
+    }
+}
+
+impl From<MailAddress> for EmailAddress {
+    fn from(address: MailAddress) -> Self {
+        match address.name {
+            Some(name) => Self::from((name, address.address)),
+            None => Self::from(address.address),
         }
     }
 }

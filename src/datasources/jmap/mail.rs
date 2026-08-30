@@ -31,7 +31,7 @@ impl MailRemote for Jmap {
             .take_list()
             .into_iter()
             .map(|remote_mail| {
-                let mail = MailData::from(remote_mail);
+                let mail = MailData::from_get_request(remote_mail);
                 let id = mail.id.clone();
 
                 (id, mail)
@@ -200,8 +200,9 @@ impl MailRemote for Jmap {
         &self,
         new: MailNew,
         since: GetState,
-    ) -> Result<remote::SetResult<MailData>, Self::Error> {
-        let (mut response, _tmp_id) = {
+    ) -> Result<remote::CreateResult<MailData>, Self::Error> {
+        let new2 = new.clone();
+        let (mut response, tmp_id) = {
             let mut request = self.client.build();
 
             let create = request
@@ -210,20 +211,46 @@ impl MailRemote for Jmap {
                 .create()
                 .mailbox_ids(new.mailbox_ids);
 
-            if let Some(keywords) = new.keywords {
-                create.keywords(keywords);
+            create.keywords(new.keywords);
+
+            if let Some(from) = new.from {
+                create.from(from);
             }
 
-            for (header, value) in new.headers {
-                create.header(header, value);
+            if let Some(to) = new.to {
+                create.to(to);
+            }
+
+            if let Some(cc) = new.cc {
+                create.cc(cc);
+            }
+
+            if let Some(bcc) = new.bcc {
+                create.bcc(bcc);
+            }
+
+            if let Some(subject) = new.subject {
+                create.subject(subject);
             }
 
             let tmp_id = create.create_id().unwrap();
             (request.send_set_email().await?, tmp_id)
         };
 
-        let _state = response.take_new_state();
-        todo!("think about this thorough: How to handle errors and what else should be set-able")
+        let value = match response.created(tmp_id.as_str()) {
+            Ok(server_mail) => Ok(MailData::from_new(new2, server_mail)),
+            Err(err) => {
+                let jmap_client::Error::Set(error) = err else {
+                    unreachable!("Why... are we gettign another error???");
+                };
+                Err(error)
+            }
+        };
+
+        Ok(remote::CreateResult {
+            value,
+            state: response.take_new_state().into(),
+        })
     }
 
     async fn update_mails(
