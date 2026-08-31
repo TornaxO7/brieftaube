@@ -9,6 +9,26 @@ use crate::{
 use jmap_client::core::set::SetObject;
 
 impl MailboxRemote for Jmap {
+    async fn fetch_mailboxes_all(
+        &self,
+    ) -> Result<remote::GetResult<MailboxId, Vec<MailboxData>>, Self::Error> {
+        let mut response = {
+            let mut request = self.client.build();
+            request.get_mailbox().properties(MailboxData::PROPERTIES);
+            request.send_get_mailbox().await?
+        };
+
+        Ok(remote::GetResult {
+            values: response
+                .take_list()
+                .into_iter()
+                .map(MailboxData::from_get_request)
+                .collect(),
+            not_found: vec![],
+            state: response.take_state().into(),
+        })
+    }
+
     async fn fetch_mailbox_changes(
         &self,
         since: &GetState,

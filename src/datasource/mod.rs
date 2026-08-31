@@ -10,11 +10,11 @@ use crate::types::{
 use types::{GetState, QueryState, QueryWindow, cache, remote};
 
 pub trait BaseDataSource {
-    type Error;
+    type Error: std::fmt::Debug;
 }
 
-pub trait Cache: MailCache + MailboxCache + ThreadCache {}
-pub trait Remote: MailRemote + MailboxRemote + ThreadRemote {}
+pub trait Cache: BaseDataSource + MailCache + MailboxCache + ThreadCache {}
+pub trait Remote: BaseDataSource + MailRemote + MailboxRemote + ThreadRemote {}
 
 pub trait MailCache: BaseDataSource {
     async fn get_mails(
@@ -152,6 +152,10 @@ pub trait MailboxCache: BaseDataSource {
 }
 
 pub trait MailboxRemote: BaseDataSource {
+    async fn fetch_mailboxes_all(
+        &self,
+    ) -> Result<remote::GetResult<MailboxId, Vec<MailboxData>>, Self::Error>;
+
     async fn fetch_mailbox_changes(
         &self,
         since: &GetState,
