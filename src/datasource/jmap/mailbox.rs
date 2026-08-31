@@ -11,14 +11,14 @@ use jmap_client::core::set::SetObject;
 impl MailboxRemote for Jmap {
     async fn fetch_mailboxes_all(
         &self,
-    ) -> Result<remote::GetResult<MailboxId, Vec<MailboxData>>, Self::Error> {
+    ) -> Result<remote::GetBatchResult<MailboxId, Vec<MailboxData>>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
             request.get_mailbox().properties(MailboxData::PROPERTIES);
             request.send_get_mailbox().await?
         };
 
-        Ok(remote::GetResult {
+        Ok(remote::GetBatchResult {
             values: response
                 .take_list()
                 .into_iter()

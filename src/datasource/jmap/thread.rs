@@ -11,7 +11,7 @@ impl ThreadRemote for Jmap {
     async fn fetch_threads(
         &self,
         ids: &[ThreadId],
-    ) -> Result<remote::GetResult<ThreadId, Vec<(ThreadId, Vec<MailId>)>>, Self::Error> {
+    ) -> Result<remote::GetBatchResult<ThreadId, Vec<(ThreadId, Vec<MailId>)>>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
             request.get_thread().ids(Some(ids));
@@ -34,7 +34,7 @@ impl ThreadRemote for Jmap {
             .map(ThreadId::from)
             .collect();
 
-        Ok(remote::GetResult {
+        Ok(remote::GetBatchResult {
             values,
             not_found,
             state: response.take_state().into(),

@@ -49,7 +49,26 @@ pub trait MailCache: BaseDataSource {
         new_state: GetState,
     ) -> Result<(), Self::Error>;
 
-    async fn evict_mails(&self, mails: &[MailId], new_state: GetState) -> Result<(), Self::Error>;
+    async fn upsert_mail_text_body(
+        &self,
+        id: &MailId,
+        body: MailDataTextBody,
+        new_state: GetState,
+    ) -> Result<(), Self::Error>;
+
+    async fn upsert_mail_html_body(
+        &self,
+        id: &MailId,
+        body: MailDataHtmlBody,
+        new_state: GetState,
+    ) -> Result<(), Self::Error>;
+
+    async fn upsert_mail_attachments(
+        &self,
+        id: &MailId,
+        attachments: Vec<MailDataAttachment>,
+        new_state: GetState,
+    ) -> Result<(), Self::Error>;
 
     async fn upsert_root_mails(
         &self,
@@ -58,6 +77,8 @@ pub trait MailCache: BaseDataSource {
         ids: Vec<MailId>,
         new_state: QueryState,
     ) -> Result<(), Self::Error>;
+
+    async fn evict_mails(&self, mails: &[MailId], new_state: GetState) -> Result<(), Self::Error>;
 }
 
 pub trait MailRemote: BaseDataSource {

@@ -149,4 +149,40 @@ impl MailCache for HashMapDataSource {
 
         Ok(())
     }
+
+    async fn upsert_mail_text_body(
+        &self,
+        id: &MailId,
+        body: MailDataTextBody,
+        state: GetState,
+    ) -> Result<(), Self::Error> {
+        let mut inner = self.inner.write().unwrap();
+        inner.mail_text_body.insert(id.clone(), body);
+        inner.mail_get_state = Some(state);
+        Ok(())
+    }
+
+    async fn upsert_mail_html_body(
+        &self,
+        id: &MailId,
+        body: MailDataHtmlBody,
+        state: GetState,
+    ) -> Result<(), Self::Error> {
+        let mut inner = self.inner.write().unwrap();
+        inner.mail_html_body.insert(id.clone(), body);
+        inner.mail_get_state = Some(state);
+        Ok(())
+    }
+
+    async fn upsert_mail_attachments(
+        &self,
+        id: &MailId,
+        attachments: Vec<MailDataAttachment>,
+        state: GetState,
+    ) -> Result<(), Self::Error> {
+        let mut inner = self.inner.write().unwrap();
+        inner.mail_attachments.insert(id.clone(), attachments);
+        inner.mail_get_state = Some(state);
+        Ok(())
+    }
 }
