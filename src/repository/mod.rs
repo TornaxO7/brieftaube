@@ -35,6 +35,7 @@ where
     C: Cache,
     R: Remote,
 {
+    // TODO: Put it inside `RwLock`
     cache: C,
     remote: R,
     receiver: mpsc::Receiver<Command<C, R>>,

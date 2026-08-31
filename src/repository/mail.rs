@@ -51,10 +51,7 @@ where
     R: Remote,
 {
     pub async fn get_mail_text_body(&self, id: MailId) -> Result<MailDataTextBody, Error<C, R>> {
-        let cache::GetOneResult {
-            value: opt_text_body,
-            ..
-        } = self
+        let opt_text_body = self
             .cache
             .get_mail_text_body(&id)
             .await
@@ -83,10 +80,7 @@ where
     }
 
     pub async fn get_mail_html_body(&self, id: MailId) -> Result<MailDataHtmlBody, Error<C, R>> {
-        let cache::GetOneResult {
-            value: opt_html_body,
-            ..
-        } = self
+        let opt_html_body = self
             .cache
             .get_mail_html_body(&id)
             .await
@@ -118,10 +112,7 @@ where
         &self,
         id: MailId,
     ) -> Result<Vec<MailDataAttachment>, Error<C, R>> {
-        let cache::GetOneResult {
-            value: opt_mail_attachments,
-            ..
-        } = self
+        let opt_mail_attachments = self
             .cache
             .get_mail_attachments(&id)
             .await
@@ -178,7 +169,7 @@ where
             .await
             .map_err(Error::Cache)?;
 
-        let mail_ids = if result.missing.is_empty() && result.is_initialised() {
+        let mail_ids = if result.missing.is_empty() {
             debug_assert_eq!(result.values.len(), 1, "Full window should be loaded");
             result.values.into_iter().next().unwrap().ids
         } else {

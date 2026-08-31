@@ -33,6 +33,12 @@ impl From<String> for QueryState {
     }
 }
 
+impl From<&str> for QueryState {
+    fn from(state: &str) -> Self {
+        Self(state.to_string())
+    }
+}
+
 impl AsRef<str> for QueryState {
     fn as_ref(&self) -> &str {
         self.0.as_str()

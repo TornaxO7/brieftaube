@@ -8,23 +8,11 @@ use crate::types::{
     MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailboxData,
     MailboxId, ThreadId,
 };
-use std::{collections::HashMap, sync::RwLock};
+use std::collections::HashMap;
 use utils::root_mails::RootMails;
 
-pub struct HashMapDataSource {
-    inner: RwLock<Inner>,
-}
-
-impl HashMapDataSource {
-    pub fn new() -> Self {
-        Self {
-            inner: RwLock::new(Inner::default()),
-        }
-    }
-}
-
 #[derive(Default)]
-struct Inner {
+pub struct HashMapDataSource {
     mails: HashMap<MailId, MailData>,
     mailboxes: HashMap<MailboxId, MailboxData>,
     threads: HashMap<ThreadId, Vec<MailId>>,
@@ -37,6 +25,12 @@ struct Inner {
     mail_get_state: Option<GetState>,
     mailboxes_get_state: Option<GetState>,
     threads_get_state: Option<GetState>,
+}
+
+impl HashMapDataSource {
+    pub fn new() -> Self {
+        Self::default()
+    }
 }
 
 impl BaseDataSource for HashMapDataSource {

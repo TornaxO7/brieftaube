@@ -103,7 +103,6 @@ impl RootMails {
         cache::QueryResponse {
             values: sections,
             missing,
-            query_state: Some(self.state.clone()),
         }
     }
 

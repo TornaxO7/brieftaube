@@ -17,6 +17,8 @@ pub trait Cache: BaseDataSource + MailCache + MailboxCache + ThreadCache {}
 pub trait Remote: BaseDataSource + MailRemote + MailboxRemote + ThreadRemote {}
 
 pub trait MailCache: BaseDataSource {
+    async fn get_mail_state(&self) -> Option<&GetState>;
+
     async fn get_mails(
         &self,
         ids: &[MailId],
@@ -25,60 +27,66 @@ pub trait MailCache: BaseDataSource {
     async fn get_mail_text_body(
         &self,
         id: &MailId,
-    ) -> Result<cache::GetOneResult<Option<MailDataTextBody>>, Self::Error>;
+    ) -> Result<Option<MailDataTextBody>, Self::Error>;
 
     async fn get_mail_html_body(
         &self,
         id: &MailId,
-    ) -> Result<cache::GetOneResult<Option<MailDataHtmlBody>>, Self::Error>;
+    ) -> Result<Option<MailDataHtmlBody>, Self::Error>;
 
     async fn get_mail_attachments(
         &self,
         id: &MailId,
-    ) -> Result<cache::GetOneResult<Option<Vec<MailDataAttachment>>>, Self::Error>;
+    ) -> Result<Option<Vec<MailDataAttachment>>, Self::Error>;
+
+    async fn get_root_mails_state(&self, mailbox: &MailboxId) -> Option<&QueryState>;
 
     async fn query_root_mails(
         &self,
         mailbox: &MailboxId,
         window: QueryWindow,
-    ) -> Result<cache::QueryResponse<MailId>, Self::Error>;
+    ) -> Result<Option<cache::QueryResponse<MailId>>, Self::Error>;
 
     async fn upsert_mails(
-        &self,
+        &mut self,
         mails: Vec<MailData>,
         new_state: GetState,
     ) -> Result<(), Self::Error>;
 
     async fn upsert_mail_text_body(
-        &self,
+        &mut self,
         id: &MailId,
         body: MailDataTextBody,
         new_state: GetState,
     ) -> Result<(), Self::Error>;
 
     async fn upsert_mail_html_body(
-        &self,
+        &mut self,
         id: &MailId,
         body: MailDataHtmlBody,
         new_state: GetState,
     ) -> Result<(), Self::Error>;
 
     async fn upsert_mail_attachments(
-        &self,
+        &mut self,
         id: &MailId,
         attachments: Vec<MailDataAttachment>,
         new_state: GetState,
     ) -> Result<(), Self::Error>;
 
     async fn upsert_root_mails(
-        &self,
+        &mut self,
         mailbox: &MailboxId,
         start: usize,
         ids: Vec<MailId>,
         new_state: QueryState,
     ) -> Result<(), Self::Error>;
 
-    async fn evict_mails(&self, mails: &[MailId], new_state: GetState) -> Result<(), Self::Error>;
+    async fn evict_mails(
+        &mut self,
+        mails: &[MailId],
+        new_state: GetState,
+    ) -> Result<(), Self::Error>;
 }
 
 pub trait MailRemote: BaseDataSource {
@@ -193,22 +201,14 @@ pub trait MailRemote: BaseDataSource {
 }
 
 pub trait MailboxCache: BaseDataSource {
-    fn get_mailbox_state(&self) -> Option<GetState>;
+    async fn get_mailbox_state(&self) -> Option<&GetState>;
 
-    async fn get_mailbox(
-        &self,
-        id: &MailboxId,
-    ) -> Result<cache::GetOneResult<Option<MailboxData>>, Self::Error> {
+    async fn get_mailbox(&self, id: &MailboxId) -> Result<Option<MailboxData>, Self::Error> {
         let result = self.get_mailboxes(&[id.clone()]).await?;
-
-        Ok(cache::GetOneResult {
-            value: result.value.into_iter().next(),
-            state: result.state,
-        })
+        Ok(result.value.into_iter().next())
     }
 
-    async fn get_all_mailboxes(&self)
-    -> Result<cache::GetOneResult<Vec<MailboxData>>, Self::Error>;
+    async fn get_all_mailboxes(&self) -> Result<Option<Vec<MailboxData>>, Self::Error>;
 
     async fn get_mailboxes(
         &self,
@@ -218,16 +218,16 @@ pub trait MailboxCache: BaseDataSource {
     async fn get_mailbox_children(
         &self,
         parent: &ParentMailboxId,
-    ) -> Result<cache::GetOneResult<Option<Vec<MailboxData>>>, Self::Error>;
+    ) -> Result<Option<Vec<MailboxData>>, Self::Error>;
 
     async fn upsert_mailboxes(
-        &self,
+        &mut self,
         mailboxes: Vec<MailboxData>,
         state: GetState,
     ) -> Result<(), Self::Error>;
 
     async fn evict_mailboxes(
-        &self,
+        &mut self,
         ids: &[MailboxId],
         new_state: GetState,
     ) -> Result<(), Self::Error>;
@@ -262,20 +262,20 @@ pub trait MailboxRemote: BaseDataSource {
 }
 
 pub trait ThreadCache: BaseDataSource {
-    async fn get_thread(
-        &self,
-        id: &ThreadId,
-    ) -> Result<cache::GetOneResult<Option<Vec<MailData>>>, Self::Error>;
+    async fn get_thread_state(&self) -> Option<&GetState>;
+
+    async fn get_thread(&self, id: &ThreadId) -> Result<Option<Vec<MailData>>, Self::Error>;
 
     async fn upsert_thread(
-        &self,
+        &mut self,
         id: &ThreadId,
         mails: &[MailData],
         new_get_mail_state: GetState,
         new_get_thread_state: GetState,
     ) -> Result<(), Self::Error>;
 
-    async fn evict_thread(&self, id: &ThreadId, new_state: GetState) -> Result<(), Self::Error>;
+    async fn evict_thread(&mut self, id: &ThreadId, new_state: GetState)
+    -> Result<(), Self::Error>;
 }
 
 pub trait ThreadRemote: BaseDataSource {
