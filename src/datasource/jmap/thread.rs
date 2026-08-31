@@ -4,42 +4,56 @@ use crate::{
         jmap::Jmap,
         types::{GetState, remote},
     },
-    types::{MailId, ThreadId},
+    types::{MailData, ThreadId},
 };
 
 impl ThreadRemote for Jmap {
-    async fn fetch_threads(
+    async fn fetch_thread(
         &self,
-        ids: &[ThreadId],
-    ) -> Result<remote::GetBatchResult<Vec<(ThreadId, Vec<MailId>)>, Vec<ThreadId>>, Self::Error>
-    {
+        id: &ThreadId,
+    ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<MailData>>>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
-            request.get_thread().ids(Some(ids));
-            request.send_get_thread().await?
+
+            let thread_mail_ids_ref = request
+                .get_thread()
+                .ids(Some([id]))
+                .result_reference(jmap_client::thread::Property::EmailIds);
+            request
+                .get_email()
+                .ids_ref(thread_mail_ids_ref)
+                .properties(MailData::PROPERTIES);
+
+            request.send().await?
         };
 
-        let values = response
-            .take_list()
-            .into_iter()
-            .map(|thread| {
-                let id = thread.id().into();
-                let thread_mails = thread.email_ids().into_iter().map(MailId::from).collect();
-                (id, thread_mails)
-            })
-            .collect();
+        let mut get_email_response = response
+            .pop_method_response()
+            .unwrap()
+            .unwrap_get_email()
+            .unwrap();
 
-        let not_found = response
-            .take_not_found()
-            .into_iter()
-            .map(ThreadId::from)
-            .collect();
+        let mut get_thread_response = response
+            .pop_method_response()
+            .unwrap()
+            .unwrap_get_thread()
+            .unwrap();
 
-        Ok(remote::GetBatchResult {
-            values,
-            not_found,
-            state: response.take_state().into(),
-        })
+        let get_mail_result = remote::GetOneResult {
+            value: get_email_response
+                .take_list()
+                .into_iter()
+                .map(MailData::from_get_request)
+                .collect(),
+            state: get_email_response.take_state().into(),
+        };
+
+        let get_thread_result = remote::GetOneResult {
+            value: get_mail_result,
+            state: get_thread_response.take_state().into(),
+        };
+
+        Ok(get_thread_result)
     }
 
     async fn fetch_thread_changes(

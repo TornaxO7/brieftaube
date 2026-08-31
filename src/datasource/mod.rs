@@ -265,25 +265,14 @@ pub trait ThreadCache: BaseDataSource {
     async fn get_thread(
         &self,
         id: &ThreadId,
-    ) -> Result<cache::GetOneResult<Option<Vec<MailId>>>, Self::Error> {
-        let result = self.get_threads(&[id.clone()]).await?;
-
-        Ok(cache::GetOneResult {
-            value: result.value.into_iter().next().map(|(_id, mails)| mails),
-            state: result.state,
-        })
-    }
-
-    async fn get_threads(
-        &self,
-        ids: &[ThreadId],
-    ) -> Result<cache::GetBatchResult<Vec<(ThreadId, Vec<MailId>)>, Vec<ThreadId>>, Self::Error>;
+    ) -> Result<cache::GetOneResult<Option<Vec<MailData>>>, Self::Error>;
 
     async fn upsert_thread(
         &self,
         id: &ThreadId,
-        mails: &[MailId],
-        new_state: GetState,
+        mails: &[MailData],
+        new_get_mail_state: GetState,
+        new_get_thread_state: GetState,
     ) -> Result<(), Self::Error>;
 
     async fn evict_thread(&self, id: &ThreadId, new_state: GetState) -> Result<(), Self::Error>;
@@ -293,24 +282,7 @@ pub trait ThreadRemote: BaseDataSource {
     async fn fetch_thread(
         &self,
         id: &ThreadId,
-    ) -> Result<remote::GetOneResult<Vec<MailId>>, Self::Error> {
-        let result = self.fetch_threads(&[id.clone()]).await?;
-
-        Ok(remote::GetOneResult {
-            value: result
-                .values
-                .into_iter()
-                .next()
-                .map(|(_id, thread_mails)| thread_mails)
-                .expect("ThreadId is valid"),
-            state: result.state,
-        })
-    }
-
-    async fn fetch_threads(
-        &self,
-        ids: &[ThreadId],
-    ) -> Result<remote::GetBatchResult<Vec<(ThreadId, Vec<MailId>)>, Vec<ThreadId>>, Self::Error>;
+    ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<MailData>>>, Self::Error>;
 
     async fn fetch_thread_changes(
         &self,

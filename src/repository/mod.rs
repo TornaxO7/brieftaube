@@ -1,5 +1,6 @@
 pub mod mail;
 pub mod mailbox;
+pub mod thread;
 
 use crate::datasource::{Cache, Remote};
 use tokio::sync::mpsc;
@@ -12,6 +13,7 @@ where
 {
     Mail(mail::Command<C, R>),
     Mailbox(mailbox::Command<C, R>),
+    Thread(thread::Command<C, R>),
     Quit,
 }
 
@@ -76,6 +78,11 @@ where
                 Command::Mailbox(cmd) => match cmd {
                     mailbox::Command::GetChildren { id, tx } => {
                         let _ = tx.send(self.get_mailbox_children(id).await);
+                    }
+                },
+                Command::Thread(cmd) => match cmd {
+                    thread::Command::GetThread { id, tx } => {
+                        let _ = tx.send(self.get_thread(id).await);
                     }
                 },
                 Command::Quit => self.quit(),
