@@ -52,10 +52,10 @@ where
     R: Remote,
 {
     pub async fn get_mail_text_body(&self, id: MailId) -> Result<MailDataTextBody, Error<C, R>> {
-        static ACCESS: Mutex<()> = Mutex::new(());
+        static ENTER: Mutex<()> = Mutex::new(());
 
         // don't let another task read from the cache while another task is currently requesting the data
-        let _ = ACCESS.lock().unwrap();
+        let _enter_function = ENTER.lock().unwrap();
         let opt_text_body = self
             .cache
             .read()
@@ -95,9 +95,9 @@ where
     }
 
     pub async fn get_mail_html_body(&self, id: MailId) -> Result<MailDataHtmlBody, Error<C, R>> {
-        static ACCESS: Mutex<()> = Mutex::new(());
+        static ENTER: Mutex<()> = Mutex::new(());
 
-        let _ = ACCESS.lock().unwrap();
+        let _enter_function = ENTER.lock().unwrap();
         let opt_html_body = self
             .cache
             .read()
@@ -140,9 +140,9 @@ where
         &self,
         id: MailId,
     ) -> Result<Vec<MailDataAttachment>, Error<C, R>> {
-        static ACCESS: Mutex<()> = Mutex::new(());
+        static ENTER: Mutex<()> = Mutex::new(());
 
-        let _ = ACCESS.lock().unwrap();
+        let _enter_function = ENTER.lock().unwrap();
         let opt_mail_attachments = self
             .cache
             .read()
@@ -187,7 +187,7 @@ where
         start: i32,
         limit: u32,
     ) -> Result<Vec<MailData>, Error<C, R>> {
-        static ACCESS: Mutex<()> = Mutex::new(());
+        static ENTER: Mutex<()> = Mutex::new(());
 
         let mailbox = self.get_mailbox(id.clone()).await?;
         let amount_threads = mailbox.total_threads;
@@ -206,7 +206,7 @@ where
             }
         };
 
-        let _ = ACCESS.lock().unwrap();
+        let _enter_function = ENTER.lock().unwrap();
 
         let opt_root_mails = self
             .cache
@@ -268,7 +268,8 @@ where
                 root_mails.clone(),
                 root_mail_query_state,
             )
-            .await;
+            .await
+            .map_err(Error::Cache)?;
 
         Ok(root_mails)
     }

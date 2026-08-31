@@ -1,11 +1,9 @@
 use super::{Error, Repository};
 use crate::{
-    datasource::{
-        Cache, Remote,
-        types::{cache, remote},
-    },
-    types::{MailData, MailId, ThreadId},
+    datasource::{Cache, Remote, types::remote},
+    types::{MailData, ThreadId},
 };
+use std::sync::Mutex;
 use tokio::sync::oneshot;
 
 #[derive(Debug)]
@@ -36,24 +34,49 @@ where
     R: Remote,
 {
     pub async fn get_thread(&self, id: ThreadId) -> Result<Vec<MailData>, Error<C, R>> {
-        let cache::GetOneResult {
-            value: opt_thread_mails,
-            ..
-        } = self.cache.get_thread(&id).await.map_err(Error::Cache)?;
+        static ENTER: Mutex<()> = Mutex::new(());
+
+        let _enter_function = ENTER.lock().unwrap();
+        let opt_thread_mails = self
+            .cache
+            .read()
+            .await
+            .get_thread(&id)
+            .await
+            .map_err(Error::Cache)?;
 
         match opt_thread_mails {
             Some(thread_mails) => Ok(thread_mails),
             None => {
                 let remote::GetOneResult {
-                    value: thread_mails_result,
+                    value:
+                        remote::GetOneResult {
+                            value: thread_mails,
+                            state: get_mail_state,
+                        },
                     state: thread_get_state,
                 } = self.remote.fetch_thread(&id).await.map_err(Error::Remote)?;
-                let remote::GetOneResult {
-                    value: thread_mails,
-                    state: get_mail_state,
-                } = thread_mails_result;
 
-                self.cache
+                let mut cache_lock = self.cache.write().await;
+
+                let opt_current_email_get_state = cache_lock.get_mail_state().await;
+                if opt_current_email_get_state
+                    .is_some_and(|current_state| current_state != &get_mail_state)
+                {
+                    self.apply_email_get_changes(&mut cache_lock).await?;
+                }
+
+                let opt_current_thread_get_state = cache_lock.get_thread_state().await;
+                if opt_current_thread_get_state
+                    .is_some_and(|current_state| current_state != &thread_get_state)
+                {
+                    self.apply_thread_get_changes(&mut cache_lock).await?;
+                }
+
+                debug_assert_eq!(cache_lock.get_mail_state().await, Some(&get_mail_state));
+                debug_assert_eq!(cache_lock.get_thread_state().await, Some(&thread_get_state));
+
+                cache_lock
                     .upsert_thread(&id, &thread_mails, get_mail_state, thread_get_state)
                     .await
                     .map_err(Error::Cache)?;

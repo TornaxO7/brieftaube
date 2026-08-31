@@ -3,10 +3,7 @@ pub mod mailbox;
 pub mod thread;
 
 use crate::{
-    datasource::{
-        Cache, Remote,
-        types::{GetState, QueryState, QueryWindow},
-    },
+    datasource::{Cache, Remote, types::QueryWindow},
     types::MailboxId,
 };
 use tokio::sync::{RwLock, RwLockWriteGuard, mpsc};

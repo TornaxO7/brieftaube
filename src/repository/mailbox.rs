@@ -3,6 +3,7 @@ use crate::{
     repository::{self, Repository},
     types::{MailboxData, MailboxId, ParentMailboxId},
 };
+use std::sync::Mutex;
 use tokio::sync::oneshot;
 
 #[derive(Debug)]
@@ -34,9 +35,10 @@ where
     R: Remote,
 {
     async fn ensure_mailboxes_are_cached(&self) -> Result<(), repository::Error<C, R>> {
-        let mut cache_lock = self.cache.write().await;
+        static ENTER: Mutex<()> = Mutex::new(());
+        let _enter_function = ENTER.lock().unwrap();
 
-        let mailboxes_are_fetched = cache_lock.get_mailbox_state().await.is_some();
+        let mailboxes_are_fetched = self.cache.read().await.get_mailbox_state().await.is_some();
         if mailboxes_are_fetched {
             return Ok(());
         }
@@ -50,7 +52,9 @@ where
             .await
             .map_err(repository::Error::Remote)?;
 
-        cache_lock
+        self.cache
+            .write()
+            .await
             .upsert_mailboxes(mailboxes, state)
             .await
             .map_err(repository::Error::Cache)?;
@@ -61,9 +65,10 @@ where
     pub async fn get_mailbox(&self, id: MailboxId) -> Result<MailboxData, repository::Error<C, R>> {
         self.ensure_mailboxes_are_cached().await?;
 
-        let cache_lock = self.cache.read().await;
-
-        let mailbox_data = cache_lock
+        let mailbox_data = self
+            .cache
+            .read()
+            .await
             .get_mailbox(&id)
             .await
             .map_err(repository::Error::Cache)?
@@ -78,9 +83,10 @@ where
     ) -> Result<Vec<MailboxData>, repository::Error<C, R>> {
         self.ensure_mailboxes_are_cached().await?;
 
-        let cache_lock = self.cache.read().await;
-
-        let children = cache_lock
+        let children = self
+            .cache
+            .read()
+            .await
             .get_mailbox_children(&id)
             .await
             .map_err(repository::Error::Cache)?
