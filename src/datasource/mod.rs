@@ -20,22 +20,22 @@ pub trait MailCache: BaseDataSource {
     async fn get_mails(
         &self,
         ids: &[MailId],
-    ) -> Result<cache::GetResult<Vec<MailData>, Vec<MailId>>, Self::Error>;
+    ) -> Result<cache::GetBatchResult<Vec<MailData>, Vec<MailId>>, Self::Error>;
 
     async fn get_mail_text_body(
         &self,
         id: &MailId,
-    ) -> Result<cache::GetResult<Option<MailDataTextBody>, ()>, Self::Error>;
+    ) -> Result<cache::GetOneResult<Option<MailDataTextBody>>, Self::Error>;
 
     async fn get_mail_html_body(
         &self,
         id: &MailId,
-    ) -> Result<cache::GetResult<Option<MailDataHtmlBody>, ()>, Self::Error>;
+    ) -> Result<cache::GetOneResult<Option<MailDataHtmlBody>>, Self::Error>;
 
     async fn get_mail_attachments(
         &self,
         id: &MailId,
-    ) -> Result<cache::GetResult<Option<Vec<MailDataAttachment>>, ()>, Self::Error>;
+    ) -> Result<cache::GetOneResult<Option<Vec<MailDataAttachment>>>, Self::Error>;
 
     async fn query_root_mails(
         &self,
@@ -123,22 +123,27 @@ pub trait MailboxCache: BaseDataSource {
     async fn get_mailbox(
         &self,
         id: &MailboxId,
-    ) -> Result<cache::GetResult<Option<MailboxData>>, Self::Error> {
+    ) -> Result<cache::GetOneResult<Option<MailboxData>>, Self::Error> {
         let result = self.get_mailboxes(&[id.clone()]).await?;
-        Ok(result.map(|mailboxes| mailboxes.into_iter().next().flatten()))
+
+        Ok(cache::GetOneResult {
+            value: result.value.into_iter().next(),
+            state: result.state,
+        })
     }
 
-    async fn get_all_mailboxes(&self) -> Result<cache::GetResult<Vec<MailboxData>>, Self::Error>;
+    async fn get_all_mailboxes(&self)
+    -> Result<cache::GetOneResult<Vec<MailboxData>>, Self::Error>;
 
     async fn get_mailboxes(
         &self,
         ids: &[MailboxId],
-    ) -> Result<cache::GetResult<Vec<Option<MailboxData>>>, Self::Error>;
+    ) -> Result<cache::GetBatchResult<Vec<MailboxData>, Vec<MailboxId>>, Self::Error>;
 
     async fn get_mailbox_children(
         &self,
         parent: &ParentMailboxId,
-    ) -> Result<cache::GetResult<Vec<MailboxData>>, Self::Error>;
+    ) -> Result<cache::GetOneResult<Option<Vec<MailboxData>>>, Self::Error>;
 
     async fn upsert_mailboxes(
         &self,
@@ -185,15 +190,19 @@ pub trait ThreadCache: BaseDataSource {
     async fn get_thread(
         &self,
         id: &ThreadId,
-    ) -> Result<cache::GetResult<Option<Vec<MailId>>>, Self::Error> {
-        let threads = self.get_threads(&[id.clone()]).await?;
-        Ok(threads.map(|mails| mails.into_iter().next().flatten()))
+    ) -> Result<cache::GetOneResult<Option<Vec<MailId>>>, Self::Error> {
+        let result = self.get_threads(&[id.clone()]).await?;
+
+        Ok(cache::GetOneResult {
+            value: result.value.into_iter().next().map(|(_id, mails)| mails),
+            state: result.state,
+        })
     }
 
     async fn get_threads(
         &self,
         ids: &[ThreadId],
-    ) -> Result<cache::GetResult<Vec<Option<Vec<MailId>>>>, Self::Error>;
+    ) -> Result<cache::GetBatchResult<Vec<(ThreadId, Vec<MailId>)>, Vec<ThreadId>>, Self::Error>;
 
     async fn upsert_thread(
         &self,

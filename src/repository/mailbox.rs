@@ -77,6 +77,6 @@ where
             .await
             .map_err(repository::Error::Cache)?;
 
-        Ok(result.value)
+        Ok(result.value.expect("All mailboxes have been cached"))
     }
 }

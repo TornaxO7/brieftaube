@@ -11,7 +11,7 @@ impl MailCache for HashMapDataSource {
     async fn get_mails(
         &self,
         ids: &[MailId],
-    ) -> Result<cache::GetResult<Vec<MailData>, Vec<MailId>>, Self::Error> {
+    ) -> Result<cache::GetBatchResult<Vec<MailData>, Vec<MailId>>, Self::Error> {
         let inner = self.inner.read().unwrap();
 
         let mut values = Vec::new();
@@ -24,7 +24,7 @@ impl MailCache for HashMapDataSource {
             }
         }
 
-        Ok(cache::GetResult {
+        Ok(cache::GetBatchResult {
             value: values,
             missing,
             state: inner.mail_get_state.clone(),
@@ -34,13 +34,12 @@ impl MailCache for HashMapDataSource {
     async fn get_mail_text_body(
         &self,
         id: &MailId,
-    ) -> Result<cache::GetResult<Option<MailDataTextBody>, ()>, Self::Error> {
+    ) -> Result<cache::GetOneResult<Option<MailDataTextBody>>, Self::Error> {
         let inner = self.inner.read().unwrap();
         let body = inner.mail_text_body.get(id).cloned();
 
-        Ok(cache::GetResult {
+        Ok(cache::GetOneResult {
             value: body,
-            missing: (),
             state: inner.mail_get_state.clone(),
         })
     }
@@ -48,13 +47,12 @@ impl MailCache for HashMapDataSource {
     async fn get_mail_html_body(
         &self,
         id: &MailId,
-    ) -> Result<cache::GetResult<Option<MailDataHtmlBody>, ()>, Self::Error> {
+    ) -> Result<cache::GetOneResult<Option<MailDataHtmlBody>>, Self::Error> {
         let inner = self.inner.read().unwrap();
         let body = inner.mail_html_body.get(id).cloned();
 
-        Ok(cache::GetResult {
+        Ok(cache::GetOneResult {
             value: body,
-            missing: (),
             state: inner.mail_get_state.clone(),
         })
     }
@@ -62,13 +60,12 @@ impl MailCache for HashMapDataSource {
     async fn get_mail_attachments(
         &self,
         id: &MailId,
-    ) -> Result<cache::GetResult<Option<Vec<MailDataAttachment>>, ()>, Self::Error> {
+    ) -> Result<cache::GetOneResult<Option<Vec<MailDataAttachment>>>, Self::Error> {
         let inner = self.inner.read().unwrap();
         let attachments = inner.mail_attachments.get(id).cloned();
 
-        Ok(cache::GetResult {
+        Ok(cache::GetOneResult {
             value: attachments,
-            missing: (),
             state: inner.mail_get_state.clone(),
         })
     }

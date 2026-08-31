@@ -11,16 +11,23 @@ impl ThreadCache for HashMapDataSource {
     async fn get_threads(
         &self,
         ids: &[ThreadId],
-    ) -> Result<cache::GetResult<Vec<Option<Vec<MailId>>>>, Self::Error> {
+    ) -> Result<cache::GetBatchResult<Vec<(ThreadId, Vec<MailId>)>, Vec<ThreadId>>, Self::Error>
+    {
         let inner = self.inner.read().unwrap();
 
-        let threads = ids
-            .iter()
-            .map(|id| inner.threads.get(id).cloned())
-            .collect();
+        let mut cached_threads = Vec::new();
+        let mut missing = Vec::new();
 
-        Ok(cache::GetResult {
-            value: threads,
+        for id in ids {
+            match inner.threads.get(id) {
+                Some(thread_mails) => cached_threads.push((id.clone(), thread_mails.clone())),
+                None => missing.push(id.clone()),
+            }
+        }
+
+        Ok(cache::GetBatchResult {
+            value: cached_threads,
+            missing,
             state: inner.threads_get_state.clone(),
         })
     }

@@ -16,25 +16,33 @@ impl MailboxCache for HashMapDataSource {
     async fn get_mailboxes(
         &self,
         ids: &[MailboxId],
-    ) -> Result<cache::GetResult<Vec<Option<MailboxData>>>, Self::Error> {
+    ) -> Result<cache::GetBatchResult<Vec<MailboxData>, Vec<MailboxId>>, Self::Error> {
         let inner = self.inner.read().unwrap();
 
-        let mailboxes: Vec<Option<MailboxData>> = ids
-            .iter()
-            .map(|id| inner.mailboxes.get(id).cloned())
-            .collect();
+        let mut cached_mailboxes = Vec::new();
+        let mut missing = Vec::new();
 
-        Ok(cache::GetResult {
-            value: mailboxes,
+        for id in ids {
+            match inner.mailboxes.get(id) {
+                Some(data) => cached_mailboxes.push(data.clone()),
+                None => missing.push(id.clone()),
+            }
+        }
+
+        Ok(cache::GetBatchResult {
+            value: cached_mailboxes,
+            missing,
             state: inner.mailboxes_get_state.clone(),
         })
     }
 
-    async fn get_all_mailboxes(&self) -> Result<cache::GetResult<Vec<MailboxData>>, Self::Error> {
+    async fn get_all_mailboxes(
+        &self,
+    ) -> Result<cache::GetOneResult<Vec<MailboxData>>, Self::Error> {
         let inner = self.inner.read().unwrap();
         let mailboxes = inner.mailboxes.values().cloned().collect();
 
-        Ok(cache::GetResult {
+        Ok(cache::GetOneResult {
             value: mailboxes,
             state: inner.mailboxes_get_state.clone(),
         })
@@ -75,17 +83,19 @@ impl MailboxCache for HashMapDataSource {
     async fn get_mailbox_children(
         &self,
         parent: &ParentMailboxId,
-    ) -> Result<cache::GetResult<Vec<MailboxData>>, Self::Error> {
+    ) -> Result<cache::GetOneResult<Option<Vec<MailboxData>>>, Self::Error> {
         let inner = self.inner.read().unwrap();
 
-        let children = inner
-            .mailboxes
-            .values()
-            .filter(|mailbox| &mailbox.parent_id == parent)
-            .cloned()
-            .collect();
+        let children = inner.mailboxes_get_state.is_some().then_some(
+            inner
+                .mailboxes
+                .values()
+                .filter(|mailbox| &mailbox.parent_id == parent)
+                .cloned()
+                .collect(),
+        );
 
-        Ok(cache::GetResult {
+        Ok(cache::GetOneResult {
             value: children,
             state: inner.mailboxes_get_state.clone(),
         })

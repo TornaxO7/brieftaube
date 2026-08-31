@@ -88,7 +88,7 @@ where
             ids
         };
 
-        let cache::GetResult {
+        let cache::GetBatchResult {
             value: cache_mails,
             missing: missing_cache_mails,
             ..

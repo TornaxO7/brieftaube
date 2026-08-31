@@ -20,23 +20,28 @@ impl<Id> QueryResponse<Id> {
     }
 }
 
-pub struct GetResult<T, M> {
+pub struct GetOneResult<T> {
+    pub value: T,
+    pub state: Option<GetState>,
+}
+
+pub struct GetBatchResult<T, M> {
     pub value: T,
     pub missing: M,
     pub state: Option<GetState>,
 }
 
-impl<T, M> GetResult<T, M> {
-    pub fn as_ref(&self) -> GetResult<&T, &M> {
-        GetResult {
+impl<T, M> GetBatchResult<T, M> {
+    pub fn as_ref(&self) -> GetBatchResult<&T, &M> {
+        GetBatchResult {
             value: &self.value,
             missing: &self.missing,
             state: self.state.clone(),
         }
     }
 
-    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> GetResult<U, M> {
-        GetResult {
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> GetBatchResult<U, M> {
+        GetBatchResult {
             value: f(self.value),
             missing: self.missing,
             state: self.state,
