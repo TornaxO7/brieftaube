@@ -3,7 +3,7 @@ pub mod remote;
 
 use std::ops::Range;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GetState(pub String);
 
 impl From<String> for GetState {

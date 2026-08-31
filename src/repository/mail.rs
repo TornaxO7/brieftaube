@@ -51,8 +51,9 @@ where
     R: Remote,
 {
     pub async fn get_mail_text_body(&self, id: MailId) -> Result<MailDataTextBody, Error<C, R>> {
-        let opt_text_body = self
-            .cache
+        let cache_lock = self.cache.read().await;
+
+        let opt_text_body = cache_lock
             .get_mail_text_body(&id)
             .await
             .map_err(Error::Cache)?;
@@ -60,6 +61,8 @@ where
         match opt_text_body {
             Some(text_body) => Ok(text_body),
             None => {
+                drop(cache_lock);
+
                 let remote::GetOneResult {
                     value: text_body,
                     state,
@@ -69,7 +72,13 @@ where
                     .await
                     .map_err(Error::Remote)?;
 
-                self.cache
+                let mut cache_lock = self.cache.write().await;
+                let opt_current_state = cache_lock.get_mail_state().await;
+                if opt_current_state.is_some_and(|current_state| *current_state != state) {
+                    todo!("Fetch Email/changes");
+                }
+
+                cache_lock
                     .upsert_mail_text_body(&id, text_body.clone(), state)
                     .await
                     .map_err(Error::Cache)?;
@@ -80,8 +89,8 @@ where
     }
 
     pub async fn get_mail_html_body(&self, id: MailId) -> Result<MailDataHtmlBody, Error<C, R>> {
-        let opt_html_body = self
-            .cache
+        let cache_lock = self.cache.read().await;
+        let opt_html_body = cache_lock
             .get_mail_html_body(&id)
             .await
             .map_err(Error::Cache)?;
@@ -89,6 +98,8 @@ where
         match opt_html_body {
             Some(html_body) => Ok(html_body),
             None => {
+                drop(cache_lock);
+
                 let remote::GetOneResult {
                     value: html_body,
                     state,
@@ -98,7 +109,13 @@ where
                     .await
                     .map_err(Error::Remote)?;
 
-                self.cache
+                let mut cache_lock = self.cache.write().await;
+                let opt_current_state = cache_lock.get_mail_state().await;
+                if opt_current_state.is_some_and(|current_state| *current_state != state) {
+                    todo!("Fetch Email/changes");
+                }
+
+                cache_lock
                     .upsert_mail_html_body(&id, html_body.clone(), state)
                     .await
                     .map_err(Error::Cache)?;
@@ -112,8 +129,8 @@ where
         &self,
         id: MailId,
     ) -> Result<Vec<MailDataAttachment>, Error<C, R>> {
-        let opt_mail_attachments = self
-            .cache
+        let cache_lock = self.cache.read().await;
+        let opt_mail_attachments = cache_lock
             .get_mail_attachments(&id)
             .await
             .map_err(Error::Cache)?;
@@ -121,6 +138,8 @@ where
         match opt_mail_attachments {
             Some(mail_attachments) => Ok(mail_attachments),
             None => {
+                drop(cache_lock);
+
                 let remote::GetOneResult {
                     value: mail_attachments,
                     state,
@@ -130,7 +149,13 @@ where
                     .await
                     .map_err(Error::Remote)?;
 
-                self.cache
+                let mut cache_lock = self.cache.write().await;
+                let opt_current_state = cache_lock.get_mail_state().await;
+                if opt_current_state.is_some_and(|current_state| *current_state != state) {
+                    todo!("Fetch Email/changes");
+                }
+
+                cache_lock
                     .upsert_mail_attachments(&id, mail_attachments.clone(), state)
                     .await
                     .map_err(Error::Cache)?;

@@ -3,7 +3,7 @@ pub mod mailbox;
 pub mod thread;
 
 use crate::datasource::{Cache, Remote};
-use tokio::sync::mpsc;
+use tokio::sync::{RwLock, mpsc};
 
 #[derive(Debug)]
 pub enum Command<C, R>
@@ -35,8 +35,7 @@ where
     C: Cache,
     R: Remote,
 {
-    // TODO: Put it inside `RwLock`
-    cache: C,
+    cache: RwLock<C>,
     remote: R,
     receiver: mpsc::Receiver<Command<C, R>>,
 }
@@ -48,7 +47,7 @@ where
 {
     pub fn new(cache: C, remote: R, receiver: mpsc::Receiver<Command<C, R>>) -> Self {
         Self {
-            cache,
+            cache: RwLock::new(cache),
             remote,
             receiver,
         }

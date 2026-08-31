@@ -1,5 +1,5 @@
 use crate::{
-    datasource::{Cache, Remote},
+    datasource::{Cache, Remote, types::remote},
     repository::{self, Repository},
     types::{MailboxData, MailboxId, ParentMailboxId},
 };
@@ -34,19 +34,24 @@ where
     R: Remote,
 {
     async fn ensure_mailboxes_are_cached(&self) -> Result<(), repository::Error<C, R>> {
-        let mailboxes_are_fetched = self.cache.get_mailbox_state().is_some();
+        let mut cache_lock = self.cache.write().await;
+
+        let mailboxes_are_fetched = cache_lock.get_mailbox_state().await.is_some();
         if mailboxes_are_fetched {
             return Ok(());
         }
 
-        let result = self
+        let remote::GetOneResult {
+            value: mailboxes,
+            state,
+        } = self
             .remote
             .fetch_mailboxes_all()
             .await
             .map_err(repository::Error::Remote)?;
 
-        self.cache
-            .upsert_mailboxes(result.value, result.state)
+        cache_lock
+            .upsert_mailboxes(mailboxes, state)
             .await
             .map_err(repository::Error::Cache)?;
 
@@ -56,13 +61,15 @@ where
     pub async fn get_mailbox(&self, id: MailboxId) -> Result<MailboxData, repository::Error<C, R>> {
         self.ensure_mailboxes_are_cached().await?;
 
-        let result = self
-            .cache
+        let cache_lock = self.cache.read().await;
+
+        let mailbox_data = cache_lock
             .get_mailbox(&id)
             .await
-            .map_err(repository::Error::Cache)?;
+            .map_err(repository::Error::Cache)?
+            .expect("Mailbox was fetched");
 
-        Ok(result.value.expect("Mailbox was fetched"))
+        Ok(mailbox_data)
     }
 
     pub async fn get_mailbox_children(
@@ -71,12 +78,14 @@ where
     ) -> Result<Vec<MailboxData>, repository::Error<C, R>> {
         self.ensure_mailboxes_are_cached().await?;
 
-        let result = self
-            .cache
+        let cache_lock = self.cache.read().await;
+
+        let children = cache_lock
             .get_mailbox_children(&id)
             .await
-            .map_err(repository::Error::Cache)?;
+            .map_err(repository::Error::Cache)?
+            .expect("All mailboxes have been cached");
 
-        Ok(result.value.expect("All mailboxes have been cached"))
+        Ok(children)
     }
 }
