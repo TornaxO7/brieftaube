@@ -293,7 +293,7 @@ pub trait ThreadRemote: BaseDataSource {
     async fn fetch_threads(
         &self,
         ids: &[ThreadId],
-    ) -> Result<remote::GetBatchResult<ThreadId, Vec<(ThreadId, Vec<MailId>)>>, Self::Error>;
+    ) -> Result<remote::GetBatchResult<Vec<(ThreadId, Vec<MailId>)>, Vec<ThreadId>>, Self::Error>;
 
     async fn fetch_thread_changes(
         &self,

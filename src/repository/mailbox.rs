@@ -46,7 +46,7 @@ where
             .map_err(repository::Error::Remote)?;
 
         self.cache
-            .upsert_mailboxes(result.values, result.state)
+            .upsert_mailboxes(result.value, result.state)
             .await
             .map_err(repository::Error::Cache)?;
 
