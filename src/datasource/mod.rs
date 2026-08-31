@@ -64,22 +64,25 @@ pub trait MailRemote: BaseDataSource {
     async fn fetch_mails(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetResult<MailId, Vec<MailData>>, Self::Error>;
+    ) -> Result<remote::GetBatchResult<Vec<MailData>, Vec<MailId>>, Self::Error>;
 
     async fn fetch_mails_text_body(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetResult<MailId, Vec<(MailId, MailDataTextBody)>>, Self::Error>;
+    ) -> Result<remote::GetBatchResult<Vec<(MailId, MailDataTextBody)>, Vec<MailId>>, Self::Error>;
 
     async fn fetch_mails_html_body(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetResult<MailId, Vec<(MailId, MailDataHtmlBody)>>, Self::Error>;
+    ) -> Result<remote::GetBatchResult<Vec<(MailId, MailDataHtmlBody)>, Vec<MailId>>, Self::Error>;
 
     async fn fetch_mails_attachments(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetResult<MailId, Vec<(MailId, Vec<MailDataAttachment>)>>, Self::Error>;
+    ) -> Result<
+        remote::GetBatchResult<Vec<(MailId, Vec<MailDataAttachment>)>, Vec<MailId>>,
+        Self::Error,
+    >;
 
     async fn fetch_root_mails(
         &self,
@@ -115,6 +118,57 @@ pub trait MailRemote: BaseDataSource {
         mailbox: &MailboxId,
         since: &QueryState,
     ) -> Result<remote::QueryChangeResult<MailId>, Self::Error>;
+
+    async fn fetch_mail_text_body(
+        &self,
+        id: &MailId,
+    ) -> Result<remote::GetOneResult<MailDataTextBody>, Self::Error> {
+        let result = self.fetch_mails_text_body(&[id.clone()]).await?;
+
+        Ok(remote::GetOneResult {
+            value: result
+                .values
+                .into_iter()
+                .next()
+                .map(|(_id, text_body)| text_body)
+                .expect("Id is valid"),
+            state: result.state,
+        })
+    }
+
+    async fn fetch_mail_html_body(
+        &self,
+        id: &MailId,
+    ) -> Result<remote::GetOneResult<MailDataHtmlBody>, Self::Error> {
+        let result = self.fetch_mails_html_body(&[id.clone()]).await?;
+
+        Ok(remote::GetOneResult {
+            value: result
+                .values
+                .into_iter()
+                .next()
+                .map(|(_id, html_body)| html_body)
+                .expect("MailId is valid"),
+            state: result.state,
+        })
+    }
+
+    async fn fetch_mail_attachments(
+        &self,
+        id: &MailId,
+    ) -> Result<remote::GetOneResult<Vec<MailDataAttachment>>, Self::Error> {
+        let result = self.fetch_mails_attachments(&[id.clone()]).await?;
+
+        Ok(remote::GetOneResult {
+            value: result
+                .values
+                .into_iter()
+                .next()
+                .map(|(_id, attachments)| attachments)
+                .expect("MailId is valid"),
+            state: result.state,
+        })
+    }
 }
 
 pub trait MailboxCache: BaseDataSource {
@@ -161,7 +215,7 @@ pub trait MailboxCache: BaseDataSource {
 pub trait MailboxRemote: BaseDataSource {
     async fn fetch_mailboxes_all(
         &self,
-    ) -> Result<remote::GetResult<MailboxId, Vec<MailboxData>>, Self::Error>;
+    ) -> Result<remote::GetOneResult<Vec<MailboxData>>, Self::Error>;
 
     async fn fetch_mailbox_changes(
         &self,
@@ -218,7 +272,7 @@ pub trait ThreadRemote: BaseDataSource {
     async fn fetch_threads(
         &self,
         ids: &[ThreadId],
-    ) -> Result<remote::GetResult<ThreadId, Vec<(ThreadId, Vec<MailId>)>>, Self::Error>;
+    ) -> Result<remote::GetBatchResult<ThreadId, Vec<(ThreadId, Vec<MailId>)>>, Self::Error>;
 
     async fn fetch_thread_changes(
         &self,

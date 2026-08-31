@@ -6,15 +6,20 @@ pub struct QueryResponse<Id> {
     pub state: QueryState,
 }
 
-pub struct GetResult<Id, T> {
-    pub values: T,
-    pub not_found: Vec<Id>,
+pub struct GetOneResult<T> {
+    pub value: T,
     pub state: GetState,
 }
 
-impl<Id, T> GetResult<Id, T> {
-    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> GetResult<Id, U> {
-        GetResult {
+pub struct GetBatchResult<T, M> {
+    pub values: T,
+    pub not_found: M,
+    pub state: GetState,
+}
+
+impl<T, M> GetBatchResult<T, M> {
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> GetBatchResult<U, M> {
+        GetBatchResult {
             values: f(self.values),
             not_found: self.not_found,
             state: self.state,

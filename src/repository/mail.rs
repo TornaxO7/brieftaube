@@ -3,8 +3,8 @@ use crate::{
         Cache, Remote,
         types::{QueryWindow, cache, remote},
     },
-    repository,
-    types::{MailData, MailboxId},
+    repository::{Error, Repository},
+    types::{MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailboxId},
 };
 use tokio::sync::oneshot;
 
@@ -14,11 +14,24 @@ where
     C: Cache,
     R: Remote,
 {
+    GetTextBody {
+        id: MailId,
+        tx: oneshot::Sender<Result<MailDataTextBody, Error<C, R>>>,
+    },
+    GetHtmlBody {
+        id: MailId,
+        tx: oneshot::Sender<Result<MailDataHtmlBody, Error<C, R>>>,
+    },
+    GetAttachments {
+        id: MailId,
+        tx: oneshot::Sender<Result<Vec<MailDataAttachment>, Error<C, R>>>,
+    },
+
     QueryRootMails {
         mailbox: MailboxId,
         start: i32,
         limit: u32,
-        tx: oneshot::Sender<Result<Vec<MailData>, repository::Error<C, R>>>,
+        tx: oneshot::Sender<Result<Vec<MailData>, Error<C, R>>>,
     },
 }
 
@@ -32,17 +45,32 @@ where
     }
 }
 
-impl<C, R> repository::Repository<C, R>
+impl<C, R> Repository<C, R>
 where
     C: Cache,
     R: Remote,
 {
+    pub async fn get_mail_text_body(&self, id: MailId) -> Result<MailDataTextBody, Error<C, R>> {
+        let cache::GetOneResult { value, .. } = self
+            .cache
+            .get_mail_text_body(&id)
+            .await
+            .map_err(Error::Cache)?;
+
+        match value {
+            Some(text_body) => Ok(text_body),
+            None => {
+                todo!("HERE");
+            }
+        }
+    }
+
     pub async fn query_root_mails(
         &self,
         id: MailboxId,
         start: i32,
         limit: u32,
-    ) -> Result<Vec<MailData>, repository::Error<C, R>> {
+    ) -> Result<Vec<MailData>, Error<C, R>> {
         let mailbox = self.get_mailbox(id.clone()).await?;
         let amount_threads = mailbox.total_threads;
 
@@ -64,7 +92,7 @@ where
             .cache
             .query_root_mails(&id, window.clone())
             .await
-            .map_err(repository::Error::Cache)?;
+            .map_err(Error::Cache)?;
 
         let mail_ids = if result.missing.is_empty() && result.is_initialised() {
             debug_assert_eq!(result.values.len(), 1, "Full window should be loaded");
@@ -78,12 +106,12 @@ where
                 .remote
                 .fetch_root_mails(&id, &window)
                 .await
-                .map_err(repository::Error::Remote)?;
+                .map_err(Error::Remote)?;
 
             self.cache
                 .upsert_root_mails(&id, window.start as usize, ids.clone(), state)
                 .await
-                .map_err(repository::Error::Cache)?;
+                .map_err(Error::Cache)?;
 
             ids
         };
@@ -96,7 +124,7 @@ where
             .cache
             .get_mails(&mail_ids)
             .await
-            .map_err(repository::Error::Cache)?;
+            .map_err(Error::Cache)?;
 
         let cache_mails = if missing_cache_mails.is_empty() {
             cache_mails
@@ -107,7 +135,7 @@ where
                     .remote
                     .fetch_mails(&missing_cache_mails)
                     .await
-                    .map_err(repository::Error::Remote)?;
+                    .map_err(Error::Remote)?;
 
                 if !result.not_found.is_empty() {
                     todo!("Eeh... that's... kinda sus. Don't know (yet)");
@@ -116,14 +144,14 @@ where
                 self.cache
                     .upsert_mails(result.values.clone(), result.state)
                     .await
-                    .map_err(repository::Error::Cache)?;
+                    .map_err(Error::Cache)?;
             }
 
             let result = self
                 .cache
                 .get_mails(&mail_ids)
                 .await
-                .map_err(repository::Error::Cache)?;
+                .map_err(Error::Cache)?;
 
             debug_assert!(
                 result.missing.is_empty(),
