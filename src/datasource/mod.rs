@@ -290,6 +290,23 @@ pub trait ThreadCache: BaseDataSource {
 }
 
 pub trait ThreadRemote: BaseDataSource {
+    async fn fetch_thread(
+        &self,
+        id: &ThreadId,
+    ) -> Result<remote::GetOneResult<Vec<MailId>>, Self::Error> {
+        let result = self.fetch_threads(&[id.clone()]).await?;
+
+        Ok(remote::GetOneResult {
+            value: result
+                .values
+                .into_iter()
+                .next()
+                .map(|(_id, thread_mails)| thread_mails)
+                .expect("ThreadId is valid"),
+            state: result.state,
+        })
+    }
+
     async fn fetch_threads(
         &self,
         ids: &[ThreadId],
