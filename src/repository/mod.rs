@@ -63,6 +63,15 @@ where
                     } => {
                         let _ = tx.send(self.query_root_mails(mailbox, start, limit).await);
                     }
+                    mail::Command::GetTextBody { id, tx } => {
+                        let _ = tx.send(self.get_mail_text_body(id).await);
+                    }
+                    mail::Command::GetHtmlBody { id, tx } => {
+                        let _ = tx.send(self.get_mail_html_body(id).await);
+                    }
+                    mail::Command::GetAttachments { id, tx } => {
+                        let _ = tx.send(self.get_mail_attachments(id).await);
+                    }
                 },
                 Command::Mailbox(cmd) => match cmd {
                     mailbox::Command::GetChildren { id, tx } => {

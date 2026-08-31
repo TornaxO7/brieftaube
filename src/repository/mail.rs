@@ -51,16 +51,100 @@ where
     R: Remote,
 {
     pub async fn get_mail_text_body(&self, id: MailId) -> Result<MailDataTextBody, Error<C, R>> {
-        let cache::GetOneResult { value, .. } = self
+        let cache::GetOneResult {
+            value: opt_text_body,
+            ..
+        } = self
             .cache
             .get_mail_text_body(&id)
             .await
             .map_err(Error::Cache)?;
 
-        match value {
+        match opt_text_body {
             Some(text_body) => Ok(text_body),
             None => {
-                todo!("HERE");
+                let remote::GetOneResult {
+                    value: text_body,
+                    state,
+                } = self
+                    .remote
+                    .fetch_mail_text_body(&id)
+                    .await
+                    .map_err(Error::Remote)?;
+
+                self.cache
+                    .upsert_mail_text_body(&id, text_body.clone(), state)
+                    .await
+                    .map_err(Error::Cache)?;
+
+                Ok(text_body)
+            }
+        }
+    }
+
+    pub async fn get_mail_html_body(&self, id: MailId) -> Result<MailDataHtmlBody, Error<C, R>> {
+        let cache::GetOneResult {
+            value: opt_html_body,
+            ..
+        } = self
+            .cache
+            .get_mail_html_body(&id)
+            .await
+            .map_err(Error::Cache)?;
+
+        match opt_html_body {
+            Some(html_body) => Ok(html_body),
+            None => {
+                let remote::GetOneResult {
+                    value: html_body,
+                    state,
+                } = self
+                    .remote
+                    .fetch_mail_html_body(&id)
+                    .await
+                    .map_err(Error::Remote)?;
+
+                self.cache
+                    .upsert_mail_html_body(&id, html_body.clone(), state)
+                    .await
+                    .map_err(Error::Cache)?;
+
+                Ok(html_body)
+            }
+        }
+    }
+
+    pub async fn get_mail_attachments(
+        &self,
+        id: MailId,
+    ) -> Result<Vec<MailDataAttachment>, Error<C, R>> {
+        let cache::GetOneResult {
+            value: opt_mail_attachments,
+            ..
+        } = self
+            .cache
+            .get_mail_attachments(&id)
+            .await
+            .map_err(Error::Cache)?;
+
+        match opt_mail_attachments {
+            Some(mail_attachments) => Ok(mail_attachments),
+            None => {
+                let remote::GetOneResult {
+                    value: mail_attachments,
+                    state,
+                } = self
+                    .remote
+                    .fetch_mail_attachments(&id)
+                    .await
+                    .map_err(Error::Remote)?;
+
+                self.cache
+                    .upsert_mail_attachments(&id, mail_attachments.clone(), state)
+                    .await
+                    .map_err(Error::Cache)?;
+
+                Ok(mail_attachments)
             }
         }
     }
