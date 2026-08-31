@@ -8,6 +8,11 @@ use crate::{
 };
 
 impl MailboxCache for HashMapDataSource {
+    fn get_mailbox_state(&self) -> Option<GetState> {
+        let inner = self.inner.read().unwrap();
+        inner.mailboxes_get_state.clone()
+    }
+
     async fn get_mailboxes(
         &self,
         ids: &[MailboxId],

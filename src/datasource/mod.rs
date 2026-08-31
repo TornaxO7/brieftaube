@@ -118,6 +118,8 @@ pub trait MailRemote: BaseDataSource {
 }
 
 pub trait MailboxCache: BaseDataSource {
+    fn get_mailbox_state(&self) -> Option<GetState>;
+
     async fn get_mailbox(
         &self,
         id: &MailboxId,

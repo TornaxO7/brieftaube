@@ -39,6 +39,19 @@ impl MailboxData {
         }
     }
 
+    pub fn from_get_request(mailbox: Mailbox) -> Self {
+        Self {
+            id: MailboxId(mailbox.id().unwrap().to_owned()),
+            name: mailbox.name().unwrap().to_owned(),
+            role: mailbox.role(),
+            sort_order: mailbox.sort_order(),
+            unread_mails: mailbox.unread_emails(),
+            parent_id: mailbox.parent_id().map(|id| MailboxId(id.to_string())),
+            total_threads: mailbox.total_threads(),
+            my_rights: mailbox.my_rights().cloned().unwrap(),
+        }
+    }
+
     pub fn update(&mut self, update: MailboxUpdate) {
         if let Some(name) = update.name {
             self.name = name;
@@ -54,27 +67,6 @@ impl MailboxData {
 
         if let Some(parent_id) = update.parent_id {
             self.parent_id = parent_id;
-        }
-    }
-}
-
-impl From<jmap_client::mailbox::Mailbox> for MailboxData {
-    fn from(mailbox: jmap_client::mailbox::Mailbox) -> Self {
-        Self::from(&mailbox)
-    }
-}
-
-impl From<&jmap_client::mailbox::Mailbox> for MailboxData {
-    fn from(mailbox: &jmap_client::mailbox::Mailbox) -> Self {
-        Self {
-            id: MailboxId(mailbox.id().unwrap().to_owned()),
-            name: mailbox.name().unwrap().to_owned(),
-            role: mailbox.role(),
-            sort_order: mailbox.sort_order(),
-            unread_mails: mailbox.unread_emails(),
-            parent_id: mailbox.parent_id().map(|id| MailboxId(id.to_string())),
-            total_threads: mailbox.total_threads(),
-            my_rights: mailbox.my_rights().cloned().unwrap(),
         }
     }
 }
