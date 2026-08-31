@@ -20,22 +20,22 @@ pub trait MailCache: BaseDataSource {
     async fn get_mails(
         &self,
         ids: &[MailId],
-    ) -> Result<cache::GetResult<Vec<Option<MailData>>>, Self::Error>;
+    ) -> Result<cache::GetResult<Vec<MailData>, Vec<MailId>>, Self::Error>;
 
     async fn get_mail_text_body(
         &self,
         id: &MailId,
-    ) -> Result<cache::GetResult<Option<MailDataTextBody>>, Self::Error>;
+    ) -> Result<cache::GetResult<Option<MailDataTextBody>, ()>, Self::Error>;
 
     async fn get_mail_html_body(
         &self,
         id: &MailId,
-    ) -> Result<cache::GetResult<Option<MailDataHtmlBody>>, Self::Error>;
+    ) -> Result<cache::GetResult<Option<MailDataHtmlBody>, ()>, Self::Error>;
 
     async fn get_mail_attachments(
         &self,
         id: &MailId,
-    ) -> Result<cache::GetResult<Option<Vec<MailDataAttachment>>>, Self::Error>;
+    ) -> Result<cache::GetResult<Option<Vec<MailDataAttachment>>, ()>, Self::Error>;
 
     async fn query_root_mails(
         &self,
@@ -84,7 +84,7 @@ pub trait MailRemote: BaseDataSource {
     async fn fetch_root_mails(
         &self,
         mailbox: &MailboxId,
-        window: QueryWindow,
+        window: &QueryWindow,
     ) -> Result<remote::QueryResponse<MailId>, Self::Error>;
 
     async fn create_mail(
@@ -110,7 +110,7 @@ pub trait MailRemote: BaseDataSource {
         since: &GetState,
     ) -> Result<remote::GetChangeResult<MailId>, Self::Error>;
 
-    async fn fetch_root_mail_changes(
+    async fn fetch_root_mails_changes(
         &self,
         mailbox: &MailboxId,
         since: &QueryState,

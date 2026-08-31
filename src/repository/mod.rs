@@ -1,13 +1,19 @@
-pub mod command;
-pub mod types;
+pub mod mail;
+pub mod mailbox;
 
-use crate::{
-    datasource::{Cache, Remote},
-    types::MailboxId,
-};
-use command::*;
-use tokio::sync::{mpsc, oneshot};
-use types::*;
+use crate::datasource::{Cache, Remote};
+use tokio::sync::mpsc;
+
+#[derive(Debug)]
+pub enum Command<C, R>
+where
+    C: Cache,
+    R: Remote,
+{
+    Mail(mail::Command<C, R>),
+    Mailbox(mailbox::Command<C, R>),
+    Quit,
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error<C, R>
@@ -48,9 +54,19 @@ where
     pub async fn run(mut self) {
         while let Some(command) = self.receiver.recv().await {
             match command {
+                Command::Mail(cmd) => match cmd {
+                    mail::Command::QueryRootMails {
+                        mailbox,
+                        start,
+                        limit,
+                        tx,
+                    } => {
+                        let _ = tx.send(self.query_root_mails(mailbox, start, limit).await);
+                    }
+                },
                 Command::Mailbox(cmd) => match cmd {
-                    MailboxCommand::GetChildren { id, tx } => {
-                        let _ = tx.send(self.mailbox_children(id).await);
+                    mailbox::Command::GetChildren { id, tx } => {
+                        let _ = tx.send(self.get_mailbox_children(id).await);
                     }
                 },
                 Command::Quit => self.quit(),

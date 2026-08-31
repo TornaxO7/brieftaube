@@ -45,6 +45,7 @@ impl From<QueryState> for String {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct QueryWindow {
     pub start: u32,
     pub limit: usize,

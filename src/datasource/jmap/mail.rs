@@ -166,7 +166,7 @@ impl MailRemote for Jmap {
     async fn fetch_root_mails(
         &self,
         mailbox: &MailboxId,
-        window: QueryWindow,
+        window: &QueryWindow,
     ) -> Result<remote::QueryResponse<MailId>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
@@ -384,11 +384,13 @@ impl MailRemote for Jmap {
         })
     }
 
-    async fn fetch_root_mail_changes(
+    async fn fetch_root_mails_changes(
         &self,
         mailbox: &MailboxId,
         since: &QueryState,
     ) -> Result<remote::QueryChangeResult<MailId>, Self::Error> {
+        todo!("Add `uptold` option");
+
         let response = {
             let mut request = self.client.build();
             request
@@ -399,12 +401,6 @@ impl MailRemote for Jmap {
                 .sort([jmap_client::email::query::Comparator::received_at().descending()]);
             request.send_query_email_changes().await?
         };
-
-        debug_assert_eq!(
-            response.old_query_state(),
-            since.as_ref(),
-            "TODO: Refresh query"
-        );
 
         let removed = response
             .removed()

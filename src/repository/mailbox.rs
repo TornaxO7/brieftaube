@@ -1,13 +1,12 @@
-use super::Command;
 use crate::{
     datasource::{Cache, Remote},
     repository::{self, Repository},
-    types::{MailboxData, ParentMailboxId},
+    types::{MailboxData, MailboxId, ParentMailboxId},
 };
 use tokio::sync::oneshot;
 
 #[derive(Debug)]
-pub enum MailboxCommand<C, R>
+pub enum Command<C, R>
 where
     C: Cache,
     R: Remote,
@@ -19,12 +18,12 @@ where
     },
 }
 
-impl<C, R> From<MailboxCommand<C, R>> for Command<C, R>
+impl<C, R> From<Command<C, R>> for super::Command<C, R>
 where
     C: Cache,
     R: Remote,
 {
-    fn from(cmd: MailboxCommand<C, R>) -> Self {
+    fn from(cmd: Command<C, R>) -> Self {
         Self::Mailbox(cmd)
     }
 }
@@ -54,7 +53,19 @@ where
         Ok(())
     }
 
-    pub async fn mailbox_children(
+    pub async fn get_mailbox(&self, id: MailboxId) -> Result<MailboxData, repository::Error<C, R>> {
+        self.ensure_mailboxes_are_cached().await?;
+
+        let result = self
+            .cache
+            .get_mailbox(&id)
+            .await
+            .map_err(repository::Error::Cache)?;
+
+        Ok(result.value.expect("Mailbox was fetched"))
+    }
+
+    pub async fn get_mailbox_children(
         &self,
         id: ParentMailboxId,
     ) -> Result<Vec<MailboxData>, repository::Error<C, R>> {

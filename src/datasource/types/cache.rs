@@ -14,22 +14,31 @@ pub struct QueryResponse<Id> {
     pub query_state: Option<QueryState>,
 }
 
-pub struct GetResult<T> {
+impl<Id> QueryResponse<Id> {
+    pub fn is_initialised(&self) -> bool {
+        self.query_state.is_none()
+    }
+}
+
+pub struct GetResult<T, M> {
     pub value: T,
+    pub missing: M,
     pub state: Option<GetState>,
 }
 
-impl<T> GetResult<T> {
-    pub fn as_ref(&self) -> GetResult<&T> {
+impl<T, M> GetResult<T, M> {
+    pub fn as_ref(&self) -> GetResult<&T, &M> {
         GetResult {
             value: &self.value,
+            missing: &self.missing,
             state: self.state.clone(),
         }
     }
 
-    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> GetResult<U> {
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> GetResult<U, M> {
         GetResult {
             value: f(self.value),
+            missing: self.missing,
             state: self.state,
         }
     }
