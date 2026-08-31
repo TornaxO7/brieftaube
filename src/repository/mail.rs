@@ -1,11 +1,12 @@
 use crate::{
     datasource::{
         Cache, Remote,
-        types::{QueryWindow, cache, remote},
+        types::{QueryWindow, remote},
     },
     repository::{Error, Repository},
     types::{MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailboxId},
 };
+use std::sync::Mutex;
 use tokio::sync::oneshot;
 
 #[derive(Debug)]
@@ -51,9 +52,14 @@ where
     R: Remote,
 {
     pub async fn get_mail_text_body(&self, id: MailId) -> Result<MailDataTextBody, Error<C, R>> {
-        let cache_lock = self.cache.read().await;
+        static ACCESS: Mutex<()> = Mutex::new(());
 
-        let opt_text_body = cache_lock
+        // don't let another task read from the cache while another task is currently requesting the data
+        let _ = ACCESS.lock().unwrap();
+        let opt_text_body = self
+            .cache
+            .read()
+            .await
             .get_mail_text_body(&id)
             .await
             .map_err(Error::Cache)?;
@@ -61,8 +67,6 @@ where
         match opt_text_body {
             Some(text_body) => Ok(text_body),
             None => {
-                drop(cache_lock);
-
                 let remote::GetOneResult {
                     value: text_body,
                     state,
@@ -75,8 +79,10 @@ where
                 let mut cache_lock = self.cache.write().await;
                 let opt_current_state = cache_lock.get_mail_state().await;
                 if opt_current_state.is_some_and(|current_state| *current_state != state) {
-                    todo!("Fetch Email/changes");
+                    self.apply_email_get_changes(&mut cache_lock).await?;
                 }
+
+                debug_assert_eq!(cache_lock.get_mail_state().await, Some(&state));
 
                 cache_lock
                     .upsert_mail_text_body(&id, text_body.clone(), state)
@@ -89,8 +95,13 @@ where
     }
 
     pub async fn get_mail_html_body(&self, id: MailId) -> Result<MailDataHtmlBody, Error<C, R>> {
-        let cache_lock = self.cache.read().await;
-        let opt_html_body = cache_lock
+        static ACCESS: Mutex<()> = Mutex::new(());
+
+        let _ = ACCESS.lock().unwrap();
+        let opt_html_body = self
+            .cache
+            .read()
+            .await
             .get_mail_html_body(&id)
             .await
             .map_err(Error::Cache)?;
@@ -98,8 +109,6 @@ where
         match opt_html_body {
             Some(html_body) => Ok(html_body),
             None => {
-                drop(cache_lock);
-
                 let remote::GetOneResult {
                     value: html_body,
                     state,
@@ -112,8 +121,10 @@ where
                 let mut cache_lock = self.cache.write().await;
                 let opt_current_state = cache_lock.get_mail_state().await;
                 if opt_current_state.is_some_and(|current_state| *current_state != state) {
-                    todo!("Fetch Email/changes");
+                    self.apply_email_get_changes(&mut cache_lock).await?;
                 }
+
+                debug_assert_eq!(cache_lock.get_mail_state().await, Some(&state));
 
                 cache_lock
                     .upsert_mail_html_body(&id, html_body.clone(), state)
@@ -129,8 +140,13 @@ where
         &self,
         id: MailId,
     ) -> Result<Vec<MailDataAttachment>, Error<C, R>> {
-        let cache_lock = self.cache.read().await;
-        let opt_mail_attachments = cache_lock
+        static ACCESS: Mutex<()> = Mutex::new(());
+
+        let _ = ACCESS.lock().unwrap();
+        let opt_mail_attachments = self
+            .cache
+            .read()
+            .await
             .get_mail_attachments(&id)
             .await
             .map_err(Error::Cache)?;
@@ -138,8 +154,6 @@ where
         match opt_mail_attachments {
             Some(mail_attachments) => Ok(mail_attachments),
             None => {
-                drop(cache_lock);
-
                 let remote::GetOneResult {
                     value: mail_attachments,
                     state,
@@ -150,10 +164,12 @@ where
                     .map_err(Error::Remote)?;
 
                 let mut cache_lock = self.cache.write().await;
-                let opt_current_state = cache_lock.get_mail_state().await;
-                if opt_current_state.is_some_and(|current_state| *current_state != state) {
-                    todo!("Fetch Email/changes");
+                let opt_current_state = cache_lock.get_mail_state().await.cloned();
+                if opt_current_state.is_some_and(|current_state| current_state != state) {
+                    self.apply_email_get_changes(&mut cache_lock).await?;
                 }
+
+                debug_assert_eq!(cache_lock.get_mail_state().await, Some(&state));
 
                 cache_lock
                     .upsert_mail_attachments(&id, mail_attachments.clone(), state)
@@ -171,11 +187,13 @@ where
         start: i32,
         limit: u32,
     ) -> Result<Vec<MailData>, Error<C, R>> {
+        static ACCESS: Mutex<()> = Mutex::new(());
+
         let mailbox = self.get_mailbox(id.clone()).await?;
         let amount_threads = mailbox.total_threads;
 
         let window = {
-            let s = if start < 0 {
+            let normalized_start = if start < 0 {
                 // according to spec (see `position` from `/query` in `core`)
                 (amount_threads as i32 + start).max(0) as u32
             } else {
@@ -183,84 +201,75 @@ where
             };
 
             QueryWindow {
-                start: s,
+                start: normalized_start,
                 limit: limit as usize,
             }
         };
 
-        let result = self
+        let _ = ACCESS.lock().unwrap();
+
+        let opt_root_mails = self
             .cache
+            .read()
+            .await
             .query_root_mails(&id, window.clone())
             .await
             .map_err(Error::Cache)?;
 
-        let mail_ids = if result.missing.is_empty() {
-            debug_assert_eq!(result.values.len(), 1, "Full window should be loaded");
-            result.values.into_iter().next().unwrap().ids
-        } else {
-            // TODO: Only fetch the missing windows => Redces potentially big requests:
-            // 1. Create one request-batch for each window
-            // 2. Add each of them into the cache
-            // 3. Query them all again
-            let remote::QueryResponse { ids, state } = self
-                .remote
-                .fetch_root_mails(&id, &window)
-                .await
-                .map_err(Error::Remote)?;
+        if let Some(root_mails) = opt_root_mails
+            && root_mails.missing.is_empty()
+        {
+            debug_assert_eq!(root_mails.values.len(), 1, "Full window was loaded");
+            return Ok(root_mails.values.into_iter().next().unwrap().values);
+        }
 
-            self.cache
-                .upsert_root_mails(&id, window.start as usize, ids.clone(), state)
-                .await
-                .map_err(Error::Cache)?;
+        // PERFORMANCE: Instead of a full fetch of the window, maybe we could just fetch the missing sections
 
-            ids
-        };
-
-        let cache::GetBatchResult {
-            value: cache_mails,
-            missing: missing_cache_mails,
-            ..
+        let remote::QueryResponse {
+            value:
+                remote::GetOneResult {
+                    value: root_mails,
+                    state: email_get_state,
+                },
+            state: root_mail_query_state,
         } = self
-            .cache
-            .get_mails(&mail_ids)
+            .remote
+            .fetch_root_mails(&id, &window)
             .await
-            .map_err(Error::Cache)?;
+            .map_err(Error::Remote)?;
 
-        let cache_mails = if missing_cache_mails.is_empty() {
-            cache_mails
-        } else {
-            // fetch the missing mails
-            {
-                let result = self
-                    .remote
-                    .fetch_mails(&missing_cache_mails)
-                    .await
-                    .map_err(Error::Remote)?;
+        let mut cache_lock = self.cache.write().await;
 
-                if !result.not_found.is_empty() {
-                    todo!("Eeh... that's... kinda sus. Don't know (yet)");
-                }
+        let opt_current_email_get_state = cache_lock.get_mail_state().await;
+        if opt_current_email_get_state
+            .is_some_and(|current_email_get_state| current_email_get_state != &email_get_state)
+        {
+            self.apply_email_get_changes(&mut cache_lock).await?;
+        }
 
-                self.cache
-                    .upsert_mails(result.values.clone(), result.state)
-                    .await
-                    .map_err(Error::Cache)?;
-            }
+        let opt_current_root_mail_query_state = cache_lock.get_root_mails_state(&id).await;
+        if opt_current_root_mail_query_state.is_some_and(|current_root_mail_query_state| {
+            current_root_mail_query_state != &root_mail_query_state
+        }) {
+            self.apply_root_mail_query_changes(&id, &window, &mut cache_lock)
+                .await?;
+        }
 
-            let result = self
-                .cache
-                .get_mails(&mail_ids)
-                .await
-                .map_err(Error::Cache)?;
+        debug_assert_eq!(cache_lock.get_mail_state().await, Some(&email_get_state));
+        debug_assert_eq!(
+            cache_lock.get_root_mails_state(&id).await,
+            Some(&root_mail_query_state)
+        );
 
-            debug_assert!(
-                result.missing.is_empty(),
-                "Mails should've been added just now o.O"
-            );
+        cache_lock
+            .upsert_root_mails(
+                &id,
+                window.start as usize,
+                root_mails.clone(),
+                root_mail_query_state,
+            )
+            .await;
 
-            result.value
-        };
-
-        Ok(cache_mails)
+        Ok(root_mails)
     }
 }

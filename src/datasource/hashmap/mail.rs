@@ -66,12 +66,18 @@ impl MailCache for HashMapDataSource {
         &self,
         mailbox: &MailboxId,
         window: QueryWindow,
-    ) -> Result<Option<cache::QueryResponse<MailId>>, Self::Error> {
+    ) -> Result<Option<cache::QueryResponse<MailData>>, Self::Error> {
         let range = window.as_range();
-        Ok(self
-            .root_mails
-            .get(mailbox)
-            .map(|root_mails| root_mails.query(range)))
+        let Some(root_mails) = self.root_mails.get(mailbox) else {
+            return Ok(None);
+        };
+
+        Ok(Some(root_mails.query(range).map(|id| {
+            self.mails
+                .get(&id)
+                .cloned()
+                .expect("MailData has been fetched as well")
+        })))
     }
 
     async fn upsert_mails(
@@ -118,17 +124,24 @@ impl MailCache for HashMapDataSource {
         &mut self,
         id: &MailboxId,
         start: usize,
-        ids: Vec<MailId>,
+        root_mails: Vec<MailData>,
         new_state: QueryState,
     ) -> Result<(), Self::Error> {
+        let root_mail_ids = root_mails.iter().map(|data| data.id.clone()).collect();
+
         match self.root_mails.entry(id.clone()) {
             std::collections::hash_map::Entry::Occupied(mut entry) => {
                 let root_mails = entry.get_mut();
-                root_mails.set(start, ids, new_state);
+                root_mails.set(start, root_mail_ids, new_state);
             }
             std::collections::hash_map::Entry::Vacant(entry) => {
-                entry.insert(RootMails::new(start, ids, new_state));
+                entry.insert(RootMails::new(start, root_mail_ids, new_state));
             }
+        }
+
+        for root_mail in root_mails {
+            let id = root_mail.id.clone();
+            self.mails.insert(id, root_mail);
         }
 
         Ok(())

@@ -90,7 +90,7 @@ impl RootMails {
 
             sections.push(cache::QueryResponseSection {
                 start: cursor,
-                ids: section.ids[section_range.clone()].to_vec(),
+                values: section.ids[section_range.clone()].to_vec(),
             });
 
             cursor = section.start + section_range.end;

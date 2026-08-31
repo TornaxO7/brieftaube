@@ -45,7 +45,7 @@ pub trait MailCache: BaseDataSource {
         &self,
         mailbox: &MailboxId,
         window: QueryWindow,
-    ) -> Result<Option<cache::QueryResponse<MailId>>, Self::Error>;
+    ) -> Result<Option<cache::QueryResponse<MailData>>, Self::Error>;
 
     async fn upsert_mails(
         &mut self,
@@ -78,7 +78,7 @@ pub trait MailCache: BaseDataSource {
         &mut self,
         mailbox: &MailboxId,
         start: usize,
-        ids: Vec<MailId>,
+        root_mails: Vec<MailData>,
         new_state: QueryState,
     ) -> Result<(), Self::Error>;
 
@@ -117,7 +117,7 @@ pub trait MailRemote: BaseDataSource {
         &self,
         mailbox: &MailboxId,
         window: &QueryWindow,
-    ) -> Result<remote::QueryResponse<MailId>, Self::Error>;
+    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<MailData>>>, Self::Error>;
 
     async fn create_mail(
         &self,

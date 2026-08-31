@@ -171,28 +171,53 @@ impl MailRemote for Jmap {
         &self,
         mailbox: &MailboxId,
         window: &QueryWindow,
-    ) -> Result<remote::QueryResponse<MailId>, Self::Error> {
+    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<MailData>>>, Self::Error> {
         let mut response = {
             let mut request = self.client.build();
 
-            request
+            let query_request = request
                 .query_email()
                 .filter(jmap_client::email::query::Filter::InMailbox {
                     value: mailbox.as_str().to_string(),
                 })
                 .sort([jmap_client::email::query::Comparator::received_at().descending()])
                 .position(window.start as i32)
-                .limit(window.limit)
-                .arguments()
-                .collapse_threads(true);
+                .limit(window.limit);
+            query_request.arguments().collapse_threads(true);
 
-            request.send_query_email().await?
+            let query_result = query_request.result_reference();
+
+            request
+                .get_email()
+                .ids_ref(query_result)
+                .properties(MailData::PROPERTIES);
+
+            request.send().await?
         };
-        let ids = response.take_ids().into_iter().map(MailId).collect();
+
+        let mut get_mails_response = response
+            .pop_method_response()
+            .unwrap()
+            .unwrap_get_email()
+            .unwrap();
+        let mut query_mails_response = response
+            .pop_method_response()
+            .unwrap()
+            .unwrap_query_email()
+            .unwrap();
+
+        let get_email_result = remote::GetOneResult {
+            value: get_mails_response
+                .take_list()
+                .into_iter()
+                .map(MailData::from_get_request)
+                .collect(),
+            state: get_mails_response.take_state().into(),
+        };
 
         Ok(remote::QueryResponse {
-            ids,
-            state: response.take_query_state().into(),
+            value: get_email_result,
+            state: query_mails_response.take_query_state().into(),
         })
     }
 

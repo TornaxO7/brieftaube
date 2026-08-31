@@ -2,8 +2,14 @@ pub mod mail;
 pub mod mailbox;
 pub mod thread;
 
-use crate::datasource::{Cache, Remote};
-use tokio::sync::{RwLock, mpsc};
+use crate::{
+    datasource::{
+        Cache, Remote,
+        types::{GetState, QueryState, QueryWindow},
+    },
+    types::MailboxId,
+};
+use tokio::sync::{RwLock, RwLockWriteGuard, mpsc};
 
 #[derive(Debug)]
 pub enum Command<C, R>
@@ -92,5 +98,36 @@ where
 
     fn quit(&mut self) {
         self.receiver.close();
+    }
+
+    async fn apply_email_get_changes(
+        &self,
+        cache_lock: &mut RwLockWriteGuard<'_, C>,
+    ) -> Result<(), Error<C, R>> {
+        todo!()
+    }
+
+    async fn apply_root_mail_query_changes(
+        &self,
+        id: &MailboxId,
+        window: &QueryWindow,
+        cache_lock: &mut RwLockWriteGuard<'_, C>,
+    ) -> Result<(), Error<C, R>> {
+        todo!()
+    }
+
+    async fn apply_mailbox_get_changes(
+        &self,
+
+        cache_lock: &mut RwLockWriteGuard<'_, C>,
+    ) -> Result<(), Error<C, R>> {
+        todo!()
+    }
+
+    async fn apply_thread_get_changes(
+        &self,
+        cache_lock: &mut RwLockWriteGuard<'_, C>,
+    ) -> Result<(), Error<C, R>> {
+        todo!()
     }
 }

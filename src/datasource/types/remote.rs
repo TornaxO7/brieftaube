@@ -1,8 +1,8 @@
 use super::{GetState, QueryState};
 use jmap_client::core::set::SetError;
 
-pub struct QueryResponse<Id> {
-    pub ids: Vec<Id>,
+pub struct QueryResponse<T> {
+    pub value: T,
     pub state: QueryState,
 }
 
