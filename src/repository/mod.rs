@@ -3,8 +3,11 @@ pub mod mailbox;
 pub mod thread;
 
 use crate::{
-    datasource::{Cache, Remote, types::QueryWindow},
-    types::MailboxId,
+    datasource::{
+        Cache, Remote,
+        types::{QueryWindow, cache},
+    },
+    types::{MailId, MailboxId},
 };
 use tokio::sync::{RwLock, RwLockWriteGuard, mpsc};
 
@@ -101,7 +104,63 @@ where
         &self,
         cache_lock: &mut RwLockWriteGuard<'_, C>,
     ) -> Result<(), Error<C, R>> {
-        todo!()
+        let mut current_state = cache_lock
+            .get_mail_state()
+            .await
+            .cloned()
+            .expect("Why is it... None?");
+
+        loop {
+            let result = self
+                .remote
+                .fetch_mail_changes(&current_state)
+                .await
+                .map_err(Error::Remote)?;
+
+            if !result.updated.is_empty() {
+                let updated_mail_data: Vec<MailId> = {
+                    let cache::GetBatchResult { value: datas, .. } = cache_lock
+                        .get_mails(&result.updated)
+                        .await
+                        .map_err(Error::Cache)?;
+
+                    datas.into_iter().map(|data| data.id).collect()
+                };
+                let updated_mail_text_body: Vec<MailId> = todo!();
+                let updated_mail_html_body: Vec<MailId> = todo!();
+                let updated_mail_attachments: Vec<MailId> = todo!();
+
+                let result = self
+                    .remote
+                    .fetch_mail_updates(
+                        &updated_mail_data,
+                        &updated_mail_text_body,
+                        &updated_mail_html_body,
+                        &updated_mail_attachments,
+                    )
+                    .await
+                    .map_err(Error::Remote)?;
+
+                todo!("insert the new data into the cache");
+            };
+
+            cache_lock
+                .evict_mails(&result.destroyed)
+                .await
+                .map_err(Error::Cache)?;
+
+            current_state = result.new_state;
+            cache_lock
+                .set_mail_state(current_state.clone())
+                .await
+                .map_err(Error::Cache)?;
+
+            if !result.has_more_changes {
+                break;
+            }
+        }
+
+        Ok(())
     }
 
     async fn apply_root_mail_query_changes(

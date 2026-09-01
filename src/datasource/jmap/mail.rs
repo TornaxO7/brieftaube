@@ -221,6 +221,24 @@ impl MailRemote for Jmap {
         })
     }
 
+    async fn fetch_mail_updates(
+        &self,
+        datas: &[MailId],
+        text: &[MailId],
+        html: &[MailId],
+        attachments: &[MailId],
+    ) -> Result<
+        remote::GetOneResult<(
+            Vec<MailData>,
+            Vec<(MailId, MailDataTextBody)>,
+            Vec<(MailId, MailDataHtmlBody)>,
+            Vec<(MailId, Vec<MailDataAttachment>)>,
+        )>,
+        Self::Error,
+    > {
+        todo!()
+    }
+
     async fn create_mail(
         &self,
         new: MailNew,

@@ -19,6 +19,8 @@ pub trait Remote: BaseDataSource + MailRemote + MailboxRemote + ThreadRemote {}
 pub trait MailCache: BaseDataSource {
     async fn get_mail_state(&self) -> Option<&GetState>;
 
+    async fn set_mail_state(&mut self, new_state: GetState) -> Result<(), Self::Error>;
+
     async fn get_mails(
         &self,
         ids: &[MailId],
@@ -47,31 +49,24 @@ pub trait MailCache: BaseDataSource {
         window: QueryWindow,
     ) -> Result<Option<cache::QueryResponse<MailData>>, Self::Error>;
 
-    async fn upsert_mails(
-        &mut self,
-        mails: Vec<MailData>,
-        new_state: GetState,
-    ) -> Result<(), Self::Error>;
+    async fn upsert_mails(&mut self, mails: Vec<MailData>) -> Result<(), Self::Error>;
 
     async fn upsert_mail_text_body(
         &mut self,
         id: &MailId,
         body: MailDataTextBody,
-        new_state: GetState,
     ) -> Result<(), Self::Error>;
 
     async fn upsert_mail_html_body(
         &mut self,
         id: &MailId,
         body: MailDataHtmlBody,
-        new_state: GetState,
     ) -> Result<(), Self::Error>;
 
     async fn upsert_mail_attachments(
         &mut self,
         id: &MailId,
         attachments: Vec<MailDataAttachment>,
-        new_state: GetState,
     ) -> Result<(), Self::Error>;
 
     async fn upsert_root_mails(
@@ -82,11 +77,7 @@ pub trait MailCache: BaseDataSource {
         new_state: QueryState,
     ) -> Result<(), Self::Error>;
 
-    async fn evict_mails(
-        &mut self,
-        mails: &[MailId],
-        new_state: GetState,
-    ) -> Result<(), Self::Error>;
+    async fn evict_mails(&mut self, mails: &[MailId]) -> Result<(), Self::Error>;
 }
 
 pub trait MailRemote: BaseDataSource {
@@ -118,6 +109,22 @@ pub trait MailRemote: BaseDataSource {
         mailbox: &MailboxId,
         window: &QueryWindow,
     ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<MailData>>>, Self::Error>;
+
+    async fn fetch_mail_updates(
+        &self,
+        datas: &[MailId],
+        text: &[MailId],
+        html: &[MailId],
+        attachments: &[MailId],
+    ) -> Result<
+        remote::GetOneResult<(
+            Vec<MailData>,
+            Vec<(MailId, MailDataTextBody)>,
+            Vec<(MailId, MailDataHtmlBody)>,
+            Vec<(MailId, Vec<MailDataAttachment>)>,
+        )>,
+        Self::Error,
+    >;
 
     async fn create_mail(
         &self,

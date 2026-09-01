@@ -52,10 +52,10 @@ where
     R: Remote,
 {
     pub async fn get_mail_text_body(&self, id: MailId) -> Result<MailDataTextBody, Error<C, R>> {
-        static ENTER: Mutex<()> = Mutex::new(());
-
         // don't let another task read from the cache while another task is currently requesting the data
+        static ENTER: Mutex<()> = Mutex::new(());
         let _enter_function = ENTER.lock().unwrap();
+
         let opt_text_body = self
             .cache
             .read()
@@ -96,8 +96,8 @@ where
 
     pub async fn get_mail_html_body(&self, id: MailId) -> Result<MailDataHtmlBody, Error<C, R>> {
         static ENTER: Mutex<()> = Mutex::new(());
-
         let _enter_function = ENTER.lock().unwrap();
+
         let opt_html_body = self
             .cache
             .read()
@@ -141,8 +141,8 @@ where
         id: MailId,
     ) -> Result<Vec<MailDataAttachment>, Error<C, R>> {
         static ENTER: Mutex<()> = Mutex::new(());
-
         let _enter_function = ENTER.lock().unwrap();
+
         let opt_mail_attachments = self
             .cache
             .read()

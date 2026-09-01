@@ -12,6 +12,11 @@ impl MailCache for HashMapDataSource {
         self.mail_get_state.as_ref()
     }
 
+    async fn set_mail_state(&mut self, new_state: GetState) -> Result<(), Self::Error> {
+        self.mail_get_state = Some(new_state);
+        Ok(())
+    }
+
     async fn get_mails(
         &self,
         ids: &[MailId],
@@ -80,25 +85,15 @@ impl MailCache for HashMapDataSource {
         })))
     }
 
-    async fn upsert_mails(
-        &mut self,
-        mails: Vec<MailData>,
-        new_state: GetState,
-    ) -> Result<(), Self::Error> {
+    async fn upsert_mails(&mut self, mails: Vec<MailData>) -> Result<(), Self::Error> {
         for mail in mails.into_iter() {
             let id = mail.id.clone();
             self.mails.insert(id, mail);
         }
-
-        self.mail_get_state = Some(new_state);
         Ok(())
     }
 
-    async fn evict_mails(
-        &mut self,
-        mails: &[MailId],
-        new_state: GetState,
-    ) -> Result<(), Self::Error> {
+    async fn evict_mails(&mut self, mails: &[MailId]) -> Result<(), Self::Error> {
         for id in mails {
             self.mail_text_body.remove(id);
             self.mail_html_body.remove(id);
@@ -115,8 +110,6 @@ impl MailCache for HashMapDataSource {
                 }
             }
         }
-
-        self.mail_get_state = Some(new_state);
         Ok(())
     }
 
@@ -151,10 +144,8 @@ impl MailCache for HashMapDataSource {
         &mut self,
         id: &MailId,
         body: MailDataTextBody,
-        state: GetState,
     ) -> Result<(), Self::Error> {
         self.mail_text_body.insert(id.clone(), body);
-        self.mail_get_state = Some(state);
         Ok(())
     }
 
@@ -162,10 +153,8 @@ impl MailCache for HashMapDataSource {
         &mut self,
         id: &MailId,
         body: MailDataHtmlBody,
-        state: GetState,
     ) -> Result<(), Self::Error> {
         self.mail_html_body.insert(id.clone(), body);
-        self.mail_get_state = Some(state);
         Ok(())
     }
 
@@ -173,10 +162,8 @@ impl MailCache for HashMapDataSource {
         &mut self,
         id: &MailId,
         attachments: Vec<MailDataAttachment>,
-        state: GetState,
     ) -> Result<(), Self::Error> {
         self.mail_attachments.insert(id.clone(), attachments);
-        self.mail_get_state = Some(state);
         Ok(())
     }
 }
