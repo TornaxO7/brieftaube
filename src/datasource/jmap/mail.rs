@@ -236,7 +236,116 @@ impl MailRemote for Jmap {
         )>,
         Self::Error,
     > {
-        todo!()
+        let mut response = {
+            let mut request = self.client.build();
+
+            request
+                .get_email()
+                .ids(Some(datas))
+                .properties(MailData::PROPERTIES);
+
+            request
+                .get_email()
+                .ids(Some(text))
+                .properties([
+                    jmap_client::email::Property::Id,
+                    jmap_client::email::Property::TextBody,
+                ])
+                .arguments()
+                .fetch_text_body_values(true);
+
+            request
+                .get_email()
+                .ids(Some(html))
+                .properties([
+                    jmap_client::email::Property::Id,
+                    jmap_client::email::Property::HtmlBody,
+                ])
+                .arguments()
+                .fetch_html_body_values(true);
+
+            request.get_email().ids(Some(attachments)).properties([
+                jmap_client::email::Property::Id,
+                jmap_client::email::Property::Attachments,
+            ]);
+
+            request.send().await?
+        };
+
+        let (fetched_attachments, state) = {
+            let mut fetched_attachments_response = response
+                .pop_method_response()
+                .unwrap()
+                .unwrap_get_email()
+                .unwrap();
+
+            let state = fetched_attachments_response.take_state().into();
+            let fetched_attachments = fetched_attachments_response
+                .take_list()
+                .into_iter()
+                .map(|mut mail_with_attachments| {
+                    let id = mail_with_attachments.take_id().into();
+                    let attachments = mail_with_attachments
+                        .attachments()
+                        .unwrap()
+                        .iter()
+                        .map(MailDataAttachment::from)
+                        .collect();
+
+                    (id, attachments)
+                })
+                .collect();
+
+            (fetched_attachments, state)
+        };
+
+        let fetched_html = response
+            .pop_method_response()
+            .unwrap()
+            .unwrap_get_email()
+            .unwrap()
+            .take_list()
+            .into_iter()
+            .map(|mut html_mail| {
+                let id = html_mail.take_id().into();
+                let html = MailDataHtmlBody::new(&html_mail).unwrap();
+                (id, html)
+            })
+            .collect();
+
+        let fetched_text = response
+            .pop_method_response()
+            .unwrap()
+            .unwrap_get_email()
+            .unwrap()
+            .take_list()
+            .into_iter()
+            .map(|mut text_mail| {
+                let id = text_mail.take_id().into();
+                let text = MailDataTextBody::new(&text_mail).unwrap();
+                (id, text)
+            })
+            .collect();
+
+        let fetched_mail_data = response
+            .pop_method_response()
+            .unwrap()
+            .unwrap_get_email()
+            .unwrap()
+            .take_list()
+            .into_iter()
+            .map(MailData::from_get_request)
+            .collect();
+
+        Ok(remote::GetOneResult {
+            value: (
+                fetched_mail_data,
+                fetched_text,
+                fetched_html,
+                fetched_attachments,
+            ),
+            state,
+        })
     }
 
     async fn create_mail(

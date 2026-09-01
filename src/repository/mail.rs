@@ -85,7 +85,7 @@ where
                 debug_assert_eq!(cache_lock.get_mail_state().await, Some(&state));
 
                 cache_lock
-                    .upsert_mail_text_body(&id, text_body.clone(), state)
+                    .upsert_mail_text_body(&id, text_body.clone())
                     .await
                     .map_err(Error::Cache)?;
 

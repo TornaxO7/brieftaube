@@ -26,20 +26,73 @@ pub trait MailCache: BaseDataSource {
         ids: &[MailId],
     ) -> Result<cache::GetBatchResult<Vec<MailData>, Vec<MailId>>, Self::Error>;
 
+    async fn upsert_mails(&mut self, mails: Vec<MailData>) -> Result<(), Self::Error>;
+
     async fn get_mail_text_body(
         &self,
         id: &MailId,
     ) -> Result<Option<MailDataTextBody>, Self::Error>;
+
+    async fn get_mails_text_body(
+        &self,
+        ids: &[MailId],
+    ) -> Result<cache::GetBatchResult<Vec<(MailId, MailDataTextBody)>, Vec<MailId>>, Self::Error>;
+
+    async fn upsert_mail_text_body(
+        &mut self,
+        id: &MailId,
+        body: MailDataTextBody,
+    ) -> Result<(), Self::Error>;
+
+    async fn upsert_mails_text_body(
+        &mut self,
+        text_bodies: &[(MailId, MailDataTextBody)],
+    ) -> Result<(), Self::Error>;
 
     async fn get_mail_html_body(
         &self,
         id: &MailId,
     ) -> Result<Option<MailDataHtmlBody>, Self::Error>;
 
+    async fn get_mails_html_body(
+        &self,
+        ids: &[MailId],
+    ) -> Result<cache::GetBatchResult<Vec<(MailId, MailDataHtmlBody)>, Vec<MailId>>, Self::Error>;
+
+    async fn upsert_mail_html_body(
+        &mut self,
+        id: &MailId,
+        body: MailDataHtmlBody,
+    ) -> Result<(), Self::Error>;
+
+    async fn upsert_mails_html_body(
+        &mut self,
+        html_bodies: &[(MailId, MailDataHtmlBody)],
+    ) -> Result<(), Self::Error>;
+
     async fn get_mail_attachments(
         &self,
         id: &MailId,
     ) -> Result<Option<Vec<MailDataAttachment>>, Self::Error>;
+
+    async fn get_mails_attachments(
+        &self,
+        ids: &[MailId],
+    ) -> Result<
+        cache::GetBatchResult<Vec<(MailId, Vec<MailDataAttachment>)>, Vec<MailId>>,
+        Self::Error,
+    >;
+
+    async fn upsert_mail_attachments(
+        &mut self,
+        id: &MailId,
+        attachments: Vec<MailDataAttachment>,
+    ) -> Result<(), Self::Error>;
+
+    async fn upsert_mails_attachments(
+        &mut self,
+        attachments: &[(MailId, Vec<MailDataAttachment>)],
+    ) -> Result<(), Self::Error>;
 
     async fn get_root_mails_state(&self, mailbox: &MailboxId) -> Option<&QueryState>;
 
@@ -48,26 +101,6 @@ pub trait MailCache: BaseDataSource {
         mailbox: &MailboxId,
         window: QueryWindow,
     ) -> Result<Option<cache::QueryResponse<MailData>>, Self::Error>;
-
-    async fn upsert_mails(&mut self, mails: Vec<MailData>) -> Result<(), Self::Error>;
-
-    async fn upsert_mail_text_body(
-        &mut self,
-        id: &MailId,
-        body: MailDataTextBody,
-    ) -> Result<(), Self::Error>;
-
-    async fn upsert_mail_html_body(
-        &mut self,
-        id: &MailId,
-        body: MailDataHtmlBody,
-    ) -> Result<(), Self::Error>;
-
-    async fn upsert_mail_attachments(
-        &mut self,
-        id: &MailId,
-        attachments: Vec<MailDataAttachment>,
-    ) -> Result<(), Self::Error>;
 
     async fn upsert_root_mails(
         &mut self,
