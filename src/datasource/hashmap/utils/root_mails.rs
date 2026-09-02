@@ -262,7 +262,7 @@ mod tests {
                 query.values,
                 vec![cache::QueryResponseSection {
                     start: 2,
-                    ids: new_mail_ids(2..5),
+                    values: new_mail_ids(2..5),
                 }]
             );
 
@@ -282,7 +282,7 @@ mod tests {
                 query.values,
                 vec![cache::QueryResponseSection {
                     start: 10,
-                    ids: new_mail_ids(10..15),
+                    values: new_mail_ids(10..15),
                 }],
             );
 
@@ -302,7 +302,7 @@ mod tests {
                 query.values,
                 vec![cache::QueryResponseSection {
                     start: 15,
-                    ids: new_mail_ids(15..20),
+                    values: new_mail_ids(15..20),
                 }],
             );
 
@@ -349,11 +349,11 @@ mod tests {
                 vec![
                     cache::QueryResponseSection {
                         start: 15,
-                        ids: new_mail_ids(15..20)
+                        values: new_mail_ids(15..20)
                     },
                     cache::QueryResponseSection {
                         start: 30,
-                        ids: new_mail_ids(30..35)
+                        values: new_mail_ids(30..35)
                     }
                 ],
             );
