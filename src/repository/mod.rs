@@ -241,7 +241,22 @@ where
             return Ok(());
         };
 
-        todo!()
+        let up_to_id = cache_lock.get_root_mails_last_id(id).await;
+
+        let result = self
+            .remote
+            .fetch_root_mails_changes(id, &current_state, up_to_id.as_ref())
+            .await
+            .map_err(Error::Remote)?;
+
+        todo!("remove first, then add");
+
+        cache_lock
+            .set_root_mails_state(id, result.new_state)
+            .await
+            .map_err(Error::Cache)?;
+
+        Ok(())
     }
 
     async fn apply_mailbox_get_changes(

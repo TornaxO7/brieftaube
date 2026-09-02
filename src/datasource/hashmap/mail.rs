@@ -198,6 +198,24 @@ impl MailCache for HashMapDataSource {
             .map(|root_mails| root_mails.state())
     }
 
+    async fn set_root_mails_state(
+        &mut self,
+        mailbox: &MailboxId,
+        new_state: QueryState,
+    ) -> Result<(), Self::Error> {
+        if let Some(root_mails) = self.root_mails.get_mut(mailbox) {
+            root_mails.set_state(new_state);
+        }
+
+        Ok(())
+    }
+
+    async fn get_root_mails_last_id(&self, mailbox: &MailboxId) -> Option<MailId> {
+        self.root_mails
+            .get(mailbox)
+            .and_then(|root_mails| root_mails.get_last_id())
+    }
+
     async fn query_root_mails(
         &self,
         mailbox: &MailboxId,

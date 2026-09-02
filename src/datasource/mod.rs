@@ -96,6 +96,14 @@ pub trait MailCache: BaseDataSource {
 
     async fn get_root_mails_state(&self, mailbox: &MailboxId) -> Option<&QueryState>;
 
+    async fn set_root_mails_state(
+        &mut self,
+        mailbox: &MailboxId,
+        new_state: QueryState,
+    ) -> Result<(), Self::Error>;
+
+    async fn get_root_mails_last_id(&self, mailbox: &MailboxId) -> Option<MailId>;
+
     async fn query_root_mails(
         &self,
         mailbox: &MailboxId,
@@ -186,6 +194,7 @@ pub trait MailRemote: BaseDataSource {
         &self,
         mailbox: &MailboxId,
         since: &QueryState,
+        up_to_id: Option<&MailId>,
     ) -> Result<remote::QueryChangeResult<MailId>, Self::Error>;
 
     async fn fetch_mail_text_body(

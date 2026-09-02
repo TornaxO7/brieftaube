@@ -5,6 +5,8 @@ use crate::{
 use std::ops::Range;
 
 pub struct RootMails {
+    // TODO: Just do a simple `Vec<Option<MailId>>`...
+    // KISS!!
     sections: Vec<Section>,
     state: QueryState,
 }
@@ -112,6 +114,16 @@ impl RootMails {
 
     pub fn state(&self) -> &QueryState {
         &self.state
+    }
+
+    pub fn set_state(&mut self, new_state: QueryState) {
+        self.state = new_state;
+    }
+
+    pub fn get_last_id(&self) -> Option<MailId> {
+        self.sections
+            .last()
+            .and_then(|last_section| last_section.ids.last().cloned())
     }
 }
 

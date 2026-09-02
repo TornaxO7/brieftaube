@@ -544,17 +544,22 @@ impl MailRemote for Jmap {
         &self,
         mailbox: &MailboxId,
         since: &QueryState,
+        up_to_id: Option<&MailboxId>,
     ) -> Result<remote::QueryChangeResult<MailId>, Self::Error> {
-        todo!("Add `uptold` option");
-
         let response = {
             let mut request = self.client.build();
-            request
-                .query_email_changes(since.as_ref())
+            let changes = request.query_email_changes(since.as_ref());
+
+            changes
                 .filter(jmap_client::email::query::Filter::InMailbox {
                     value: mailbox.0.clone(),
                 })
                 .sort([jmap_client::email::query::Comparator::received_at().descending()]);
+
+            if let Some(id) = up_to_id {
+                changes.up_to_id(id);
+            }
+
             request.send_query_email_changes().await?
         };
 
