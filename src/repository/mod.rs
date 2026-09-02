@@ -180,6 +180,7 @@ where
                             updated_html_bodies,
                             updated_attachments,
                         ),
+                    // TODO: Maybe check if this state is also the same? Otherwise => do more `/changes` request
                     state: _,
                 } = self
                     .remote
@@ -192,6 +193,7 @@ where
                     .await
                     .map_err(Error::Remote)?;
 
+                // PERFORMANCE: put in `join` instead of sequentially
                 cache_lock
                     .upsert_mails(updated_mail_datas)
                     .await
