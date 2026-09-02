@@ -104,11 +104,10 @@ where
         &self,
         cache_lock: &mut RwLockWriteGuard<'_, C>,
     ) -> Result<(), Error<C, R>> {
-        let mut current_state = cache_lock
-            .get_mail_state()
-            .await
-            .cloned()
-            .expect("Why is it... None?");
+        let Some(mut current_state) = cache_lock.get_mail_state().await.cloned() else {
+            // no updates to do if there's no data :D
+            return Ok(());
+        };
 
         loop {
             let result = self
@@ -236,14 +235,21 @@ where
         window: &QueryWindow,
         cache_lock: &mut RwLockWriteGuard<'_, C>,
     ) -> Result<(), Error<C, R>> {
+        let Some(mut current_state) = cache_lock.get_root_mails_state(id).await.cloned() else {
+            return Ok(());
+        };
+
         todo!()
     }
 
     async fn apply_mailbox_get_changes(
         &self,
-
         cache_lock: &mut RwLockWriteGuard<'_, C>,
     ) -> Result<(), Error<C, R>> {
+        let Some(mut current_state) = cache_lock.get_mailbox_state().await.cloned() else {
+            return Ok(());
+        };
+
         todo!()
     }
 
@@ -251,6 +257,10 @@ where
         &self,
         cache_lock: &mut RwLockWriteGuard<'_, C>,
     ) -> Result<(), Error<C, R>> {
+        let Some(mut current_state) = cache_lock.get_thread_state().await.cloned() else {
+            return Ok(());
+        };
+
         todo!()
     }
 }
