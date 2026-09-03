@@ -1,6 +1,6 @@
 mod mail;
 mod mailbox;
-mod root_mails;
+mod root_mails_linear;
 mod thread;
 
 use super::{BaseDataSource, types::GetState};
@@ -8,7 +8,7 @@ use crate::types::{
     MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailboxData,
     MailboxId, ThreadId,
 };
-use root_mails::RootMails;
+use root_mails_linear::RootMails;
 use std::collections::HashMap;
 
 #[derive(Default)]
