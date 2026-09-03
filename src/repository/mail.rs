@@ -4,7 +4,7 @@ use crate::{
         types::{QueryWindow, remote},
     },
     repository::{Error, Repository},
-    types::{MailDataCore, MailDataHtmlBody, MailDataTextBody, MailId, MailboxId},
+    types::{MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody, MailId, MailboxId},
 };
 use std::sync::Mutex;
 use tokio::sync::oneshot;
@@ -15,6 +15,14 @@ where
     C: Cache,
     R: Remote,
 {
+    GetCore {
+        id: MailId,
+        tx: oneshot::Sender<Result<MailDataCore, Error<C, R>>>,
+    },
+    GetPreview {
+        id: MailId,
+        tx: oneshot::Sender<Result<MailDataPreview, Error<C, R>>>,
+    },
     GetTextBody {
         id: MailId,
         tx: oneshot::Sender<Result<MailDataTextBody, Error<C, R>>>,
@@ -46,6 +54,90 @@ where
     C: Cache,
     R: Remote,
 {
+    pub async fn get_mail_core(&self, id: MailId) -> Result<MailDataCore, Error<C, R>> {
+        static ENTER: Mutex<()> = Mutex::new(());
+        let _enter = ENTER.lock().unwrap();
+
+        match self
+            .cache
+            .read()
+            .await
+            .get_mail_core(&id)
+            .await
+            .map_err(Error::Cache)?
+        {
+            Some(data) => Ok(data),
+            None => {
+                let result = self
+                    .remote
+                    .fetch_mail_core(id.clone())
+                    .await
+                    .map_err(Error::Remote)?;
+
+                let mut cache_lock = self.cache.write().await;
+                if let Some(current_email_get_state) = cache_lock.get_mail_state().await {
+                    if *current_email_get_state != result.state {
+                        self.apply_email_get_changes(&mut cache_lock).await?;
+                    }
+                }
+
+                cache_lock
+                    .upsert_mails_core([(id, result.value.clone())])
+                    .await
+                    .map_err(Error::Cache)?;
+
+                cache_lock
+                    .set_mail_state(result.state)
+                    .await
+                    .map_err(Error::Cache)?;
+
+                Ok(result.value)
+            }
+        }
+    }
+
+    pub async fn get_mail_preview(&self, id: MailId) -> Result<MailDataPreview, Error<C, R>> {
+        static ENTER: Mutex<()> = Mutex::new(());
+        let _enter = ENTER.lock().unwrap();
+
+        match self
+            .cache
+            .read()
+            .await
+            .get_mail_preview(&id)
+            .await
+            .map_err(Error::Cache)?
+        {
+            Some(data) => Ok(data),
+            None => {
+                let result = self
+                    .remote
+                    .fetch_mail_preview(id.clone())
+                    .await
+                    .map_err(Error::Remote)?;
+
+                let mut cache_lock = self.cache.write().await;
+                if let Some(current_email_get_state) = cache_lock.get_mail_state().await {
+                    if *current_email_get_state != result.state {
+                        self.apply_email_get_changes(&mut cache_lock).await?;
+                    }
+                }
+
+                cache_lock
+                    .upsert_mails_preview([(id, result.value.clone())])
+                    .await
+                    .map_err(Error::Cache)?;
+
+                cache_lock
+                    .set_mail_state(result.state)
+                    .await
+                    .map_err(Error::Cache)?;
+
+                Ok(result.value)
+            }
+        }
+    }
+
     pub async fn get_mail_text_body(&self, id: MailId) -> Result<MailDataTextBody, Error<C, R>> {
         // don't let another task read from the cache while another task is currently requesting the data
         static ENTER: Mutex<()> = Mutex::new(());

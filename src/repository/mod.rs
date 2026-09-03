@@ -63,6 +63,18 @@ where
         while let Some(command) = self.receiver.recv().await {
             match command {
                 Command::Mail(cmd) => match cmd {
+                    mail::Command::GetCore { id, tx } => {
+                        let _ = tx.send(self.get_mail_core(id).await);
+                    }
+                    mail::Command::GetPreview { id, tx } => {
+                        let _ = tx.send(self.get_mail_preview(id).await);
+                    }
+                    mail::Command::GetTextBody { id, tx } => {
+                        let _ = tx.send(self.get_mail_text_body(id).await);
+                    }
+                    mail::Command::GetHtmlBody { id, tx } => {
+                        let _ = tx.send(self.get_mail_html_body(id).await);
+                    }
                     mail::Command::QueryRootMails {
                         mailbox,
                         start,
@@ -70,12 +82,6 @@ where
                         tx,
                     } => {
                         let _ = tx.send(self.query_root_mails(mailbox, start, limit).await);
-                    }
-                    mail::Command::GetTextBody { id, tx } => {
-                        let _ = tx.send(self.get_mail_text_body(id).await);
-                    }
-                    mail::Command::GetHtmlBody { id, tx } => {
-                        let _ = tx.send(self.get_mail_html_body(id).await);
                     }
                 },
                 Command::Mailbox(cmd) => match cmd {

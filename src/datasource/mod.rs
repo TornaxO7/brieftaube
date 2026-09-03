@@ -26,10 +26,30 @@ pub trait MailCache: BaseDataSource {
 
     async fn set_mail_state(&mut self, new_state: GetState) -> Result<(), Self::Error>;
 
+    async fn get_mail_core(&self, id: &MailId) -> Result<Option<MailDataCore>, Self::Error> {
+        let result = self.get_mails_core(&[id.clone()]).await?;
+
+        if result.missing.is_empty() {
+            Ok(Some(result.value.into_iter().next().unwrap().1))
+        } else {
+            Ok(None)
+        }
+    }
+
     async fn get_mails_core(
         &self,
         ids: &[MailId],
     ) -> Result<cache::GetBatchResult<HashMap<MailId, MailDataCore>, Vec<MailId>>, Self::Error>;
+
+    async fn get_mail_preview(&self, id: &MailId) -> Result<Option<MailDataPreview>, Self::Error> {
+        let result = self.get_mails_preview(&[id.clone()]).await?;
+
+        if result.missing.is_empty() {
+            Ok(Some(result.value.into_iter().next().unwrap().1))
+        } else {
+            Ok(None)
+        }
+    }
 
     async fn get_mails_preview(
         &self,
@@ -116,12 +136,46 @@ pub trait MailCache: BaseDataSource {
 }
 
 pub trait MailRemote: BaseDataSource {
+    async fn fetch_mail_core(
+        &self,
+        id: MailId,
+    ) -> Result<remote::GetOneResult<MailDataCore>, Self::Error> {
+        let result = self.fetch_mails_core([id]).await?;
+
+        Ok(remote::GetOneResult {
+            value: result
+                .values
+                .into_iter()
+                .next()
+                .map(|(_id, data)| data)
+                .expect("Id is valid"),
+            state: result.state,
+        })
+    }
+
     async fn fetch_mails_core<MailIds>(
         &self,
         ids: MailIds,
     ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataCore>, Vec<MailId>>, Self::Error>
     where
         MailIds: IntoIterator<Item = MailId>;
+
+    async fn fetch_mail_preview(
+        &self,
+        id: MailId,
+    ) -> Result<remote::GetOneResult<MailDataPreview>, Self::Error> {
+        let result = self.fetch_mails_preview([id]).await?;
+
+        Ok(remote::GetOneResult {
+            value: result
+                .values
+                .into_iter()
+                .next()
+                .map(|(_id, data)| data)
+                .expect("Id is valid"),
+            state: result.state,
+        })
+    }
 
     async fn fetch_mails_preview<MailIds>(
         &self,
