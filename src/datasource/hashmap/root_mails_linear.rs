@@ -4,7 +4,7 @@ use crate::{
         hashmap::HashMapDataSource,
         types::{QueryState, cache},
     },
-    types::{MailData, MailId, MailboxId},
+    types::{MailId, MailboxId},
 };
 use std::{collections::HashSet, ops::Range};
 
@@ -36,18 +36,13 @@ impl RootMailsCache for HashMapDataSource {
         &self,
         mailbox: &MailboxId,
         window: crate::datasource::types::QueryWindow,
-    ) -> Result<Option<cache::QueryResponse<MailData>>, Self::Error> {
+    ) -> Result<Option<cache::QueryResponse<MailId>>, Self::Error> {
         let range = window.as_range();
         let Some(root_mails) = self.root_mails.get(mailbox) else {
             return Ok(None);
         };
 
-        Ok(Some(root_mails.query(range).map(|id| {
-            self.mails
-                .get(&id)
-                .cloned()
-                .expect("MailData has been fetched as well")
-        })))
+        Ok(Some(root_mails.query(range)))
     }
 
     async fn insert_root_mails<MailsWithIndex>(

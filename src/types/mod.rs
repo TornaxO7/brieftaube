@@ -1,23 +1,5 @@
-mod mail_address;
-pub use mail_address::*;
-
-mod mail_addresses;
-pub use mail_addresses::*;
-
-mod mail_data;
-pub use mail_data::*;
-
-mod mail_id;
-pub use mail_id::*;
-
-mod mail_keyword;
-pub use mail_keyword::*;
-
-mod mail_update;
-pub use mail_update::*;
-
-mod mail_new;
-pub use mail_new::*;
+mod mail;
+pub use mail::*;
 
 // mailbox
 

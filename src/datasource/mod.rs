@@ -6,7 +6,7 @@ pub mod types;
 use std::collections::HashSet;
 
 use crate::types::{
-    MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailNew, MailUpdate,
+    MailDataAttachment, MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody, MailId,
     MailboxData, MailboxId, MailboxNew, MailboxUpdate, ParentMailboxId, ThreadId,
 };
 use types::{GetState, QueryState, QueryWindow, cache, remote};
@@ -26,22 +26,43 @@ pub trait MailCache: BaseDataSource {
 
     async fn set_mail_state(&mut self, new_state: GetState) -> Result<(), Self::Error>;
 
-    async fn get_mails(
+    async fn get_mails_core(
         &self,
         ids: &[MailId],
-    ) -> Result<cache::GetBatchResult<Vec<MailData>, Vec<MailId>>, Self::Error>;
+    ) -> Result<cache::GetBatchResult<Vec<MailDataCore>, Vec<MailId>>, Self::Error>;
 
-    async fn upsert_mails(&mut self, mails: Vec<MailData>) -> Result<(), Self::Error>;
+    async fn get_mails_preview(
+        &self,
+        ids: &[MailId],
+    ) -> Result<cache::GetBatchResult<Vec<MailDataPreview>, Vec<MailId>>, Self::Error>;
+
+    async fn upsert_mails_core<Mails>(&mut self, mails: Mails) -> Result<(), Self::Error>
+    where
+        Mails: IntoIterator<Item = (MailId, MailDataCore)>;
+
+    async fn upsert_mails_preview<Mails>(&mut self, mails: Mails) -> Result<(), Self::Error>
+    where
+        Mails: IntoIterator<Item = (MailId, MailDataPreview)>;
 
     async fn get_mail_text_body(
         &self,
         id: &MailId,
-    ) -> Result<Option<MailDataTextBody>, Self::Error>;
+    ) -> Result<Option<MailDataTextBody>, Self::Error> {
+        let result = self.get_mails_text_body([id.clone()]).await?;
 
-    async fn get_mails_text_body(
+        if !result.value.is_empty() {
+            Ok(Some(result.value.into_iter().next().unwrap().1))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn get_mails_text_body<MailIds>(
         &self,
-        ids: &[MailId],
-    ) -> Result<cache::GetBatchResult<Vec<(MailId, MailDataTextBody)>, Vec<MailId>>, Self::Error>;
+        ids: MailIds,
+    ) -> Result<cache::GetBatchResult<Vec<(MailId, MailDataTextBody)>, Vec<MailId>>, Self::Error>
+    where
+        MailIds: IntoIterator<Item = MailId>;
 
     async fn upsert_mail_text_body(
         &mut self,
@@ -49,20 +70,32 @@ pub trait MailCache: BaseDataSource {
         body: MailDataTextBody,
     ) -> Result<(), Self::Error>;
 
-    async fn upsert_mails_text_body(
+    async fn upsert_mails_text_body<MailTextBodies>(
         &mut self,
-        text_bodies: &[(MailId, MailDataTextBody)],
-    ) -> Result<(), Self::Error>;
+        text_bodies: MailTextBodies,
+    ) -> Result<(), Self::Error>
+    where
+        MailTextBodies: IntoIterator<Item = (MailId, MailDataTextBody)>;
 
     async fn get_mail_html_body(
         &self,
         id: &MailId,
-    ) -> Result<Option<MailDataHtmlBody>, Self::Error>;
+    ) -> Result<Option<MailDataHtmlBody>, Self::Error> {
+        let result = self.get_mails_html_body([id.clone()]).await?;
 
-    async fn get_mails_html_body(
+        if !result.value.is_empty() {
+            Ok(Some(result.value.into_iter().next().unwrap().1))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn get_mails_html_body<MailIds>(
         &self,
-        ids: &[MailId],
-    ) -> Result<cache::GetBatchResult<Vec<(MailId, MailDataHtmlBody)>, Vec<MailId>>, Self::Error>;
+        ids: MailIds,
+    ) -> Result<cache::GetBatchResult<Vec<(MailId, MailDataHtmlBody)>, Vec<MailId>>, Self::Error>
+    where
+        MailIds: IntoIterator<Item = MailId>;
 
     async fn upsert_mail_html_body(
         &mut self,
@@ -70,95 +103,94 @@ pub trait MailCache: BaseDataSource {
         body: MailDataHtmlBody,
     ) -> Result<(), Self::Error>;
 
-    async fn upsert_mails_html_body(
+    async fn upsert_mails_html_body<MailHtmlBodies>(
         &mut self,
-        html_bodies: &[(MailId, MailDataHtmlBody)],
-    ) -> Result<(), Self::Error>;
+        html_bodies: MailHtmlBodies,
+    ) -> Result<(), Self::Error>
+    where
+        MailHtmlBodies: IntoIterator<Item = (MailId, MailDataHtmlBody)>;
 
-    async fn get_mail_attachments(
-        &self,
-        id: &MailId,
-    ) -> Result<Option<Vec<MailDataAttachment>>, Self::Error>;
-
-    async fn get_mails_attachments(
-        &self,
-        ids: &[MailId],
-    ) -> Result<
-        cache::GetBatchResult<Vec<(MailId, Vec<MailDataAttachment>)>, Vec<MailId>>,
-        Self::Error,
-    >;
-
-    async fn upsert_mail_attachments(
-        &mut self,
-        id: &MailId,
-        attachments: Vec<MailDataAttachment>,
-    ) -> Result<(), Self::Error>;
-
-    async fn upsert_mails_attachments(
-        &mut self,
-        attachments: &[(MailId, Vec<MailDataAttachment>)],
-    ) -> Result<(), Self::Error>;
-
-    async fn evict_mails(&mut self, mails: &[MailId]) -> Result<(), Self::Error>;
+    async fn evict_mails<MailIds>(&mut self, mails: MailIds) -> Result<(), Self::Error>
+    where
+        MailIds: IntoIterator<Item = MailId>;
 }
 
 pub trait MailRemote: BaseDataSource {
-    async fn fetch_mails(
+    async fn fetch_mails_core<MailIds>(
         &self,
-        ids: &[MailId],
-    ) -> Result<remote::GetBatchResult<Vec<MailData>, Vec<MailId>>, Self::Error>;
+        ids: MailIds,
+    ) -> Result<remote::GetBatchResult<Vec<MailDataCore>, Vec<MailId>>, Self::Error>
+    where
+        MailIds: IntoIterator<Item = MailId>;
 
-    async fn fetch_mails_text_body(
+    async fn fetch_mails_preview<MailIds>(
         &self,
-        ids: &[MailId],
-    ) -> Result<remote::GetBatchResult<Vec<(MailId, MailDataTextBody)>, Vec<MailId>>, Self::Error>;
+        ids: MailIds,
+    ) -> Result<remote::GetBatchResult<Vec<MailDataPreview>, Vec<MailId>>, Self::Error>
+    where
+        MailIds: IntoIterator<Item = MailId>;
 
-    async fn fetch_mails_html_body(
+    async fn fetch_mails_text_body<MailIds>(
         &self,
-        ids: &[MailId],
-    ) -> Result<remote::GetBatchResult<Vec<(MailId, MailDataHtmlBody)>, Vec<MailId>>, Self::Error>;
+        ids: MailIds,
+    ) -> Result<remote::GetBatchResult<Vec<(MailId, MailDataTextBody)>, Vec<MailId>>, Self::Error>
+    where
+        MailIds: IntoIterator<Item = MailId>;
 
-    async fn fetch_mails_attachments(
+    async fn fetch_mails_html_body<MailIds>(
         &self,
-        ids: &[MailId],
+        ids: MailIds,
+    ) -> Result<remote::GetBatchResult<Vec<(MailId, MailDataHtmlBody)>, Vec<MailId>>, Self::Error>
+    where
+        MailIds: IntoIterator<Item = MailId>;
+
+    async fn fetch_mails_attachments<MailIds>(
+        &self,
+        ids: MailIds,
     ) -> Result<
         remote::GetBatchResult<Vec<(MailId, Vec<MailDataAttachment>)>, Vec<MailId>>,
         Self::Error,
-    >;
+    >
+    where
+        MailIds: IntoIterator<Item = MailId>;
 
-    async fn fetch_mail_updates(
+    async fn fetch_mail_updates<MailIds>(
         &self,
-        datas: &[MailId],
-        text: &[MailId],
-        html: &[MailId],
-        attachments: &[MailId],
+        cores: MailIds,
+        preivews: MailIds,
+        text: MailIds,
+        html: MailIds,
     ) -> Result<
         remote::GetOneResult<(
-            Vec<MailData>,
+            Vec<MailDataCore>,
+            Vec<MailDataPreview>,
             Vec<(MailId, MailDataTextBody)>,
             Vec<(MailId, MailDataHtmlBody)>,
-            Vec<(MailId, Vec<MailDataAttachment>)>,
         )>,
         Self::Error,
-    >;
+    >
+    where
+        MailIds: IntoIterator<Item = MailId>;
 
-    async fn create_mail(
-        &self,
-        new: MailNew,
-        since: GetState,
-    ) -> Result<remote::CreateResult<MailData>, Self::Error>;
+    // async fn create_mail(
+    //     &self,
+    //     new: MailNew,
+    //     since: GetState,
+    // ) -> Result<remote::CreateResult<MailData>, Self::Error>;
 
-    async fn update_mails(
-        &self,
-        updates: Vec<(MailData, MailUpdate)>,
-        since: GetState,
-    ) -> Result<remote::UpdateResult<MailId, MailData>, Self::Error>;
+    // async fn update_mails(
+    //     &self,
+    //     updates: Vec<(MailData, MailUpdate)>,
+    //     since: GetState,
+    // ) -> Result<remote::UpdateResult<MailId, MailData>, Self::Error>;
 
-    async fn destroy_mails(
+    async fn destroy_mails<MailIds>(
         &self,
-        ids: Vec<MailId>,
+        ids: MailIds,
         since: GetState,
-    ) -> Result<remote::DestroyResult<MailId>, Self::Error>;
+    ) -> Result<remote::DestroyResult<MailId>, Self::Error>
+    where
+        MailIds: IntoIterator<Item = MailId>;
 
     async fn fetch_mail_changes(
         &self,
@@ -169,7 +201,7 @@ pub trait MailRemote: BaseDataSource {
         &self,
         id: &MailId,
     ) -> Result<remote::GetOneResult<MailDataTextBody>, Self::Error> {
-        let result = self.fetch_mails_text_body(&[id.clone()]).await?;
+        let result = self.fetch_mails_text_body([id.clone()]).await?;
 
         Ok(remote::GetOneResult {
             value: result
@@ -186,7 +218,7 @@ pub trait MailRemote: BaseDataSource {
         &self,
         id: &MailId,
     ) -> Result<remote::GetOneResult<MailDataHtmlBody>, Self::Error> {
-        let result = self.fetch_mails_html_body(&[id.clone()]).await?;
+        let result = self.fetch_mails_html_body([id.clone()]).await?;
 
         Ok(remote::GetOneResult {
             value: result
@@ -194,23 +226,6 @@ pub trait MailRemote: BaseDataSource {
                 .into_iter()
                 .next()
                 .map(|(_id, html_body)| html_body)
-                .expect("MailId is valid"),
-            state: result.state,
-        })
-    }
-
-    async fn fetch_mail_attachments(
-        &self,
-        id: &MailId,
-    ) -> Result<remote::GetOneResult<Vec<MailDataAttachment>>, Self::Error> {
-        let result = self.fetch_mails_attachments(&[id.clone()]).await?;
-
-        Ok(remote::GetOneResult {
-            value: result
-                .values
-                .into_iter()
-                .next()
-                .map(|(_id, attachments)| attachments)
                 .expect("MailId is valid"),
             state: result.state,
         })
@@ -232,7 +247,7 @@ pub trait RootMailsCache: MailCache {
         &self,
         mailbox: &MailboxId,
         window: QueryWindow,
-    ) -> Result<Option<cache::QueryResponse<MailData>>, Self::Error>;
+    ) -> Result<Option<cache::QueryResponse<MailId>>, Self::Error>;
 
     async fn insert_root_mails<MailsWithIndex>(
         &mut self,
@@ -254,7 +269,7 @@ pub trait RootMailsRemote: MailRemote {
         &self,
         mailbox: &MailboxId,
         window: &QueryWindow,
-    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<MailData>>>, Self::Error>;
+    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<(MailId, MailDataCore)>>>, Self::Error>;
 
     async fn fetch_root_mails_changes(
         &self,
@@ -328,25 +343,26 @@ pub trait MailboxRemote: BaseDataSource {
 pub trait ThreadCache: BaseDataSource {
     async fn get_thread_state(&self) -> Option<&GetState>;
 
-    async fn get_thread(&self, id: &ThreadId) -> Result<Option<Vec<MailData>>, Self::Error>;
+    async fn set_thread_state(&mut self, new_state: GetState) -> Result<(), Self::Error>;
 
-    async fn upsert_thread(
-        &mut self,
-        id: &ThreadId,
-        mails: &[MailData],
-        new_get_mail_state: GetState,
-        new_get_thread_state: GetState,
-    ) -> Result<(), Self::Error>;
+    async fn get_thread(&self, id: &ThreadId) -> Result<Option<Vec<MailId>>, Self::Error>;
 
-    async fn evict_thread(&mut self, id: &ThreadId, new_state: GetState)
-    -> Result<(), Self::Error>;
+    // async fn upsert_thread(
+    //     &mut self,
+    //     id: &ThreadId,
+    //     mails: &[MailData],
+    //     new_get_mail_state: GetState,
+    //     new_get_thread_state: GetState,
+    // ) -> Result<(), Self::Error>;
+
+    async fn evict_thread(&mut self, id: &ThreadId) -> Result<(), Self::Error>;
 }
 
 pub trait ThreadRemote: BaseDataSource {
     async fn fetch_thread(
         &self,
         id: &ThreadId,
-    ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<MailData>>>, Self::Error>;
+    ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<(MailId, MailDataCore)>>>, Self::Error>;
 
     async fn fetch_thread_changes(
         &self,

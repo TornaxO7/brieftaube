@@ -7,7 +7,7 @@ use super::{BaseDataSource, types::GetState};
 use crate::{
     datasource::types::QueryState,
     types::{
-        MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailboxData,
+        MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody, MailId, MailboxData,
         MailboxId, ThreadId,
     },
 };
@@ -16,14 +16,14 @@ use std::collections::HashMap;
 
 #[derive(Default)]
 pub struct HashMapDataSource {
-    mails: HashMap<MailId, MailData>,
+    mails_core: HashMap<MailId, MailDataCore>,
+    mails_preview: HashMap<MailId, MailDataPreview>,
+    mail_text_body: HashMap<MailId, MailDataTextBody>,
+    mail_html_body: HashMap<MailId, MailDataHtmlBody>,
+
     mailboxes: HashMap<MailboxId, MailboxData>,
     threads: HashMap<ThreadId, Vec<MailId>>,
     root_mails: HashMap<MailboxId, RootMails>,
-
-    mail_text_body: HashMap<MailId, MailDataTextBody>,
-    mail_html_body: HashMap<MailId, MailDataHtmlBody>,
-    mail_attachments: HashMap<MailId, Vec<MailDataAttachment>>,
 
     root_mails_state: HashMap<MailboxId, QueryState>,
     mail_get_state: Option<GetState>,
