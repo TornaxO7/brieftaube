@@ -7,6 +7,7 @@ mod data_core;
 mod data_preview;
 mod id;
 mod keyword;
+mod message_id;
 mod new;
 mod update;
 
@@ -18,5 +19,6 @@ pub use data_core::*;
 pub use data_preview::*;
 pub use id::*;
 pub use keyword::*;
+pub use message_id::*;
 pub use new::*;
 pub use update::*;
