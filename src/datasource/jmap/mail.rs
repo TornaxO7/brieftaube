@@ -544,7 +544,7 @@ impl MailRemote for Jmap {
         &self,
         mailbox: &MailboxId,
         since: &QueryState,
-        up_to_id: Option<&MailboxId>,
+        up_to_id: Option<&MailId>,
     ) -> Result<remote::QueryChangeResult<MailId>, Self::Error> {
         let response = {
             let mut request = self.client.build();
