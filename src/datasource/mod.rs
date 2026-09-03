@@ -259,10 +259,7 @@ pub trait RootMailsRemote: MailRemote {
         &self,
         mailbox: &MailboxId,
         window: &QueryWindow,
-    ) -> Result<
-        remote::QueryResponse<remote::GetOneResult<HashMap<MailId, MailDataCore>>>,
-        Self::Error,
-    >;
+    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<(MailId, MailDataCore)>>>, Self::Error>;
 
     async fn fetch_root_mails_changes(
         &self,
@@ -340,13 +337,13 @@ pub trait ThreadCache: BaseDataSource {
 
     async fn get_thread(&self, id: &ThreadId) -> Result<Option<Vec<MailId>>, Self::Error>;
 
-    // async fn upsert_thread(
-    //     &mut self,
-    //     id: &ThreadId,
-    //     mails: &[MailData],
-    //     new_get_mail_state: GetState,
-    //     new_get_thread_state: GetState,
-    // ) -> Result<(), Self::Error>;
+    async fn upsert_thread<MailIds>(
+        &mut self,
+        id: &ThreadId,
+        mails: MailIds,
+    ) -> Result<(), Self::Error>
+    where
+        MailIds: IntoIterator<Item = MailId>;
 
     async fn evict_thread(&mut self, id: &ThreadId) -> Result<(), Self::Error>;
 }
@@ -355,10 +352,7 @@ pub trait ThreadRemote: BaseDataSource {
     async fn fetch_thread(
         &self,
         id: &ThreadId,
-    ) -> Result<
-        remote::GetOneResult<remote::GetOneResult<HashMap<MailId, MailDataCore>>>,
-        Self::Error,
-    >;
+    ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<(MailId, MailDataCore)>>>, Self::Error>;
 
     async fn fetch_thread_changes(
         &self,

@@ -77,9 +77,6 @@ where
                     mail::Command::GetHtmlBody { id, tx } => {
                         let _ = tx.send(self.get_mail_html_body(id).await);
                     }
-                    mail::Command::GetAttachments { id, tx } => {
-                        let _ = tx.send(self.get_mail_attachments(id).await);
-                    }
                 },
                 Command::Mailbox(cmd) => match cmd {
                     mailbox::Command::GetChildren { id, tx } => {
@@ -127,7 +124,7 @@ where
                         .await
                         .map_err(Error::Cache)?;
 
-                    cached_datas.into_iter().map(|data| data.id).collect()
+                    cached_datas.into_iter().map(|(id, _data)| id).collect()
                 };
                 let updated_mail_preview_ids: Vec<MailId> = {
                     let cache::GetBatchResult {
@@ -138,14 +135,14 @@ where
                         .await
                         .map_err(Error::Cache)?;
 
-                    cached_datas.into_iter().map(|data| data.id).collect()
+                    cached_datas.into_iter().map(|(id, _data)| id).collect()
                 };
                 let updated_mail_text_body_ids: Vec<MailId> = {
                     let cache::GetBatchResult {
                         value: cached_text_bodies,
                         ..
                     } = cache_lock
-                        .get_mails_text_body(&result.updated)
+                        .get_mails_text_body(result.updated.clone())
                         .await
                         .map_err(Error::Cache)?;
 
@@ -159,7 +156,7 @@ where
                         value: cache_html_bodies,
                         ..
                     } = cache_lock
-                        .get_mails_html_body(&result.updated)
+                        .get_mails_html_body(result.updated.clone())
                         .await
                         .map_err(Error::Cache)?;
 
@@ -168,63 +165,49 @@ where
                         .map(|(id, _html_body)| id)
                         .collect()
                 };
-                let updated_mail_attachments_ids: Vec<MailId> = {
-                    let cache::GetBatchResult {
-                        value: cached_attachments,
-                        ..
-                    } = cache_lock
-                        .get_mails_attachments(&result.updated)
-                        .await
-                        .map_err(Error::Cache)?;
-
-                    cached_attachments
-                        .into_iter()
-                        .map(|(id, _attachments)| id)
-                        .collect()
-                };
 
                 let remote::GetOneResult {
                     value:
                         (
-                            updated_mail_datas,
+                            updated_mails_core,
+                            updated_mails_preview,
                             updated_text_bodies,
                             updated_html_bodies,
-                            updated_attachments,
                         ),
                     // TODO: Maybe check if this state is also the same? Otherwise => do more `/changes` request
                     state: _,
                 } = self
                     .remote
                     .fetch_mail_updates(
-                        &updated_mail_core_ids,
-                        &updated_mail_text_body_ids,
-                        &updated_mail_html_body_ids,
-                        &updated_mail_attachments_ids,
+                        updated_mail_core_ids,
+                        updated_mail_preview_ids,
+                        updated_mail_text_body_ids,
+                        updated_mail_html_body_ids,
                     )
                     .await
                     .map_err(Error::Remote)?;
 
                 // PERFORMANCE: put in `join` instead of sequentially
                 cache_lock
-                    .upsert_mails(updated_mail_datas)
+                    .upsert_mails_core(updated_mails_core)
                     .await
                     .map_err(Error::Cache)?;
                 cache_lock
-                    .upsert_mails_text_body(&updated_text_bodies)
+                    .upsert_mails_preview(updated_mails_preview)
                     .await
                     .map_err(Error::Cache)?;
                 cache_lock
-                    .upsert_mails_html_body(&updated_html_bodies)
+                    .upsert_mails_text_body(updated_text_bodies)
                     .await
                     .map_err(Error::Cache)?;
                 cache_lock
-                    .upsert_mails_attachments(&updated_attachments)
+                    .upsert_mails_html_body(updated_html_bodies)
                     .await
                     .map_err(Error::Cache)?;
             };
 
             cache_lock
-                .evict_mails(&result.destroyed)
+                .evict_mails(result.destroyed)
                 .await
                 .map_err(Error::Cache)?;
 

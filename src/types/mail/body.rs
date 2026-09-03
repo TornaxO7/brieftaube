@@ -1,4 +1,4 @@
-use jmap_client::email::Email;
+use jmap_client::email::{Email, EmailBodyPart};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MailDataTextBody(pub String);

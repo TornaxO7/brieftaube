@@ -1,5 +1,5 @@
-use super::{MailKeyword, MailboxId};
-use crate::types::{MailAddresses, MessageId};
+use super::MailKeyword;
+use crate::types::{MailAddresses, MailboxId, MessageId};
 use std::collections::HashSet;
 
 #[derive(Debug, Clone)]

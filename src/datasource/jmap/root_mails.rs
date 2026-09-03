@@ -6,17 +6,14 @@ use crate::{
     },
     types::{MailDataCore, MailId, MailboxId},
 };
-use std::collections::HashMap;
 
 impl RootMailsRemote for Jmap {
     async fn fetch_root_mails(
         &self,
         mailbox: &MailboxId,
         window: &QueryWindow,
-    ) -> Result<
-        remote::QueryResponse<remote::GetOneResult<HashMap<MailId, MailDataCore>>>,
-        Self::Error,
-    > {
+    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<(MailId, MailDataCore)>>>, Self::Error>
+    {
         let mut response = {
             let mut request = self.client.build();
 

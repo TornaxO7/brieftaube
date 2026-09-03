@@ -1,6 +1,5 @@
+use crate::types::{MailKeyword, MailboxId};
 use std::collections::HashMap;
-
-use super::{MailId, MailKeyword, MailboxId};
 
 #[derive(Debug, Clone, Default)]
 pub struct MailUpdate {
