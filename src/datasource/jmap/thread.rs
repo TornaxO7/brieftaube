@@ -6,13 +6,16 @@ use crate::{
     },
     types::{MailDataCore, MailId, ThreadId},
 };
+use std::collections::HashMap;
 
 impl ThreadRemote for Jmap {
     async fn fetch_thread(
         &self,
         id: &ThreadId,
-    ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<(MailId, MailDataCore)>>>, Self::Error>
-    {
+    ) -> Result<
+        remote::GetOneResult<remote::GetOneResult<HashMap<MailId, MailDataCore>>>,
+        Self::Error,
+    > {
         let mut response = {
             let mut request = self.client.build();
 

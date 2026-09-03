@@ -2,12 +2,10 @@ pub mod mail;
 pub mod mailbox;
 pub mod thread;
 
-use std::collections::HashSet;
-
 use crate::{
     datasource::{
         Cache, Remote,
-        types::{QueryWindow, cache, remote},
+        types::{cache, remote},
     },
     types::{MailId, MailboxId},
 };
@@ -120,12 +118,23 @@ where
 
             if !result.updated.is_empty() {
                 // PERFORMANCE: join them all instead awaiting them sequentially
-                let updated_mail_data_ids: Vec<MailId> = {
+                let updated_mail_core_ids: Vec<MailId> = {
                     let cache::GetBatchResult {
                         value: cached_datas,
                         ..
                     } = cache_lock
-                        .get_mails(&result.updated)
+                        .get_mails_core(&result.updated)
+                        .await
+                        .map_err(Error::Cache)?;
+
+                    cached_datas.into_iter().map(|data| data.id).collect()
+                };
+                let updated_mail_preview_ids: Vec<MailId> = {
+                    let cache::GetBatchResult {
+                        value: cached_datas,
+                        ..
+                    } = cache_lock
+                        .get_mails_preview(&result.updated)
                         .await
                         .map_err(Error::Cache)?;
 
@@ -187,7 +196,7 @@ where
                 } = self
                     .remote
                     .fetch_mail_updates(
-                        &updated_mail_data_ids,
+                        &updated_mail_core_ids,
                         &updated_mail_text_body_ids,
                         &updated_mail_html_body_ids,
                         &updated_mail_attachments_ids,

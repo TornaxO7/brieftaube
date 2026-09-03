@@ -3,7 +3,7 @@ pub mod hashmap;
 pub mod jmap;
 pub mod types;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::types::{
     MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody, MailId, MailboxData,
@@ -29,12 +29,12 @@ pub trait MailCache: BaseDataSource {
     async fn get_mails_core(
         &self,
         ids: &[MailId],
-    ) -> Result<cache::GetBatchResult<Vec<MailDataCore>, Vec<MailId>>, Self::Error>;
+    ) -> Result<cache::GetBatchResult<HashMap<MailId, MailDataCore>, Vec<MailId>>, Self::Error>;
 
     async fn get_mails_preview(
         &self,
         ids: &[MailId],
-    ) -> Result<cache::GetBatchResult<Vec<MailDataPreview>, Vec<MailId>>, Self::Error>;
+    ) -> Result<cache::GetBatchResult<HashMap<MailId, MailDataPreview>, Vec<MailId>>, Self::Error>;
 
     async fn upsert_mails_core<Mails>(&mut self, mails: Mails) -> Result<(), Self::Error>
     where
@@ -60,7 +60,7 @@ pub trait MailCache: BaseDataSource {
     async fn get_mails_text_body<MailIds>(
         &self,
         ids: MailIds,
-    ) -> Result<cache::GetBatchResult<Vec<(MailId, MailDataTextBody)>, Vec<MailId>>, Self::Error>
+    ) -> Result<cache::GetBatchResult<HashMap<MailId, MailDataTextBody>, Vec<MailId>>, Self::Error>
     where
         MailIds: IntoIterator<Item = MailId>;
 
@@ -93,7 +93,7 @@ pub trait MailCache: BaseDataSource {
     async fn get_mails_html_body<MailIds>(
         &self,
         ids: MailIds,
-    ) -> Result<cache::GetBatchResult<Vec<(MailId, MailDataHtmlBody)>, Vec<MailId>>, Self::Error>
+    ) -> Result<cache::GetBatchResult<HashMap<MailId, MailDataHtmlBody>, Vec<MailId>>, Self::Error>
     where
         MailIds: IntoIterator<Item = MailId>;
 
@@ -119,28 +119,28 @@ pub trait MailRemote: BaseDataSource {
     async fn fetch_mails_core<MailIds>(
         &self,
         ids: MailIds,
-    ) -> Result<remote::GetBatchResult<Vec<(MailId, MailDataCore)>, Vec<MailId>>, Self::Error>
+    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataCore>, Vec<MailId>>, Self::Error>
     where
         MailIds: IntoIterator<Item = MailId>;
 
     async fn fetch_mails_preview<MailIds>(
         &self,
         ids: MailIds,
-    ) -> Result<remote::GetBatchResult<Vec<(MailId, MailDataPreview)>, Vec<MailId>>, Self::Error>
+    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataPreview>, Vec<MailId>>, Self::Error>
     where
         MailIds: IntoIterator<Item = MailId>;
 
     async fn fetch_mails_text_body<MailIds>(
         &self,
         ids: MailIds,
-    ) -> Result<remote::GetBatchResult<Vec<(MailId, MailDataTextBody)>, Vec<MailId>>, Self::Error>
+    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataTextBody>, Vec<MailId>>, Self::Error>
     where
         MailIds: IntoIterator<Item = MailId>;
 
     async fn fetch_mails_html_body<MailIds>(
         &self,
         ids: MailIds,
-    ) -> Result<remote::GetBatchResult<Vec<(MailId, MailDataHtmlBody)>, Vec<MailId>>, Self::Error>
+    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataHtmlBody>, Vec<MailId>>, Self::Error>
     where
         MailIds: IntoIterator<Item = MailId>;
 
@@ -259,7 +259,10 @@ pub trait RootMailsRemote: MailRemote {
         &self,
         mailbox: &MailboxId,
         window: &QueryWindow,
-    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<(MailId, MailDataCore)>>>, Self::Error>;
+    ) -> Result<
+        remote::QueryResponse<remote::GetOneResult<HashMap<MailId, MailDataCore>>>,
+        Self::Error,
+    >;
 
     async fn fetch_root_mails_changes(
         &self,
@@ -352,7 +355,10 @@ pub trait ThreadRemote: BaseDataSource {
     async fn fetch_thread(
         &self,
         id: &ThreadId,
-    ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<(MailId, MailDataCore)>>>, Self::Error>;
+    ) -> Result<
+        remote::GetOneResult<remote::GetOneResult<HashMap<MailId, MailDataCore>>>,
+        Self::Error,
+    >;
 
     async fn fetch_thread_changes(
         &self,

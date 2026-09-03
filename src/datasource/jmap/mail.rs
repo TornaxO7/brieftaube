@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::Jmap;
 use crate::{
     datasource::{
@@ -11,7 +13,7 @@ impl MailRemote for Jmap {
     async fn fetch_mails_core<MailIds>(
         &self,
         ids: MailIds,
-    ) -> Result<remote::GetBatchResult<Vec<(MailId, MailDataCore)>, Vec<MailId>>, Self::Error>
+    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataCore>, Vec<MailId>>, Self::Error>
     where
         MailIds: IntoIterator<Item = MailId>,
     {
@@ -32,7 +34,6 @@ impl MailRemote for Jmap {
             .map(|mut email| {
                 let id = email.take_id().into();
                 let data = MailDataCore::from_get_request(email);
-
                 (id, data)
             })
             .collect();
@@ -49,7 +50,7 @@ impl MailRemote for Jmap {
     async fn fetch_mails_preview<MailIds>(
         &self,
         ids: MailIds,
-    ) -> Result<remote::GetBatchResult<Vec<(MailId, MailDataPreview)>, Vec<MailId>>, Self::Error>
+    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataPreview>, Vec<MailId>>, Self::Error>
     where
         MailIds: IntoIterator<Item = MailId>,
     {
@@ -87,7 +88,7 @@ impl MailRemote for Jmap {
     async fn fetch_mails_text_body<MailIds>(
         &self,
         ids: MailIds,
-    ) -> Result<remote::GetBatchResult<Vec<(MailId, MailDataTextBody)>, Vec<MailId>>, Self::Error>
+    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataTextBody>, Vec<MailId>>, Self::Error>
     where
         MailIds: IntoIterator<Item = MailId>,
     {
@@ -130,7 +131,7 @@ impl MailRemote for Jmap {
     async fn fetch_mails_html_body<MailIds>(
         &self,
         ids: MailIds,
-    ) -> Result<remote::GetBatchResult<Vec<(MailId, MailDataHtmlBody)>, Vec<MailId>>, Self::Error>
+    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataHtmlBody>, Vec<MailId>>, Self::Error>
     where
         MailIds: IntoIterator<Item = MailId>,
     {
