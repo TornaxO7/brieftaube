@@ -4,7 +4,7 @@ use crate::{
         jmap::Jmap,
         types::{QueryState, QueryWindow, remote},
     },
-    types::{MailData, MailId, MailboxId},
+    types::{MailDataCore, MailId, MailboxId},
 };
 
 impl RootMailsRemote for Jmap {
@@ -12,7 +12,8 @@ impl RootMailsRemote for Jmap {
         &self,
         mailbox: &MailboxId,
         window: &QueryWindow,
-    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<MailData>>>, Self::Error> {
+    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<(MailId, MailDataCore)>>>, Self::Error>
+    {
         let mut response = {
             let mut request = self.client.build();
 
@@ -32,7 +33,7 @@ impl RootMailsRemote for Jmap {
             request
                 .get_email()
                 .ids_ref(query_result)
-                .properties(MailData::PROPERTIES);
+                .properties(MailDataCore::GET_REQUEST_PROPERTIES);
 
             request.send().await?
         };
@@ -52,7 +53,11 @@ impl RootMailsRemote for Jmap {
             value: get_mails_response
                 .take_list()
                 .into_iter()
-                .map(MailData::from_get_request)
+                .map(|mut mail| {
+                    let id = mail.take_id().into();
+                    let data = MailDataCore::from_get_request(mail);
+                    (id, data)
+                })
                 .collect(),
             state: get_mails_response.take_state().into(),
         };

@@ -4,14 +4,15 @@ use crate::{
         jmap::Jmap,
         types::{GetState, remote},
     },
-    types::{MailData, ThreadId},
+    types::{MailDataCore, MailId, ThreadId},
 };
 
 impl ThreadRemote for Jmap {
     async fn fetch_thread(
         &self,
         id: &ThreadId,
-    ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<MailData>>>, Self::Error> {
+    ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<(MailId, MailDataCore)>>>, Self::Error>
+    {
         let mut response = {
             let mut request = self.client.build();
 
@@ -22,7 +23,7 @@ impl ThreadRemote for Jmap {
             request
                 .get_email()
                 .ids_ref(thread_mail_ids_ref)
-                .properties(MailData::PROPERTIES);
+                .properties(MailDataCore::GET_REQUEST_PROPERTIES);
 
             request.send().await?
         };
@@ -43,7 +44,11 @@ impl ThreadRemote for Jmap {
             value: get_email_response
                 .take_list()
                 .into_iter()
-                .map(MailData::from_get_request)
+                .map(|mut mail| {
+                    let id = mail.take_id().into();
+                    let data = MailDataCore::from_get_request(mail);
+                    (id, data)
+                })
                 .collect(),
             state: get_email_response.take_state().into(),
         };

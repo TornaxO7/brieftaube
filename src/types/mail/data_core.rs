@@ -15,7 +15,8 @@ pub struct MailDataCore {
 }
 
 impl MailDataCore {
-    pub const PROPERTIES: [Property; 6] = [
+    pub const GET_REQUEST_PROPERTIES: [Property; 7] = [
+        Property::Id,
         Property::MessageId,
         Property::Keywords,
         Property::Subject,

@@ -6,8 +6,8 @@ pub mod types;
 use std::collections::HashSet;
 
 use crate::types::{
-    MailDataAttachment, MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody, MailId,
-    MailboxData, MailboxId, MailboxNew, MailboxUpdate, ParentMailboxId, ThreadId,
+    MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody, MailId, MailboxData,
+    MailboxId, MailboxNew, MailboxUpdate, ParentMailboxId, ThreadId,
 };
 use types::{GetState, QueryState, QueryWindow, cache, remote};
 
@@ -119,14 +119,14 @@ pub trait MailRemote: BaseDataSource {
     async fn fetch_mails_core<MailIds>(
         &self,
         ids: MailIds,
-    ) -> Result<remote::GetBatchResult<Vec<MailDataCore>, Vec<MailId>>, Self::Error>
+    ) -> Result<remote::GetBatchResult<Vec<(MailId, MailDataCore)>, Vec<MailId>>, Self::Error>
     where
         MailIds: IntoIterator<Item = MailId>;
 
     async fn fetch_mails_preview<MailIds>(
         &self,
         ids: MailIds,
-    ) -> Result<remote::GetBatchResult<Vec<MailDataPreview>, Vec<MailId>>, Self::Error>
+    ) -> Result<remote::GetBatchResult<Vec<(MailId, MailDataPreview)>, Vec<MailId>>, Self::Error>
     where
         MailIds: IntoIterator<Item = MailId>;
 
@@ -144,26 +144,16 @@ pub trait MailRemote: BaseDataSource {
     where
         MailIds: IntoIterator<Item = MailId>;
 
-    async fn fetch_mails_attachments<MailIds>(
-        &self,
-        ids: MailIds,
-    ) -> Result<
-        remote::GetBatchResult<Vec<(MailId, Vec<MailDataAttachment>)>, Vec<MailId>>,
-        Self::Error,
-    >
-    where
-        MailIds: IntoIterator<Item = MailId>;
-
     async fn fetch_mail_updates<MailIds>(
         &self,
         cores: MailIds,
-        preivews: MailIds,
+        previews: MailIds,
         text: MailIds,
         html: MailIds,
     ) -> Result<
         remote::GetOneResult<(
-            Vec<MailDataCore>,
-            Vec<MailDataPreview>,
+            Vec<(MailId, MailDataCore)>,
+            Vec<(MailId, MailDataPreview)>,
             Vec<(MailId, MailDataTextBody)>,
             Vec<(MailId, MailDataHtmlBody)>,
         )>,
