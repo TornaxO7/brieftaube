@@ -13,8 +13,11 @@ pub trait BaseDataSource {
     type Error: std::fmt::Debug;
 }
 
-pub trait Cache: BaseDataSource + MailCache + MailboxCache + ThreadCache {}
-pub trait Remote: BaseDataSource + MailRemote + MailboxRemote + ThreadRemote {}
+pub trait Cache: BaseDataSource + MailCache + RootMailsCache + MailboxCache + ThreadCache {}
+pub trait Remote:
+    BaseDataSource + MailRemote + RootMailsRemote + MailboxRemote + ThreadRemote
+{
+}
 
 pub trait MailCache: BaseDataSource {
     async fn get_mail_state(&self) -> Option<&GetState>;
@@ -94,30 +97,6 @@ pub trait MailCache: BaseDataSource {
         attachments: &[(MailId, Vec<MailDataAttachment>)],
     ) -> Result<(), Self::Error>;
 
-    async fn get_root_mails_state(&self, mailbox: &MailboxId) -> Option<&QueryState>;
-
-    async fn set_root_mails_state(
-        &mut self,
-        mailbox: &MailboxId,
-        new_state: QueryState,
-    ) -> Result<(), Self::Error>;
-
-    async fn get_root_mails_last_id(&self, mailbox: &MailboxId) -> Option<MailId>;
-
-    async fn query_root_mails(
-        &self,
-        mailbox: &MailboxId,
-        window: QueryWindow,
-    ) -> Result<Option<cache::QueryResponse<MailData>>, Self::Error>;
-
-    async fn upsert_root_mails(
-        &mut self,
-        mailbox: &MailboxId,
-        start: usize,
-        root_mails: Vec<MailData>,
-        new_state: QueryState,
-    ) -> Result<(), Self::Error>;
-
     async fn evict_mails(&mut self, mails: &[MailId]) -> Result<(), Self::Error>;
 }
 
@@ -144,12 +123,6 @@ pub trait MailRemote: BaseDataSource {
         remote::GetBatchResult<Vec<(MailId, Vec<MailDataAttachment>)>, Vec<MailId>>,
         Self::Error,
     >;
-
-    async fn fetch_root_mails(
-        &self,
-        mailbox: &MailboxId,
-        window: &QueryWindow,
-    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<MailData>>>, Self::Error>;
 
     async fn fetch_mail_updates(
         &self,
@@ -189,13 +162,6 @@ pub trait MailRemote: BaseDataSource {
         &self,
         since: &GetState,
     ) -> Result<remote::GetChangeResult<MailId>, Self::Error>;
-
-    async fn fetch_root_mails_changes(
-        &self,
-        mailbox: &MailboxId,
-        since: &QueryState,
-        up_to_id: Option<&MailId>,
-    ) -> Result<remote::QueryChangeResult<MailId>, Self::Error>;
 
     async fn fetch_mail_text_body(
         &self,
@@ -247,6 +213,47 @@ pub trait MailRemote: BaseDataSource {
             state: result.state,
         })
     }
+}
+
+pub trait RootMailsCache: MailCache {
+    async fn get_root_mails_state(&self, mailbox: &MailboxId) -> Option<&QueryState>;
+
+    async fn set_root_mails_state(
+        &mut self,
+        mailbox: &MailboxId,
+        new_state: QueryState,
+    ) -> Result<(), Self::Error>;
+
+    async fn get_root_mails_last_id(&self, mailbox: &MailboxId) -> Option<MailId>;
+
+    async fn query_root_mails(
+        &self,
+        mailbox: &MailboxId,
+        window: QueryWindow,
+    ) -> Result<Option<cache::QueryResponse<MailData>>, Self::Error>;
+
+    async fn upsert_root_mails(
+        &mut self,
+        mailbox: &MailboxId,
+        start: usize,
+        root_mails: Vec<MailData>,
+        new_state: QueryState,
+    ) -> Result<(), Self::Error>;
+}
+
+pub trait RootMailsRemote: MailRemote {
+    async fn fetch_root_mails(
+        &self,
+        mailbox: &MailboxId,
+        window: &QueryWindow,
+    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<MailData>>>, Self::Error>;
+
+    async fn fetch_root_mails_changes(
+        &self,
+        mailbox: &MailboxId,
+        since: &QueryState,
+        up_to_id: Option<&MailId>,
+    ) -> Result<remote::QueryChangeResult<MailId>, Self::Error>;
 }
 
 pub trait MailboxCache: BaseDataSource {

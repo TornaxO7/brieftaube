@@ -1,10 +1,10 @@
 use crate::{
     datasource::{
         MailCache,
-        hashmap::{HashMapDataSource, utils::root_mails::RootMails},
-        types::{GetState, QueryState, QueryWindow, cache},
+        hashmap::HashMapDataSource,
+        types::{GetState, cache},
     },
-    types::{MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailboxId},
+    types::{MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId},
 };
 
 impl MailCache for HashMapDataSource {
@@ -192,48 +192,6 @@ impl MailCache for HashMapDataSource {
         Ok(())
     }
 
-    async fn get_root_mails_state(&self, mailbox: &MailboxId) -> Option<&QueryState> {
-        self.root_mails
-            .get(mailbox)
-            .map(|root_mails| root_mails.state())
-    }
-
-    async fn set_root_mails_state(
-        &mut self,
-        mailbox: &MailboxId,
-        new_state: QueryState,
-    ) -> Result<(), Self::Error> {
-        if let Some(root_mails) = self.root_mails.get_mut(mailbox) {
-            root_mails.set_state(new_state);
-        }
-
-        Ok(())
-    }
-
-    async fn get_root_mails_last_id(&self, mailbox: &MailboxId) -> Option<MailId> {
-        self.root_mails
-            .get(mailbox)
-            .and_then(|root_mails| root_mails.get_last_id())
-    }
-
-    async fn query_root_mails(
-        &self,
-        mailbox: &MailboxId,
-        window: QueryWindow,
-    ) -> Result<Option<cache::QueryResponse<MailData>>, Self::Error> {
-        let range = window.as_range();
-        let Some(root_mails) = self.root_mails.get(mailbox) else {
-            return Ok(None);
-        };
-
-        Ok(Some(root_mails.query(range).map(|id| {
-            self.mails
-                .get(&id)
-                .cloned()
-                .expect("MailData has been fetched as well")
-        })))
-    }
-
     async fn evict_mails(&mut self, mails: &[MailId]) -> Result<(), Self::Error> {
         for id in mails {
             self.mail_text_body.remove(id);
@@ -251,33 +209,6 @@ impl MailCache for HashMapDataSource {
                 }
             }
         }
-        Ok(())
-    }
-
-    async fn upsert_root_mails(
-        &mut self,
-        id: &MailboxId,
-        start: usize,
-        root_mails: Vec<MailData>,
-        new_state: QueryState,
-    ) -> Result<(), Self::Error> {
-        let root_mail_ids = root_mails.iter().map(|data| data.id.clone()).collect();
-
-        match self.root_mails.entry(id.clone()) {
-            std::collections::hash_map::Entry::Occupied(mut entry) => {
-                let root_mails = entry.get_mut();
-                root_mails.set(start, root_mail_ids, new_state);
-            }
-            std::collections::hash_map::Entry::Vacant(entry) => {
-                entry.insert(RootMails::new(start, root_mail_ids, new_state));
-            }
-        }
-
-        for root_mail in root_mails {
-            let id = root_mail.id.clone();
-            self.mails.insert(id, root_mail);
-        }
-
         Ok(())
     }
 }

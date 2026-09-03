@@ -1,15 +1,15 @@
 mod mail;
 mod mailbox;
+mod root_mails;
 mod thread;
-mod utils;
 
 use super::{BaseDataSource, types::GetState};
 use crate::types::{
     MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailboxData,
     MailboxId, ThreadId,
 };
+use root_mails::RootMails;
 use std::collections::HashMap;
-use utils::root_mails::RootMails;
 
 #[derive(Default)]
 pub struct HashMapDataSource {

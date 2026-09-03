@@ -1,5 +1,6 @@
 mod mail;
 mod mailbox;
+mod root_mails;
 mod thread;
 
 use super::BaseDataSource;

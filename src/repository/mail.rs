@@ -27,7 +27,6 @@ where
         id: MailId,
         tx: oneshot::Sender<Result<Vec<MailDataAttachment>, Error<C, R>>>,
     },
-
     QueryRootMails {
         mailbox: MailboxId,
         start: i32,
@@ -231,7 +230,7 @@ where
                     value: root_mails,
                     state: email_get_state,
                 },
-            state: root_mail_query_state,
+            state: root_mails_query_state,
         } = self
             .remote
             .fetch_root_mails(&id, &window)
@@ -240,25 +239,23 @@ where
 
         let mut cache_lock = self.cache.write().await;
 
-        let opt_current_email_get_state = cache_lock.get_mail_state().await;
-        if opt_current_email_get_state
-            .is_some_and(|current_email_get_state| current_email_get_state != &email_get_state)
-        {
-            self.apply_email_get_changes(&mut cache_lock).await?;
+        if let Some(current_email_get_state) = cache_lock.get_mail_state().await {
+            if *current_email_get_state != email_get_state {
+                self.apply_email_get_changes(&mut cache_lock).await?;
+            }
         }
 
-        let opt_current_root_mail_query_state = cache_lock.get_root_mails_state(&id).await;
-        if opt_current_root_mail_query_state.is_some_and(|current_root_mail_query_state| {
-            current_root_mail_query_state != &root_mail_query_state
-        }) {
-            self.apply_root_mail_query_changes(&id, &window, &mut cache_lock)
-                .await?;
+        if let Some(current_root_mail_query_state) = cache_lock.get_root_mails_state(&id).await {
+            if *current_root_mail_query_state != root_mails_query_state {
+                self.apply_root_mail_query_changes(&id, &window, &mut cache_lock)
+                    .await?;
+            }
         }
 
         debug_assert_eq!(cache_lock.get_mail_state().await, Some(&email_get_state));
         debug_assert_eq!(
             cache_lock.get_root_mails_state(&id).await,
-            Some(&root_mail_query_state)
+            Some(&root_mails_query_state)
         );
 
         cache_lock
@@ -266,7 +263,7 @@ where
                 &id,
                 window.start as usize,
                 root_mails.clone(),
-                root_mail_query_state,
+                root_mails_query_state,
             )
             .await
             .map_err(Error::Cache)?;

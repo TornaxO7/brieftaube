@@ -1,12 +1,85 @@
 use crate::{
-    datasource::types::{QueryState, cache},
-    types::MailId,
+    datasource::{
+        RootMailsCache,
+        hashmap::HashMapDataSource,
+        types::{QueryState, cache},
+    },
+    types::{MailData, MailId, MailboxId},
 };
 use std::ops::Range;
 
+impl RootMailsCache for HashMapDataSource {
+    async fn get_root_mails_state(&self, mailbox: &MailboxId) -> Option<&QueryState> {
+        self.root_mails
+            .get(mailbox)
+            .map(|root_mails| root_mails.state())
+    }
+
+    async fn set_root_mails_state(
+        &mut self,
+        mailbox: &MailboxId,
+        new_state: QueryState,
+    ) -> Result<(), Self::Error> {
+        if let Some(root_mails) = self.root_mails.get_mut(mailbox) {
+            root_mails.set_state(new_state);
+        }
+
+        Ok(())
+    }
+
+    async fn get_root_mails_last_id(&self, mailbox: &MailboxId) -> Option<MailId> {
+        self.root_mails
+            .get(mailbox)
+            .and_then(|root_mails| root_mails.get_last_id())
+    }
+
+    async fn query_root_mails(
+        &self,
+        mailbox: &MailboxId,
+        window: crate::datasource::types::QueryWindow,
+    ) -> Result<Option<cache::QueryResponse<MailData>>, Self::Error> {
+        let range = window.as_range();
+        let Some(root_mails) = self.root_mails.get(mailbox) else {
+            return Ok(None);
+        };
+
+        Ok(Some(root_mails.query(range).map(|id| {
+            self.mails
+                .get(&id)
+                .cloned()
+                .expect("MailData has been fetched as well")
+        })))
+    }
+
+    async fn upsert_root_mails(
+        &mut self,
+        mailbox: &MailboxId,
+        start: usize,
+        root_mails: Vec<MailData>,
+        new_state: QueryState,
+    ) -> Result<(), Self::Error> {
+        let root_mail_ids = root_mails.iter().map(|data| data.id.clone()).collect();
+
+        match self.root_mails.entry(mailbox.clone()) {
+            std::collections::hash_map::Entry::Occupied(mut entry) => {
+                let root_mails = entry.get_mut();
+                root_mails.set(start, root_mail_ids);
+            }
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(RootMails::new(start, root_mail_ids, new_state));
+            }
+        }
+
+        for root_mail in root_mails {
+            let id = root_mail.id.clone();
+            self.mails.insert(id, root_mail);
+        }
+
+        Ok(())
+    }
+}
+
 pub struct RootMails {
-    // TODO: Just do a simple `Vec<Option<MailId>>`...
-    // KISS!!
     sections: Vec<Section>,
     state: QueryState,
 }
@@ -21,7 +94,13 @@ impl RootMails {
         }
     }
 
-    pub fn set(&mut self, start: usize, ids: Vec<MailId>, new_state: QueryState) {
+    pub fn add(&mut self, ids: Vec<(MailId, usize)>) {
+        for (id, index) in ids {
+            self.set(index, vec![id]);
+        }
+    }
+
+    pub fn set(&mut self, start: usize, ids: Vec<MailId>) {
         debug_assert!(!ids.is_empty());
         let end = start + ids.len();
 
@@ -62,8 +141,6 @@ impl RootMails {
                 ids: merged_ids,
             }],
         );
-
-        self.state = new_state;
     }
 
     pub fn query(&self, range: Range<usize>) -> cache::QueryResponse<MailId> {
@@ -181,7 +258,7 @@ mod tests {
             };
 
             let ids = new_mail_ids(0..5);
-            root.set(0, ids, "1".into());
+            root.set(0, ids);
 
             assert_eq!(
                 root.sections,
@@ -197,7 +274,7 @@ mod tests {
             };
 
             let ids = new_mail_ids(20..30);
-            root.set(20, ids, "1".into());
+            root.set(20, ids);
 
             assert_eq!(
                 root.sections,
@@ -217,7 +294,7 @@ mod tests {
             };
 
             let ids = new_mail_ids(20..30);
-            root.set(20, ids, "1".into());
+            root.set(20, ids);
 
             assert_eq!(
                 root.sections,
@@ -233,7 +310,7 @@ mod tests {
             };
 
             let ids = new_mail_ids(10..20);
-            root.set(10, ids, "1".into());
+            root.set(10, ids);
 
             assert_eq!(
                 root.sections,
@@ -249,7 +326,7 @@ mod tests {
             };
 
             let ids = new_mail_ids(30..40);
-            root.set(30, ids, "1".into());
+            root.set(30, ids);
 
             assert_eq!(
                 root.sections,
