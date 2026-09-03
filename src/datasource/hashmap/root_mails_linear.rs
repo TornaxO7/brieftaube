@@ -10,9 +10,7 @@ use std::{collections::HashSet, ops::Range};
 
 impl RootMailsCache for HashMapDataSource {
     async fn get_root_mails_state(&self, mailbox: &MailboxId) -> Option<&QueryState> {
-        self.root_mails
-            .get(mailbox)
-            .map(|root_mails| root_mails.state())
+        self.root_mails_state.get(mailbox)
     }
 
     async fn set_root_mails_state(
@@ -20,9 +18,10 @@ impl RootMailsCache for HashMapDataSource {
         mailbox: &MailboxId,
         new_state: QueryState,
     ) -> Result<(), Self::Error> {
-        if let Some(root_mails) = self.root_mails.get_mut(mailbox) {
-            root_mails.set_state(new_state);
-        }
+        self.root_mails_state
+            .entry(mailbox.clone())
+            .and_modify(|state| *state = new_state.clone())
+            .or_insert(new_state);
 
         Ok(())
     }
@@ -51,28 +50,43 @@ impl RootMailsCache for HashMapDataSource {
         })))
     }
 
-    async fn upsert_root_mails(
+    async fn insert_root_mails(
         &mut self,
         mailbox: &MailboxId,
-        start: usize,
-        root_mails: Vec<MailData>,
-        new_state: QueryState,
+        mails: Vec<(MailData, usize)>,
     ) -> Result<(), Self::Error> {
-        let root_mail_ids = root_mails.iter().map(|data| data.id.clone()).collect();
+        let additional_root_mails = mails
+            .iter()
+            .map(|(data, idx)| (data.id.clone(), idx.clone()))
+            .collect();
 
         match self.root_mails.entry(mailbox.clone()) {
             std::collections::hash_map::Entry::Occupied(mut entry) => {
                 let root_mails = entry.get_mut();
-                root_mails.set(start, root_mail_ids);
+                root_mails.add(additional_root_mails);
             }
             std::collections::hash_map::Entry::Vacant(entry) => {
-                entry.insert(RootMails::new(start, root_mail_ids, new_state));
+                let mut root_mails = RootMails::new();
+                root_mails.add(additional_root_mails);
+                entry.insert(root_mails);
             }
         }
 
-        for root_mail in root_mails {
-            let id = root_mail.id.clone();
-            self.mails.insert(id, root_mail);
+        for (data, _idx) in mails {
+            let id = data.id.clone();
+            self.mails.insert(id, data);
+        }
+
+        Ok(())
+    }
+
+    async fn evict_root_mails(
+        &mut self,
+        mailbox: &MailboxId,
+        ids: HashSet<MailId>,
+    ) -> Result<(), Self::Error> {
+        if let Some(root_mails) = self.root_mails.get_mut(mailbox) {
+            root_mails.remove(ids);
         }
 
         Ok(())
@@ -81,22 +95,22 @@ impl RootMailsCache for HashMapDataSource {
 
 pub struct RootMails {
     ids: Vec<Option<MailId>>,
-    state: QueryState,
 }
 
 impl RootMails {
-    pub fn new(start: usize, init_ids: Vec<MailId>, state: QueryState) -> Self {
-        let end = start + init_ids.len();
-        let mut ids = vec![None; end.next_power_of_two()];
-
-        ids.splice(start..end, init_ids.into_iter().map(|id| Some(id)));
-
-        Self { ids, state: state }
+    pub fn new() -> Self {
+        Self {
+            ids: Vec::with_capacity(1024),
+        }
     }
 
     pub fn add(&mut self, ids: Vec<(MailId, usize)>) {
         for (id, index) in ids {
-            self.set(index, vec![id]);
+            if self.ids.len() < index {
+                self.ids.resize(index, None);
+            }
+
+            self.ids.insert(index, Some(id));
         }
     }
 
@@ -117,17 +131,6 @@ impl RootMails {
                 }
             }
         }
-    }
-
-    pub fn set(&mut self, start: usize, ids: Vec<MailId>) {
-        debug_assert!(!ids.is_empty());
-        let end = start + ids.len();
-        if self.ids.len() < end {
-            self.ids.resize(end.next_power_of_two(), None);
-        }
-
-        self.ids
-            .splice(start..end, ids.into_iter().map(|id| Some(id)));
     }
 
     pub fn query(&self, range: Range<usize>) -> cache::QueryResponse<MailId> {
@@ -194,14 +197,6 @@ impl RootMails {
         self.ids.clear();
     }
 
-    pub fn state(&self) -> &QueryState {
-        &self.state
-    }
-
-    pub fn set_state(&mut self, new_state: QueryState) {
-        self.state = new_state;
-    }
-
     pub fn get_last_id(&self) -> Option<MailId> {
         self.ids
             .iter()
@@ -223,7 +218,6 @@ mod tests {
         fn all_some() {
             let root = RootMails {
                 ids: vec![Some("1".into()), Some("2".into())],
-                state: "1".into(),
             };
 
             assert_eq!(
@@ -242,7 +236,6 @@ mod tests {
         fn all_none() {
             let root = RootMails {
                 ids: vec![None, None],
-                state: "1".into(),
             };
 
             assert_eq!(
@@ -258,7 +251,6 @@ mod tests {
         fn empty_prefix_and_suffix() {
             let root = RootMails {
                 ids: vec![None, Some("1".into()), Some("2".into()), None],
-                state: "1".into(),
             };
 
             assert_eq!(
@@ -277,7 +269,6 @@ mod tests {
         fn empty_infix() {
             let root = RootMails {
                 ids: vec![Some("1".into()), None, Some("2".into())],
-                state: "1".into(),
             };
 
             assert_eq!(
@@ -302,7 +293,6 @@ mod tests {
         fn range_bigger_than_values() {
             let root = RootMails {
                 ids: vec![Some("1".into())],
-                state: "1".into(),
             };
 
             assert_eq!(

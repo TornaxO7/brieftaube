@@ -258,13 +258,18 @@ where
             Some(&root_mails_query_state)
         );
 
+        let cache_root_mails = root_mails
+            .clone()
+            .into_iter()
+            .enumerate()
+            .map(|(idx, root_mail)| {
+                let position = window.start as usize + idx;
+                (root_mail, position)
+            })
+            .collect();
+
         cache_lock
-            .upsert_root_mails(
-                &id,
-                window.start as usize,
-                root_mails.clone(),
-                root_mails_query_state,
-            )
+            .insert_root_mails(&id, cache_root_mails)
             .await
             .map_err(Error::Cache)?;
 

@@ -3,6 +3,8 @@ pub mod hashmap;
 pub mod jmap;
 pub mod types;
 
+use std::collections::HashSet;
+
 use crate::types::{
     MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailNew, MailUpdate,
     MailboxData, MailboxId, MailboxNew, MailboxUpdate, ParentMailboxId, ThreadId,
@@ -232,12 +234,16 @@ pub trait RootMailsCache: MailCache {
         window: QueryWindow,
     ) -> Result<Option<cache::QueryResponse<MailData>>, Self::Error>;
 
-    async fn upsert_root_mails(
+    async fn insert_root_mails(
         &mut self,
         mailbox: &MailboxId,
-        start: usize,
-        root_mails: Vec<MailData>,
-        new_state: QueryState,
+        root_mails: Vec<(MailData, usize)>,
+    ) -> Result<(), Self::Error>;
+
+    async fn evict_root_mails(
+        &mut self,
+        mailbox: &MailboxId,
+        ids: HashSet<MailId>,
     ) -> Result<(), Self::Error>;
 }
 

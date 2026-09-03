@@ -4,9 +4,12 @@ mod root_mails_linear;
 mod thread;
 
 use super::{BaseDataSource, types::GetState};
-use crate::types::{
-    MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailboxData,
-    MailboxId, ThreadId,
+use crate::{
+    datasource::types::QueryState,
+    types::{
+        MailData, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId, MailboxData,
+        MailboxId, ThreadId,
+    },
 };
 use root_mails_linear::RootMails;
 use std::collections::HashMap;
@@ -22,6 +25,7 @@ pub struct HashMapDataSource {
     mail_html_body: HashMap<MailId, MailDataHtmlBody>,
     mail_attachments: HashMap<MailId, Vec<MailDataAttachment>>,
 
+    root_mails_state: HashMap<MailboxId, QueryState>,
     mail_get_state: Option<GetState>,
     mailboxes_get_state: Option<GetState>,
     threads_get_state: Option<GetState>,
