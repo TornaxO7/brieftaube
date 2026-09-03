@@ -50,31 +50,24 @@ impl RootMailsCache for HashMapDataSource {
         })))
     }
 
-    async fn insert_root_mails(
+    async fn insert_root_mails<MailsWithIndex>(
         &mut self,
         mailbox: &MailboxId,
-        mails: Vec<(MailData, usize)>,
-    ) -> Result<(), Self::Error> {
-        let additional_root_mails = mails
-            .iter()
-            .map(|(data, idx)| (data.id.clone(), idx.clone()))
-            .collect();
-
+        mails: MailsWithIndex,
+    ) -> Result<(), Self::Error>
+    where
+        MailsWithIndex: IntoIterator<Item = (MailId, usize)>,
+    {
         match self.root_mails.entry(mailbox.clone()) {
             std::collections::hash_map::Entry::Occupied(mut entry) => {
                 let root_mails = entry.get_mut();
-                root_mails.add(additional_root_mails);
+                root_mails.add(mails);
             }
             std::collections::hash_map::Entry::Vacant(entry) => {
                 let mut root_mails = RootMails::new();
-                root_mails.add(additional_root_mails);
+                root_mails.add(mails);
                 entry.insert(root_mails);
             }
-        }
-
-        for (data, _idx) in mails {
-            let id = data.id.clone();
-            self.mails.insert(id, data);
         }
 
         Ok(())
@@ -104,7 +97,10 @@ impl RootMails {
         }
     }
 
-    pub fn add(&mut self, ids: Vec<(MailId, usize)>) {
+    pub fn add<MailIdsWithIndex>(&mut self, ids: MailIdsWithIndex)
+    where
+        MailIdsWithIndex: IntoIterator<Item = (MailId, usize)>,
+    {
         for (id, index) in ids {
             if self.ids.len() < index {
                 self.ids.resize(index, None);

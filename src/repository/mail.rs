@@ -247,7 +247,7 @@ where
 
         if let Some(current_root_mail_query_state) = cache_lock.get_root_mails_state(&id).await {
             if *current_root_mail_query_state != root_mails_query_state {
-                self.apply_root_mail_query_changes(&id, &window, &mut cache_lock)
+                self.apply_root_mail_query_changes(&id, &mut cache_lock)
                     .await?;
             }
         }
@@ -258,18 +258,28 @@ where
             Some(&root_mails_query_state)
         );
 
-        let cache_root_mails = root_mails
-            .clone()
-            .into_iter()
+        let cache_root_mails: Vec<(MailId, usize)> = root_mails
+            .iter()
             .enumerate()
             .map(|(idx, root_mail)| {
+                let id = root_mail.id.clone();
                 let position = window.start as usize + idx;
-                (root_mail, position)
+                (id, position)
             })
             .collect();
 
         cache_lock
             .insert_root_mails(&id, cache_root_mails)
+            .await
+            .map_err(Error::Cache)?;
+
+        cache_lock
+            .upsert_mails(root_mails.clone())
+            .await
+            .map_err(Error::Cache)?;
+
+        cache_lock
+            .set_root_mails_state(&id, root_mails_query_state)
             .await
             .map_err(Error::Cache)?;
 

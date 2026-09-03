@@ -2,6 +2,8 @@ pub mod mail;
 pub mod mailbox;
 pub mod thread;
 
+use std::collections::HashSet;
+
 use crate::{
     datasource::{
         Cache, Remote,
@@ -234,10 +236,9 @@ where
     async fn apply_root_mail_query_changes(
         &self,
         id: &MailboxId,
-        window: &QueryWindow,
         cache_lock: &mut RwLockWriteGuard<'_, C>,
     ) -> Result<(), Error<C, R>> {
-        let Some(mut current_state) = cache_lock.get_root_mails_state(id).await.cloned() else {
+        let Some(current_state) = cache_lock.get_root_mails_state(id).await.cloned() else {
             return Ok(());
         };
 
@@ -249,7 +250,15 @@ where
             .await
             .map_err(Error::Remote)?;
 
-        todo!("remove first, then add");
+        cache_lock
+            .evict_root_mails(id, result.removed.into_iter().collect())
+            .await
+            .map_err(Error::Cache)?;
+
+        cache_lock
+            .insert_root_mails(id, result.added)
+            .await
+            .map_err(Error::Cache)?;
 
         cache_lock
             .set_root_mails_state(id, result.new_state)

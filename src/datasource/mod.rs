@@ -234,11 +234,13 @@ pub trait RootMailsCache: MailCache {
         window: QueryWindow,
     ) -> Result<Option<cache::QueryResponse<MailData>>, Self::Error>;
 
-    async fn insert_root_mails(
+    async fn insert_root_mails<MailsWithIndex>(
         &mut self,
         mailbox: &MailboxId,
-        root_mails: Vec<(MailData, usize)>,
-    ) -> Result<(), Self::Error>;
+        root_mails: MailsWithIndex,
+    ) -> Result<(), Self::Error>
+    where
+        MailsWithIndex: IntoIterator<Item = (MailId, usize)>;
 
     async fn evict_root_mails(
         &mut self,
