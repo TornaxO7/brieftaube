@@ -1,16 +1,89 @@
 // pub mod composer;
 // pub mod log_viewer;
-// pub mod mailfs;
+pub mod mailfs;
 // pub mod palette;
 // pub mod prompt;
 // pub mod reader;
 // pub mod statusbar;
-// mod utils;
+mod utils;
 
+use color_eyre::eyre;
 use crossterm::event::Event;
-use ratatui::{Frame, layout::Rect};
+use futures::{FutureExt, StreamExt};
+use ratatui::{DefaultTerminal, Frame, layout::Rect};
+use tracing::error;
 
-pub trait LayerCore<ParentAction = crate::Action> {
+enum Layer {
+    Mailfs(mailfs::State),
+}
+
+impl Layer {
+    pub fn is_overlay(&self) -> bool {
+        false
+    }
+}
+
+pub enum Action {
+    Redraw,
+    Quit,
+}
+
+/// Stores the app state
+pub struct Ui {
+    is_running: bool,
+    layers: Vec<Layer>,
+    needs_full_redraw: bool,
+}
+
+impl Ui {
+    pub fn new() -> Self {
+        Self {
+            is_running: true,
+            layers: vec![],
+            needs_full_redraw: false,
+        }
+    }
+
+    pub async fn run(mut self, terminal: &mut DefaultTerminal) -> eyre::Result<()> {
+        let mut reader = crossterm::event::EventStream::new();
+
+        while self.is_running {
+            tokio::select! {
+                maybe_event = reader.next().fuse() => match maybe_event {
+                    Some(Ok(event)) => if let Some(action) = self.handle_event(event) {
+                        self.apply_action(action);
+                    }
+                    Some(Err(e)) => error!("{}", e),
+                    None => {},
+                }
+            }
+
+            terminal.draw(|frame| self.draw(frame))?;
+        }
+
+        Ok(())
+    }
+
+    fn draw(&mut self, frame: &mut Frame) {}
+
+    fn handle_event(&mut self, event: Event) -> Option<Action> {
+        None
+    }
+
+    fn apply_action(&mut self, action: Action) {
+        match action {
+            Action::Redraw => {
+                self.needs_full_redraw = true;
+            }
+
+            Action::Quit => {
+                self.is_running = false;
+            }
+        }
+    }
+}
+
+pub trait LayerCore<ParentAction = Action> {
     fn handle_event(&mut self, event: Event) -> Option<ParentAction>;
 
     fn is_overlay(&self) -> bool {
@@ -24,7 +97,7 @@ pub trait LayerOverlay: LayerCore {
     fn into_message(self) -> Option<String>;
 }
 
-pub trait LayerState<Action, ParentAction = crate::Action>: LayerCore<ParentAction> {
+pub trait LayerState<Action, ParentAction = Action>: LayerCore<ParentAction> {
     #[must_use]
     fn apply_action(&mut self, action: Action) -> Option<ParentAction>;
 

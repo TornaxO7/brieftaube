@@ -2,16 +2,9 @@ mod selection;
 
 use super::UserAction;
 use crate::{
-    backend::{
-        Backend, LoadingRole,
-        types::{MailId, MailboxId, ParentMailboxId, TOP_PARENT_MAILBOX_ID, ThreadId},
-    },
-    layer::{
-        LayerCore, LayerState,
-        mailfs::backend::{MailfsMessage, MailfsSnapshot},
-        utils::keybindmanager::KeybindManager,
-    },
     task_manager::TaskManager,
+    types::{MailId, MailboxId},
+    ui::utils::keybindmanager::KeybindManager,
 };
 use futures::stream;
 use futures::stream::StreamExt;

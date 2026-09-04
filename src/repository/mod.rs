@@ -2,12 +2,14 @@ pub mod mail;
 pub mod mailbox;
 pub mod thread;
 
+use std::collections::HashMap;
+
 use crate::{
     datasource::{
         Cache, Remote,
         types::{cache, remote},
     },
-    types::{MailId, MailboxId},
+    types::{AccountId, MailId, MailboxId},
 };
 use tokio::sync::{RwLock, RwLockWriteGuard, mpsc};
 
