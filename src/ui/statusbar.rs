@@ -91,7 +91,13 @@ impl<'a> Widget for Statusbar<'a> {
 
                 Text::raw(msg).style(status_style)
             })
-            .unwrap_or_default();
+            .unwrap_or(
+                Text::raw("").style(
+                    Style::new()
+                        .fg(scheme.on_secondary_container.into_color())
+                        .bg(scheme.secondary_container.into_color()),
+                ),
+            );
 
         Widget::render(status_msg, center, buf);
 

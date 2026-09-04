@@ -14,12 +14,7 @@ pub fn view(state: &mut super::State, frame: &mut Frame, area: Rect) {
     .areas(area);
 
     frame.render_widget(
-        Statusbar::default()
-            .layer_name("Mailfs(normal)")
-            .status_msg(statusbar::StatusMsg {
-                msg: "hello",
-                ty: statusbar::StatusMsgType::Info,
-            }),
+        Statusbar::default().layer_name("Mailfs(normal)"),
         statusbar_area,
     );
 }
