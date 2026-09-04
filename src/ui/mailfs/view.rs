@@ -1,8 +1,7 @@
-use crate::ui::statusbar::{self, Statusbar};
+use crate::ui::statusbar::Statusbar;
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
-    widgets::Widget,
 };
 
 pub fn view(state: &mut super::State, frame: &mut Frame, area: Rect) {

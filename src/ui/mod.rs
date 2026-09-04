@@ -15,7 +15,7 @@ use tracing::error;
 
 use crate::ui::palette::PaletteEntry;
 
-struct LayerMessage(pub String);
+pub struct LayerMessage(pub String);
 
 impl LayerMessage {
     pub fn as_str(&self) -> &str {

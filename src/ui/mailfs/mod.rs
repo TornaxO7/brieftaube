@@ -3,7 +3,10 @@ mod view;
 
 use crate::{
     types::{MailId, MailKeyword, MailboxId, ParentMailboxId},
-    ui::{Action, LayerCore, LayerMessage, LayerState, utils::keybindmanager::KeybindManager},
+    ui::{
+        Action, LayerCore, LayerMessage, LayerState,
+        utils::keybindmanager::{self, KeybindManager},
+    },
 };
 use crossterm::event::Event;
 use ratatui::widgets::ListState;
@@ -66,8 +69,19 @@ impl From<State> for Option<LayerMessage> {
 }
 
 impl LayerCore for State {
-    fn handle_event(&mut self, event: Event) -> Option<super::Action> {
-        todo!()
+    fn handle_event(&mut self, event: Event) -> Option<Action> {
+        match event {
+            Event::Mouse(_)
+            | Event::Paste(_)
+            | Event::Resize(_, _)
+            | Event::FocusGained
+            | Event::FocusLost => None,
+            Event::Key(key_event) => match self.keybindings.handle_event(key_event) {
+                keybindmanager::HandleEvent::Action(action) => self.apply_action(action),
+                keybindmanager::HandleEvent::Registered => None,
+                keybindmanager::HandleEvent::Cancel => None,
+            },
+        }
     }
 
     fn handle_layer_message<Msg>(&mut self, msg: Msg) -> Option<Action>
