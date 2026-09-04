@@ -1,8 +1,8 @@
 // pub mod composer;
 // pub mod log_viewer;
 pub mod mailfs;
-// pub mod palette;
-// pub mod prompt;
+pub mod palette;
+pub mod prompt;
 // pub mod reader;
 // pub mod statusbar;
 mod utils;
@@ -10,20 +10,46 @@ mod utils;
 use color_eyre::eyre;
 use crossterm::event::Event;
 use futures::{FutureExt, StreamExt};
-use ratatui::{DefaultTerminal, Frame, layout::Rect};
+use ratatui::{DefaultTerminal, Frame};
 use tracing::error;
+
+use crate::ui::palette::PaletteEntry;
+
+struct LayerMessage(pub String);
+
+impl LayerMessage {
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl From<String> for LayerMessage {
+    fn from(msg: String) -> Self {
+        Self(msg)
+    }
+}
 
 enum Layer {
     Mailfs(mailfs::State),
+
+    Palette(palette::State),
+    Prompt(prompt::State),
 }
 
-impl Layer {
-    pub fn is_overlay(&self) -> bool {
-        false
+impl From<Layer> for Option<LayerMessage> {
+    fn from(layer: Layer) -> Self {
+        match layer {
+            Layer::Mailfs(state) => state.into(),
+            Layer::Palette(state) => state.into(),
+            Layer::Prompt(state) => state.into(),
+        }
     }
 }
 
 pub enum Action {
+    OpenPrompt { description: String },
+    OpenPalette { entries: Vec<PaletteEntry> },
+    Back,
     Redraw,
     Quit,
 }
@@ -39,7 +65,7 @@ impl Ui {
     pub fn new() -> Self {
         Self {
             is_running: true,
-            layers: vec![],
+            layers: vec![Layer::Mailfs(mailfs::State::new())],
             needs_full_redraw: false,
         }
     }
@@ -64,14 +90,51 @@ impl Ui {
         Ok(())
     }
 
-    fn draw(&mut self, frame: &mut Frame) {}
+    fn draw(&mut self, frame: &mut Frame) {
+        let area = frame.area();
+
+        match self.layers.last_mut().expect("There's at least one layer") {
+            Layer::Mailfs(state) => mailfs::view(state, frame, area),
+            Layer::Palette(state) => palette::view(state, frame, area),
+            Layer::Prompt(state) => prompt::view(state, frame, area),
+        }
+    }
 
     fn handle_event(&mut self, event: Event) -> Option<Action> {
-        None
+        match self.layers.last_mut().expect("At least one layer is there") {
+            Layer::Mailfs(state) => state.handle_event(event),
+            Layer::Palette(state) => state.handle_event(event),
+            Layer::Prompt(state) => state.handle_event(event),
+        }
     }
 
     fn apply_action(&mut self, action: Action) {
         match action {
+            Action::OpenPrompt { description } => {
+                let state = prompt::State::new(description);
+                self.layers.push(Layer::Prompt(state));
+            }
+            Action::OpenPalette { entries } => {
+                let state = palette::State::new(entries);
+                self.layers.push(Layer::Palette(state));
+            }
+
+            Action::Back => {
+                let Some(layer) = self.layers.pop() else {
+                    panic!("Layers must never be empty!");
+                };
+
+                let action = match self.layers.last_mut().unwrap() {
+                    Layer::Mailfs(state) => state.handle_layer_message(layer),
+                    Layer::Palette(state) => state.handle_layer_message(layer),
+                    Layer::Prompt(state) => state.handle_layer_message(layer),
+                };
+
+                if let Some(action) = action {
+                    self.apply_action(action);
+                }
+            }
+
             Action::Redraw => {
                 self.needs_full_redraw = true;
             }
@@ -83,28 +146,22 @@ impl Ui {
     }
 }
 
-pub trait LayerCore<ParentAction = Action> {
+pub trait LayerCore<ParentAction = Action>: Into<Option<LayerMessage>> {
     fn handle_event(&mut self, event: Event) -> Option<ParentAction>;
 
     fn is_overlay(&self) -> bool {
         false
     }
 
-    fn draw(&mut self, frame: &mut Frame, area: Rect);
-}
-
-pub trait LayerOverlay: LayerCore {
-    fn into_message(self) -> Option<String>;
-}
-
-pub trait LayerState<Action, ParentAction = Action>: LayerCore<ParentAction> {
     #[must_use]
-    fn apply_action(&mut self, action: Action) -> Option<ParentAction>;
-
-    #[must_use]
-    fn handle_overlay<O>(&mut self, overlay: O) -> Option<ParentAction>
+    fn handle_layer_message<Msg>(&mut self, layer: Msg) -> Option<ParentAction>
     where
-        O: LayerOverlay;
+        Msg: Into<Option<LayerMessage>>;
+}
+
+pub trait LayerState<UserAction, ParentAction = Action>: LayerCore<ParentAction> {
+    #[must_use]
+    fn apply_action(&mut self, action: UserAction) -> Option<ParentAction>;
 }
 
 // pub trait LayerModelDefaultHandleEvent<Action, ParentAction = crate::Action>:

@@ -1,4 +1,4 @@
-use crate::palette::PaletteEntry;
+use crate::ui::palette::PaletteEntry;
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator};
 
@@ -44,11 +44,10 @@ pub enum UserAction {
     #[strum(message = "Paste the entries which are marked as 'cut'.")]
     PasteSelectedEntries,
 
-    #[strum(message = "Mark the given mail as seen.")]
-    MarkMailAsSeen,
-    #[strum(message = "Mark the given mail as unseen.")]
-    MarkMailAsUnseen,
-
+    // #[strum(message = "Mark the given mail as seen.")]
+    // MarkMailAsSeen,
+    // #[strum(message = "Mark the given mail as unseen.")]
+    // MarkMailAsUnseen,
     #[strum(message = "Move the selected mailbox up")]
     MoveMailboxUp,
     #[strum(message = "Move the selected mailbox down")]
@@ -59,8 +58,6 @@ pub enum UserAction {
     #[strum(message = "Remove mailbox only, if it's empty.")]
     RemoveMailbox,
 
-    #[strum(message = "Open logs")]
-    OpenLogs,
     #[strum(message = "Quit the application")]
     Quit,
 }

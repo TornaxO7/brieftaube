@@ -1,4 +1,4 @@
-use super::Model;
+use super::State;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
@@ -10,7 +10,7 @@ use ratatui::{
 pub struct Palette;
 
 impl StatefulWidget for Palette {
-    type State = Model;
+    type State = State;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let [left, description] = area.layout(
