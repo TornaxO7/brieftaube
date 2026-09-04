@@ -9,7 +9,7 @@ pub enum Cache {
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
-pub enum Remote {
+pub enum Backend {
     #[default]
     Jmap,
 }
@@ -41,5 +41,5 @@ pub struct AccountConfig {
     pub cache: Cache,
 
     #[serde(default)]
-    pub remote: Remote,
+    pub backend: Backend,
 }

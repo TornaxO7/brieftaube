@@ -4,7 +4,7 @@ pub mod mailfs;
 pub mod palette;
 pub mod prompt;
 // pub mod reader;
-// pub mod statusbar;
+pub mod statusbar;
 mod utils;
 
 use color_eyre::eyre;
@@ -72,6 +72,7 @@ impl Ui {
 
     pub async fn run(mut self, terminal: &mut DefaultTerminal) -> eyre::Result<()> {
         let mut reader = crossterm::event::EventStream::new();
+        terminal.draw(|frame| self.draw(frame))?;
 
         while self.is_running {
             tokio::select! {

@@ -1,9 +1,10 @@
 use crate::{THEME, utils::IntoColor};
 use ratatui::{
-    Frame,
+    buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     style::Style,
     text::Text,
+    widgets::Widget,
 };
 
 pub enum StatusMsgType {
@@ -16,53 +17,92 @@ pub struct StatusMsg<'a> {
     pub ty: StatusMsgType,
 }
 
-pub fn draw(
-    layer_name: &str,
-    status_msg: StatusMsg<'_>,
-    pressed_keys: &str,
-    frame: &mut Frame,
-    area: Rect,
-) {
-    let layer_name = format!(" {layer_name} ");
-    let pressed_keys = format!(" {pressed_keys} ");
+#[derive(Default)]
+pub struct Statusbar<'a> {
+    layer_name: Option<&'a str>,
+    status_msg: Option<StatusMsg<'a>>,
+    pressed_keys: Option<&'a str>,
+}
 
-    let [left, center, right] = Layout::horizontal([
-        Constraint::Length(layer_name.len() as u16),
-        Constraint::Fill(1),
-        Constraint::Length(pressed_keys.len() as u16),
-    ])
-    .areas(area);
+impl<'a> Statusbar<'a> {
+    pub fn layer_name(mut self, layer_name: &'a str) -> Self {
+        self.layer_name = Some(layer_name);
+        self
+    }
 
-    let theme = THEME.get().unwrap();
-    let scheme = &theme.schemes.dark;
+    pub fn status_msg(mut self, status_msg: StatusMsg<'a>) -> Self {
+        self.status_msg = Some(status_msg);
+        self
+    }
 
-    frame.render_widget(
-        Text::raw(layer_name).style(
-            Style::new()
-                .fg(scheme.on_primary_container.into_color())
-                .bg(scheme.primary_container.into_color()),
-        ),
-        left,
-    );
+    pub fn pressed_keys(mut self, pressed_keys: &'a str) -> Self {
+        self.pressed_keys = Some(pressed_keys);
+        self
+    }
+}
 
-    let status_style = match status_msg.ty {
-        StatusMsgType::Error => Style::new()
-            .fg(scheme.on_error_container.into_color())
-            .bg(scheme.error_container.into_color()),
-        StatusMsgType::Info => Style::new()
-            .fg(scheme.on_secondary_container.into_color())
-            .bg(scheme.secondary_container.into_color()),
-    };
+impl<'a> Widget for Statusbar<'a> {
+    fn render(self, area: Rect, buf: &mut Buffer)
+    where
+        Self: Sized,
+    {
+        let layer_name = self
+            .layer_name
+            .map(|layer_name| format!(" {layer_name} "))
+            .unwrap_or_default();
 
-    let msg = format!(" {} ", status_msg.msg);
-    frame.render_widget(Text::raw(msg).style(status_style), center);
+        let pressed_keys = self
+            .pressed_keys
+            .map(|pressed_keys| format!(" {pressed_keys} "))
+            .unwrap_or_default();
 
-    frame.render_widget(
-        Text::raw(pressed_keys).style(
-            Style::new()
-                .fg(scheme.on_tertiary_container.into_color())
-                .bg(scheme.tertiary_container.into_color()),
-        ),
-        right,
-    );
+        let [left, center, right] = Layout::horizontal([
+            Constraint::Length(layer_name.len() as u16),
+            Constraint::Fill(1),
+            Constraint::Length(pressed_keys.len() as u16),
+        ])
+        .areas(area);
+
+        let theme = THEME.get().unwrap();
+        let scheme = &theme.schemes.dark;
+
+        Widget::render(
+            Text::raw(layer_name).style(
+                Style::new()
+                    .fg(scheme.on_primary_container.into_color())
+                    .bg(scheme.primary_container.into_color()),
+            ),
+            left,
+            buf,
+        );
+
+        let status_msg = self
+            .status_msg
+            .map(|status_msg| {
+                let status_style = match status_msg.ty {
+                    StatusMsgType::Error => Style::new()
+                        .fg(scheme.on_error_container.into_color())
+                        .bg(scheme.error_container.into_color()),
+                    StatusMsgType::Info => Style::new()
+                        .fg(scheme.on_secondary_container.into_color())
+                        .bg(scheme.secondary_container.into_color()),
+                };
+                let msg = format!(" {} ", status_msg.msg);
+
+                Text::raw(msg).style(status_style)
+            })
+            .unwrap_or_default();
+
+        Widget::render(status_msg, center, buf);
+
+        Widget::render(
+            Text::raw(pressed_keys).style(
+                Style::new()
+                    .fg(scheme.on_tertiary_container.into_color())
+                    .bg(scheme.tertiary_container.into_color()),
+            ),
+            right,
+            buf,
+        );
+    }
 }
