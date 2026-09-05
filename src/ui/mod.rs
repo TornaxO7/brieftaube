@@ -150,10 +150,6 @@ impl Ui {
 pub trait LayerCore<ParentAction = Action>: Into<Option<LayerMessage>> {
     fn handle_event(&mut self, event: Event) -> Option<ParentAction>;
 
-    fn is_overlay(&self) -> bool {
-        false
-    }
-
     #[must_use]
     fn handle_layer_message<Msg>(&mut self, layer: Msg) -> Option<ParentAction>
     where
@@ -164,30 +160,3 @@ pub trait LayerState<UserAction, ParentAction = Action>: LayerCore<ParentAction>
     #[must_use]
     fn apply_action(&mut self, action: UserAction) -> Option<ParentAction>;
 }
-
-// pub trait LayerModelDefaultHandleEvent<Action, ParentAction = crate::Action>:
-//     LayerModel<Action, ParentAction>
-// where
-//     Action: Clone,
-// {
-//     fn keybinding_manager(&mut self) -> &mut KeybindManager<Action>;
-
-//     fn handle_event(&mut self, event: Event) -> Option<ParentAction> {
-//         match event {
-//             Event::Key(event) => {
-//                 tracing::debug!("{:#?}", event);
-
-//                 match self.keybinding_manager().handle_event(event) {
-//                     HandleEvent::Action(action) => {
-//                         let action = self.apply_action(action);
-//                         action
-//                     }
-//                     HandleEvent::Registered => None,
-//                     HandleEvent::Cancel => None,
-//                 }
-//             }
-//             Event::Mouse(_event) => None,
-//             _ => None,
-//         }
-//     }
-// }
