@@ -2,7 +2,7 @@ mod user_action;
 mod view;
 
 use crate::{
-    types::{MailId, MailKeyword, MailboxId, ParentMailboxId},
+    types::{MailKeyword, ParentMailboxId},
     ui::{
         Action, LayerCore, LayerMessage, LayerState,
         utils::keybindmanager::{self, KeybindManager},
@@ -22,20 +22,14 @@ enum OverlayValue {
     NewMailboxName,
 }
 
-pub enum RightColumn {
-    Mailbox(MailboxId),
-    MailPreview(MailId),
-}
-
 pub struct State {
     keybindings: KeybindManager<UserAction>,
     overlay_value: Option<OverlayValue>,
 
     pub throbber: ThrobberState,
-
-    account_column: ListState,
-    navigation_stack: Vec<ParentMailboxId>,
-    mailboxes: HashMap<ParentMailboxId, ListState>,
+    pub account_column: ListState,
+    pub navigation_stack: Vec<ParentMailboxId>,
+    pub mailboxes: HashMap<ParentMailboxId, ListState>,
 }
 
 impl State {
@@ -122,7 +116,7 @@ impl LayerState<UserAction> for State {
             UserAction::NavigateUp => self.navigate_up(),
             UserAction::NavigateToTop => self.navigate_to_top(),
             UserAction::NavigateToBottom => self.navigate_to_bottom(),
-            UserAction::NavigateRight => return self.navigate_right(),
+            UserAction::NavigateRight => self.navigate_right(),
             UserAction::NavigateLeft => self.navigate_left(),
             UserAction::NavigateToParent => self.navigate_to_parent(),
 

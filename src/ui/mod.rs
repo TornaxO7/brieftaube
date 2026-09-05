@@ -7,13 +7,12 @@ pub mod prompt;
 pub mod statusbar;
 mod utils;
 
+use crate::ui::palette::PaletteEntry;
 use color_eyre::eyre;
 use crossterm::event::Event;
 use futures::{FutureExt, StreamExt};
 use ratatui::{DefaultTerminal, Frame};
 use tracing::error;
-
-use crate::ui::palette::PaletteEntry;
 
 pub struct LayerMessage(pub String);
 
@@ -94,7 +93,20 @@ impl Ui {
     fn draw(&mut self, frame: &mut Frame) {
         let area = frame.area();
 
-        match self.layers.last_mut().expect("There's at least one layer") {
+        let is_overlay = match self.layers.last().unwrap() {
+            Layer::Mailfs(_) => false,
+            Layer::Palette(_) | Layer::Prompt(_) => true,
+        };
+
+        if is_overlay {
+            match self.layers.iter_mut().rev().skip(1).next().unwrap() {
+                Layer::Mailfs(state) => mailfs::view(state, frame, area),
+                Layer::Palette(state) => palette::view(state, frame, area),
+                Layer::Prompt(state) => prompt::view(state, frame, area),
+            }
+        }
+
+        match self.layers.last_mut().unwrap() {
             Layer::Mailfs(state) => mailfs::view(state, frame, area),
             Layer::Palette(state) => palette::view(state, frame, area),
             Layer::Prompt(state) => prompt::view(state, frame, area),
@@ -102,7 +114,7 @@ impl Ui {
     }
 
     fn handle_event(&mut self, event: Event) -> Option<Action> {
-        match self.layers.last_mut().expect("At least one layer is there") {
+        match self.layers.last_mut().unwrap() {
             Layer::Mailfs(state) => state.handle_event(event),
             Layer::Palette(state) => state.handle_event(event),
             Layer::Prompt(state) => state.handle_event(event),
