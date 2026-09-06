@@ -2,13 +2,13 @@ use serde::{Deserialize, Serialize};
 
 pub const FILE_NAME: &str = "config.toml";
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub enum Cache {
     #[default]
     Internal,
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub enum Backend {
     #[default]
     Jmap,
@@ -16,7 +16,7 @@ pub enum Backend {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
-    pub accounts: Vec<AccountConfig>,
+    pub users: Vec<UserConfig>,
     html_renderer: Option<String>,
     editor: Option<String>,
 }
@@ -31,9 +31,9 @@ impl Config {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AccountConfig {
-    pub address: String,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserConfig {
+    pub username: String,
     pub password: String,
     pub host: String,
 
