@@ -13,7 +13,10 @@ type EntryValue = String;
 type EntryDescription = String;
 
 pub enum Message {
-    Restart(Vec<PaletteEntry>),
+    Restart {
+        entries: Vec<PaletteEntry>,
+        map: fn(String) -> super::Message,
+    },
     Event(Event),
 }
 
@@ -31,7 +34,7 @@ pub struct State {
 
     pub list_state: ListState,
 
-    selected_entry: Option<EntryValue>,
+    pub map: fn(String) -> super::Message,
 }
 
 impl State {
@@ -45,10 +48,14 @@ impl State {
             input
         };
 
+        let map = |_| {
+            unreachable!();
+        };
+
         Self {
             input,
             nucleo,
-            selected_entry: None,
+            map,
             list_state: ListState::default().with_selected(Some(0)),
         }
     }
@@ -59,19 +66,23 @@ impl State {
 }
 
 impl Layer<Message, super::Message> for State {
-    fn update(&mut self, msg: Message) -> Option<super::Message> {
+    fn update(&mut self, msg: Message) -> Vec<super::Message> {
         match msg {
-            Message::Restart(entries) => self.handle_start(entries),
+            Message::Restart { entries, map } => self.handle_restart(entries, map),
             Message::Event(event) => self.handle_event(event),
         }
     }
 }
 
 impl State {
-    fn handle_start(&mut self, entries: Vec<PaletteEntry>) -> Option<super::Message> {
+    fn handle_restart(
+        &mut self,
+        entries: Vec<PaletteEntry>,
+        map: fn(String) -> super::Message,
+    ) -> Vec<super::Message> {
         self.nucleo.restart(true);
         self.input.clear();
-        self.selected_entry = None;
+        self.map = map;
         self.list_state.select(Some(0));
 
         let inj = self.nucleo.injector();
@@ -85,15 +96,15 @@ impl State {
             );
         }
 
-        None
+        vec![]
     }
 
-    fn handle_event(&mut self, event: Event) -> Option<super::Message> {
+    fn handle_event(&mut self, event: Event) -> Vec<super::Message> {
         match event {
             Event::Key(event) => {
                 match event.code {
                     KeyCode::Esc => {
-                        return Some(super::Message::Back);
+                        return vec![super::Message::Back];
                     }
                     KeyCode::Enter => {
                         let mut matches = self.nucleo.snapshot().matched_items(..);
@@ -102,18 +113,18 @@ impl State {
                             let item = matches.nth(idx).unwrap();
 
                             let value = item.data.0.clone();
-                            self.selected_entry = Some(value);
+                            return vec![super::Message::Back, (self.map)(value)];
                         }
 
-                        return Some(super::Message::Back);
+                        return vec![super::Message::Back];
                     }
                     KeyCode::Down => {
                         self.list_state.select_next();
-                        return None;
+                        return vec![];
                     }
                     KeyCode::Up => {
                         self.list_state.select_previous();
-                        return None;
+                        return vec![];
                     }
                     _ => {}
                 }
@@ -129,9 +140,9 @@ impl State {
                     false,
                 );
 
-                None
+                vec![]
             }
-            _ => None,
+            _ => vec![],
         }
     }
 }

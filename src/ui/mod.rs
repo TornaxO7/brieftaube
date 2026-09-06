@@ -30,8 +30,14 @@ pub enum Message {
     Prompt(prompt::Message),
 
     Event(Event),
-    OpenPrompt { description: String },
-    OpenPalette { entries: Vec<PaletteEntry> },
+    OpenPrompt {
+        description: String,
+        map: fn(String) -> Message,
+    },
+    OpenPalette {
+        entries: Vec<PaletteEntry>,
+        map: fn(String) -> Message,
+    },
     Back,
     Redraw,
     Quit,
@@ -73,20 +79,19 @@ impl Ui {
         let mut reader = crossterm::event::EventStream::new();
         terminal.draw(|frame| self.draw(frame))?;
 
+        let mut msgs = Vec::with_capacity(8);
+
         while self.is_running {
-            let mut msg = tokio::select! {
+            tokio::select! {
                 maybe_event = reader.next().fuse() => match maybe_event {
-                    Some(Ok(event)) => Some(Message::Event(event)),
-                    Some(Err(e)) => {
-                        error!("{}", e);
-                        None
-                    },
-                    None => None,
+                    Some(Ok(event)) => msgs.push(Message::Event(event)),
+                    Some(Err(e)) => error!("{}", e),
+                    None => (),
                 }
             };
 
-            while let Some(next_message) = msg {
-                msg = self.handle_message(next_message);
+            while let Some(next_message) = msgs.pop() {
+                msgs.extend(self.handle_message(next_message));
             }
 
             terminal.draw(|frame| self.draw(frame))?;
@@ -118,7 +123,7 @@ impl Ui {
         }
     }
 
-    fn handle_message(&mut self, msg: Message) -> Option<Message> {
+    fn handle_message(&mut self, msg: Message) -> Vec<Message> {
         match msg {
             Message::Event(event) => match self.layers.last_mut().unwrap() {
                 ActiveLayer::Mailfs => self.mailfs.update(mailfs::Message::Event(event)),
@@ -126,30 +131,32 @@ impl Ui {
                 ActiveLayer::Prompt => self.prompt.update(prompt::Message::Event(event)),
             },
 
-            Message::OpenPrompt { description } => {
-                self.prompt.update(prompt::Message::Reset(description));
+            Message::OpenPrompt { description, map } => {
+                self.prompt
+                    .update(prompt::Message::Reset { description, map });
                 self.layers.push(ActiveLayer::Prompt);
-                None
+                vec![]
             }
-            Message::OpenPalette { entries } => {
-                self.palette.update(palette::Message::Restart(entries));
+            Message::OpenPalette { entries, map } => {
+                self.palette
+                    .update(palette::Message::Restart { entries, map });
                 self.layers.push(ActiveLayer::Palette);
-                None
+                vec![]
             }
 
             Message::Back => {
                 self.layers.pop();
-                None
+                vec![]
             }
 
             Message::Redraw => {
                 self.needs_full_redraw = true;
-                None
+                vec![]
             }
 
             Message::Quit => {
                 self.is_running = false;
-                None
+                vec![]
             }
             Message::Mailfs(message) => self.mailfs.update(message),
             Message::Palette(message) => self.palette.update(message),
@@ -159,5 +166,5 @@ impl Ui {
 }
 
 pub trait Layer<LayerMsg, ParentLayerMsg = Message> {
-    fn update(&mut self, msg: LayerMsg) -> Option<ParentLayerMsg>;
+    fn update(&mut self, msg: LayerMsg) -> Vec<ParentLayerMsg>;
 }

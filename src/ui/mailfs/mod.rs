@@ -82,7 +82,7 @@ impl State {
 }
 
 impl Layer<Message> for State {
-    fn update(&mut self, msg: Message) -> Option<super::Message> {
+    fn update(&mut self, msg: Message) -> Vec<super::Message> {
         match msg {
             Message::Event(event) => self.handle_event(event),
             Message::UserAction(action) => self.handle_user_action(action),
@@ -92,22 +92,22 @@ impl Layer<Message> for State {
 }
 
 impl State {
-    fn handle_event(&mut self, event: Event) -> Option<super::Message> {
+    fn handle_event(&mut self, event: Event) -> Vec<super::Message> {
         match event {
             Event::Mouse(_)
             | Event::Paste(_)
             | Event::Resize(_, _)
             | Event::FocusGained
-            | Event::FocusLost => None,
+            | Event::FocusLost => vec![],
             Event::Key(key_event) => match self.keybindings.handle_event(key_event) {
                 keybindmanager::HandleEvent::Action(action) => self.handle_user_action(action),
-                keybindmanager::HandleEvent::Registered => None,
-                keybindmanager::HandleEvent::Cancel => None,
+                keybindmanager::HandleEvent::Registered => vec![],
+                keybindmanager::HandleEvent::Cancel => vec![],
             },
         }
     }
 
-    fn handle_user_action(&mut self, action: UserAction) -> Option<super::Message> {
+    fn handle_user_action(&mut self, action: UserAction) -> Vec<super::Message> {
         debug!("{:?}", action);
 
         match action {
@@ -135,87 +135,87 @@ impl State {
         }
     }
 
-    fn handle_selected_palette_entry(&mut self, entry: String) -> Option<super::Message> {
+    fn handle_selected_palette_entry(&mut self, entry: String) -> Vec<super::Message> {
         let action = UserAction::from_str(entry.as_str()).unwrap();
-        Some(super::Message::Mailfs(Message::UserAction(action)))
+        vec![super::Message::Mailfs(Message::UserAction(action))]
     }
 }
 
 /// Action implementations
 impl State {
-    fn quit(&self) -> Option<super::Message> {
-        Some(super::Message::Quit)
+    fn quit(&self) -> Vec<super::Message> {
+        vec![super::Message::Quit]
     }
 
-    fn open_command_palette(&mut self) -> Option<super::Message> {
+    fn open_command_palette(&mut self) -> Vec<super::Message> {
         let entries = UserAction::palette_options();
-        Some(super::Message::OpenPalette { entries })
+        vec![super::Message::OpenPalette {
+            entries,
+            map: |entry| super::Message::Mailfs(Message::SelectedPaletteEntry(entry)),
+        }]
     }
 
-    fn navigate_down(&self) -> Option<super::Message> {
-        todo!();
-        None
-    }
-
-    fn navigate_up(&self) -> Option<super::Message> {
-        todo!();
-        None
-    }
-
-    fn navigate_to_top(&mut self) -> Option<super::Message> {
-        todo!();
-        None
-    }
-
-    fn navigate_to_bottom(&mut self) -> Option<super::Message> {
-        todo!();
-        None
-    }
-
-    fn navigate_right(&mut self) -> Option<super::Message> {
+    fn navigate_down(&self) -> Vec<super::Message> {
         todo!();
     }
 
-    fn navigate_left(&mut self) -> Option<super::Message> {
+    fn navigate_up(&self) -> Vec<super::Message> {
         todo!();
     }
 
-    fn navigate_to_parent(&mut self) -> Option<super::Message> {
+    fn navigate_to_top(&mut self) -> Vec<super::Message> {
         todo!();
     }
 
-    fn select_entry(&mut self) -> Option<super::Message> {
+    fn navigate_to_bottom(&mut self) -> Vec<super::Message> {
         todo!();
     }
 
-    fn cut_selected_entries(&mut self) -> Option<super::Message> {
+    fn navigate_right(&mut self) -> Vec<super::Message> {
         todo!();
     }
 
-    fn paste_selected_entries(&mut self) -> Option<super::Message> {
+    fn navigate_left(&mut self) -> Vec<super::Message> {
         todo!();
     }
 
-    fn move_mailbox_up(&mut self) -> Option<super::Message> {
+    fn navigate_to_parent(&mut self) -> Vec<super::Message> {
         todo!();
     }
 
-    fn move_mailbox_down(&mut self) -> Option<super::Message> {
+    fn select_entry(&mut self) -> Vec<super::Message> {
         todo!();
     }
 
-    fn create_mailbox(&mut self) -> Option<super::Message> {
-        self.overlay_value = Some(OverlayValue::NewMailboxName);
-        Some(super::Message::OpenPrompt {
-            description: "Mailbox name:".to_string(),
-        })
-    }
-
-    fn remove_mailbox(&mut self) -> Option<super::Message> {
+    fn cut_selected_entries(&mut self) -> Vec<super::Message> {
         todo!();
     }
 
-    fn mail_patch_keywords(&mut self, patch: &[(MailKeyword, bool)]) -> Option<super::Message> {
+    fn paste_selected_entries(&mut self) -> Vec<super::Message> {
+        todo!();
+    }
+
+    fn move_mailbox_up(&mut self) -> Vec<super::Message> {
+        todo!();
+    }
+
+    fn move_mailbox_down(&mut self) -> Vec<super::Message> {
+        todo!();
+    }
+
+    fn create_mailbox(&mut self) -> Vec<super::Message> {
+        todo!();
+        // Some(super::Message::OpenPrompt {
+        //     description: "Mailbox name:".to_string(),
+        //     map: |entry| super::Message::Mailfs(Message::SelectedPaletteEntry(entry)),
+        // })
+    }
+
+    fn remove_mailbox(&mut self) -> Vec<super::Message> {
+        todo!();
+    }
+
+    fn mail_patch_keywords(&mut self, patch: &[(MailKeyword, bool)]) -> Vec<super::Message> {
         todo!();
     }
 }
