@@ -14,6 +14,15 @@ use crate::{
 use root_mails_linear::RootMails;
 use std::collections::HashMap;
 
+#[derive(thiserror::Error, Debug, Clone, Copy)]
+pub struct HashMapDataSourceError;
+
+impl std::fmt::Display for HashMapDataSourceError {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        unreachable!("This should never happen...")
+    }
+}
+
 #[derive(Default)]
 pub struct HashMapDataSource {
     mails_core: HashMap<MailId, MailDataCore>,
@@ -38,5 +47,5 @@ impl HashMapDataSource {
 }
 
 impl BaseDataSource for HashMapDataSource {
-    type Error = ();
+    type Error = HashMapDataSourceError;
 }

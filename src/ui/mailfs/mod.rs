@@ -2,15 +2,24 @@ mod user_action;
 mod view;
 
 use crate::{
+    CONFIG,
+    config::UserConfig,
     types::{MailKeyword, ParentMailboxId},
     ui::{
         Action, LayerCore, LayerMessage, LayerState,
-        utils::keybindmanager::{self, KeybindManager},
+        utils::{
+            Loadable,
+            keybindmanager::{self, KeybindManager},
+        },
     },
 };
 use crossterm::event::Event;
 use ratatui::widgets::ListState;
-use std::{collections::HashMap, str::FromStr};
+use std::{
+    collections::HashMap,
+    str::FromStr,
+    sync::{Arc, Mutex},
+};
 use throbber_widgets_tui::ThrobberState;
 use tracing::debug;
 use user_action::UserAction;
@@ -22,25 +31,42 @@ enum OverlayValue {
     NewMailboxName,
 }
 
+struct AccountCtx {}
+
 pub struct State {
     keybindings: KeybindManager<UserAction>,
     overlay_value: Option<OverlayValue>,
 
     pub throbber: ThrobberState,
-    pub account_column: ListState,
-    pub navigation_stack: Vec<ParentMailboxId>,
-    pub mailboxes: HashMap<ParentMailboxId, ListState>,
+
+    pub user_list: Vec<UserCtx>,
+    pub user_list_state: ListState,
 }
 
 impl State {
     pub fn new() -> Self {
+        let user_list: Vec<UserCtx> = CONFIG
+            .get()
+            .unwrap()
+            .users
+            .iter()
+            .map(UserCtx::new)
+            .collect();
+
+        let user_list_state = if user_list.is_empty() {
+            ListState::default()
+        } else {
+            ListState::default().with_selected(Some(0))
+        };
+
         Self {
             overlay_value: None,
             throbber: ThrobberState::default(),
-            account_column: ListState::default(),
-            navigation_stack: vec![],
-            mailboxes: HashMap::new(),
+            // navigation_stack: vec![],
+            // mailbox_states: HashMap::new(),
             // selection: HashMap::new(),
+            user_list,
+            user_list_state,
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", UserAction::Quit),
                 ("j", UserAction::NavigateDown),
@@ -212,5 +238,21 @@ impl State {
 
     fn mail_patch_keywords(&mut self, patch: &[(MailKeyword, bool)]) -> Option<Action> {
         todo!();
+    }
+}
+
+pub struct UserCtx {
+    pub collapsed: bool,
+    pub accounts: Loadable<Vec<()>>,
+    config: UserConfig,
+}
+
+impl UserCtx {
+    pub fn new(config: &UserConfig) -> Self {
+        Self {
+            collapsed: true,
+            accounts: Loadable::NotLoaded,
+            config: config.clone(),
+        }
     }
 }

@@ -12,7 +12,7 @@ use crate::types::{
 use types::{GetState, QueryState, QueryWindow, cache, remote};
 
 pub trait BaseDataSource {
-    type Error: std::fmt::Debug;
+    type Error: Sync + Send + std::error::Error + 'static;
 }
 
 pub trait Cache: BaseDataSource + MailCache + RootMailsCache + MailboxCache + ThreadCache {}

@@ -2,26 +2,20 @@ pub mod mail;
 pub mod mailbox;
 pub mod thread;
 
-use std::collections::HashMap;
-
 use crate::{
     datasource::{
         Cache, Remote,
         types::{cache, remote},
     },
-    types::{AccountId, MailId, MailboxId},
+    types::{MailId, MailboxId},
 };
 use tokio::sync::{RwLock, RwLockWriteGuard, mpsc};
 
 #[derive(Debug)]
-pub enum Command<C, R>
-where
-    C: Cache,
-    R: Remote,
-{
-    Mail(mail::Command<C, R>),
-    Mailbox(mailbox::Command<C, R>),
-    Thread(thread::Command<C, R>),
+pub enum Command {
+    Mail(mail::Command),
+    Mailbox(mailbox::Command),
+    Thread(thread::Command),
     Quit,
 }
 
@@ -45,7 +39,7 @@ where
 {
     cache: RwLock<C>,
     remote: R,
-    receiver: mpsc::Receiver<Command<C, R>>,
+    receiver: mpsc::Receiver<Command>,
 }
 
 impl<C, R> Repository<C, R>
@@ -53,7 +47,7 @@ where
     C: Cache,
     R: Remote,
 {
-    pub fn new(cache: C, remote: R, receiver: mpsc::Receiver<Command<C, R>>) -> Self {
+    pub fn new(cache: C, remote: R, receiver: mpsc::Receiver<Command>) -> Self {
         Self {
             cache: RwLock::new(cache),
             remote,
@@ -108,18 +102,14 @@ where
     async fn apply_email_get_changes(
         &self,
         cache_lock: &mut RwLockWriteGuard<'_, C>,
-    ) -> Result<(), Error<C, R>> {
+    ) -> color_eyre::Result<()> {
         let Some(mut current_state) = cache_lock.get_mail_state().await.cloned() else {
             // no updates to do if there's no data :D
             return Ok(());
         };
 
         loop {
-            let result = self
-                .remote
-                .fetch_mail_changes(&current_state)
-                .await
-                .map_err(Error::Remote)?;
+            let result = self.remote.fetch_mail_changes(&current_state).await?;
 
             if !result.updated.is_empty() {
                 // PERFORMANCE: join them all instead awaiting them sequentially
@@ -127,10 +117,7 @@ where
                     let cache::GetBatchResult {
                         value: cached_datas,
                         ..
-                    } = cache_lock
-                        .get_mails_core(&result.updated)
-                        .await
-                        .map_err(Error::Cache)?;
+                    } = cache_lock.get_mails_core(&result.updated).await?;
 
                     cached_datas.into_iter().map(|(id, _data)| id).collect()
                 };
@@ -138,10 +125,7 @@ where
                     let cache::GetBatchResult {
                         value: cached_datas,
                         ..
-                    } = cache_lock
-                        .get_mails_preview(&result.updated)
-                        .await
-                        .map_err(Error::Cache)?;
+                    } = cache_lock.get_mails_preview(&result.updated).await?;
 
                     cached_datas.into_iter().map(|(id, _data)| id).collect()
                 };
@@ -151,8 +135,7 @@ where
                         ..
                     } = cache_lock
                         .get_mails_text_body(result.updated.clone())
-                        .await
-                        .map_err(Error::Cache)?;
+                        .await?;
 
                     cached_text_bodies
                         .into_iter()
@@ -165,8 +148,7 @@ where
                         ..
                     } = cache_lock
                         .get_mails_html_body(result.updated.clone())
-                        .await
-                        .map_err(Error::Cache)?;
+                        .await?;
 
                     cache_html_bodies
                         .into_iter()
@@ -192,38 +174,25 @@ where
                         updated_mail_text_body_ids,
                         updated_mail_html_body_ids,
                     )
-                    .await
-                    .map_err(Error::Remote)?;
+                    .await?;
 
                 // PERFORMANCE: put in `join` instead of sequentially
-                cache_lock
-                    .upsert_mails_core(updated_mails_core)
-                    .await
-                    .map_err(Error::Cache)?;
+                cache_lock.upsert_mails_core(updated_mails_core).await?;
                 cache_lock
                     .upsert_mails_preview(updated_mails_preview)
-                    .await
-                    .map_err(Error::Cache)?;
+                    .await?;
                 cache_lock
                     .upsert_mails_text_body(updated_text_bodies)
-                    .await
-                    .map_err(Error::Cache)?;
+                    .await?;
                 cache_lock
                     .upsert_mails_html_body(updated_html_bodies)
-                    .await
-                    .map_err(Error::Cache)?;
+                    .await?;
             };
 
-            cache_lock
-                .evict_mails(result.destroyed)
-                .await
-                .map_err(Error::Cache)?;
+            cache_lock.evict_mails(result.destroyed).await?;
 
             current_state = result.new_state;
-            cache_lock
-                .set_mail_state(current_state.clone())
-                .await
-                .map_err(Error::Cache)?;
+            cache_lock.set_mail_state(current_state.clone()).await?;
 
             if !result.has_more_changes {
                 break;
@@ -237,7 +206,7 @@ where
         &self,
         id: &MailboxId,
         cache_lock: &mut RwLockWriteGuard<'_, C>,
-    ) -> Result<(), Error<C, R>> {
+    ) -> color_eyre::Result<()> {
         let Some(current_state) = cache_lock.get_root_mails_state(id).await.cloned() else {
             return Ok(());
         };
@@ -247,23 +216,17 @@ where
         let result = self
             .remote
             .fetch_root_mails_changes(id, &current_state, up_to_id.as_ref())
-            .await
-            .map_err(Error::Remote)?;
+            .await?;
 
         cache_lock
             .evict_root_mails(id, result.removed.into_iter().collect())
-            .await
-            .map_err(Error::Cache)?;
+            .await?;
 
-        cache_lock
-            .insert_root_mails(id, result.added)
-            .await
-            .map_err(Error::Cache)?;
+        cache_lock.insert_root_mails(id, result.added).await?;
 
         cache_lock
             .set_root_mails_state(id, result.new_state)
-            .await
-            .map_err(Error::Cache)?;
+            .await?;
 
         Ok(())
     }
@@ -271,7 +234,7 @@ where
     async fn apply_mailbox_get_changes(
         &self,
         cache_lock: &mut RwLockWriteGuard<'_, C>,
-    ) -> Result<(), Error<C, R>> {
+    ) -> color_eyre::Result<()> {
         let Some(mut current_state) = cache_lock.get_mailbox_state().await.cloned() else {
             return Ok(());
         };
@@ -282,11 +245,16 @@ where
     async fn apply_thread_get_changes(
         &self,
         cache_lock: &mut RwLockWriteGuard<'_, C>,
-    ) -> Result<(), Error<C, R>> {
+    ) -> color_eyre::Result<()> {
         let Some(mut current_state) = cache_lock.get_thread_state().await.cloned() else {
             return Ok(());
         };
 
         todo!()
     }
+}
+
+#[derive(Clone)]
+pub struct RepositoryHandler {
+    tx: mpsc::Sender<Command>,
 }
