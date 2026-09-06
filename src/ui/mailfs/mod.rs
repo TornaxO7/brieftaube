@@ -5,7 +5,7 @@ use crate::{
     CONFIG,
     config::UserConfig,
     task_manager::TaskManager,
-    types::MailKeyword,
+    types::{AccountData, MailKeyword, ParentMailboxId},
     ui::{
         Layer,
         utils::{
@@ -15,7 +15,7 @@ use crate::{
     },
 };
 use crossterm::event::Event;
-use ratatui::widgets::ListState;
+use ratatui::widgets::{ListState, TableState};
 use std::{collections::HashMap, rc::Rc, str::FromStr};
 use throbber_widgets_tui::ThrobberState;
 use tracing::debug;
@@ -30,42 +30,44 @@ pub enum Message {
     SelectedPaletteEntry(String),
 }
 
-struct AccountCtx {}
-
 pub struct State {
     keybindings: KeybindManager<UserAction>,
     task_manager: Rc<TaskManager>,
 
-    pub throbber: ThrobberState,
+    throbber: ThrobberState,
+    mode: Mode,
 
-    pub user_list: Vec<UserCtx>,
-    pub user_list_state: ListState,
+    navigation_stack: Vec<ParentMailboxId>,
+    user_and_accounts_list: Vec<UserAccountEntry>,
+    user_and_accounts_list_state: TableState,
 }
 
 impl State {
     pub fn new(task_manager: Rc<TaskManager>) -> Self {
-        let user_list: Vec<UserCtx> = CONFIG
+        let user_list: Vec<UserAccountEntry> = CONFIG
             .get()
             .unwrap()
             .users
             .iter()
-            .map(UserCtx::new)
+            .cloned()
+            .map(UserAccountEntry::User)
             .collect();
 
         let user_list_state = if user_list.is_empty() {
-            ListState::default()
+            TableState::default()
         } else {
-            ListState::default().with_selected(Some(0))
+            TableState::default().with_selected(Some(0))
         };
 
         Self {
             throbber: ThrobberState::default(),
             task_manager,
-            // navigation_stack: vec![],
+            mode: Mode::Normal,
+            navigation_stack: vec![],
             // mailbox_states: HashMap::new(),
             // selection: HashMap::new(),
-            user_list,
-            user_list_state,
+            user_and_accounts_list: user_list,
+            user_and_accounts_list_state: user_list_state,
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", UserAction::Quit),
                 ("j", UserAction::NavigateDown),
@@ -83,6 +85,7 @@ impl State {
 
 impl Layer<Message> for State {
     fn update(&mut self, msg: Message) -> Vec<super::Message> {
+        self.throbber.calc_next();
         match msg {
             Message::Event(event) => self.handle_event(event),
             Message::UserAction(action) => self.handle_user_action(action),
@@ -220,18 +223,12 @@ impl State {
     }
 }
 
-pub struct UserCtx {
-    pub collapsed: bool,
-    pub accounts: Loadable<Vec<()>>,
-    config: UserConfig,
+enum UserAccountEntry {
+    User(UserConfig),
+    Account(AccountData),
 }
 
-impl UserCtx {
-    pub fn new(config: &UserConfig) -> Self {
-        Self {
-            collapsed: true,
-            accounts: Loadable::NotLoaded,
-            config: config.clone(),
-        }
-    }
+#[derive(strum::Display, Debug, Clone, Copy)]
+enum Mode {
+    Normal,
 }
