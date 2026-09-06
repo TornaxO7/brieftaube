@@ -9,45 +9,27 @@ pub mod prompt;
 // pub mod reader;
 pub mod statusbar;
 
-use crate::ui::palette::PaletteEntry;
+use crate::{task_manager::TaskManager, ui::palette::PaletteEntry};
 use color_eyre::eyre;
 use crossterm::event::Event;
 use futures::{FutureExt, StreamExt};
 use ratatui::{DefaultTerminal, Frame};
+use std::rc::Rc;
 use tracing::error;
 
-pub struct LayerMessage(pub String);
-
-impl LayerMessage {
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
+#[derive(Debug, Clone, Copy)]
+enum ActiveLayer {
+    Mailfs,
+    Palette,
+    Prompt,
 }
 
-impl From<String> for LayerMessage {
-    fn from(msg: String) -> Self {
-        Self(msg)
-    }
-}
+pub enum Message {
+    Mailfs(mailfs::Message),
+    Palette(palette::Message),
+    Prompt(prompt::Message),
 
-enum Layer {
-    Mailfs(mailfs::State),
-
-    Palette(palette::State),
-    Prompt(prompt::State),
-}
-
-impl From<Layer> for Option<LayerMessage> {
-    fn from(layer: Layer) -> Self {
-        match layer {
-            Layer::Mailfs(state) => state.into(),
-            Layer::Palette(state) => state.into(),
-            Layer::Prompt(state) => state.into(),
-        }
-    }
-}
-
-pub enum Action {
+    Event(Event),
     OpenPrompt { description: String },
     OpenPalette { entries: Vec<PaletteEntry> },
     Back,
@@ -58,16 +40,32 @@ pub enum Action {
 /// Stores the app state
 pub struct Ui {
     is_running: bool,
-    layers: Vec<Layer>,
+    layers: Vec<ActiveLayer>,
     needs_full_redraw: bool,
+    task_manager: Rc<TaskManager>,
+
+    mailfs: mailfs::State,
+    palette: palette::State,
+    prompt: prompt::State,
 }
 
 impl Ui {
     pub fn new() -> Self {
+        let task_manager = Rc::new(TaskManager::new());
+
+        let mailfs = mailfs::State::new(task_manager.clone());
+        let palette = palette::State::new();
+        let prompt = prompt::State::new();
+
         Self {
+            mailfs,
+            palette,
+            prompt,
+
             is_running: true,
-            layers: vec![Layer::Mailfs(mailfs::State::new())],
+            layers: vec![ActiveLayer::Mailfs],
             needs_full_redraw: false,
+            task_manager,
         }
     }
 
@@ -76,14 +74,19 @@ impl Ui {
         terminal.draw(|frame| self.draw(frame))?;
 
         while self.is_running {
-            tokio::select! {
+            let mut msg = tokio::select! {
                 maybe_event = reader.next().fuse() => match maybe_event {
-                    Some(Ok(event)) => if let Some(action) = self.handle_event(event) {
-                        self.apply_action(action);
-                    }
-                    Some(Err(e)) => error!("{}", e),
-                    None => {},
+                    Some(Ok(event)) => Some(Message::Event(event)),
+                    Some(Err(e)) => {
+                        error!("{}", e);
+                        None
+                    },
+                    None => None,
                 }
+            };
+
+            while let Some(next_message) = msg {
+                msg = self.handle_message(next_message);
             }
 
             terminal.draw(|frame| self.draw(frame))?;
@@ -96,81 +99,65 @@ impl Ui {
         let area = frame.area();
 
         let is_overlay = match self.layers.last().unwrap() {
-            Layer::Mailfs(_) => false,
-            Layer::Palette(_) | Layer::Prompt(_) => true,
+            ActiveLayer::Mailfs => false,
+            ActiveLayer::Palette | ActiveLayer::Prompt => true,
         };
 
         if is_overlay {
-            match self.layers.iter_mut().rev().skip(1).next().unwrap() {
-                Layer::Mailfs(state) => mailfs::view(state, frame, area),
-                Layer::Palette(state) => palette::view(state, frame, area),
-                Layer::Prompt(state) => prompt::view(state, frame, area),
+            match self.layers.iter().rev().skip(1).next().unwrap() {
+                ActiveLayer::Mailfs => mailfs::view(&mut self.mailfs, frame, area),
+                ActiveLayer::Palette => palette::view(&mut self.palette, frame, area),
+                ActiveLayer::Prompt => prompt::view(&mut self.prompt, frame, area),
             }
         }
 
         match self.layers.last_mut().unwrap() {
-            Layer::Mailfs(state) => mailfs::view(state, frame, area),
-            Layer::Palette(state) => palette::view(state, frame, area),
-            Layer::Prompt(state) => prompt::view(state, frame, area),
+            ActiveLayer::Mailfs => mailfs::view(&mut self.mailfs, frame, area),
+            ActiveLayer::Palette => palette::view(&mut self.palette, frame, area),
+            ActiveLayer::Prompt => prompt::view(&mut self.prompt, frame, area),
         }
     }
 
-    fn handle_event(&mut self, event: Event) -> Option<Action> {
-        match self.layers.last_mut().unwrap() {
-            Layer::Mailfs(state) => state.handle_event(event),
-            Layer::Palette(state) => state.handle_event(event),
-            Layer::Prompt(state) => state.handle_event(event),
-        }
-    }
+    fn handle_message(&mut self, msg: Message) -> Option<Message> {
+        match msg {
+            Message::Event(event) => match self.layers.last_mut().unwrap() {
+                ActiveLayer::Mailfs => self.mailfs.update(mailfs::Message::Event(event)),
+                ActiveLayer::Palette => self.palette.update(palette::Message::Event(event)),
+                ActiveLayer::Prompt => self.prompt.update(prompt::Message::Event(event)),
+            },
 
-    fn apply_action(&mut self, action: Action) {
-        match action {
-            Action::OpenPrompt { description } => {
-                let state = prompt::State::new(description);
-                self.layers.push(Layer::Prompt(state));
+            Message::OpenPrompt { description } => {
+                self.prompt.update(prompt::Message::Reset(description));
+                self.layers.push(ActiveLayer::Prompt);
+                None
             }
-            Action::OpenPalette { entries } => {
-                let state = palette::State::new(entries);
-                self.layers.push(Layer::Palette(state));
-            }
-
-            Action::Back => {
-                let Some(layer) = self.layers.pop() else {
-                    panic!("Layers must never be empty!");
-                };
-
-                let action = match self.layers.last_mut().unwrap() {
-                    Layer::Mailfs(state) => state.handle_layer_message(layer),
-                    Layer::Palette(state) => state.handle_layer_message(layer),
-                    Layer::Prompt(state) => state.handle_layer_message(layer),
-                };
-
-                if let Some(action) = action {
-                    self.apply_action(action);
-                }
+            Message::OpenPalette { entries } => {
+                self.palette.update(palette::Message::Restart(entries));
+                self.layers.push(ActiveLayer::Palette);
+                None
             }
 
-            Action::Redraw => {
+            Message::Back => {
+                self.layers.pop();
+                None
+            }
+
+            Message::Redraw => {
                 self.needs_full_redraw = true;
+                None
             }
 
-            Action::Quit => {
+            Message::Quit => {
                 self.is_running = false;
+                None
             }
+            Message::Mailfs(message) => self.mailfs.update(message),
+            Message::Palette(message) => self.palette.update(message),
+            Message::Prompt(message) => self.prompt.update(message),
         }
     }
 }
 
-pub trait LayerCore<ParentAction = Action>: Into<Option<LayerMessage>> {
-    fn handle_event(&mut self, event: Event) -> Option<ParentAction>;
-
-    #[must_use]
-    fn handle_layer_message<Msg>(&mut self, layer: Msg) -> Option<ParentAction>
-    where
-        Msg: Into<Option<LayerMessage>>;
-}
-
-pub trait LayerState<UserAction, ParentAction = Action>: LayerCore<ParentAction> {
-    #[must_use]
-    fn apply_action(&mut self, action: UserAction) -> Option<ParentAction>;
+pub trait Layer<LayerMsg, ParentLayerMsg = Message> {
+    fn update(&mut self, msg: LayerMsg) -> Option<ParentLayerMsg>;
 }

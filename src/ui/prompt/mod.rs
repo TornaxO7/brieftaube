@@ -1,11 +1,16 @@
 mod view;
 
-use crate::ui::{Action, LayerCore, LayerMessage};
+use crate::ui::Layer;
 use crossterm::event::{Event, KeyCode};
 use ratatui::style::Style;
 use ratatui_textarea::TextArea;
 
 pub use view::view;
+
+pub enum Message {
+    Reset(String),
+    Event(Event),
+}
 
 pub struct State {
     pub input: TextArea<'static>,
@@ -13,31 +18,40 @@ pub struct State {
 }
 
 impl State {
-    pub fn new<S: ToString>(desc: S) -> Self {
+    pub fn new() -> Self {
         let mut input = TextArea::default();
         input.set_cursor_line_style(Style::default());
 
         Self {
             input,
-            desc: desc.to_string(),
+            desc: String::new(),
         }
     }
 }
 
-impl From<State> for Option<LayerMessage> {
-    fn from(state: State) -> Self {
-        state.input.lines().first().cloned().map(LayerMessage::from)
+impl Layer<Message> for State {
+    fn update(&mut self, msg: Message) -> Option<super::Message> {
+        match msg {
+            Message::Reset(desc) => self.handle_reset(desc),
+            Message::Event(event) => self.handle_event(event),
+        }
     }
 }
 
-impl LayerCore for State {
-    fn handle_event(&mut self, event: Event) -> Option<Action> {
+impl State {
+    fn handle_reset(&mut self, desc: String) -> Option<super::Message> {
+        self.desc = desc;
+        self.input.clear();
+        None
+    }
+
+    fn handle_event(&mut self, event: Event) -> Option<super::Message> {
         match event {
             Event::Key(event) => match event.code {
-                KeyCode::Enter => Some(Action::Back),
+                KeyCode::Enter => Some(super::Message::Back),
                 KeyCode::Esc => {
                     self.input.clear();
-                    Some(Action::Back)
+                    Some(super::Message::Back)
                 }
                 _ => {
                     self.input.input(event);
@@ -46,12 +60,5 @@ impl LayerCore for State {
             },
             _ => None,
         }
-    }
-
-    fn handle_layer_message<Msg>(&mut self, _: Msg) -> Option<Action>
-    where
-        Msg: Into<Option<super::LayerMessage>>,
-    {
-        None
     }
 }

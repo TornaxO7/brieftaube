@@ -1,15 +1,21 @@
 mod view;
 
-use crate::ui::{Action, LayerCore, LayerMessage};
+use crate::ui::Layer;
 use crossterm::event::{Event, KeyCode};
 use nucleo::Nucleo;
 use ratatui::{style::Style, widgets::ListState};
 use ratatui_textarea::TextArea;
 use std::sync::Arc;
+
 pub use view::view;
 
 type EntryValue = String;
 type EntryDescription = String;
+
+pub enum Message {
+    Restart(Vec<PaletteEntry>),
+    Event(Event),
+}
 
 #[derive(Debug, Clone)]
 pub struct PaletteEntry {
@@ -29,20 +35,9 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(entries: Vec<PaletteEntry>) -> Self {
+    pub fn new() -> Self {
         let nucleo: Nucleo<(EntryValue, EntryDescription)> =
             Nucleo::new(nucleo::Config::DEFAULT, Arc::new(|| {}), None, 3);
-
-        let inj = nucleo.injector();
-        for e in entries.into_iter() {
-            inj.push(
-                (e.name, e.description),
-                |&(ref name, ref description), row| {
-                    row[0] = (*name).clone().into();
-                    row[1] = (*description).clone().into();
-                },
-            );
-        }
 
         let input = {
             let mut input = TextArea::default();
@@ -63,19 +58,42 @@ impl State {
     }
 }
 
-impl From<State> for Option<LayerMessage> {
-    fn from(state: State) -> Self {
-        state.selected_entry.map(|entry| LayerMessage(entry))
+impl Layer<Message, super::Message> for State {
+    fn update(&mut self, msg: Message) -> Option<super::Message> {
+        match msg {
+            Message::Restart(entries) => self.handle_start(entries),
+            Message::Event(event) => self.handle_event(event),
+        }
     }
 }
 
-impl LayerCore for State {
-    fn handle_event(&mut self, event: Event) -> Option<Action> {
+impl State {
+    fn handle_start(&mut self, entries: Vec<PaletteEntry>) -> Option<super::Message> {
+        self.nucleo.restart(true);
+        self.input.clear();
+        self.selected_entry = None;
+        self.list_state.select(Some(0));
+
+        let inj = self.nucleo.injector();
+        for e in entries.into_iter() {
+            inj.push(
+                (e.name, e.description),
+                |&(ref name, ref description), row| {
+                    row[0] = (*name).clone().into();
+                    row[1] = (*description).clone().into();
+                },
+            );
+        }
+
+        None
+    }
+
+    fn handle_event(&mut self, event: Event) -> Option<super::Message> {
         match event {
             Event::Key(event) => {
                 match event.code {
                     KeyCode::Esc => {
-                        return Some(Action::Back);
+                        return Some(super::Message::Back);
                     }
                     KeyCode::Enter => {
                         let mut matches = self.nucleo.snapshot().matched_items(..);
@@ -87,7 +105,7 @@ impl LayerCore for State {
                             self.selected_entry = Some(value);
                         }
 
-                        return Some(Action::Back);
+                        return Some(super::Message::Back);
                     }
                     KeyCode::Down => {
                         self.list_state.select_next();
@@ -99,6 +117,7 @@ impl LayerCore for State {
                     }
                     _ => {}
                 }
+
                 self.input.input(event);
 
                 let search_term = self.input.lines().get(0).unwrap().as_str();
@@ -109,17 +128,10 @@ impl LayerCore for State {
                     nucleo::pattern::Normalization::Smart,
                     false,
                 );
+
+                None
             }
-            _ => {}
+            _ => None,
         }
-
-        None
-    }
-
-    fn handle_layer_message<Msg>(&mut self, _msg: Msg) -> Option<Action>
-    where
-        Msg: Into<Option<LayerMessage>>,
-    {
-        None
     }
 }

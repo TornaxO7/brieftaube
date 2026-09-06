@@ -4,9 +4,10 @@ mod view;
 use crate::{
     CONFIG,
     config::UserConfig,
-    types::{MailKeyword, ParentMailboxId},
+    task_manager::TaskManager,
+    types::MailKeyword,
     ui::{
-        Action, LayerCore, LayerMessage, LayerState,
+        Layer,
         utils::{
             Loadable,
             keybindmanager::{self, KeybindManager},
@@ -15,27 +16,25 @@ use crate::{
 };
 use crossterm::event::Event;
 use ratatui::widgets::ListState;
-use std::{
-    collections::HashMap,
-    str::FromStr,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, rc::Rc, str::FromStr};
 use throbber_widgets_tui::ThrobberState;
 use tracing::debug;
 use user_action::UserAction;
 
 pub use view::view;
 
-enum OverlayValue {
-    Action,
-    NewMailboxName,
+pub enum Message {
+    Event(Event),
+    UserAction(UserAction),
+
+    SelectedPaletteEntry(String),
 }
 
 struct AccountCtx {}
 
 pub struct State {
     keybindings: KeybindManager<UserAction>,
-    overlay_value: Option<OverlayValue>,
+    task_manager: Rc<TaskManager>,
 
     pub throbber: ThrobberState,
 
@@ -44,7 +43,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn new() -> Self {
+    pub fn new(task_manager: Rc<TaskManager>) -> Self {
         let user_list: Vec<UserCtx> = CONFIG
             .get()
             .unwrap()
@@ -60,8 +59,8 @@ impl State {
         };
 
         Self {
-            overlay_value: None,
             throbber: ThrobberState::default(),
+            task_manager,
             // navigation_stack: vec![],
             // mailbox_states: HashMap::new(),
             // selection: HashMap::new(),
@@ -82,14 +81,18 @@ impl State {
     }
 }
 
-impl From<State> for Option<LayerMessage> {
-    fn from(_: State) -> Self {
-        None
+impl Layer<Message> for State {
+    fn update(&mut self, msg: Message) -> Option<super::Message> {
+        match msg {
+            Message::Event(event) => self.handle_event(event),
+            Message::UserAction(action) => self.handle_user_action(action),
+            Message::SelectedPaletteEntry(entry) => self.handle_selected_palette_entry(entry),
+        }
     }
 }
 
-impl LayerCore for State {
-    fn handle_event(&mut self, event: Event) -> Option<Action> {
+impl State {
+    fn handle_event(&mut self, event: Event) -> Option<super::Message> {
         match event {
             Event::Mouse(_)
             | Event::Paste(_)
@@ -97,42 +100,14 @@ impl LayerCore for State {
             | Event::FocusGained
             | Event::FocusLost => None,
             Event::Key(key_event) => match self.keybindings.handle_event(key_event) {
-                keybindmanager::HandleEvent::Action(action) => self.apply_action(action),
+                keybindmanager::HandleEvent::Action(action) => self.handle_user_action(action),
                 keybindmanager::HandleEvent::Registered => None,
                 keybindmanager::HandleEvent::Cancel => None,
             },
         }
     }
 
-    fn handle_layer_message<Msg>(&mut self, msg: Msg) -> Option<Action>
-    where
-        Msg: Into<Option<LayerMessage>>,
-    {
-        let expected_type = self.overlay_value.take()?;
-        let msg = msg.into()?;
-
-        match expected_type {
-            OverlayValue::Action => {
-                let action = UserAction::from_str(msg.as_str()).unwrap();
-                self.apply_action(action)
-            }
-            OverlayValue::NewMailboxName => {
-                // let column_id = self.center_column_mailbox().clone();
-                // let columns = self.columns.clone();
-                // let backend = self.backend.clone();
-                // self.task_manager.spawn(async move {
-                //     create_new_mailbox(msg, column_id, columns, backend).await;
-                // });
-
-                // None
-                todo!()
-            }
-        }
-    }
-}
-
-impl LayerState<UserAction> for State {
-    fn apply_action(&mut self, action: UserAction) -> Option<Action> {
+    fn handle_user_action(&mut self, action: UserAction) -> Option<super::Message> {
         debug!("{:?}", action);
 
         match action {
@@ -159,84 +134,88 @@ impl LayerState<UserAction> for State {
             // UserAction::MarkMailAsSeen => self.mail_patch_keywords(&[(MailKeyword::Seen, true)]),
         }
     }
+
+    fn handle_selected_palette_entry(&mut self, entry: String) -> Option<super::Message> {
+        let action = UserAction::from_str(entry.as_str()).unwrap();
+        Some(super::Message::Mailfs(Message::UserAction(action)))
+    }
 }
 
 /// Action implementations
 impl State {
-    fn quit(&self) -> Option<Action> {
-        Some(Action::Quit)
+    fn quit(&self) -> Option<super::Message> {
+        Some(super::Message::Quit)
     }
 
-    fn open_command_palette(&mut self) -> Option<Action> {
-        self.overlay_value = Some(OverlayValue::Action);
+    fn open_command_palette(&mut self) -> Option<super::Message> {
         let entries = UserAction::palette_options();
-        Some(Action::OpenPalette { entries })
+        Some(super::Message::OpenPalette { entries })
     }
 
-    fn navigate_down(&self) -> Option<Action> {
+    fn navigate_down(&self) -> Option<super::Message> {
         todo!();
         None
     }
 
-    fn navigate_up(&self) -> Option<Action> {
+    fn navigate_up(&self) -> Option<super::Message> {
         todo!();
         None
     }
 
-    fn navigate_to_top(&mut self) -> Option<Action> {
+    fn navigate_to_top(&mut self) -> Option<super::Message> {
         todo!();
         None
     }
 
-    fn navigate_to_bottom(&mut self) -> Option<Action> {
+    fn navigate_to_bottom(&mut self) -> Option<super::Message> {
         todo!();
         None
     }
 
-    fn navigate_right(&mut self) -> Option<Action> {
+    fn navigate_right(&mut self) -> Option<super::Message> {
         todo!();
     }
 
-    fn navigate_left(&mut self) -> Option<Action> {
+    fn navigate_left(&mut self) -> Option<super::Message> {
         todo!();
     }
 
-    fn navigate_to_parent(&mut self) -> Option<Action> {
+    fn navigate_to_parent(&mut self) -> Option<super::Message> {
         todo!();
     }
 
-    fn select_entry(&mut self) -> Option<Action> {
+    fn select_entry(&mut self) -> Option<super::Message> {
         todo!();
     }
 
-    fn cut_selected_entries(&mut self) -> Option<Action> {
+    fn cut_selected_entries(&mut self) -> Option<super::Message> {
         todo!();
     }
 
-    fn paste_selected_entries(&mut self) -> Option<Action> {
+    fn paste_selected_entries(&mut self) -> Option<super::Message> {
         todo!();
     }
 
-    fn move_mailbox_up(&mut self) -> Option<Action> {
+    fn move_mailbox_up(&mut self) -> Option<super::Message> {
         todo!();
     }
 
-    fn move_mailbox_down(&mut self) -> Option<Action> {
+    fn move_mailbox_down(&mut self) -> Option<super::Message> {
         todo!();
     }
 
-    fn create_mailbox(&mut self) -> Option<Action> {
+    fn create_mailbox(&mut self) -> Option<super::Message> {
         self.overlay_value = Some(OverlayValue::NewMailboxName);
-        Some(Action::OpenPrompt {
+        Some(super::Message::OpenPrompt {
             description: "Mailbox name:".to_string(),
         })
     }
 
-    fn remove_mailbox(&mut self) -> Option<Action> {
+    fn remove_mailbox(&mut self) -> Option<super::Message> {
         todo!();
     }
 
-    fn mail_patch_keywords(&mut self, patch: &[(MailKeyword, bool)]) -> Option<Action> {
+    fn mail_patch_keywords(&mut self, patch: &[(MailKeyword, bool)]) -> Option<super::Message> {
         todo!();
     }
 }
