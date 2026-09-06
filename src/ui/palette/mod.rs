@@ -1,6 +1,6 @@
 mod view;
 
-use crate::ui::Layer;
+use crate::{THEME, ui::Layer, utils::IntoColor};
 use crossterm::event::{Event, KeyCode};
 use nucleo::Nucleo;
 use ratatui::{style::Style, widgets::ListState};
@@ -39,12 +39,15 @@ pub struct State {
 
 impl State {
     pub fn new() -> Self {
+        let theme = THEME.get().unwrap();
+        let scheme = &theme.schemes.dark;
+
         let nucleo: Nucleo<(EntryValue, EntryDescription)> =
             Nucleo::new(nucleo::Config::DEFAULT, Arc::new(|| {}), None, 3);
 
         let input = {
             let mut input = TextArea::default();
-            input.set_cursor_line_style(Style::new());
+            input.set_cursor_line_style(Style::new().fg(scheme.on_surface.into_color()));
             input
         };
 
@@ -67,6 +70,8 @@ impl State {
 
 impl Layer<Message, super::Message> for State {
     fn update(&mut self, msg: Message) -> Vec<super::Message> {
+        self.nucleo.tick(10);
+
         match msg {
             Message::Restart { entries, map } => self.handle_restart(entries, map),
             Message::Event(event) => self.handle_event(event),
@@ -96,6 +101,7 @@ impl State {
             );
         }
 
+        self.nucleo.tick(10);
         vec![]
     }
 
