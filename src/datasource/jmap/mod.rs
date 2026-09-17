@@ -3,8 +3,9 @@ mod mailbox;
 mod root_mails;
 mod thread;
 
-use super::BaseDataSource;
 use jmap_client::client::{Client, Credentials};
+
+use crate::datasource::Remote;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -44,8 +45,10 @@ impl Jmap {
     }
 }
 
-impl BaseDataSource for Jmap {
-    type Error = jmap_client::Error;
+impl Remote for Jmap {
+    fn get_accounts(&self) -> Vec<crate::types::AccountData> {
+        todo!()
+    }
 }
 
 fn get_host_from_url<'a>(url: &'a str) -> Option<&'a str> {

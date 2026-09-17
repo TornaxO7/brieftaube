@@ -6,7 +6,10 @@ use crate::{
     },
     types::{MailboxData, MailboxId, ParentMailboxId},
 };
+use async_trait::async_trait;
+use color_eyre::Result;
 
+#[async_trait]
 impl MailboxCache for HashMapDataSource {
     async fn get_mailbox_state(&self) -> Option<&GetState> {
         self.mailboxes_get_state.as_ref()
@@ -15,7 +18,7 @@ impl MailboxCache for HashMapDataSource {
     async fn get_mailboxes(
         &self,
         ids: &[MailboxId],
-    ) -> Result<cache::GetBatchResult<Vec<MailboxData>, Vec<MailboxId>>, Self::Error> {
+    ) -> Result<cache::GetBatchResult<Vec<MailboxData>, Vec<MailboxId>>> {
         let mut cached_mailboxes = Vec::new();
         let mut missing = Vec::new();
 
@@ -32,7 +35,7 @@ impl MailboxCache for HashMapDataSource {
         })
     }
 
-    async fn get_all_mailboxes(&self) -> Result<Option<Vec<MailboxData>>, Self::Error> {
+    async fn get_all_mailboxes(&self) -> Result<Option<Vec<MailboxData>>> {
         if self.mailboxes_get_state.is_some() {
             let mailboxes = self.mailboxes.values().cloned().collect();
             Ok(Some(mailboxes))
@@ -45,7 +48,7 @@ impl MailboxCache for HashMapDataSource {
         &mut self,
         mailboxes: Vec<MailboxData>,
         new_state: GetState,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<()> {
         for mailbox in mailboxes {
             let id = mailbox.id.clone();
             self.mailboxes.insert(id, mailbox);
@@ -55,11 +58,7 @@ impl MailboxCache for HashMapDataSource {
         Ok(())
     }
 
-    async fn evict_mailboxes(
-        &mut self,
-        ids: &[MailboxId],
-        new_state: GetState,
-    ) -> Result<(), Self::Error> {
+    async fn evict_mailboxes(&mut self, ids: &[MailboxId], new_state: GetState) -> Result<()> {
         for id in ids {
             self.mailboxes.remove(id);
             self.root_mails.remove(id);
@@ -72,7 +71,7 @@ impl MailboxCache for HashMapDataSource {
     async fn get_mailbox_children(
         &self,
         parent: &ParentMailboxId,
-    ) -> Result<Option<Vec<MailboxData>>, Self::Error> {
+    ) -> Result<Option<Vec<MailboxData>>> {
         let children = self.mailboxes_get_state.is_some().then_some(
             self.mailboxes
                 .values()

@@ -1,10 +1,9 @@
 use super::Repository;
 use crate::{
-    datasource::{Cache, Remote, types::remote},
+    datasource::types::remote,
     types::{MailDataCore, MailId, ThreadId},
 };
-use std::sync::Mutex;
-use tokio::sync::oneshot;
+use tokio::sync::{Mutex, oneshot};
 
 #[derive(Debug)]
 pub enum Command {
@@ -20,15 +19,14 @@ impl From<Command> for super::Command {
     }
 }
 
-impl<C, R> Repository<C, R>
-where
-    C: Cache,
-    R: Remote,
-{
-    pub async fn get_thread(&self, id: ThreadId) -> color_eyre::Result<Vec<MailDataCore>> {
-        static ENTER: Mutex<()> = Mutex::new(());
+#[derive(Default)]
+pub struct Locks {
+    get_thread: Mutex<()>,
+}
 
-        let _enter_function = ENTER.lock().unwrap();
+impl Repository {
+    pub async fn get_thread(&self, id: ThreadId) -> color_eyre::Result<Vec<MailDataCore>> {
+        let _enter = self.thread_locks.get_thread.lock().await;
         let opt_thread_mail_ids = self.cache.read().await.get_thread(&id).await?;
 
         match opt_thread_mail_ids {
@@ -49,7 +47,7 @@ where
                 } else {
                     let result = self
                         .remote
-                        .fetch_mails_core(opt_thread_mails.missing)
+                        .fetch_mails_core(&opt_thread_mails.missing)
                         .await?;
 
                     let mut cache_lock = self.cache.write().await;
@@ -59,7 +57,9 @@ where
                         }
                     }
 
-                    cache_lock.upsert_mails_core(result.values).await?;
+                    cache_lock
+                        .upsert_mails_core(result.values.into_iter().collect())
+                        .await?;
 
                     let thread_mail_cores_result =
                         cache_lock.get_mails_core(&thread_mail_ids).await?;
@@ -111,7 +111,7 @@ where
                     .collect();
 
                 cache_lock.upsert_mails_core(thread_mails).await?;
-                cache_lock.upsert_thread(&id, thread_mail_ids).await?;
+                cache_lock.upsert_thread(id, thread_mail_ids).await?;
                 cache_lock.set_mail_state(get_mail_state).await?;
                 cache_lock.set_thread_state(thread_get_state).await?;
 

@@ -1,6 +1,6 @@
 use crate::{
     THEME,
-    ui::{mailfs::UserAccountEntry, statusbar::Statusbar},
+    ui::{mailfs::user_column::UserColumnEntry, statusbar::Statusbar, utils::Loadable},
     utils::IntoColor,
 };
 use material_theme_loader::Scheme;
@@ -9,14 +9,16 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::Style,
     text::{Line, Span},
-    widgets::{Fill, Row, Table},
+    widgets::{Cell, Fill, Row, Table},
 };
+use throbber_widgets_tui::Throbber;
 
 const COLLAPSED: &str = "▸";
 const UNCOLLAPSED: &str = "▾";
 const UNCOLLAPSED_CHILD: &str = "├";
 const UNCOLLAPSED_END: &str = "└";
 const SEPARATION_LINE: &str = "│";
+const PLACEHOLDER: &str = " ";
 
 // TODO: create cache for rendering
 
@@ -40,11 +42,11 @@ fn render_path(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, are
     let mut path: Vec<Span> = Vec::new();
 
     // account name
-    let Some(idx) = state.user_and_accounts_list_state.selected() else {
+    let Some(idx) = state.users_column.state.selected() else {
         return;
     };
 
-    let Some(UserAccountEntry::Account(account)) = state.user_and_accounts_list.get(idx) else {
+    let Some(UserColumnEntry::Account(account)) = state.users_column.iter().skip(idx).next() else {
         return;
     };
 
@@ -82,17 +84,17 @@ fn render_columns(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, 
 }
 
 fn render_left_column(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
-    if state.navigation_stack.is_empty() {
+    if state.column_stack.len() <= 1 {
         return;
     }
 
-    if state.navigation_stack.len() == 1 {
+    if state.column_stack.len() == 2 {
         render_user_accounts_column(scheme, state, frame, area);
     }
 }
 
 fn render_middle_column(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
-    if state.navigation_stack.is_empty() {
+    if state.column_stack.len() == 1 {
         render_user_accounts_column(scheme, state, frame, area);
     } else {
     }
@@ -106,38 +108,65 @@ fn render_user_accounts_column(
     frame: &mut Frame,
     area: Rect,
 ) {
-    let widths = [Constraint::Length(2), Constraint::Fill(1)];
-
     let rows: Vec<Row> = {
         let mut rows = vec![];
 
-        let mut iterator = state.user_and_accounts_list.iter().peekable();
+        for user in state.users_column.users.iter() {
+            if user.is_collapsed {
+                rows.push(Row::new([
+                    Cell::from(COLLAPSED),
+                    Cell::from(user.config.username.as_str()),
+                ]));
+                continue;
+            }
 
-        while let Some(entry) = iterator.next() {
-            let row = match entry {
-                UserAccountEntry::User(user_config) => match iterator.peek() {
-                    Some(UserAccountEntry::User(_)) | None => {
-                        Row::new([COLLAPSED, user_config.username.as_str()])
-                    }
-                    Some(UserAccountEntry::Account(_)) => {
-                        Row::new([UNCOLLAPSED, user_config.username.as_str()])
-                    }
-                },
-                UserAccountEntry::Account(account) => match iterator.peek() {
-                    Some(UserAccountEntry::User(_)) | None => {
-                        Row::new([UNCOLLAPSED_END, account.name.as_str()])
-                    }
-                    Some(UserAccountEntry::Account(_)) => {
-                        Row::new([UNCOLLAPSED_CHILD, account.name.as_str()])
-                    }
-                },
-            };
+            match &user.accounts {
+                Loadable::NotLoaded => {
+                    rows.push(Row::new([
+                        Cell::from(UNCOLLAPSED_END),
+                        Cell::from("Not loaded"),
+                    ]));
+                }
+                Loadable::Loading => {
+                    let throbber = Throbber::default()
+                        .label("Logging in...")
+                        .style(
+                            Style::default()
+                                .bg(scheme.primary_container.into_color())
+                                .fg(scheme.on_primary_container.into_color()),
+                        )
+                        .throbber_style(Style::default().fg(scheme.primary.into_color()));
 
-            rows.push(row);
+                    let text = throbber.to_symbol_span(&state.throbber);
+
+                    rows.push(Row::new([Cell::from(UNCOLLAPSED), Cell::from(text)]))
+                }
+                Loadable::Loaded(accounts) => {
+                    let (last, rest) = accounts.split_last().unwrap();
+
+                    for account in rest {
+                        rows.push(Row::new([
+                            Cell::from(UNCOLLAPSED_CHILD),
+                            Cell::from(account.name.as_str()),
+                        ]));
+                    }
+
+                    rows.push(Row::new([
+                        Cell::from(UNCOLLAPSED_END),
+                        Cell::from(last.name.as_str()),
+                    ]));
+                }
+                Loadable::Error => rows.push(Row::new([
+                    Cell::from(UNCOLLAPSED_END),
+                    Cell::from("Error: Login failed"),
+                ])),
+            }
         }
 
         rows
     };
+
+    let widths = [Constraint::Length(2), Constraint::Fill(1)];
 
     frame.render_stateful_widget(
         Table::new(rows, widths).row_highlight_style(
@@ -146,7 +175,7 @@ fn render_user_accounts_column(
                 .bg(scheme.primary_container.into_color()),
         ),
         area,
-        &mut state.user_and_accounts_list_state,
+        &mut state.users_column.state,
     );
 }
 

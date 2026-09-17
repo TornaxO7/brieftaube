@@ -6,12 +6,13 @@ use crate::{
     },
     types::{MailboxData, MailboxId, MailboxNew, MailboxUpdate},
 };
+use async_trait::async_trait;
+use color_eyre::Result;
 use jmap_client::core::set::SetObject;
 
+#[async_trait]
 impl MailboxRemote for Jmap {
-    async fn fetch_mailboxes_all(
-        &self,
-    ) -> Result<remote::GetOneResult<Vec<MailboxData>>, Self::Error> {
+    async fn fetch_mailboxes_all(&self) -> Result<remote::GetOneResult<Vec<MailboxData>>> {
         let mut response = {
             let mut request = self.client.build();
             request.get_mailbox().properties(MailboxData::PROPERTIES);
@@ -31,7 +32,7 @@ impl MailboxRemote for Jmap {
     async fn fetch_mailbox_changes(
         &self,
         since: &GetState,
-    ) -> Result<remote::GetChangeResult<MailboxId>, Self::Error> {
+    ) -> Result<remote::GetChangeResult<MailboxId>> {
         let mut response = {
             let mut request = self.client.build();
             request.changes_mailbox(since.as_ref());
@@ -53,10 +54,7 @@ impl MailboxRemote for Jmap {
         })
     }
 
-    async fn create_mailbox(
-        &self,
-        new: MailboxNew,
-    ) -> Result<remote::CreateResult<MailboxData>, Self::Error> {
+    async fn create_mailbox(&self, new: MailboxNew) -> Result<remote::CreateResult<MailboxData>> {
         let (mut response, tmp_id) = {
             let mut request = self.client.build();
             let tmp_id = request
@@ -92,7 +90,7 @@ impl MailboxRemote for Jmap {
         &self,
         updates: Vec<(MailboxData, MailboxUpdate)>,
         since: &GetState,
-    ) -> Result<remote::UpdateResult<MailboxId, MailboxData>, Self::Error> {
+    ) -> Result<remote::UpdateResult<MailboxId, MailboxData>> {
         let mut response = {
             let mut request = self.client.build();
             let set = request.set_mailbox().if_in_state(since.as_ref());
@@ -165,7 +163,7 @@ impl MailboxRemote for Jmap {
         &self,
         ids: &[MailboxId],
         on_destroy_remove_emails: bool,
-    ) -> Result<remote::DestroyResult<MailboxId>, Self::Error> {
+    ) -> Result<remote::DestroyResult<MailboxId>> {
         let mut response = {
             let mut request = self.client.build();
             request

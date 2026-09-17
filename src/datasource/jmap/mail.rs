@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use super::Jmap;
 use crate::{
     datasource::{
@@ -8,15 +6,16 @@ use crate::{
     },
     types::{MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody, MailId},
 };
+use async_trait::async_trait;
+use color_eyre::Result;
+use std::collections::HashMap;
 
+#[async_trait]
 impl MailRemote for Jmap {
-    async fn fetch_mails_core<MailIds>(
+    async fn fetch_mails_core(
         &self,
-        ids: MailIds,
-    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataCore>, Vec<MailId>>, Self::Error>
-    where
-        MailIds: IntoIterator<Item = MailId>,
-    {
+        ids: &[MailId],
+    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataCore>, Vec<MailId>>> {
         let mut response = {
             let mut request = self.client.build();
 
@@ -47,13 +46,10 @@ impl MailRemote for Jmap {
         })
     }
 
-    async fn fetch_mails_preview<MailIds>(
+    async fn fetch_mails_preview(
         &self,
-        ids: MailIds,
-    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataPreview>, Vec<MailId>>, Self::Error>
-    where
-        MailIds: IntoIterator<Item = MailId>,
-    {
+        ids: &[MailId],
+    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataPreview>, Vec<MailId>>> {
         let mut response = {
             let mut request = self.client.build();
 
@@ -85,13 +81,10 @@ impl MailRemote for Jmap {
         })
     }
 
-    async fn fetch_mails_text_body<MailIds>(
+    async fn fetch_mails_text_body(
         &self,
-        ids: MailIds,
-    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataTextBody>, Vec<MailId>>, Self::Error>
-    where
-        MailIds: IntoIterator<Item = MailId>,
-    {
+        ids: &[MailId],
+    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataTextBody>, Vec<MailId>>> {
         let mut response = {
             let mut request = self.client.build();
 
@@ -128,13 +121,10 @@ impl MailRemote for Jmap {
         })
     }
 
-    async fn fetch_mails_html_body<MailIds>(
+    async fn fetch_mails_html_body(
         &self,
-        ids: MailIds,
-    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataHtmlBody>, Vec<MailId>>, Self::Error>
-    where
-        MailIds: IntoIterator<Item = MailId>,
-    {
+        ids: &[MailId],
+    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataHtmlBody>, Vec<MailId>>> {
         let mut response = {
             let mut request = self.client.build();
 
@@ -171,12 +161,12 @@ impl MailRemote for Jmap {
         })
     }
 
-    async fn fetch_mail_updates<MailIds>(
+    async fn fetch_mail_updates(
         &self,
-        cores: MailIds,
-        previews: MailIds,
-        text: MailIds,
-        html: MailIds,
+        cores: &[MailId],
+        previews: &[MailId],
+        text: &[MailId],
+        html: &[MailId],
     ) -> Result<
         remote::GetOneResult<(
             Vec<(MailId, MailDataCore)>,
@@ -184,11 +174,7 @@ impl MailRemote for Jmap {
             Vec<(MailId, MailDataTextBody)>,
             Vec<(MailId, MailDataHtmlBody)>,
         )>,
-        Self::Error,
-    >
-    where
-        MailIds: IntoIterator<Item = MailId>,
-    {
+    > {
         let mut response = {
             let mut request = self.client.build();
 
@@ -302,7 +288,7 @@ impl MailRemote for Jmap {
     //     &self,
     //     new: MailNew,
     //     since: GetState,
-    // ) -> Result<remote::CreateResult<MailData>, Self::Error> {
+    // ) -> Result<remote::CreateResult<MailData>, {
     //     let new2 = new.clone();
     //     let (mut response, tmp_id) = {
     //         let mut request = self.client.build();
@@ -367,7 +353,7 @@ impl MailRemote for Jmap {
     //     &self,
     //     updates: Vec<(MailData, MailUpdate)>,
     //     since: GetState,
-    // ) -> Result<remote::UpdateResult<MailId, MailData>, Self::Error> {
+    // ) -> Result<remote::UpdateResult<MailId, MailData>, {
     //     let mut response = {
     //         let mut request = self.client.build();
     //         let set_mail = request.set_email().if_in_state(since);
@@ -427,15 +413,12 @@ impl MailRemote for Jmap {
     //     })
     // }
 
-    async fn destroy_mails<MailIds>(
+    async fn destroy_mails(
         &self,
-        ids: MailIds,
+        ids: &[MailId],
         since: GetState,
-    ) -> Result<remote::DestroyResult<MailId>, Self::Error>
-    where
-        MailIds: IntoIterator<Item = MailId>,
-    {
-        let ids: Vec<MailId> = ids.into_iter().collect();
+    ) -> Result<remote::DestroyResult<MailId>> {
+        let ids: Vec<MailId> = ids.into_iter().cloned().collect();
 
         let mut response = {
             let mut request = self.client.build();
@@ -468,7 +451,7 @@ impl MailRemote for Jmap {
     async fn fetch_mail_changes(
         &self,
         since: &GetState,
-    ) -> Result<remote::GetChangeResult<MailId>, Self::Error> {
+    ) -> Result<remote::GetChangeResult<MailId>> {
         let mut response = {
             let mut request = self.client.build();
             request.changes_email(since.as_ref());

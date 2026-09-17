@@ -6,8 +6,11 @@ use crate::{
     },
     types::{MailId, MailboxId},
 };
+use async_trait::async_trait;
+use color_eyre::Result;
 use std::{collections::HashSet, ops::Range};
 
+#[async_trait]
 impl RootMailsCache for HashMapDataSource {
     async fn get_root_mails_state(&self, mailbox: &MailboxId) -> Option<&QueryState> {
         self.root_mails_state.get(mailbox)
@@ -17,7 +20,7 @@ impl RootMailsCache for HashMapDataSource {
         &mut self,
         mailbox: &MailboxId,
         new_state: QueryState,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<()> {
         self.root_mails_state
             .entry(mailbox.clone())
             .and_modify(|state| *state = new_state.clone())
@@ -36,7 +39,7 @@ impl RootMailsCache for HashMapDataSource {
         &self,
         mailbox: &MailboxId,
         window: crate::datasource::types::QueryWindow,
-    ) -> Result<Option<cache::QueryResponse<MailId>>, Self::Error> {
+    ) -> Result<Option<cache::QueryResponse<MailId>>> {
         let range = window.as_range();
         let Some(root_mails) = self.root_mails.get(mailbox) else {
             return Ok(None);
@@ -45,14 +48,11 @@ impl RootMailsCache for HashMapDataSource {
         Ok(Some(root_mails.query(range)))
     }
 
-    async fn insert_root_mails<MailsWithIndex>(
+    async fn insert_root_mails(
         &mut self,
         mailbox: &MailboxId,
-        mails: MailsWithIndex,
-    ) -> Result<(), Self::Error>
-    where
-        MailsWithIndex: IntoIterator<Item = (MailId, usize)>,
-    {
+        mails: Vec<(MailId, usize)>,
+    ) -> Result<()> {
         match self.root_mails.entry(mailbox.clone()) {
             std::collections::hash_map::Entry::Occupied(mut entry) => {
                 let root_mails = entry.get_mut();
@@ -68,11 +68,7 @@ impl RootMailsCache for HashMapDataSource {
         Ok(())
     }
 
-    async fn evict_root_mails(
-        &mut self,
-        mailbox: &MailboxId,
-        ids: HashSet<MailId>,
-    ) -> Result<(), Self::Error> {
+    async fn evict_root_mails(&mut self, mailbox: &MailboxId, ids: HashSet<MailId>) -> Result<()> {
         if let Some(root_mails) = self.root_mails.get_mut(mailbox) {
             root_mails.remove(ids);
         }

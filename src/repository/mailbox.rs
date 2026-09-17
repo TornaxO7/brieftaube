@@ -1,10 +1,9 @@
 use crate::{
-    datasource::{Cache, Remote, types::remote},
+    datasource::types::remote,
     repository::Repository,
     types::{MailboxData, MailboxId, ParentMailboxId},
 };
-use std::sync::Mutex;
-use tokio::sync::oneshot;
+use tokio::sync::{Mutex, oneshot};
 
 #[derive(Debug)]
 pub enum Command {
@@ -21,14 +20,14 @@ impl From<Command> for super::Command {
     }
 }
 
-impl<C, R> Repository<C, R>
-where
-    C: Cache,
-    R: Remote,
-{
+#[derive(Default)]
+pub struct Locks {
+    ensure_mailboxes_are_cached: Mutex<()>,
+}
+
+impl Repository {
     async fn ensure_mailboxes_are_cached(&self) -> color_eyre::Result<()> {
-        static ENTER: Mutex<()> = Mutex::new(());
-        let _enter_function = ENTER.lock().unwrap();
+        let _enter = self.mailbox_locks.ensure_mailboxes_are_cached.lock().await;
 
         let mailboxes_are_fetched = self.cache.read().await.get_mailbox_state().await.is_some();
         if mailboxes_are_fetched {

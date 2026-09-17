@@ -1,13 +1,22 @@
+mod column;
+mod message;
+mod message_request;
 mod user_action;
 mod view;
 
+mod mailbox_column;
+mod thread_column;
+mod user_column;
+
 use crate::{
-    CONFIG,
-    config::UserConfig,
-    task_manager::TaskManager,
-    types::{AccountData, MailKeyword, ParentMailboxId},
+    config,
+    datasource::types::QueryWindow,
+    types::{AccountData, MailKeyword, ParentMailboxId, ThreadId},
     ui::{
         Layer,
+        mailfs::{
+            mailbox_column::MailboxColumn, thread_column::ThreadColumn, user_column::UserColumn,
+        },
         utils::{
             Loadable,
             keybindmanager::{self, KeybindManager},
@@ -15,59 +24,43 @@ use crate::{
     },
 };
 use crossterm::event::Event;
-use ratatui::widgets::{ListState, TableState};
-use std::{collections::HashMap, rc::Rc, str::FromStr};
+use std::{collections::HashMap, str::FromStr};
 use throbber_widgets_tui::ThrobberState;
 use tracing::debug;
 use user_action::UserAction;
 
+pub use message::*;
+pub use message_request::*;
 pub use view::view;
-
-pub enum Message {
-    Event(Event),
-    UserAction(UserAction),
-
-    SelectedPaletteEntry(String),
-}
 
 pub struct State {
     keybindings: KeybindManager<UserAction>,
-    task_manager: Rc<TaskManager>,
 
     throbber: ThrobberState,
     mode: Mode,
 
-    navigation_stack: Vec<ParentMailboxId>,
-    user_and_accounts_list: Vec<UserAccountEntry>,
-    user_and_accounts_list_state: TableState,
+    column_stack: Vec<ColumnStackEntry>,
+
+    users_column: UserColumn,
+    mailbox_columns: HashMap<ParentMailboxId, MailboxColumn>,
+    thread_columns: HashMap<ThreadId, ThreadColumn>,
 }
 
 impl State {
-    pub fn new(task_manager: Rc<TaskManager>) -> Self {
-        let user_list: Vec<UserAccountEntry> = CONFIG
-            .get()
-            .unwrap()
-            .users
-            .iter()
-            .cloned()
-            .map(UserAccountEntry::User)
-            .collect();
-
-        let user_list_state = if user_list.is_empty() {
-            TableState::default()
-        } else {
-            TableState::default().with_selected(Some(0))
-        };
+    pub fn new() -> Self {
+        let users_column = UserColumn::new();
+        let thread_columns = HashMap::new();
+        let mailbox_columns = HashMap::new();
 
         Self {
             throbber: ThrobberState::default(),
-            task_manager,
             mode: Mode::Normal,
-            navigation_stack: vec![],
-            // mailbox_states: HashMap::new(),
-            // selection: HashMap::new(),
-            user_and_accounts_list: user_list,
-            user_and_accounts_list_state: user_list_state,
+            column_stack: vec![ColumnStackEntry::Users],
+
+            thread_columns,
+            users_column,
+            mailbox_columns,
+
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", UserAction::Quit),
                 ("j", UserAction::NavigateDown),
@@ -90,6 +83,10 @@ impl Layer<Message> for State {
             Message::Event(event) => self.handle_event(event),
             Message::UserAction(action) => self.handle_user_action(action),
             Message::SelectedPaletteEntry(entry) => self.handle_selected_palette_entry(entry),
+            Message::SetUserAccounts {
+                username: to,
+                accounts,
+            } => self.handle_set_user_accounts(to, accounts),
         }
     }
 }
@@ -142,6 +139,15 @@ impl State {
         let action = UserAction::from_str(entry.as_str()).unwrap();
         vec![super::Message::Mailfs(Message::UserAction(action))]
     }
+
+    fn handle_set_user_accounts(
+        &mut self,
+        username: config::Username,
+        accounts: Loadable<Vec<AccountData>>,
+    ) -> Vec<super::Message> {
+        self.users_column.set_accounts(username, accounts);
+        vec![]
+    }
 }
 
 /// Action implementations
@@ -150,7 +156,7 @@ impl State {
         vec![super::Message::Quit]
     }
 
-    fn open_command_palette(&mut self) -> Vec<super::Message> {
+    fn open_command_palette(&self) -> Vec<super::Message> {
         let entries = UserAction::palette_options();
         vec![super::Message::OpenPalette {
             entries,
@@ -158,28 +164,133 @@ impl State {
         }]
     }
 
-    fn navigate_down(&self) -> Vec<super::Message> {
-        todo!();
+    fn navigate_down(&mut self) -> Vec<super::Message> {
+        match self.column_stack.last().unwrap() {
+            ColumnStackEntry::Users => {
+                self.users_column.select_next();
+                vec![]
+            }
+            ColumnStackEntry::Mailbox(mailbox_id) => self
+                .mailbox_columns
+                .get_mut(mailbox_id)
+                .unwrap()
+                .navigate_down(),
+            ColumnStackEntry::Thread(thread_id) => self
+                .thread_columns
+                .get_mut(&thread_id)
+                .unwrap()
+                .navigate_down(),
+        }
     }
 
-    fn navigate_up(&self) -> Vec<super::Message> {
-        todo!();
+    fn navigate_up(&mut self) -> Vec<super::Message> {
+        match self.column_stack.last().unwrap() {
+            ColumnStackEntry::Users => self.users_column.navigate_up(),
+            ColumnStackEntry::Mailbox(mailbox_id) => self
+                .mailbox_columns
+                .get_mut(mailbox_id)
+                .unwrap()
+                .navigate_up(),
+            ColumnStackEntry::Thread(thread_id) => self
+                .thread_columns
+                .get_mut(thread_id)
+                .unwrap()
+                .navigate_up(),
+        }
     }
 
     fn navigate_to_top(&mut self) -> Vec<super::Message> {
-        todo!();
+        match self.column_stack.last().unwrap() {
+            ColumnStackEntry::Users => self.users_column.navigate_to_top(),
+            ColumnStackEntry::Mailbox(mailbox_id) => self
+                .mailbox_columns
+                .get_mut(mailbox_id)
+                .unwrap()
+                .navigate_to_top(),
+            ColumnStackEntry::Thread(thread_id) => self
+                .thread_columns
+                .get_mut(thread_id)
+                .unwrap()
+                .navigate_to_top(),
+        }
     }
 
     fn navigate_to_bottom(&mut self) -> Vec<super::Message> {
-        todo!();
+        match self.column_stack.last().unwrap() {
+            ColumnStackEntry::Users => self.users_column.navigate_to_bottom(),
+            ColumnStackEntry::Mailbox(mailbox_id) => self
+                .mailbox_columns
+                .get_mut(mailbox_id)
+                .unwrap()
+                .navigate_to_bottom(),
+            ColumnStackEntry::Thread(thread_id) => self
+                .thread_columns
+                .get_mut(thread_id)
+                .unwrap()
+                .navigate_to_bottom(),
+        }
     }
 
     fn navigate_right(&mut self) -> Vec<super::Message> {
-        todo!();
+        match self.column_stack.last().cloned().unwrap() {
+            ColumnStackEntry::Users => self.users_column.navigate_right(),
+            ColumnStackEntry::Mailbox(mailbox_id) => {
+                self.mailbox_columns
+                    .entry(mailbox_id.clone())
+                    .or_insert(MailboxColumn::loading());
+
+                let mut request_messages: Vec<super::Message> = vec![
+                    MessageRequest::GetChildMailboxes {
+                        parent: mailbox_id.clone(),
+                    }
+                    .into(),
+                ];
+
+                if let Some(id) = mailbox_id.clone() {
+                    request_messages.push(
+                        MessageRequest::QueryMails {
+                            mailbox: id,
+                            window: QueryWindow {
+                                start: 0,
+                                limit: 30,
+                            },
+                        }
+                        .into(),
+                    );
+                }
+
+                request_messages
+            }
+            ColumnStackEntry::Thread(thread_id) => {
+                self.column_stack
+                    .push(ColumnStackEntry::Thread(thread_id.clone()));
+
+                match self
+                    .thread_columns
+                    .get_mut(&thread_id)
+                    .map(|thread_column| &thread_column.mails)
+                {
+                    Some(Loadable::NotLoaded) | Some(Loadable::Error) | None => {
+                        self.thread_columns
+                            .insert(thread_id.clone(), ThreadColumn::loading());
+                        vec![MessageRequest::GetThreadMails { thread: thread_id }.into()]
+                    }
+                    Some(Loadable::Loading) | Some(Loadable::Loaded(_)) => {
+                        vec![]
+                    }
+                }
+            }
+        }
     }
 
     fn navigate_left(&mut self) -> Vec<super::Message> {
-        todo!();
+        match self.column_stack.last_mut().unwrap() {
+            ColumnStackEntry::Users => self.users_column.navigate_left(),
+            ColumnStackEntry::Mailbox(_) | ColumnStackEntry::Thread(_) => {
+                self.column_stack.pop();
+                vec![]
+            }
+        }
     }
 
     fn navigate_to_parent(&mut self) -> Vec<super::Message> {
@@ -218,17 +329,56 @@ impl State {
         todo!();
     }
 
-    fn mail_patch_keywords(&mut self, patch: &[(MailKeyword, bool)]) -> Vec<super::Message> {
+    fn mail_patch_keywords(&mut self, _patch: &[(MailKeyword, bool)]) -> Vec<super::Message> {
         todo!();
     }
 }
 
-enum UserAccountEntry {
-    User(UserConfig),
-    Account(AccountData),
+struct UserData {
+    user: config::UserConfig,
+    is_collapsed: bool,
+    accounts: Loadable<Vec<AccountData>>,
+}
+
+impl UserData {
+    fn new(user_config: config::UserConfig) -> Self {
+        Self {
+            user: user_config,
+            is_collapsed: true,
+            accounts: Loadable::NotLoaded,
+        }
+    }
+
+    fn len(&self) -> usize {
+        if self.is_collapsed {
+            return 1;
+        }
+
+        match &self.accounts {
+            Loadable::NotLoaded | Loadable::Loading | Loadable::Error => 1,
+            Loadable::Loaded(accounts) => accounts.len() + 1,
+        }
+    }
 }
 
 #[derive(strum::Display, Debug, Clone, Copy)]
 enum Mode {
     Normal,
+}
+
+#[derive(Debug, Clone, Hash)]
+enum ColumnStackEntry {
+    Users,
+    Mailbox(ParentMailboxId),
+    Thread(ThreadId),
+}
+
+trait MailfsColumn {
+    fn navigate_up(&mut self) -> Vec<super::Message>;
+
+    fn navigate_down(&mut self) -> Vec<super::Message>;
+
+    fn navigate_to_bottom(&mut self) -> Vec<super::Message>;
+
+    fn navigate_to_top(&mut self) -> Vec<super::Message>;
 }

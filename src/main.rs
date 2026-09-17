@@ -1,7 +1,6 @@
 mod config;
 mod datasource;
 mod repository;
-mod task_manager;
 mod types;
 mod ui;
 mod utils;

@@ -1,4 +1,8 @@
+mod types;
+
 use serde::{Deserialize, Serialize};
+
+pub use types::*;
 
 pub const FILE_NAME: &str = "config.toml";
 
@@ -26,16 +30,16 @@ impl Config {
         self.editor.clone().or_else(|| std::env::var("EDITOR").ok())
     }
 
-    pub fn html_renderer(&self) -> String {
-        self.html_renderer.clone().unwrap_or("xdg-open".to_string())
+    pub fn html_renderer(&self) -> Option<String> {
+        self.html_renderer.clone()
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserConfig {
-    pub username: String,
+    pub username: Username,
     pub password: String,
-    pub host: String,
+    pub server_url: String,
 
     #[serde(default)]
     pub cache: Cache,

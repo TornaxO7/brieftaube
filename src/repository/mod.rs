@@ -9,6 +9,7 @@ use crate::{
     },
     types::{MailId, MailboxId},
 };
+use std::sync::Arc;
 use tokio::sync::{RwLock, RwLockWriteGuard, mpsc};
 
 #[derive(Debug)]
@@ -19,57 +20,41 @@ pub enum Command {
     Quit,
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum Error<C, R>
-where
-    C: Cache,
-    R: Remote,
-{
-    #[error("Error from cache: {0}")]
-    Cache(C::Error),
+struct Repository {
+    cache: Arc<RwLock<Box<dyn Cache>>>,
+    remote: Box<dyn Remote>,
+    rx: mpsc::Receiver<Command>,
 
-    #[error("Remote error: {0}")]
-    Remote(R::Error),
+    mail_locks: mail::Locks,
+    mailbox_locks: mailbox::Locks,
+    thread_locks: thread::Locks,
 }
 
-pub struct Repository<C, R>
-where
-    C: Cache,
-    R: Remote,
-{
-    cache: RwLock<C>,
-    remote: R,
-    receiver: mpsc::Receiver<Command>,
-}
-
-impl<C, R> Repository<C, R>
-where
-    C: Cache,
-    R: Remote,
-{
-    pub fn new(cache: C, remote: R, receiver: mpsc::Receiver<Command>) -> Self {
-        Self {
-            cache: RwLock::new(cache),
+impl Repository {
+    async fn run(cache: Box<dyn Cache>, remote: Box<dyn Remote>, rx: mpsc::Receiver<Command>) {
+        let mut repo = Self {
+            cache: Arc::new(RwLock::new(cache)),
             remote,
-            receiver,
-        }
-    }
+            rx,
+            mail_locks: mail::Locks::default(),
+            mailbox_locks: mailbox::Locks::default(),
+            thread_locks: thread::Locks::default(),
+        };
 
-    pub async fn run(mut self) {
-        while let Some(command) = self.receiver.recv().await {
+        while let Some(command) = repo.rx.recv().await {
             match command {
                 Command::Mail(cmd) => match cmd {
                     mail::Command::GetCore { id, tx } => {
-                        let _ = tx.send(self.get_mail_core(id).await);
+                        let _ = tx.send(repo.get_mail_core(id).await);
                     }
                     mail::Command::GetPreview { id, tx } => {
-                        let _ = tx.send(self.get_mail_preview(id).await);
+                        let _ = tx.send(repo.get_mail_preview(id).await);
                     }
                     mail::Command::GetTextBody { id, tx } => {
-                        let _ = tx.send(self.get_mail_text_body(id).await);
+                        let _ = tx.send(repo.get_mail_text_body(id).await);
                     }
                     mail::Command::GetHtmlBody { id, tx } => {
-                        let _ = tx.send(self.get_mail_html_body(id).await);
+                        let _ = tx.send(repo.get_mail_html_body(id).await);
                     }
                     mail::Command::QueryRootMails {
                         mailbox,
@@ -77,31 +62,31 @@ where
                         limit,
                         tx,
                     } => {
-                        let _ = tx.send(self.query_root_mails(mailbox, start, limit).await);
+                        let _ = tx.send(repo.query_root_mails(mailbox, start, limit).await);
                     }
                 },
                 Command::Mailbox(cmd) => match cmd {
                     mailbox::Command::GetChildren { id, tx } => {
-                        let _ = tx.send(self.get_mailbox_children(id).await);
+                        let _ = tx.send(repo.get_mailbox_children(id).await);
                     }
                 },
                 Command::Thread(cmd) => match cmd {
                     thread::Command::GetThread { id, tx } => {
-                        let _ = tx.send(self.get_thread(id).await);
+                        let _ = tx.send(repo.get_thread(id).await);
                     }
                 },
-                Command::Quit => self.quit(),
+                Command::Quit => repo.quit(),
             }
         }
     }
 
     fn quit(&mut self) {
-        self.receiver.close();
+        self.rx.close();
     }
 
     async fn apply_email_get_changes(
         &self,
-        cache_lock: &mut RwLockWriteGuard<'_, C>,
+        cache_lock: &mut RwLockWriteGuard<'_, Box<dyn Cache>>,
     ) -> color_eyre::Result<()> {
         let Some(mut current_state) = cache_lock.get_mail_state().await.cloned() else {
             // no updates to do if there's no data :D
@@ -133,9 +118,7 @@ where
                     let cache::GetBatchResult {
                         value: cached_text_bodies,
                         ..
-                    } = cache_lock
-                        .get_mails_text_body(result.updated.clone())
-                        .await?;
+                    } = cache_lock.get_mails_text_body(&result.updated).await?;
 
                     cached_text_bodies
                         .into_iter()
@@ -146,9 +129,7 @@ where
                     let cache::GetBatchResult {
                         value: cache_html_bodies,
                         ..
-                    } = cache_lock
-                        .get_mails_html_body(result.updated.clone())
-                        .await?;
+                    } = cache_lock.get_mails_html_body(&result.updated).await?;
 
                     cache_html_bodies
                         .into_iter()
@@ -169,10 +150,10 @@ where
                 } = self
                     .remote
                     .fetch_mail_updates(
-                        updated_mail_core_ids,
-                        updated_mail_preview_ids,
-                        updated_mail_text_body_ids,
-                        updated_mail_html_body_ids,
+                        &updated_mail_core_ids,
+                        &updated_mail_preview_ids,
+                        &updated_mail_text_body_ids,
+                        &updated_mail_html_body_ids,
                     )
                     .await?;
 
@@ -182,14 +163,14 @@ where
                     .upsert_mails_preview(updated_mails_preview)
                     .await?;
                 cache_lock
-                    .upsert_mails_text_body(updated_text_bodies)
+                    .upsert_mails_text_body(&updated_text_bodies)
                     .await?;
                 cache_lock
-                    .upsert_mails_html_body(updated_html_bodies)
+                    .upsert_mails_html_body(&updated_html_bodies)
                     .await?;
             };
 
-            cache_lock.evict_mails(result.destroyed).await?;
+            cache_lock.evict_mails(&result.destroyed).await?;
 
             current_state = result.new_state;
             cache_lock.set_mail_state(current_state.clone()).await?;
@@ -205,7 +186,7 @@ where
     async fn apply_root_mail_query_changes(
         &self,
         id: &MailboxId,
-        cache_lock: &mut RwLockWriteGuard<'_, C>,
+        cache_lock: &mut RwLockWriteGuard<'_, Box<dyn Cache>>,
     ) -> color_eyre::Result<()> {
         let Some(current_state) = cache_lock.get_root_mails_state(id).await.cloned() else {
             return Ok(());
@@ -233,7 +214,7 @@ where
 
     async fn apply_mailbox_get_changes(
         &self,
-        cache_lock: &mut RwLockWriteGuard<'_, C>,
+        cache_lock: &mut RwLockWriteGuard<'_, Box<dyn Cache>>,
     ) -> color_eyre::Result<()> {
         let Some(mut current_state) = cache_lock.get_mailbox_state().await.cloned() else {
             return Ok(());
@@ -244,7 +225,7 @@ where
 
     async fn apply_thread_get_changes(
         &self,
-        cache_lock: &mut RwLockWriteGuard<'_, C>,
+        cache_lock: &mut RwLockWriteGuard<'_, Box<dyn Cache>>,
     ) -> color_eyre::Result<()> {
         let Some(mut current_state) = cache_lock.get_thread_state().await.cloned() else {
             return Ok(());
@@ -257,4 +238,14 @@ where
 #[derive(Clone)]
 pub struct RepositoryHandler {
     tx: mpsc::Sender<Command>,
+}
+
+impl RepositoryHandler {
+    pub fn new(cache: Box<dyn Cache>, remote: Box<dyn Remote>) -> RepositoryHandler {
+        let (tx, rx) = mpsc::channel(32);
+
+        tokio::spawn(Repository::run(cache, remote, rx));
+
+        Self { tx }
+    }
 }

@@ -3,9 +3,9 @@ mod mailbox;
 mod root_mails_linear;
 mod thread;
 
-use super::{BaseDataSource, types::GetState};
+use super::types::GetState;
 use crate::{
-    datasource::types::QueryState,
+    datasource::{Cache, types::QueryState},
     types::{
         MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody, MailId, MailboxData,
         MailboxId, ThreadId,
@@ -13,15 +13,6 @@ use crate::{
 };
 use root_mails_linear::RootMails;
 use std::collections::HashMap;
-
-#[derive(thiserror::Error, Debug, Clone, Copy)]
-pub struct HashMapDataSourceError;
-
-impl std::fmt::Display for HashMapDataSourceError {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        unreachable!("This should never happen...")
-    }
-}
 
 #[derive(Default)]
 pub struct HashMapDataSource {
@@ -46,6 +37,4 @@ impl HashMapDataSource {
     }
 }
 
-impl BaseDataSource for HashMapDataSource {
-    type Error = HashMapDataSourceError;
-}
+impl Cache for HashMapDataSource {}

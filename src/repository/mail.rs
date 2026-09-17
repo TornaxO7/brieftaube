@@ -1,13 +1,9 @@
 use crate::{
-    datasource::{
-        Cache, Remote,
-        types::{QueryWindow, remote},
-    },
+    datasource::types::{QueryWindow, remote},
     repository::Repository,
     types::{MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody, MailId, MailboxId},
 };
-use std::sync::Mutex;
-use tokio::sync::oneshot;
+use tokio::sync::{Mutex, oneshot};
 
 #[derive(Debug)]
 pub enum Command {
@@ -41,14 +37,18 @@ impl From<Command> for super::Command {
     }
 }
 
-impl<C, R> Repository<C, R>
-where
-    C: Cache,
-    R: Remote,
-{
+#[derive(Default)]
+pub struct Locks {
+    get_mail_core: Mutex<()>,
+    get_mail_preview: Mutex<()>,
+    get_mail_text_body: Mutex<()>,
+    get_mail_html_body: Mutex<()>,
+    query_root_mails: Mutex<()>,
+}
+
+impl Repository {
     pub async fn get_mail_core(&self, id: MailId) -> color_eyre::Result<MailDataCore> {
-        static ENTER: Mutex<()> = Mutex::new(());
-        let _enter = ENTER.lock().unwrap();
+        let _entry = self.mail_locks.get_mail_core.lock().await;
 
         match self.cache.read().await.get_mail_core(&id).await? {
             Some(data) => Ok(data),
@@ -63,7 +63,7 @@ where
                 }
 
                 cache_lock
-                    .upsert_mails_core([(id, result.value.clone())])
+                    .upsert_mails_core(vec![(id, result.value.clone())])
                     .await?;
 
                 cache_lock.set_mail_state(result.state).await?;
@@ -74,8 +74,7 @@ where
     }
 
     pub async fn get_mail_preview(&self, id: MailId) -> color_eyre::Result<MailDataPreview> {
-        static ENTER: Mutex<()> = Mutex::new(());
-        let _enter = ENTER.lock().unwrap();
+        let _enter = self.mail_locks.get_mail_preview.lock().await;
 
         match self.cache.read().await.get_mail_preview(&id).await? {
             Some(data) => Ok(data),
@@ -90,7 +89,7 @@ where
                 }
 
                 cache_lock
-                    .upsert_mails_preview([(id, result.value.clone())])
+                    .upsert_mails_preview(vec![(id, result.value.clone())])
                     .await?;
 
                 cache_lock.set_mail_state(result.state).await?;
@@ -101,9 +100,7 @@ where
     }
 
     pub async fn get_mail_text_body(&self, id: MailId) -> color_eyre::Result<MailDataTextBody> {
-        // don't let another task read from the cache while another task is currently requesting the data
-        static ENTER: Mutex<()> = Mutex::new(());
-        let _enter_function = ENTER.lock().unwrap();
+        let _enter = self.mail_locks.get_mail_text_body.lock().await;
 
         let opt_text_body = self.cache.read().await.get_mail_text_body(&id).await?;
 
@@ -133,8 +130,7 @@ where
     }
 
     pub async fn get_mail_html_body(&self, id: MailId) -> color_eyre::Result<MailDataHtmlBody> {
-        static ENTER: Mutex<()> = Mutex::new(());
-        let _enter_function = ENTER.lock().unwrap();
+        let _enter = self.mail_locks.get_mail_html_body.lock().await;
 
         let opt_html_body = self.cache.read().await.get_mail_html_body(&id).await?;
 
@@ -169,8 +165,6 @@ where
         start: i32,
         limit: u32,
     ) -> color_eyre::Result<Vec<MailDataCore>> {
-        static ENTER: Mutex<()> = Mutex::new(());
-
         let mailbox = self.get_mailbox(id.clone()).await?;
         let amount_threads = mailbox.total_threads;
 
@@ -188,7 +182,7 @@ where
             }
         };
 
-        let _enter_function = ENTER.lock().unwrap();
+        let _enter = self.mail_locks.query_root_mails.lock().await;
 
         let opt_root_mail_ids = self
             .cache
@@ -212,8 +206,10 @@ where
                     .collect();
                 return Ok(root_mails_core);
             } else {
-                let missing_mails_core =
-                    self.remote.fetch_mails_core(opt_root_mails.missing).await?;
+                let missing_mails_core = self
+                    .remote
+                    .fetch_mails_core(&opt_root_mails.missing)
+                    .await?;
 
                 let mut cache_lock = self.cache.write().await;
                 if let Some(current_email_get_state) = cache_lock.get_mail_state().await {
@@ -223,7 +219,7 @@ where
                 }
 
                 cache_lock
-                    .upsert_mails_core(missing_mails_core.values)
+                    .upsert_mails_core(missing_mails_core.values.into_iter().collect())
                     .await?;
 
                 let result = cache_lock.get_mails_core(&root_mails).await?;
