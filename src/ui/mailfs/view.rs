@@ -118,6 +118,11 @@ fn render_user_accounts_column(
                     Cell::from(user.config.username.as_str()),
                 ]));
                 continue;
+            } else {
+                rows.push(Row::new([
+                    Cell::from(UNCOLLAPSED),
+                    Cell::from(user.config.username.as_str()),
+                ]));
             }
 
             match &user.accounts {

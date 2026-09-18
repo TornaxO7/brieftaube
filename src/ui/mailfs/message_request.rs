@@ -6,11 +6,7 @@ use crate::{
 };
 
 pub enum MessageRequest {
-    RepositoryCreate {
-        username: config::Username,
-        cache_type: config::Cache,
-        remote_type: config::Backend,
-    },
+    GetAccountsOf(config::Username),
     RepositoryCommand {
         user: config::Username,
         command: repository::Command,

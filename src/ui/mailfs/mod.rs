@@ -164,7 +164,7 @@ impl State {
     fn navigate_down(&mut self) -> Vec<super::Message> {
         match self.column_stack.last().unwrap() {
             ColumnStackEntry::Users => {
-                self.users_column.select_next();
+                self.users_column.navigate_down();
                 vec![]
             }
             ColumnStackEntry::Mailbox(mailbox_id) => self

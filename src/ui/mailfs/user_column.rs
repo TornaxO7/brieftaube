@@ -89,26 +89,96 @@ impl UserColumn {
         None
     }
 
-    pub fn select_next(&mut self) {
-        todo!()
+    pub fn get_selected_entry_mut<'a>(&'a mut self) -> Option<UserColumnEntryMut<'a>> {
+        let selected_idx = self.state.selected()?;
+
+        let mut idx = 0;
+        for user in self.users.iter_mut() {
+            if idx == selected_idx {
+                return Some(UserColumnEntryMut::User(user));
+            }
+
+            idx += 1;
+
+            match &mut user.accounts {
+                Loadable::NotLoaded => {
+                    if idx == selected_idx {
+                        return Some(UserColumnEntryMut::AccountNotLoaded);
+                    }
+
+                    idx += 1;
+                }
+                Loadable::Loading => {
+                    if idx == selected_idx {
+                        return Some(UserColumnEntryMut::AccountLoading);
+                    }
+
+                    idx += 1;
+                }
+                Loadable::Error => {
+                    if idx == selected_idx {
+                        return Some(UserColumnEntryMut::AccountError);
+                    }
+
+                    idx += 1;
+                }
+                Loadable::Loaded(accounts) => {
+                    for account in accounts.iter_mut() {
+                        if idx == selected_idx {
+                            return Some(UserColumnEntryMut::Account(account));
+                        }
+
+                        idx += 1;
+                    }
+                }
+            }
+        }
+
+        None
     }
 
-    pub fn navigate_right(&mut self) -> Vec<super::super::Message> {
-        todo!()
+    pub fn navigate_right(&mut self) -> Vec<crate::ui::Message> {
+        let Some(selected_entry) = self.get_selected_entry_mut() else {
+            return vec![];
+        };
+
+        match selected_entry {
+            UserColumnEntryMut::User(user_ctx) => {
+                if user_ctx.is_collapsed {
+                    user_ctx.is_collapsed = false;
+                }
+
+                if matches!(user_ctx.accounts, Loadable::NotLoaded) {
+                    user_ctx.accounts = Loadable::Loading;
+                    return vec![
+                        super::MessageRequest::GetAccountsOf(user_ctx.config.username.clone())
+                            .into(),
+                    ];
+                }
+
+                vec![]
+            }
+            UserColumnEntryMut::Account(account_data) => todo!(),
+            UserColumnEntryMut::AccountNotLoaded => todo!(),
+            UserColumnEntryMut::AccountLoading => todo!(),
+            UserColumnEntryMut::AccountError => todo!(),
+        }
     }
 
-    pub fn navigate_left(&mut self) -> Vec<super::super::Message> {
+    pub fn navigate_left(&mut self) -> Vec<crate::ui::Message> {
         todo!()
     }
 }
 
 impl MailfsColumn for UserColumn {
     fn navigate_up(&mut self) -> Vec<crate::ui::Message> {
-        todo!()
+        self.state.select_previous();
+        vec![]
     }
 
     fn navigate_down(&mut self) -> Vec<crate::ui::Message> {
-        todo!()
+        self.state.select_next();
+        vec![]
     }
 
     fn navigate_to_bottom(&mut self) -> Vec<crate::ui::Message> {
@@ -140,6 +210,14 @@ impl UserCtx {
 pub enum UserColumnEntry<'a> {
     User(&'a UserCtx),
     Account(&'a AccountData),
+    AccountNotLoaded,
+    AccountLoading,
+    AccountError,
+}
+
+pub enum UserColumnEntryMut<'a> {
+    User(&'a mut UserCtx),
+    Account(&'a mut AccountData),
     AccountNotLoaded,
     AccountLoading,
     AccountError,

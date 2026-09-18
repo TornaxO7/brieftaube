@@ -189,15 +189,20 @@ impl Ui {
             Message::Mailfs(message) => self.mailfs.update(message),
             Message::MailfsRequest(message_request) => {
                 match message_request {
-                    mailfs::MessageRequest::RepositoryCreate {
-                        username: user,
-                        cache_type,
-                        remote_type,
-                    } => {
+                    mailfs::MessageRequest::GetAccountsOf(username) => {
+                        let config = CONFIG.get().unwrap();
+
+                        let user_config = config
+                            .users
+                            .iter()
+                            .find(|user_config| user_config.username == username)
+                            .unwrap();
+
+                        // TODO
                         self.task_manager.spawn(mailfs_repository_create(
-                            user,
-                            cache_type,
-                            remote_type,
+                            username,
+                            user_config.cache,
+                            user_config.backend,
                         ));
                     }
                     mailfs::MessageRequest::RepositoryCommand { user, command } => todo!(),
