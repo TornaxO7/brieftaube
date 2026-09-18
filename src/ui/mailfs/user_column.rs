@@ -41,8 +41,52 @@ impl UserColumn {
         user.accounts = accounts;
     }
 
-    pub fn iter<'a>(&'a self) -> UserColumnIterator<'a> {
-        UserColumnIterator::new(self)
+    pub fn get_selected_entry<'a>(&'a self) -> Option<UserColumnEntry<'a>> {
+        let selected_idx = self.state.selected()?;
+
+        let mut idx = 0;
+        for user in self.users.iter() {
+            if idx == selected_idx {
+                return Some(UserColumnEntry::User(user));
+            }
+
+            idx += 1;
+
+            match &user.accounts {
+                Loadable::NotLoaded => {
+                    if idx == selected_idx {
+                        return Some(UserColumnEntry::AccountNotLoaded);
+                    }
+
+                    idx += 1;
+                }
+                Loadable::Loading => {
+                    if idx == selected_idx {
+                        return Some(UserColumnEntry::AccountLoading);
+                    }
+
+                    idx += 1;
+                }
+                Loadable::Error => {
+                    if idx == selected_idx {
+                        return Some(UserColumnEntry::AccountError);
+                    }
+
+                    idx += 1;
+                }
+                Loadable::Loaded(accounts) => {
+                    for account in accounts.iter() {
+                        if idx == selected_idx {
+                            return Some(UserColumnEntry::Account(account));
+                        }
+
+                        idx += 1;
+                    }
+                }
+            }
+        }
+
+        None
     }
 
     pub fn select_next(&mut self) {
@@ -89,78 +133,6 @@ impl UserCtx {
             config: user,
             is_collapsed: true,
             accounts: Loadable::NotLoaded,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct UserColumnIterator<'a> {
-    column: &'a UserColumn,
-
-    user_idx: Option<usize>,
-    account_idx: Option<usize>,
-}
-
-impl<'a> UserColumnIterator<'a> {
-    fn new(column: &'a UserColumn) -> Self {
-        let ctx_idx = if column.users.is_empty() {
-            None
-        } else {
-            Some(0)
-        };
-
-        Self {
-            column,
-            user_idx: ctx_idx,
-            account_idx: None,
-        }
-    }
-}
-
-impl<'a> Iterator for UserColumnIterator<'a> {
-    type Item = UserColumnEntry<'a>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let ctx_idx = self.user_idx?;
-
-        let ctx = &self.column.users[ctx_idx];
-        match self.account_idx {
-            Some(account_idx) => {
-                let ret_value = match ctx.accounts.as_ref() {
-                    Loadable::NotLoaded => UserColumnEntry::AccountNotLoaded,
-                    Loadable::Loading => UserColumnEntry::AccountLoading,
-                    Loadable::Loaded(accounts) => {
-                        let no_accounts_left = account_idx >= accounts.len() - 1;
-                        if no_accounts_left {
-                            self.account_idx = None;
-                        } else {
-                            self.account_idx = Some(account_idx + 1);
-                        }
-
-                        UserColumnEntry::Account(&accounts[account_idx])
-                    }
-                    Loadable::Error => UserColumnEntry::AccountError,
-                };
-
-                Some(ret_value)
-            }
-            None => {
-                let ret_value = Some(UserColumnEntry::User(&ctx));
-
-                if ctx.is_collapsed {
-                    let no_users_left = ctx_idx >= self.column.users.len() - 1;
-                    if no_users_left {
-                        self.user_idx = None;
-                        self.account_idx = None;
-                    } else {
-                        self.user_idx = Some(ctx_idx + 1);
-                    }
-                } else {
-                    self.account_idx = Some(0);
-                }
-
-                ret_value
-            }
         }
     }
 }

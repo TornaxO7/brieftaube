@@ -46,7 +46,7 @@ fn render_path(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, are
         return;
     };
 
-    let Some(UserColumnEntry::Account(account)) = state.users_column.iter().skip(idx).next() else {
+    let Some(UserColumnEntry::Account(account)) = state.users_column.get_selected_entry() else {
         return;
     };
 
