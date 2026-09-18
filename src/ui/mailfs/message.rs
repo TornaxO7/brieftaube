@@ -1,7 +1,7 @@
 use crate::{
     config::Username,
     types::AccountData,
-    ui::{mailfs::user_action::UserAction, utils::Loadable},
+    ui::{Loadable, mailfs::user_action::UserAction},
 };
 use crossterm::event::Event;
 

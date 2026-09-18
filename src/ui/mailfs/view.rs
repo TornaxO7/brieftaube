@@ -1,6 +1,6 @@
 use crate::{
     THEME,
-    ui::{mailfs::user_column::UserColumnEntry, statusbar::Statusbar, utils::Loadable},
+    ui::{Loadable, mailfs::user_column::UserColumnEntry, statusbar::Statusbar},
     utils::IntoColor,
 };
 use material_theme_loader::Scheme;

@@ -1,5 +1,6 @@
 mod renderer;
 mod task_manager;
+mod types;
 mod utils;
 
 // pub mod composer;
@@ -10,12 +11,14 @@ pub mod prompt;
 // pub mod reader;
 pub mod statusbar;
 
+pub use types::*;
+
 use crate::{
     CONFIG,
     config::{self, Username},
     datasource::{self, Cache, Remote, jmap::JmapDescriptor},
     repository::RepositoryHandler,
-    ui::{palette::PaletteEntry, utils::Loadable},
+    ui::palette::PaletteEntry,
 };
 use color_eyre::eyre;
 use crossterm::event::Event;

@@ -1,6 +1,6 @@
 use crate::{
     types::{MailId, MailboxId},
-    ui::{mailfs::MailfsColumn, utils::Loadable},
+    ui::{Loadable, mailfs::MailfsColumn},
 };
 use ratatui::widgets::TableState;
 

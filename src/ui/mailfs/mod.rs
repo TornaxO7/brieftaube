@@ -13,14 +13,11 @@ use crate::{
     datasource::types::QueryWindow,
     types::{AccountData, MailKeyword, ParentMailboxId, ThreadId},
     ui::{
-        Layer,
+        Layer, Loadable,
         mailfs::{
             mailbox_column::MailboxColumn, thread_column::ThreadColumn, user_column::UserColumn,
         },
-        utils::{
-            Loadable,
-            keybindmanager::{self, KeybindManager},
-        },
+        utils::keybindmanager::{self, KeybindManager},
     },
 };
 use crossterm::event::Event;
