@@ -6,7 +6,7 @@ use crate::{
 };
 
 pub enum MessageRequest {
-    GetAccountsOf(config::Username),
+    GetAccountsOf(config::UserConfig),
     RepositoryCommand {
         user: config::Username,
         command: repository::CommandKind,

@@ -191,20 +191,9 @@ impl Ui {
             Message::Mailfs(message) => self.mailfs.update(message),
             Message::MailfsRequest(message_request) => {
                 match message_request {
-                    mailfs::MessageRequest::GetAccountsOf(username) => {
-                        let config = CONFIG.get().unwrap();
-
-                        let user_config = config
-                            .users
-                            .iter()
-                            .find(|user_config| user_config.username == username)
-                            .unwrap();
-
-                        self.task_manager.spawn(mailfs_repository_create(
-                            username,
-                            user_config.cache,
-                            user_config.backend,
-                        ));
+                    mailfs::MessageRequest::GetAccountsOf(user_config) => {
+                        self.task_manager
+                            .spawn(mailfs_repository_create(user_config));
                     }
                     mailfs::MessageRequest::RepositoryCommand { user, command } => todo!(),
                     mailfs::MessageRequest::GetChildMailboxes { account_id, parent } => todo!(),
@@ -228,26 +217,15 @@ pub trait Layer<LayerMsg, ParentLayerMsg = Message> {
     fn update(&mut self, msg: LayerMsg) -> Vec<ParentLayerMsg>;
 }
 
-async fn mailfs_repository_create(
-    user: Username,
-    cache_type: config::Cache,
-    remote_type: config::Backend,
-) -> Vec<Message> {
-    let cache: Box<dyn Cache> = match cache_type {
+async fn mailfs_repository_create(user_config: config::UserConfig) -> Vec<Message> {
+    let cache: Box<dyn Cache> = match user_config.cache {
         config::Cache::Internal => {
             Box::new(datasource::hashmap::HashMapDataSource::new()) as Box<dyn Cache>
         }
     };
 
-    let remote = match remote_type {
+    let remote = match user_config.backend {
         config::Backend::Jmap => {
-            let config = CONFIG.get().unwrap();
-            let user_config = config
-                .users
-                .iter()
-                .find(|user_config| user_config.username == user)
-                .unwrap();
-
             let desc = JmapDescriptor {
                 credentials: jmap_client::client::Credentials::basic(
                     user_config.username.as_str(),
@@ -263,8 +241,8 @@ async fn mailfs_repository_create(
 
                     return vec![
                         mailfs::Message::SetUserAccounts {
-                            username: user.clone(),
-                            accounts: Loadable::Error,
+                            username: user_config.username.clone(),
+                            accounts: Loadable::Error(err.to_string()),
                         }
                         .into(),
                     ];
@@ -277,9 +255,9 @@ async fn mailfs_repository_create(
     let handler = RepositoryHandler::new(cache, remote);
 
     vec![
-        Message::AddRepositoryHandler(user.clone(), handler),
+        Message::AddRepositoryHandler(user_config.username.clone(), handler),
         mailfs::Message::SetUserAccounts {
-            username: user,
+            username: user_config.username.clone(),
             accounts: Loadable::Loaded(accounts),
         }
         .into(),

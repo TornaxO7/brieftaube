@@ -67,7 +67,7 @@ impl UserColumn {
 
                     idx += 1;
                 }
-                Loadable::Error => {
+                Loadable::Error(_) => {
                     if idx == selected_idx {
                         return Some(UserColumnEntry::AccountError);
                     }
@@ -115,7 +115,7 @@ impl UserColumn {
 
                     idx += 1;
                 }
-                Loadable::Error => {
+                Loadable::Error(_) => {
                     if idx == selected_idx {
                         return Some(UserColumnEntryMut::AccountError);
                     }
@@ -163,7 +163,7 @@ impl UserColumn {
 
                     idx += 1;
                 }
-                Loadable::Error => {
+                Loadable::Error(_) => {
                     if idx == selected_idx {
                         return Some(user);
                     }
@@ -206,11 +206,10 @@ impl UserColumn {
                     user_ctx.is_collapsed = false;
                 }
 
-                if matches!(user_ctx.accounts, Loadable::NotLoaded | Loadable::Error) {
+                if matches!(user_ctx.accounts, Loadable::NotLoaded | Loadable::Error(_)) {
                     user_ctx.accounts = Loadable::Loading;
                     return vec![
-                        super::MessageRequest::GetAccountsOf(user_ctx.config.username.clone())
-                            .into(),
+                        super::MessageRequest::GetAccountsOf(user_ctx.config.clone()).into(),
                     ];
                 }
 

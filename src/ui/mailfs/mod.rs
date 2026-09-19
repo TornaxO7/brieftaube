@@ -11,13 +11,11 @@ mod user_column;
 use crate::{
     config,
     datasource::types::QueryWindow,
-    types::{AccountData, AccountId, MailKeyword, ParentMailboxId, ROOT_MAILBOX_ID, ThreadId},
+    types::{AccountData, MailKeyword, ParentMailboxId, ThreadId},
     ui::{
         Layer, Loadable,
         mailfs::{
-            mailbox_column::MailboxColumn,
-            thread_column::ThreadColumn,
-            user_column::{UserColumn, UserColumnEntry},
+            mailbox_column::MailboxColumn, thread_column::ThreadColumn, user_column::UserColumn,
         },
         utils::keybindmanager::{self, KeybindManager},
     },
@@ -40,7 +38,6 @@ pub struct State {
 
     column_stack: Vec<ColumnStackEntry>,
 
-    selected_account_id: Option<AccountId>,
     users_column: UserColumn,
     mailbox_columns: HashMap<ParentMailboxId, MailboxColumn>,
     thread_columns: HashMap<ThreadId, ThreadColumn>,
@@ -56,7 +53,6 @@ impl State {
             throbber: ThrobberState::default(),
             mode: Mode::Normal,
             column_stack: vec![ColumnStackEntry::Users],
-            selected_account_id: None,
 
             thread_columns,
             users_column,
@@ -272,7 +268,7 @@ impl State {
                     .get_mut(&thread_id)
                     .map(|thread_column| &thread_column.mails)
                 {
-                    Some(Loadable::NotLoaded) | Some(Loadable::Error) | None => {
+                    Some(Loadable::NotLoaded) | Some(Loadable::Error(_)) | None => {
                         self.thread_columns
                             .insert(thread_id.clone(), ThreadColumn::loading());
 
@@ -367,7 +363,7 @@ impl UserData {
         }
 
         match &self.accounts {
-            Loadable::NotLoaded | Loadable::Loading | Loadable::Error => 1,
+            Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => 1,
             Loadable::Loaded(accounts) => accounts.len() + 1,
         }
     }

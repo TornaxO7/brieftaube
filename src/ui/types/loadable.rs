@@ -4,7 +4,7 @@ pub enum Loadable<T> {
     NotLoaded,
     Loading,
     Loaded(T),
-    Error,
+    Error(String),
 }
 
 impl<T> Loadable<T> {
@@ -13,7 +13,7 @@ impl<T> Loadable<T> {
             Loadable::NotLoaded => Loadable::NotLoaded,
             Loadable::Loading => Loadable::Loading,
             Loadable::Loaded(value) => Loadable::Loaded(value),
-            Loadable::Error => Loadable::Error,
+            Loadable::Error(message) => Loadable::Error(message.clone()),
         }
     }
 
@@ -22,7 +22,7 @@ impl<T> Loadable<T> {
             Loadable::NotLoaded => Loadable::NotLoaded,
             Loadable::Loading => Loadable::Loading,
             Loadable::Loaded(value) => Loadable::Loaded(value),
-            Loadable::Error => Loadable::Error,
+            Loadable::Error(message) => Loadable::Error(message.clone()),
         }
     }
 
@@ -31,7 +31,7 @@ impl<T> Loadable<T> {
             Loadable::NotLoaded => Loadable::NotLoaded,
             Loadable::Loading => Loadable::Loading,
             Loadable::Loaded(value) => Loadable::Loaded(f(value)),
-            Loadable::Error => Loadable::Error,
+            Loadable::Error(message) => Loadable::Error(message),
         }
     }
 }

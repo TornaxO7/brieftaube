@@ -3,11 +3,14 @@ pub mod mailbox;
 pub mod thread;
 
 use crate::{
+    config,
     datasource::{
-        Cache, Remote,
+        self, Cache, Remote,
+        jmap::JmapDescriptor,
         types::{cache, remote},
     },
     types::{AccountId, MailId, MailboxId},
+    ui::mailfs,
 };
 use std::sync::Arc;
 use tokio::sync::{RwLock, RwLockWriteGuard, mpsc};
@@ -254,10 +257,6 @@ impl RepositoryHandler {
         tokio::spawn(Repository::run(cache, remote, rx));
 
         Self { tx }
-    }
-
-    pub fn execute(&self, command: CommandKind) {
-        let _ = self.tx.send(command);
     }
 }
 

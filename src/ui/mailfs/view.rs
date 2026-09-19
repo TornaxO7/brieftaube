@@ -162,7 +162,7 @@ fn render_user_accounts_column(
                         Cell::from(last.name.as_str()),
                     ]));
                 }
-                Loadable::Error => rows.push(Row::new([
+                Loadable::Error(_) => rows.push(Row::new([
                     Cell::from(UNCOLLAPSED_END),
                     Cell::from("Error: Login failed"),
                 ])),
