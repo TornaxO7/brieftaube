@@ -11,6 +11,7 @@ use crate::{
 };
 use std::sync::Arc;
 use tokio::sync::{RwLock, RwLockWriteGuard, mpsc};
+use tracing::error;
 
 #[derive(Debug)]
 pub enum Command {
@@ -247,5 +248,17 @@ impl RepositoryHandler {
         tokio::spawn(Repository::run(cache, remote, rx));
 
         Self { tx }
+    }
+
+    pub fn execute(&self, command: Command) {
+        let _ = self.tx.send(command);
+    }
+}
+
+impl Drop for RepositoryHandler {
+    fn drop(&mut self) {
+        if let Err(err) = self.tx.blocking_send(Command::Quit) {
+            error!("Couldn't gracefully quit repository: {err}");
+        }
     }
 }

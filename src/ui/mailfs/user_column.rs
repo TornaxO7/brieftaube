@@ -137,6 +137,54 @@ impl UserColumn {
         None
     }
 
+    pub fn get_selected_user_mut<'a>(&'a mut self) -> Option<&'a mut UserCtx> {
+        let selected_idx = self.state.selected()?;
+
+        let mut idx = 0;
+        for user in self.users.iter_mut() {
+            if idx == selected_idx {
+                return Some(user);
+            }
+
+            idx += 1;
+
+            match &mut user.accounts {
+                Loadable::NotLoaded => {
+                    if idx == selected_idx {
+                        return Some(user);
+                    }
+
+                    idx += 1;
+                }
+                Loadable::Loading => {
+                    if idx == selected_idx {
+                        return Some(user);
+                    }
+
+                    idx += 1;
+                }
+                Loadable::Error => {
+                    if idx == selected_idx {
+                        return Some(user);
+                    }
+
+                    idx += 1;
+                }
+                Loadable::Loaded(accounts) => {
+                    for _account in accounts.iter_mut() {
+                        if idx == selected_idx {
+                            return Some(user);
+                        }
+
+                        idx += 1;
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
     pub fn navigate_right(&mut self) -> Vec<crate::ui::Message> {
         let Some(selected_entry) = self.get_selected_entry_mut() else {
             return vec![];
@@ -148,7 +196,7 @@ impl UserColumn {
                     user_ctx.is_collapsed = false;
                 }
 
-                if matches!(user_ctx.accounts, Loadable::NotLoaded) {
+                if matches!(user_ctx.accounts, Loadable::NotLoaded | Loadable::Error) {
                     user_ctx.accounts = Loadable::Loading;
                     return vec![
                         super::MessageRequest::GetAccountsOf(user_ctx.config.username.clone())
@@ -166,7 +214,12 @@ impl UserColumn {
     }
 
     pub fn navigate_left(&mut self) -> Vec<crate::ui::Message> {
-        todo!()
+        let Some(user) = self.get_selected_user_mut() else {
+            return vec![];
+        };
+
+        user.is_collapsed = true;
+        vec![]
     }
 }
 

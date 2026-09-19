@@ -134,17 +134,18 @@ fn render_user_accounts_column(
                 }
                 Loadable::Loading => {
                     let throbber = Throbber::default()
-                        .label("Logging in...")
-                        .style(
-                            Style::default()
-                                .bg(scheme.primary_container.into_color())
-                                .fg(scheme.on_primary_container.into_color()),
-                        )
-                        .throbber_style(Style::default().fg(scheme.primary.into_color()));
+                        .throbber_style(Style::default().fg(scheme.primary.into_color()))
+                        .to_symbol_span(&state.throbber);
 
-                    let text = throbber.to_symbol_span(&state.throbber);
+                    let line = Cell::from(Line::from(vec![
+                        throbber,
+                        Span::styled(
+                            "Loading account...",
+                            Style::default().fg(scheme.primary.into_color()),
+                        ),
+                    ]));
 
-                    rows.push(Row::new([Cell::from(UNCOLLAPSED), Cell::from(text)]))
+                    rows.push(Row::new([Cell::from(UNCOLLAPSED_END), line]))
                 }
                 Loadable::Loaded(accounts) => {
                     let (last, rest) = accounts.split_last().unwrap();

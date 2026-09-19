@@ -24,7 +24,7 @@ use color_eyre::eyre;
 use crossterm::event::Event;
 use futures::{FutureExt, StreamExt};
 use ratatui::{DefaultTerminal, Frame};
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 use task_manager::TaskManager;
 use tracing::error;
 
@@ -100,6 +100,7 @@ impl Ui {
         terminal.draw(|frame| self.draw(frame))?;
 
         let mut msgs = Vec::with_capacity(8);
+        let mut interval = tokio::time::interval(Duration::from_millis(500));
 
         while self.is_running {
             tokio::select! {
@@ -110,7 +111,8 @@ impl Ui {
                 },
                 next_message = self.task_manager.finish_next_task(), if self.task_manager.has_tasks_running() => {
                     msgs.extend(next_message);
-                }
+                },
+                _timeout = interval.tick(), if self.task_manager.has_tasks_running() => {}
             };
 
             while let Some(next_message) = msgs.pop() {
@@ -155,7 +157,7 @@ impl Ui {
             },
 
             Message::AddRepositoryHandler(username, handler) => {
-                self.repos.insert(username, handler);
+                self.repos.insert(username.clone(), handler);
                 vec![]
             }
 
@@ -198,7 +200,6 @@ impl Ui {
                             .find(|user_config| user_config.username == username)
                             .unwrap();
 
-                        // TODO
                         self.task_manager.spawn(mailfs_repository_create(
                             username,
                             user_config.cache,
@@ -268,7 +269,15 @@ async fn mailfs_repository_create(
         }
     };
 
+    let accounts = remote.get_accounts();
     let handler = RepositoryHandler::new(cache, remote);
 
-    vec![Message::AddRepositoryHandler(user, handler)]
+    vec![
+        Message::AddRepositoryHandler(user.clone(), handler),
+        mailfs::Message::SetUserAccounts {
+            username: user,
+            accounts: Loadable::Loaded(accounts),
+        }
+        .into(),
+    ]
 }
