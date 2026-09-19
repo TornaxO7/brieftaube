@@ -11,11 +11,13 @@ mod user_column;
 use crate::{
     config,
     datasource::types::QueryWindow,
-    types::{AccountData, MailKeyword, ParentMailboxId, ThreadId},
+    types::{AccountData, AccountId, MailKeyword, ParentMailboxId, ROOT_MAILBOX_ID, ThreadId},
     ui::{
         Layer, Loadable,
         mailfs::{
-            mailbox_column::MailboxColumn, thread_column::ThreadColumn, user_column::UserColumn,
+            mailbox_column::MailboxColumn,
+            thread_column::ThreadColumn,
+            user_column::{UserColumn, UserColumnEntry},
         },
         utils::keybindmanager::{self, KeybindManager},
     },
@@ -38,6 +40,7 @@ pub struct State {
 
     column_stack: Vec<ColumnStackEntry>,
 
+    selected_account_id: Option<AccountId>,
     users_column: UserColumn,
     mailbox_columns: HashMap<ParentMailboxId, MailboxColumn>,
     thread_columns: HashMap<ThreadId, ThreadColumn>,
@@ -53,6 +56,7 @@ impl State {
             throbber: ThrobberState::default(),
             mode: Mode::Normal,
             column_stack: vec![ColumnStackEntry::Users],
+            selected_account_id: None,
 
             thread_columns,
             users_column,
@@ -163,10 +167,7 @@ impl State {
 
     fn navigate_down(&mut self) -> Vec<super::Message> {
         match self.column_stack.last().unwrap() {
-            ColumnStackEntry::Users => {
-                self.users_column.navigate_down();
-                vec![]
-            }
+            ColumnStackEntry::Users => self.users_column.navigate_down(),
             ColumnStackEntry::Mailbox(mailbox_id) => self
                 .mailbox_columns
                 .get_mut(mailbox_id)
@@ -236,8 +237,11 @@ impl State {
                     .entry(mailbox_id.clone())
                     .or_insert(MailboxColumn::loading());
 
+                let account_id = self.users_column.get_selected_account().unwrap().id.clone();
+
                 let mut request_messages: Vec<super::Message> = vec![
                     MessageRequest::GetChildMailboxes {
+                        account_id: account_id.clone(),
                         parent: mailbox_id.clone(),
                     }
                     .into(),
@@ -246,6 +250,7 @@ impl State {
                 if let Some(id) = mailbox_id.clone() {
                     request_messages.push(
                         MessageRequest::QueryMails {
+                            account_id: account_id.clone(),
                             mailbox: id,
                             window: QueryWindow {
                                 start: 0,
@@ -270,7 +275,17 @@ impl State {
                     Some(Loadable::NotLoaded) | Some(Loadable::Error) | None => {
                         self.thread_columns
                             .insert(thread_id.clone(), ThreadColumn::loading());
-                        vec![MessageRequest::GetThreadMails { thread: thread_id }.into()]
+
+                        let account_id =
+                            self.users_column.get_selected_account().unwrap().id.clone();
+
+                        vec![
+                            MessageRequest::GetThreadMails {
+                                account_id: account_id,
+                                thread: thread_id,
+                            }
+                            .into(),
+                        ]
                     }
                     Some(Loadable::Loading) | Some(Loadable::Loaded(_)) => {
                         vec![]

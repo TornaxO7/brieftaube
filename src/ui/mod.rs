@@ -207,9 +207,13 @@ impl Ui {
                         ));
                     }
                     mailfs::MessageRequest::RepositoryCommand { user, command } => todo!(),
-                    mailfs::MessageRequest::GetChildMailboxes { parent } => todo!(),
-                    mailfs::MessageRequest::QueryMails { mailbox, window } => todo!(),
-                    mailfs::MessageRequest::GetThreadMails { thread } => todo!(),
+                    mailfs::MessageRequest::GetChildMailboxes { account_id, parent } => todo!(),
+                    mailfs::MessageRequest::QueryMails {
+                        account_id,
+                        mailbox,
+                        window,
+                    } => todo!(),
+                    mailfs::MessageRequest::GetThreadMails { account_id, thread } => todo!(),
                 };
                 vec![]
             }

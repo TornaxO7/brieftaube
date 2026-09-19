@@ -1,7 +1,7 @@
 use crate::{
     CONFIG,
     config::{self, UserConfig},
-    types::AccountData,
+    types::{AccountData, AccountId},
     ui::{Loadable, mailfs::MailfsColumn},
 };
 use ratatui::widgets::TableState;
@@ -183,6 +183,16 @@ impl UserColumn {
         }
 
         None
+    }
+
+    pub fn get_selected_account<'a>(&'a self) -> Option<&'a AccountData> {
+        match self.get_selected_entry()? {
+            UserColumnEntry::User(_)
+            | UserColumnEntry::AccountNotLoaded
+            | UserColumnEntry::AccountLoading
+            | UserColumnEntry::AccountError => None,
+            UserColumnEntry::Account(account_data) => Some(account_data),
+        }
     }
 
     pub fn navigate_right(&mut self) -> Vec<crate::ui::Message> {

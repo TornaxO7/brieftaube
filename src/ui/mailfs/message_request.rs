@@ -2,7 +2,7 @@ use crate::{
     config,
     datasource::types::QueryWindow,
     repository,
-    types::{MailboxId, ParentMailboxId, ThreadId},
+    types::{AccountId, MailboxId, ParentMailboxId, ThreadId},
 };
 
 pub enum MessageRequest {
@@ -12,13 +12,16 @@ pub enum MessageRequest {
         command: repository::Command,
     },
     GetChildMailboxes {
+        account_id: AccountId,
         parent: ParentMailboxId,
     },
     QueryMails {
+        account_id: AccountId,
         mailbox: MailboxId,
         window: QueryWindow,
     },
     GetThreadMails {
+        account_id: AccountId,
         thread: ThreadId,
     },
 }

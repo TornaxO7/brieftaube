@@ -1,4 +1,4 @@
-pub const TOP_PARENT_MAILBOX_ID: ParentMailboxId = None;
+pub const ROOT_MAILBOX_ID: ParentMailboxId = None;
 pub type ParentMailboxId = Option<MailboxId>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
