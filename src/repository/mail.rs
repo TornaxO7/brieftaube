@@ -6,7 +6,7 @@ use crate::{
 use tokio::sync::{Mutex, oneshot};
 
 #[derive(Debug)]
-pub enum Command {
+pub enum CommandKind {
     GetCore {
         id: MailId,
         tx: oneshot::Sender<color_eyre::Result<MailDataCore>>,
@@ -31,8 +31,8 @@ pub enum Command {
     },
 }
 
-impl From<Command> for super::Command {
-    fn from(cmd: Command) -> Self {
+impl From<CommandKind> for super::CommandKind {
+    fn from(cmd: CommandKind) -> Self {
         Self::Mail(cmd)
     }
 }

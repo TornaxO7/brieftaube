@@ -7,24 +7,30 @@ use crate::{
         Cache, Remote,
         types::{cache, remote},
     },
-    types::{MailId, MailboxId},
+    types::{AccountId, MailId, MailboxId},
 };
 use std::sync::Arc;
 use tokio::sync::{RwLock, RwLockWriteGuard, mpsc};
 use tracing::error;
 
 #[derive(Debug)]
-pub enum Command {
-    Mail(mail::Command),
-    Mailbox(mailbox::Command),
-    Thread(thread::Command),
+pub struct Command {
+    pub id: AccountId,
+    pub kind: CommandKind,
+}
+
+#[derive(Debug)]
+pub enum CommandKind {
+    Mail(mail::CommandKind),
+    Mailbox(mailbox::CommandKind),
+    Thread(thread::CommandKind),
     Quit,
 }
 
 struct Repository {
     cache: Arc<RwLock<Box<dyn Cache>>>,
     remote: Box<dyn Remote>,
-    rx: mpsc::Receiver<Command>,
+    rx: mpsc::Receiver<CommandKind>,
 
     mail_locks: mail::Locks,
     mailbox_locks: mailbox::Locks,
@@ -32,7 +38,7 @@ struct Repository {
 }
 
 impl Repository {
-    async fn run(cache: Box<dyn Cache>, remote: Box<dyn Remote>, rx: mpsc::Receiver<Command>) {
+    async fn run(cache: Box<dyn Cache>, remote: Box<dyn Remote>, rx: mpsc::Receiver<CommandKind>) {
         let mut repo = Self {
             cache: Arc::new(RwLock::new(cache)),
             remote,
@@ -44,20 +50,20 @@ impl Repository {
 
         while let Some(command) = repo.rx.recv().await {
             match command {
-                Command::Mail(cmd) => match cmd {
-                    mail::Command::GetCore { id, tx } => {
+                CommandKind::Mail(cmd) => match cmd {
+                    mail::CommandKind::GetCore { id, tx } => {
                         let _ = tx.send(repo.get_mail_core(id).await);
                     }
-                    mail::Command::GetPreview { id, tx } => {
+                    mail::CommandKind::GetPreview { id, tx } => {
                         let _ = tx.send(repo.get_mail_preview(id).await);
                     }
-                    mail::Command::GetTextBody { id, tx } => {
+                    mail::CommandKind::GetTextBody { id, tx } => {
                         let _ = tx.send(repo.get_mail_text_body(id).await);
                     }
-                    mail::Command::GetHtmlBody { id, tx } => {
+                    mail::CommandKind::GetHtmlBody { id, tx } => {
                         let _ = tx.send(repo.get_mail_html_body(id).await);
                     }
-                    mail::Command::QueryRootMails {
+                    mail::CommandKind::QueryRootMails {
                         mailbox,
                         start,
                         limit,
@@ -66,17 +72,17 @@ impl Repository {
                         let _ = tx.send(repo.query_root_mails(mailbox, start, limit).await);
                     }
                 },
-                Command::Mailbox(cmd) => match cmd {
-                    mailbox::Command::GetChildren { id, tx } => {
+                CommandKind::Mailbox(cmd) => match cmd {
+                    mailbox::CommandKind::GetChildren { id, tx } => {
                         let _ = tx.send(repo.get_mailbox_children(id).await);
                     }
                 },
-                Command::Thread(cmd) => match cmd {
-                    thread::Command::GetThread { id, tx } => {
+                CommandKind::Thread(cmd) => match cmd {
+                    thread::CommandKind::GetThread { id, tx } => {
                         let _ = tx.send(repo.get_thread(id).await);
                     }
                 },
-                Command::Quit => repo.quit(),
+                CommandKind::Quit => repo.quit(),
             }
         }
     }
@@ -238,7 +244,7 @@ impl Repository {
 
 #[derive(Clone)]
 pub struct RepositoryHandler {
-    tx: mpsc::Sender<Command>,
+    tx: mpsc::Sender<CommandKind>,
 }
 
 impl RepositoryHandler {
@@ -250,14 +256,14 @@ impl RepositoryHandler {
         Self { tx }
     }
 
-    pub fn execute(&self, command: Command) {
+    pub fn execute(&self, command: CommandKind) {
         let _ = self.tx.send(command);
     }
 }
 
 impl Drop for RepositoryHandler {
     fn drop(&mut self) {
-        if let Err(err) = self.tx.blocking_send(Command::Quit) {
+        if let Err(err) = self.tx.blocking_send(CommandKind::Quit) {
             error!("Couldn't gracefully quit repository: {err}");
         }
     }

@@ -3,8 +3,6 @@ mod mailbox;
 mod root_mails;
 mod thread;
 
-use std::ops::Deref;
-
 use jmap_client::client::{Client, Credentials};
 use tracing::debug;
 

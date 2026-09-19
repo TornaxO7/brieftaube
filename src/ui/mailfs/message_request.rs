@@ -9,7 +9,7 @@ pub enum MessageRequest {
     GetAccountsOf(config::Username),
     RepositoryCommand {
         user: config::Username,
-        command: repository::Command,
+        command: repository::CommandKind,
     },
     GetChildMailboxes {
         account_id: AccountId,

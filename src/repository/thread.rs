@@ -6,15 +6,15 @@ use crate::{
 use tokio::sync::{Mutex, oneshot};
 
 #[derive(Debug)]
-pub enum Command {
+pub enum CommandKind {
     GetThread {
         id: ThreadId,
         tx: oneshot::Sender<color_eyre::Result<Vec<MailDataCore>>>,
     },
 }
 
-impl From<Command> for super::Command {
-    fn from(cmd: Command) -> Self {
+impl From<CommandKind> for super::CommandKind {
+    fn from(cmd: CommandKind) -> Self {
         Self::Thread(cmd)
     }
 }
