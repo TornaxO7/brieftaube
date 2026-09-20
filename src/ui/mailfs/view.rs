@@ -9,7 +9,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::Style,
     text::{Line, Span},
-    widgets::{Cell, Fill, Row, Table},
+    widgets::{Cell, Fill, Paragraph, Row, Table, Wrap},
 };
 use throbber_widgets_tui::Throbber;
 
@@ -100,7 +100,44 @@ fn render_middle_column(scheme: &Scheme, state: &mut super::State, frame: &mut F
     }
 }
 
-fn render_right_column(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {}
+fn render_right_column(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
+    let middle_is_user_accounts = state.column_stack.len() == 1;
+    if middle_is_user_accounts {
+        let Some(selected_entry) = state.users_column.get_selected_entry() else {
+            return;
+        };
+
+        match selected_entry {
+            UserColumnEntry::User(_user_ctx) => {}
+            UserColumnEntry::Account(_account_data) => {
+                todo!()
+            }
+            UserColumnEntry::AccountNotLoaded => {
+                frame.render_widget(
+                    Paragraph::new("Accounts haven't been loaded yet.")
+                        .style(Style::new().fg(scheme.primary.into_color())),
+                    area,
+                );
+            }
+            UserColumnEntry::AccountLoading => {
+                frame.render_widget(
+                    Paragraph::new("Connecting to server...")
+                        .style(Style::new().fg(scheme.primary.into_color())),
+                    area,
+                );
+            }
+            UserColumnEntry::AccountError(error) => {
+                frame.render_widget(
+                    Paragraph::new(format!("Couldn't connect to server:\n{error}"))
+                        .wrap(Wrap { trim: false })
+                        .style(Style::new().fg(scheme.error.into_color())),
+                    area,
+                );
+            }
+        }
+        return;
+    }
+}
 
 fn render_user_accounts_column(
     scheme: &Scheme,
@@ -115,16 +152,19 @@ fn render_user_accounts_column(
             if user.is_collapsed {
                 rows.push(Row::new([
                     Cell::from(COLLAPSED),
-                    Cell::from(user.config.username.as_str()),
+                    Cell::from(user.config.username.as_str())
+                        .style(Style::new().fg(scheme.secondary.into_color())),
                 ]));
                 continue;
             } else {
                 rows.push(Row::new([
                     Cell::from(UNCOLLAPSED),
-                    Cell::from(user.config.username.as_str()),
+                    Cell::from(user.config.username.as_str())
+                        .style(Style::new().fg(scheme.secondary.into_color())),
                 ]));
             }
 
+            // accounts
             match &user.accounts {
                 Loadable::NotLoaded => {
                     rows.push(Row::new([
@@ -164,7 +204,8 @@ fn render_user_accounts_column(
                 }
                 Loadable::Error(_) => rows.push(Row::new([
                     Cell::from(UNCOLLAPSED_END),
-                    Cell::from("Error: Login failed"),
+                    Cell::from("Error: Login failed")
+                        .style(Style::default().fg(scheme.error.into_color())),
                 ])),
             }
         }

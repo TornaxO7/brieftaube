@@ -67,9 +67,9 @@ impl UserColumn {
 
                     idx += 1;
                 }
-                Loadable::Error(_) => {
+                Loadable::Error(err) => {
                     if idx == selected_idx {
-                        return Some(UserColumnEntry::AccountError);
+                        return Some(UserColumnEntry::AccountError(err.as_str()));
                     }
 
                     idx += 1;
@@ -115,9 +115,9 @@ impl UserColumn {
 
                     idx += 1;
                 }
-                Loadable::Error(_) => {
+                Loadable::Error(err) => {
                     if idx == selected_idx {
-                        return Some(UserColumnEntryMut::AccountError);
+                        return Some(UserColumnEntryMut::AccountError(err.as_str()));
                     }
 
                     idx += 1;
@@ -190,7 +190,7 @@ impl UserColumn {
             UserColumnEntry::User(_)
             | UserColumnEntry::AccountNotLoaded
             | UserColumnEntry::AccountLoading
-            | UserColumnEntry::AccountError => None,
+            | UserColumnEntry::AccountError(_) => None,
             UserColumnEntry::Account(account_data) => Some(account_data),
         }
     }
@@ -215,10 +215,10 @@ impl UserColumn {
 
                 vec![]
             }
-            UserColumnEntryMut::Account(account_data) => todo!(),
+            UserColumnEntryMut::Account(_account_data) => todo!(),
             UserColumnEntryMut::AccountNotLoaded => todo!(),
             UserColumnEntryMut::AccountLoading => todo!(),
-            UserColumnEntryMut::AccountError => todo!(),
+            UserColumnEntryMut::AccountError(_err) => todo!(),
         }
     }
 
@@ -274,7 +274,7 @@ pub enum UserColumnEntry<'a> {
     Account(&'a AccountData),
     AccountNotLoaded,
     AccountLoading,
-    AccountError,
+    AccountError(&'a str),
 }
 
 pub enum UserColumnEntryMut<'a> {
@@ -282,5 +282,5 @@ pub enum UserColumnEntryMut<'a> {
     Account(&'a mut AccountData),
     AccountNotLoaded,
     AccountLoading,
-    AccountError,
+    AccountError(&'a str),
 }
