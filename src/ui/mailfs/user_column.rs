@@ -1,7 +1,7 @@
 use crate::{
     CONFIG,
     config::{self, UserConfig},
-    types::{AccountData, AccountId},
+    types::AccountData,
     ui::{Loadable, mailfs::MailfsColumn},
 };
 use ratatui::widgets::TableState;
