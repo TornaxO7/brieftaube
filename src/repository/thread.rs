@@ -37,12 +37,21 @@ impl Repository {
         id: ThreadId,
     ) -> color_eyre::Result<Vec<MailDataCore>> {
         let _enter = self.thread_locks.get_thread.lock().await;
-        let opt_thread_mail_ids = self.cache.read().await.get_thread(&id).await?;
+        let opt_thread_mail_ids = self
+            .caches
+            .get(&account_id)
+            .unwrap()
+            .read()
+            .await
+            .get_thread(&id)
+            .await?;
 
         match opt_thread_mail_ids {
             Some(thread_mail_ids) => {
                 let opt_thread_mails = self
-                    .cache
+                    .caches
+                    .get(&account_id)
+                    .unwrap()
                     .read()
                     .await
                     .get_mails_core(&thread_mail_ids)
@@ -61,7 +70,7 @@ impl Repository {
                         .fetch_mails_core(&opt_thread_mails.missing)
                         .await?;
 
-                    let mut cache_lock = self.cache.write().await;
+                    let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
                     if let Some(current_state) = cache_lock.get_mail_state().await {
                         if *current_state != result.state {
                             self.apply_email_get_changes(&account_id, &mut cache_lock)
@@ -99,7 +108,7 @@ impl Repository {
                     .fetch_thread(&id)
                     .await?;
 
-                let mut cache_lock = self.cache.write().await;
+                let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
 
                 let opt_current_email_get_state = cache_lock.get_mail_state().await;
                 if opt_current_email_get_state

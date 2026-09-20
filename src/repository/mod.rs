@@ -9,7 +9,7 @@ use crate::{
     },
     types::{AccountId, MailId, MailboxId},
 };
-use std::sync::Arc;
+use std::collections::HashMap;
 use tokio::sync::{RwLock, RwLockWriteGuard, mpsc};
 use tracing::error;
 
@@ -22,7 +22,7 @@ pub enum Command {
 }
 
 struct Repository {
-    cache: Arc<RwLock<Box<dyn Cache>>>,
+    caches: HashMap<AccountId, RwLock<Box<dyn Cache>>>,
     remote: Box<dyn RemoteSession>,
     rx: mpsc::Receiver<Command>,
 
@@ -33,12 +33,12 @@ struct Repository {
 
 impl Repository {
     async fn run(
-        cache: Box<dyn Cache>,
+        caches: HashMap<AccountId, RwLock<Box<dyn Cache>>>,
         remote: Box<dyn RemoteSession>,
         rx: mpsc::Receiver<Command>,
     ) {
         let mut repo = Self {
-            cache: Arc::new(RwLock::new(cache)),
+            caches,
             remote,
             rx,
             mail_locks: mail::Locks::default(),
@@ -257,10 +257,13 @@ pub struct RepositoryHandler {
 }
 
 impl RepositoryHandler {
-    pub fn new(cache: Box<dyn Cache>, remote: Box<dyn RemoteSession>) -> RepositoryHandler {
+    pub fn new(
+        caches: HashMap<AccountId, RwLock<Box<dyn Cache>>>,
+        remote: Box<dyn RemoteSession>,
+    ) -> RepositoryHandler {
         let (tx, rx) = mpsc::channel(32);
 
-        tokio::spawn(Repository::run(cache, remote, rx));
+        tokio::spawn(Repository::run(caches, remote, rx));
 
         Self { tx }
     }

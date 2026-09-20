@@ -35,7 +35,15 @@ impl Repository {
     async fn ensure_mailboxes_are_cached(&self, account_id: AccountId) -> color_eyre::Result<()> {
         let _enter = self.mailbox_locks.ensure_mailboxes_are_cached.lock().await;
 
-        let mailboxes_are_fetched = self.cache.read().await.get_mailbox_state().await.is_some();
+        let mailboxes_are_fetched = self
+            .caches
+            .get(&account_id)
+            .unwrap()
+            .read()
+            .await
+            .get_mailbox_state()
+            .await
+            .is_some();
         if mailboxes_are_fetched {
             return Ok(());
         }
@@ -45,11 +53,13 @@ impl Repository {
             state,
         } = self
             .remote
-            .get_remote_account(account_id)
+            .get_remote_account(account_id.clone())
             .fetch_mailboxes_all()
             .await?;
 
-        self.cache
+        self.caches
+            .get(&account_id)
+            .unwrap()
             .write()
             .await
             .upsert_mailboxes(mailboxes, state)
@@ -63,10 +73,12 @@ impl Repository {
         account_id: AccountId,
         id: MailboxId,
     ) -> color_eyre::Result<MailboxData> {
-        self.ensure_mailboxes_are_cached(account_id).await?;
+        self.ensure_mailboxes_are_cached(account_id.clone()).await?;
 
         let mailbox_data = self
-            .cache
+            .caches
+            .get(&account_id)
+            .unwrap()
             .read()
             .await
             .get_mailbox(&id)
@@ -81,10 +93,12 @@ impl Repository {
         account_id: AccountId,
         id: ParentMailboxId,
     ) -> color_eyre::Result<Vec<MailboxData>> {
-        self.ensure_mailboxes_are_cached(account_id).await?;
+        self.ensure_mailboxes_are_cached(account_id.clone()).await?;
 
         let children = self
-            .cache
+            .caches
+            .get(&account_id)
+            .unwrap()
             .read()
             .await
             .get_mailbox_children(&id)

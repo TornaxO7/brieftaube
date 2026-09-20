@@ -11,6 +11,7 @@ pub mod prompt;
 // pub mod reader;
 pub mod statusbar;
 
+use tokio::sync::RwLock;
 pub use types::*;
 
 use crate::{
@@ -218,12 +219,6 @@ pub trait Layer<LayerMsg, ParentLayerMsg = Message> {
 }
 
 async fn mailfs_repository_create(user_config: config::UserConfig) -> Vec<Message> {
-    let cache: Box<dyn Cache> = match user_config.cache {
-        config::Cache::Internal => {
-            Box::new(datasource::hashmap::HashMapDataSource::new()) as Box<dyn Cache>
-        }
-    };
-
     let remote = match user_config.backend {
         config::Backend::Jmap => {
             let desc = JmapDescriptor {
@@ -252,7 +247,22 @@ async fn mailfs_repository_create(user_config: config::UserConfig) -> Vec<Messag
     };
 
     let accounts = remote.get_accounts();
-    let handler = RepositoryHandler::new(cache, remote);
+
+    let caches = accounts
+        .clone()
+        .into_iter()
+        .map(|account| {
+            let cache: Box<dyn Cache> = match user_config.cache {
+                config::Cache::Internal => {
+                    Box::new(datasource::hashmap::HashMapDataSource::new()) as Box<dyn Cache>
+                }
+            };
+
+            (account.id, RwLock::new(cache))
+        })
+        .collect();
+
+    let handler = RepositoryHandler::new(caches, remote);
 
     vec![
         Message::AddRepositoryHandler(user_config.username.clone(), handler),
