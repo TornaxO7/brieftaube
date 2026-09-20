@@ -1,7 +1,7 @@
 use crate::{
     datasource::{
         MailboxRemote,
-        jmap::Jmap,
+        jmap::JmapAccount,
         types::{GetState, remote},
     },
     types::{MailboxData, MailboxId, MailboxNew, MailboxUpdate},
@@ -11,10 +11,10 @@ use color_eyre::Result;
 use jmap_client::core::set::SetObject;
 
 #[async_trait]
-impl MailboxRemote for Jmap {
+impl MailboxRemote for JmapAccount {
     async fn fetch_mailboxes_all(&self) -> Result<remote::GetOneResult<Vec<MailboxData>>> {
         let mut response = {
-            let mut request = self.client.build();
+            let mut request = self.build_request();
             request.get_mailbox().properties(MailboxData::PROPERTIES);
             request.send_get_mailbox().await?
         };
@@ -34,7 +34,7 @@ impl MailboxRemote for Jmap {
         since: &GetState,
     ) -> Result<remote::GetChangeResult<MailboxId>> {
         let mut response = {
-            let mut request = self.client.build();
+            let mut request = self.build_request();
             request.changes_mailbox(since.as_ref());
             request.send_changes_mailbox().await?
         };
@@ -56,7 +56,7 @@ impl MailboxRemote for Jmap {
 
     async fn create_mailbox(&self, new: MailboxNew) -> Result<remote::CreateResult<MailboxData>> {
         let (mut response, tmp_id) = {
-            let mut request = self.client.build();
+            let mut request = self.build_request();
             let tmp_id = request
                 .set_mailbox()
                 .create()
@@ -92,7 +92,7 @@ impl MailboxRemote for Jmap {
         since: &GetState,
     ) -> Result<remote::UpdateResult<MailboxId, MailboxData>> {
         let mut response = {
-            let mut request = self.client.build();
+            let mut request = self.build_request();
             let set = request.set_mailbox().if_in_state(since.as_ref());
 
             for (data, update) in &updates {
@@ -165,7 +165,7 @@ impl MailboxRemote for Jmap {
         on_destroy_remove_emails: bool,
     ) -> Result<remote::DestroyResult<MailboxId>> {
         let mut response = {
-            let mut request = self.client.build();
+            let mut request = self.build_request();
             request
                 .set_mailbox()
                 .destroy(ids)

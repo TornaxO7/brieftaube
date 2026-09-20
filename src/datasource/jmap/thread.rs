@@ -1,7 +1,7 @@
 use crate::{
     datasource::{
         ThreadRemote,
-        jmap::Jmap,
+        jmap::JmapAccount,
         types::{GetState, remote},
     },
     types::{MailDataCore, MailId, ThreadId},
@@ -10,13 +10,13 @@ use async_trait::async_trait;
 use color_eyre::Result;
 
 #[async_trait]
-impl ThreadRemote for Jmap {
+impl ThreadRemote for JmapAccount {
     async fn fetch_thread(
         &self,
         id: &ThreadId,
     ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<(MailId, MailDataCore)>>>> {
         let mut response = {
-            let mut request = self.client.build();
+            let mut request = self.build_request();
 
             let thread_mail_ids_ref = request
                 .get_thread()
@@ -68,7 +68,7 @@ impl ThreadRemote for Jmap {
         since: &GetState,
     ) -> Result<remote::GetChangeResult<ThreadId>> {
         let mut response = {
-            let mut request = self.client.build();
+            let mut request = self.build_request();
             request.changes_thread(since.as_ref());
             request.send_changes_thread().await?
         };

@@ -4,8 +4,8 @@ pub mod jmap;
 pub mod types;
 
 use crate::types::{
-    AccountData, MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody, MailId,
-    MailboxData, MailboxId, MailboxNew, MailboxUpdate, ParentMailboxId, ThreadId,
+    AccountData, AccountId, MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody,
+    MailId, MailboxData, MailboxId, MailboxNew, MailboxUpdate, ParentMailboxId, ThreadId,
 };
 use async_trait::async_trait;
 use color_eyre::Result;
@@ -13,10 +13,16 @@ use std::collections::{HashMap, HashSet};
 use types::{GetState, QueryState, QueryWindow, cache, remote};
 
 pub trait Cache: MailCache + RootMailsCache + MailboxCache + ThreadCache + Send + Sync {}
-pub trait Remote:
+
+pub trait RemoteSession: Send + Sync {
+    fn get_accounts(&self) -> Vec<AccountData>;
+
+    fn get_remote_account(&self, account_id: AccountId) -> Box<dyn RemoteAccount>;
+}
+
+pub trait RemoteAccount:
     MailRemote + RootMailsRemote + MailboxRemote + ThreadRemote + Send + Sync
 {
-    fn get_accounts(&self) -> Vec<AccountData>;
 }
 
 #[async_trait]

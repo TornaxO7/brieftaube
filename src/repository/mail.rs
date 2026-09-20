@@ -1,9 +1,18 @@
 use crate::{
     datasource::types::{QueryWindow, remote},
     repository::Repository,
-    types::{MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody, MailId, MailboxId},
+    types::{
+        AccountId, MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody, MailId,
+        MailboxId,
+    },
 };
 use tokio::sync::{Mutex, oneshot};
+
+#[derive(Debug)]
+pub struct Command {
+    pub account_id: AccountId,
+    pub kind: CommandKind,
+}
 
 #[derive(Debug)]
 pub enum CommandKind {
@@ -31,8 +40,8 @@ pub enum CommandKind {
     },
 }
 
-impl From<CommandKind> for super::CommandKind {
-    fn from(cmd: CommandKind) -> Self {
+impl From<Command> for super::Command {
+    fn from(cmd: Command) -> Self {
         Self::Mail(cmd)
     }
 }
@@ -47,18 +56,27 @@ pub struct Locks {
 }
 
 impl Repository {
-    pub async fn get_mail_core(&self, id: MailId) -> color_eyre::Result<MailDataCore> {
+    pub async fn get_mail_core(
+        &self,
+        account_id: AccountId,
+        id: MailId,
+    ) -> color_eyre::Result<MailDataCore> {
         let _entry = self.mail_locks.get_mail_core.lock().await;
 
         match self.cache.read().await.get_mail_core(&id).await? {
             Some(data) => Ok(data),
             None => {
-                let result = self.remote.fetch_mail_core(id.clone()).await?;
+                let result = self
+                    .remote
+                    .get_remote_account(account_id.clone())
+                    .fetch_mail_core(id.clone())
+                    .await?;
 
                 let mut cache_lock = self.cache.write().await;
                 if let Some(current_email_get_state) = cache_lock.get_mail_state().await {
                     if *current_email_get_state != result.state {
-                        self.apply_email_get_changes(&mut cache_lock).await?;
+                        self.apply_email_get_changes(&account_id, &mut cache_lock)
+                            .await?;
                     }
                 }
 
@@ -73,18 +91,27 @@ impl Repository {
         }
     }
 
-    pub async fn get_mail_preview(&self, id: MailId) -> color_eyre::Result<MailDataPreview> {
+    pub async fn get_mail_preview(
+        &self,
+        account_id: AccountId,
+        id: MailId,
+    ) -> color_eyre::Result<MailDataPreview> {
         let _enter = self.mail_locks.get_mail_preview.lock().await;
 
         match self.cache.read().await.get_mail_preview(&id).await? {
             Some(data) => Ok(data),
             None => {
-                let result = self.remote.fetch_mail_preview(id.clone()).await?;
+                let result = self
+                    .remote
+                    .get_remote_account(account_id.clone())
+                    .fetch_mail_preview(id.clone())
+                    .await?;
 
                 let mut cache_lock = self.cache.write().await;
                 if let Some(current_email_get_state) = cache_lock.get_mail_state().await {
                     if *current_email_get_state != result.state {
-                        self.apply_email_get_changes(&mut cache_lock).await?;
+                        self.apply_email_get_changes(&account_id, &mut cache_lock)
+                            .await?;
                     }
                 }
 
@@ -99,7 +126,11 @@ impl Repository {
         }
     }
 
-    pub async fn get_mail_text_body(&self, id: MailId) -> color_eyre::Result<MailDataTextBody> {
+    pub async fn get_mail_text_body(
+        &self,
+        account_id: AccountId,
+        id: MailId,
+    ) -> color_eyre::Result<MailDataTextBody> {
         let _enter = self.mail_locks.get_mail_text_body.lock().await;
 
         let opt_text_body = self.cache.read().await.get_mail_text_body(&id).await?;
@@ -110,12 +141,17 @@ impl Repository {
                 let remote::GetOneResult {
                     value: text_body,
                     state,
-                } = self.remote.fetch_mail_text_body(&id).await?;
+                } = self
+                    .remote
+                    .get_remote_account(account_id.clone())
+                    .fetch_mail_text_body(&id)
+                    .await?;
 
                 let mut cache_lock = self.cache.write().await;
                 let opt_current_state = cache_lock.get_mail_state().await;
                 if opt_current_state.is_some_and(|current_state| *current_state != state) {
-                    self.apply_email_get_changes(&mut cache_lock).await?;
+                    self.apply_email_get_changes(&account_id, &mut cache_lock)
+                        .await?;
                 }
 
                 debug_assert_eq!(cache_lock.get_mail_state().await, Some(&state));
@@ -129,7 +165,11 @@ impl Repository {
         }
     }
 
-    pub async fn get_mail_html_body(&self, id: MailId) -> color_eyre::Result<MailDataHtmlBody> {
+    pub async fn get_mail_html_body(
+        &self,
+        account_id: AccountId,
+        id: MailId,
+    ) -> color_eyre::Result<MailDataHtmlBody> {
         let _enter = self.mail_locks.get_mail_html_body.lock().await;
 
         let opt_html_body = self.cache.read().await.get_mail_html_body(&id).await?;
@@ -140,12 +180,17 @@ impl Repository {
                 let remote::GetOneResult {
                     value: html_body,
                     state,
-                } = self.remote.fetch_mail_html_body(&id).await?;
+                } = self
+                    .remote
+                    .get_remote_account(account_id.clone())
+                    .fetch_mail_html_body(&id)
+                    .await?;
 
                 let mut cache_lock = self.cache.write().await;
                 let opt_current_state = cache_lock.get_mail_state().await;
                 if opt_current_state.is_some_and(|current_state| *current_state != state) {
-                    self.apply_email_get_changes(&mut cache_lock).await?;
+                    self.apply_email_get_changes(&account_id, &mut cache_lock)
+                        .await?;
                 }
 
                 debug_assert_eq!(cache_lock.get_mail_state().await, Some(&state));
@@ -161,11 +206,12 @@ impl Repository {
 
     pub async fn query_root_mails(
         &self,
+        account_id: AccountId,
         id: MailboxId,
         start: i32,
         limit: u32,
     ) -> color_eyre::Result<Vec<MailDataCore>> {
-        let mailbox = self.get_mailbox(id.clone()).await?;
+        let mailbox = self.get_mailbox(account_id.clone(), id.clone()).await?;
         let amount_threads = mailbox.total_threads;
 
         let window = {
@@ -208,13 +254,15 @@ impl Repository {
             } else {
                 let missing_mails_core = self
                     .remote
+                    .get_remote_account(account_id.clone())
                     .fetch_mails_core(&opt_root_mails.missing)
                     .await?;
 
                 let mut cache_lock = self.cache.write().await;
                 if let Some(current_email_get_state) = cache_lock.get_mail_state().await {
                     if *current_email_get_state != missing_mails_core.state {
-                        self.apply_email_get_changes(&mut cache_lock).await?;
+                        self.apply_email_get_changes(&account_id, &mut cache_lock)
+                            .await?;
                     }
                 }
 
@@ -244,19 +292,24 @@ impl Repository {
                     state: email_get_state,
                 },
             state: root_mails_query_state,
-        } = self.remote.fetch_root_mails(&id, &window).await?;
+        } = self
+            .remote
+            .get_remote_account(account_id.clone())
+            .fetch_root_mails(&id, &window)
+            .await?;
 
         let mut cache_lock = self.cache.write().await;
 
         if let Some(current_email_get_state) = cache_lock.get_mail_state().await {
             if *current_email_get_state != email_get_state {
-                self.apply_email_get_changes(&mut cache_lock).await?;
+                self.apply_email_get_changes(&account_id, &mut cache_lock)
+                    .await?;
             }
         }
 
         if let Some(current_root_mail_query_state) = cache_lock.get_root_mails_state(&id).await {
             if *current_root_mail_query_state != root_mails_query_state {
-                self.apply_root_mail_query_changes(&id, &mut cache_lock)
+                self.apply_root_mail_query_changes(&account_id, &id, &mut cache_lock)
                     .await?;
             }
         }

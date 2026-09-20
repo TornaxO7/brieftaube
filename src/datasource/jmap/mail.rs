@@ -1,4 +1,4 @@
-use super::Jmap;
+use super::JmapAccount;
 use crate::{
     datasource::{
         MailRemote,
@@ -11,13 +11,13 @@ use color_eyre::Result;
 use std::collections::HashMap;
 
 #[async_trait]
-impl MailRemote for Jmap {
+impl MailRemote for JmapAccount {
     async fn fetch_mails_core(
         &self,
         ids: &[MailId],
     ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataCore>, Vec<MailId>>> {
         let mut response = {
-            let mut request = self.client.build();
+            let mut request = self.build_request();
 
             request
                 .get_email()
@@ -51,7 +51,7 @@ impl MailRemote for Jmap {
         ids: &[MailId],
     ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataPreview>, Vec<MailId>>> {
         let mut response = {
-            let mut request = self.client.build();
+            let mut request = self.build_request();
 
             request
                 .get_email()
@@ -86,7 +86,7 @@ impl MailRemote for Jmap {
         ids: &[MailId],
     ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataTextBody>, Vec<MailId>>> {
         let mut response = {
-            let mut request = self.client.build();
+            let mut request = self.build_request();
 
             request
                 .get_email()
@@ -126,7 +126,7 @@ impl MailRemote for Jmap {
         ids: &[MailId],
     ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataHtmlBody>, Vec<MailId>>> {
         let mut response = {
-            let mut request = self.client.build();
+            let mut request = self.build_request();
 
             request
                 .get_email()
@@ -176,7 +176,7 @@ impl MailRemote for Jmap {
         )>,
     > {
         let mut response = {
-            let mut request = self.client.build();
+            let mut request = self.build_request();
 
             request
                 .get_email()
@@ -291,7 +291,7 @@ impl MailRemote for Jmap {
     // ) -> Result<remote::CreateResult<MailData>, {
     //     let new2 = new.clone();
     //     let (mut response, tmp_id) = {
-    //         let mut request = self.client.build();
+    //         let mut request = self.build_request();
 
     //         let create = request
     //             .set_email()
@@ -355,7 +355,7 @@ impl MailRemote for Jmap {
     //     since: GetState,
     // ) -> Result<remote::UpdateResult<MailId, MailData>, {
     //     let mut response = {
-    //         let mut request = self.client.build();
+    //         let mut request = self.build_request();
     //         let set_mail = request.set_email().if_in_state(since);
 
     //         for (data, update) in updates.iter() {
@@ -421,7 +421,7 @@ impl MailRemote for Jmap {
         let ids: Vec<MailId> = ids.into_iter().cloned().collect();
 
         let mut response = {
-            let mut request = self.client.build();
+            let mut request = self.build_request();
             request.set_email().if_in_state(since).destroy(&ids);
             request.send_set_email().await?
         };
@@ -453,7 +453,7 @@ impl MailRemote for Jmap {
         since: &GetState,
     ) -> Result<remote::GetChangeResult<MailId>> {
         let mut response = {
-            let mut request = self.client.build();
+            let mut request = self.build_request();
             request.changes_email(since.as_ref());
             request.send_changes_email().await?
         };

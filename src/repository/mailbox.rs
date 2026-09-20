@@ -1,9 +1,15 @@
 use crate::{
     datasource::types::remote,
     repository::Repository,
-    types::{MailboxData, MailboxId, ParentMailboxId},
+    types::{AccountId, MailboxData, MailboxId, ParentMailboxId},
 };
 use tokio::sync::{Mutex, oneshot};
+
+#[derive(Debug)]
+pub struct Command {
+    pub account_id: AccountId,
+    pub kind: CommandKind,
+}
 
 #[derive(Debug)]
 pub enum CommandKind {
@@ -14,8 +20,8 @@ pub enum CommandKind {
     },
 }
 
-impl From<CommandKind> for super::CommandKind {
-    fn from(cmd: CommandKind) -> Self {
+impl From<Command> for super::Command {
+    fn from(cmd: Command) -> Self {
         Self::Mailbox(cmd)
     }
 }
@@ -26,7 +32,7 @@ pub struct Locks {
 }
 
 impl Repository {
-    async fn ensure_mailboxes_are_cached(&self) -> color_eyre::Result<()> {
+    async fn ensure_mailboxes_are_cached(&self, account_id: AccountId) -> color_eyre::Result<()> {
         let _enter = self.mailbox_locks.ensure_mailboxes_are_cached.lock().await;
 
         let mailboxes_are_fetched = self.cache.read().await.get_mailbox_state().await.is_some();
@@ -37,7 +43,11 @@ impl Repository {
         let remote::GetOneResult {
             value: mailboxes,
             state,
-        } = self.remote.fetch_mailboxes_all().await?;
+        } = self
+            .remote
+            .get_remote_account(account_id)
+            .fetch_mailboxes_all()
+            .await?;
 
         self.cache
             .write()
@@ -48,8 +58,12 @@ impl Repository {
         Ok(())
     }
 
-    pub async fn get_mailbox(&self, id: MailboxId) -> color_eyre::Result<MailboxData> {
-        self.ensure_mailboxes_are_cached().await?;
+    pub async fn get_mailbox(
+        &self,
+        account_id: AccountId,
+        id: MailboxId,
+    ) -> color_eyre::Result<MailboxData> {
+        self.ensure_mailboxes_are_cached(account_id).await?;
 
         let mailbox_data = self
             .cache
@@ -64,9 +78,10 @@ impl Repository {
 
     pub async fn get_mailbox_children(
         &self,
+        account_id: AccountId,
         id: ParentMailboxId,
     ) -> color_eyre::Result<Vec<MailboxData>> {
-        self.ensure_mailboxes_are_cached().await?;
+        self.ensure_mailboxes_are_cached(account_id).await?;
 
         let children = self
             .cache

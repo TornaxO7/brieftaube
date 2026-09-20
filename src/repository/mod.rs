@@ -3,37 +3,28 @@ pub mod mailbox;
 pub mod thread;
 
 use crate::{
-    config,
     datasource::{
-        self, Cache, Remote,
-        jmap::JmapDescriptor,
+        Cache, RemoteSession,
         types::{cache, remote},
     },
     types::{AccountId, MailId, MailboxId},
-    ui::mailfs,
 };
 use std::sync::Arc;
 use tokio::sync::{RwLock, RwLockWriteGuard, mpsc};
 use tracing::error;
 
 #[derive(Debug)]
-pub struct Command {
-    pub id: AccountId,
-    pub kind: CommandKind,
-}
-
-#[derive(Debug)]
-pub enum CommandKind {
-    Mail(mail::CommandKind),
-    Mailbox(mailbox::CommandKind),
-    Thread(thread::CommandKind),
+pub enum Command {
+    Mail(mail::Command),
+    Mailbox(mailbox::Command),
+    Thread(thread::Command),
     Quit,
 }
 
 struct Repository {
     cache: Arc<RwLock<Box<dyn Cache>>>,
-    remote: Box<dyn Remote>,
-    rx: mpsc::Receiver<CommandKind>,
+    remote: Box<dyn RemoteSession>,
+    rx: mpsc::Receiver<Command>,
 
     mail_locks: mail::Locks,
     mailbox_locks: mailbox::Locks,
@@ -41,7 +32,11 @@ struct Repository {
 }
 
 impl Repository {
-    async fn run(cache: Box<dyn Cache>, remote: Box<dyn Remote>, rx: mpsc::Receiver<CommandKind>) {
+    async fn run(
+        cache: Box<dyn Cache>,
+        remote: Box<dyn RemoteSession>,
+        rx: mpsc::Receiver<Command>,
+    ) {
         let mut repo = Self {
             cache: Arc::new(RwLock::new(cache)),
             remote,
@@ -53,18 +48,18 @@ impl Repository {
 
         while let Some(command) = repo.rx.recv().await {
             match command {
-                CommandKind::Mail(cmd) => match cmd {
+                Command::Mail(cmd) => match cmd.kind {
                     mail::CommandKind::GetCore { id, tx } => {
-                        let _ = tx.send(repo.get_mail_core(id).await);
+                        let _ = tx.send(repo.get_mail_core(cmd.account_id, id).await);
                     }
                     mail::CommandKind::GetPreview { id, tx } => {
-                        let _ = tx.send(repo.get_mail_preview(id).await);
+                        let _ = tx.send(repo.get_mail_preview(cmd.account_id, id).await);
                     }
                     mail::CommandKind::GetTextBody { id, tx } => {
-                        let _ = tx.send(repo.get_mail_text_body(id).await);
+                        let _ = tx.send(repo.get_mail_text_body(cmd.account_id, id).await);
                     }
                     mail::CommandKind::GetHtmlBody { id, tx } => {
-                        let _ = tx.send(repo.get_mail_html_body(id).await);
+                        let _ = tx.send(repo.get_mail_html_body(cmd.account_id, id).await);
                     }
                     mail::CommandKind::QueryRootMails {
                         mailbox,
@@ -72,20 +67,23 @@ impl Repository {
                         limit,
                         tx,
                     } => {
-                        let _ = tx.send(repo.query_root_mails(mailbox, start, limit).await);
+                        let _ = tx.send(
+                            repo.query_root_mails(cmd.account_id, mailbox, start, limit)
+                                .await,
+                        );
                     }
                 },
-                CommandKind::Mailbox(cmd) => match cmd {
+                Command::Mailbox(cmd) => match cmd.kind {
                     mailbox::CommandKind::GetChildren { id, tx } => {
-                        let _ = tx.send(repo.get_mailbox_children(id).await);
+                        let _ = tx.send(repo.get_mailbox_children(cmd.account_id, id).await);
                     }
                 },
-                CommandKind::Thread(cmd) => match cmd {
+                Command::Thread(cmd) => match cmd.kind {
                     thread::CommandKind::GetThread { id, tx } => {
-                        let _ = tx.send(repo.get_thread(id).await);
+                        let _ = tx.send(repo.get_thread(cmd.account_id, id).await);
                     }
                 },
-                CommandKind::Quit => repo.quit(),
+                Command::Quit => repo.quit(),
             }
         }
     }
@@ -96,6 +94,7 @@ impl Repository {
 
     async fn apply_email_get_changes(
         &self,
+        account_id: &AccountId,
         cache_lock: &mut RwLockWriteGuard<'_, Box<dyn Cache>>,
     ) -> color_eyre::Result<()> {
         let Some(mut current_state) = cache_lock.get_mail_state().await.cloned() else {
@@ -104,7 +103,11 @@ impl Repository {
         };
 
         loop {
-            let result = self.remote.fetch_mail_changes(&current_state).await?;
+            let result = self
+                .remote
+                .get_remote_account(account_id.clone())
+                .fetch_mail_changes(&current_state)
+                .await?;
 
             if !result.updated.is_empty() {
                 // PERFORMANCE: join them all instead awaiting them sequentially
@@ -159,6 +162,7 @@ impl Repository {
                     state: _,
                 } = self
                     .remote
+                    .get_remote_account(account_id.clone())
                     .fetch_mail_updates(
                         &updated_mail_core_ids,
                         &updated_mail_preview_ids,
@@ -195,6 +199,7 @@ impl Repository {
 
     async fn apply_root_mail_query_changes(
         &self,
+        account_id: &AccountId,
         id: &MailboxId,
         cache_lock: &mut RwLockWriteGuard<'_, Box<dyn Cache>>,
     ) -> color_eyre::Result<()> {
@@ -206,6 +211,7 @@ impl Repository {
 
         let result = self
             .remote
+            .get_remote_account(account_id.clone())
             .fetch_root_mails_changes(id, &current_state, up_to_id.as_ref())
             .await?;
 
@@ -226,7 +232,7 @@ impl Repository {
         &self,
         cache_lock: &mut RwLockWriteGuard<'_, Box<dyn Cache>>,
     ) -> color_eyre::Result<()> {
-        let Some(mut current_state) = cache_lock.get_mailbox_state().await.cloned() else {
+        let Some(mut _current_state) = cache_lock.get_mailbox_state().await.cloned() else {
             return Ok(());
         };
 
@@ -237,7 +243,7 @@ impl Repository {
         &self,
         cache_lock: &mut RwLockWriteGuard<'_, Box<dyn Cache>>,
     ) -> color_eyre::Result<()> {
-        let Some(mut current_state) = cache_lock.get_thread_state().await.cloned() else {
+        let Some(mut _current_state) = cache_lock.get_thread_state().await.cloned() else {
             return Ok(());
         };
 
@@ -247,11 +253,11 @@ impl Repository {
 
 #[derive(Clone)]
 pub struct RepositoryHandler {
-    tx: mpsc::Sender<CommandKind>,
+    tx: mpsc::Sender<Command>,
 }
 
 impl RepositoryHandler {
-    pub fn new(cache: Box<dyn Cache>, remote: Box<dyn Remote>) -> RepositoryHandler {
+    pub fn new(cache: Box<dyn Cache>, remote: Box<dyn RemoteSession>) -> RepositoryHandler {
         let (tx, rx) = mpsc::channel(32);
 
         tokio::spawn(Repository::run(cache, remote, rx));
@@ -262,7 +268,7 @@ impl RepositoryHandler {
 
 impl Drop for RepositoryHandler {
     fn drop(&mut self) {
-        if let Err(err) = self.tx.blocking_send(CommandKind::Quit) {
+        if let Err(err) = self.tx.blocking_send(Command::Quit) {
             error!("Couldn't gracefully quit repository: {err}");
         }
     }

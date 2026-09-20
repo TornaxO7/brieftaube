@@ -3,10 +3,16 @@ mod mailbox;
 mod root_mails;
 mod thread;
 
-use jmap_client::client::{Client, Credentials};
+use crate::{
+    datasource::{RemoteAccount, RemoteSession},
+    types::{AccountData, AccountId},
+};
+use jmap_client::{
+    client::{Client, Credentials},
+    core::request::Request,
+};
+use std::sync::Arc;
 use tracing::debug;
-
-use crate::{datasource::Remote, types::AccountData};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -23,15 +29,11 @@ pub struct JmapDescriptor {
     pub server_url: String,
 }
 
-pub struct Jmap {
-    client: Client,
+pub struct JmapSession {
+    client: Arc<Client>,
 }
 
-impl Jmap {
-    pub fn new(client: Client) -> Self {
-        Self { client }
-    }
-
+impl JmapSession {
     pub async fn connect(desc: JmapDescriptor) -> Result<Self, Error> {
         let host =
             get_host_from_url(desc.server_url.as_str()).ok_or(Error::NoDoubleSlashFoundInUrl)?;
@@ -44,11 +46,13 @@ impl Jmap {
             .connect(&desc.server_url)
             .await?;
 
-        Ok(Self::new(client))
+        Ok(Self {
+            client: Arc::new(client),
+        })
     }
 }
 
-impl Remote for Jmap {
+impl RemoteSession for JmapSession {
     fn get_accounts(&self) -> Vec<crate::types::AccountData> {
         let mut accounts = Vec::new();
         let session = self.client.session();
@@ -66,7 +70,27 @@ impl Remote for Jmap {
 
         accounts
     }
+
+    fn get_remote_account(&self, account_id: AccountId) -> Box<dyn RemoteAccount> {
+        Box::new(JmapAccount {
+            client: self.client.clone(),
+            account_id,
+        }) as Box<dyn RemoteAccount>
+    }
 }
+
+pub struct JmapAccount {
+    client: Arc<Client>,
+    account_id: AccountId,
+}
+
+impl JmapAccount {
+    pub fn build_request(&self) -> Request<'_> {
+        self.client.build().account_id(self.account_id.0.clone())
+    }
+}
+
+impl RemoteAccount for JmapAccount {}
 
 fn get_host_from_url<'a>(url: &'a str) -> Option<&'a str> {
     let double_slash_pos = url.find("//")?;

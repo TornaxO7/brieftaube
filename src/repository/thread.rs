@@ -1,9 +1,15 @@
 use super::Repository;
 use crate::{
     datasource::types::remote,
-    types::{MailDataCore, MailId, ThreadId},
+    types::{AccountId, MailDataCore, MailId, ThreadId},
 };
 use tokio::sync::{Mutex, oneshot};
+
+#[derive(Debug)]
+pub struct Command {
+    pub account_id: AccountId,
+    pub kind: CommandKind,
+}
 
 #[derive(Debug)]
 pub enum CommandKind {
@@ -13,8 +19,8 @@ pub enum CommandKind {
     },
 }
 
-impl From<CommandKind> for super::CommandKind {
-    fn from(cmd: CommandKind) -> Self {
+impl From<Command> for super::Command {
+    fn from(cmd: Command) -> Self {
         Self::Thread(cmd)
     }
 }
@@ -25,7 +31,11 @@ pub struct Locks {
 }
 
 impl Repository {
-    pub async fn get_thread(&self, id: ThreadId) -> color_eyre::Result<Vec<MailDataCore>> {
+    pub async fn get_thread(
+        &self,
+        account_id: AccountId,
+        id: ThreadId,
+    ) -> color_eyre::Result<Vec<MailDataCore>> {
         let _enter = self.thread_locks.get_thread.lock().await;
         let opt_thread_mail_ids = self.cache.read().await.get_thread(&id).await?;
 
@@ -47,13 +57,15 @@ impl Repository {
                 } else {
                     let result = self
                         .remote
+                        .get_remote_account(account_id.clone())
                         .fetch_mails_core(&opt_thread_mails.missing)
                         .await?;
 
                     let mut cache_lock = self.cache.write().await;
                     if let Some(current_state) = cache_lock.get_mail_state().await {
                         if *current_state != result.state {
-                            self.apply_email_get_changes(&mut cache_lock).await?;
+                            self.apply_email_get_changes(&account_id, &mut cache_lock)
+                                .await?;
                         }
                     }
 
@@ -81,7 +93,11 @@ impl Repository {
                             state: get_mail_state,
                         },
                     state: thread_get_state,
-                } = self.remote.fetch_thread(&id).await?;
+                } = self
+                    .remote
+                    .get_remote_account(account_id.clone())
+                    .fetch_thread(&id)
+                    .await?;
 
                 let mut cache_lock = self.cache.write().await;
 
@@ -89,7 +105,8 @@ impl Repository {
                 if opt_current_email_get_state
                     .is_some_and(|current_state| current_state != &get_mail_state)
                 {
-                    self.apply_email_get_changes(&mut cache_lock).await?;
+                    self.apply_email_get_changes(&account_id, &mut cache_lock)
+                        .await?;
                 }
 
                 let opt_current_thread_get_state = cache_lock.get_thread_state().await;

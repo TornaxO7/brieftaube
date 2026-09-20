@@ -16,7 +16,7 @@ pub use types::*;
 use crate::{
     CONFIG,
     config::{self, Username},
-    datasource::{self, Cache, Remote, jmap::JmapDescriptor},
+    datasource::{self, Cache, RemoteAccount, RemoteSession, jmap::JmapDescriptor},
     repository::RepositoryHandler,
     ui::palette::PaletteEntry,
 };
@@ -234,8 +234,8 @@ async fn mailfs_repository_create(user_config: config::UserConfig) -> Vec<Messag
                 server_url: user_config.server_url.clone(),
             };
 
-            match datasource::jmap::Jmap::connect(desc).await {
-                Ok(remote) => Box::new(remote) as Box<dyn Remote>,
+            match datasource::jmap::JmapSession::connect(desc).await {
+                Ok(remote) => Box::new(remote) as Box<dyn RemoteSession>,
                 Err(err) => {
                     error!("Couldn't connect to jmap account: {}", err);
 
