@@ -52,7 +52,7 @@ impl State {
         };
 
         let map = |_| {
-            unreachable!();
+            unreachable!("Placeholder");
         };
 
         Self {

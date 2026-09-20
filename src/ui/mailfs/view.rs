@@ -17,7 +17,6 @@ use ratatui::{
     widgets::{Cell, Fill, Paragraph, Row, Table, Wrap},
 };
 use throbber_widgets_tui::Throbber;
-use tracing::debug;
 
 const MAX_DATE_LENGTH: usize = "Jan 10, 1996".len();
 
@@ -67,7 +66,19 @@ fn render_path(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, are
 }
 
 fn render_statusbar(_scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
-    let layer_name = format!("Mailifs({})", state.mode);
+    let layer_name = {
+        let column_type = match state.column_stack.last().unwrap() {
+            ColumnStackEntry::Users => "Users",
+            ColumnStackEntry::Mailbox(_) => "Mailbox",
+            ColumnStackEntry::Thread(_) => "Thread",
+        };
+
+        let mode = match state.mode {
+            super::Mode::Normal => "normal",
+        };
+
+        format!("{}({})", column_type, mode)
+    };
 
     frame.render_widget(Statusbar::default().layer_name(layer_name.as_str()), area);
 }
