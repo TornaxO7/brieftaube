@@ -17,7 +17,9 @@ use crate::{
     ui::{
         Layer, Loadable,
         mailfs::{
-            mailbox_column::MailboxColumn, thread_column::ThreadColumn, user_column::UserColumn,
+            mailbox_column::MailboxColumn,
+            thread_column::ThreadColumn,
+            user_column::{UserColumn, UserColumnEntryMut},
         },
         utils::keybindmanager::{self, KeybindManager},
     },
@@ -189,13 +191,18 @@ impl State {
     }
 
     fn navigate_down(&mut self) -> Vec<super::Message> {
-        match self.column_stack.last().unwrap() {
+        match self.column_stack.last().unwrap().clone() {
             ColumnStackEntry::Users => {
                 self.users_column.navigate_down();
                 self.ensure_right_column_data()
             }
-            ColumnStackEntry::Mailbox(_mailbox_id) => {
-                todo!()
+            ColumnStackEntry::Mailbox(mailbox_id) => {
+                let selected_account = self.users_column.get_selected_account().unwrap();
+                let key = selected_account.as_key(mailbox_id);
+
+                let mailbox_column = self.mailbox_columns.get_mut(&key).unwrap();
+                mailbox_column.navigate_down();
+                self.ensure_right_column_data()
             }
             ColumnStackEntry::Thread(_thread_id) => {
                 todo!()
@@ -204,13 +211,18 @@ impl State {
     }
 
     fn navigate_up(&mut self) -> Vec<super::Message> {
-        match self.column_stack.last().unwrap() {
+        match self.column_stack.last().unwrap().clone() {
             ColumnStackEntry::Users => {
                 self.users_column.navigate_up();
-                vec![]
+                self.ensure_right_column_data()
             }
-            ColumnStackEntry::Mailbox(_mailbox_id) => {
-                todo!()
+            ColumnStackEntry::Mailbox(mailbox_id) => {
+                let selected_account = self.users_column.get_selected_account().unwrap();
+                let key = selected_account.as_key(mailbox_id);
+
+                let mailbox_column = self.mailbox_columns.get_mut(&key).unwrap();
+                mailbox_column.navigate_up();
+                self.ensure_right_column_data()
             }
             ColumnStackEntry::Thread(_thread_id) => {
                 todo!();
@@ -250,7 +262,37 @@ impl State {
 
     fn navigate_right(&mut self) -> Vec<super::Message> {
         match self.column_stack.last().cloned().unwrap() {
-            ColumnStackEntry::Users => self.users_column.navigate_right(),
+            ColumnStackEntry::Users => {
+                let Some(selected_entry) = self.users_column.get_selected_entry_mut() else {
+                    return vec![];
+                };
+
+                match selected_entry {
+                    UserColumnEntryMut::User(user_ctx) => {
+                        if user_ctx.is_collapsed {
+                            user_ctx.is_collapsed = false;
+                        }
+
+                        if matches!(user_ctx.accounts, Loadable::NotLoaded | Loadable::Error(_)) {
+                            user_ctx.accounts = Loadable::Loading;
+                            return vec![
+                                MessageRequest::GetAccountsOf(user_ctx.config.clone()).into(),
+                            ];
+                        }
+
+                        vec![]
+                    }
+                    UserColumnEntryMut::Account(_account_data) => {
+                        self.column_stack
+                            .push(ColumnStackEntry::Mailbox(ROOT_MAILBOX_ID));
+
+                        vec![]
+                    }
+                    UserColumnEntryMut::AccountNotLoaded
+                    | UserColumnEntryMut::AccountLoading
+                    | UserColumnEntryMut::AccountError(_) => vec![],
+                }
+            }
             ColumnStackEntry::Mailbox(_mailbox_id) => {
                 todo!();
             }
@@ -314,7 +356,7 @@ impl State {
 // helpers
 impl State {
     fn ensure_right_column_data(&mut self) -> Vec<crate::ui::Message> {
-        match self.column_stack.last().unwrap() {
+        match self.column_stack.last().unwrap().clone() {
             ColumnStackEntry::Users => {
                 let Some(account_key) = self.users_column.get_selected_account() else {
                     return vec![];
@@ -338,7 +380,29 @@ impl State {
                     ]
                 }
             }
-            ColumnStackEntry::Mailbox(_mailbox_id) => todo!(),
+            ColumnStackEntry::Mailbox(mailbox_id) => {
+                let Some(account_key) = self.users_column.get_selected_account() else {
+                    return vec![];
+                };
+
+                let key = account_key.as_key(mailbox_id);
+
+                if self.mailbox_columns.contains_key(&key) {
+                    vec![]
+                } else {
+                    self.mailbox_columns
+                        .insert(key.clone(), MailboxColumn::new_root());
+
+                    vec![
+                        MessageRequest::GetChildMailboxes {
+                            username: key.0,
+                            account_id: key.1,
+                            parent_id: key.2,
+                        }
+                        .into(),
+                    ]
+                }
+            }
             ColumnStackEntry::Thread(_thread_id) => todo!(),
         }
     }

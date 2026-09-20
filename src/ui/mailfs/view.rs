@@ -151,8 +151,13 @@ fn render_right_column(scheme: &Scheme, state: &mut super::State, frame: &mut Fr
                 }
             }
         }
-        ColumnStackEntry::Mailbox(mailbox_id) => todo!(),
-        ColumnStackEntry::Thread(thread_id) => todo!(),
+        ColumnStackEntry::Mailbox(mailbox_id) => {
+            // TODO: get selected entry of this given mailbox and render it.
+            // render_mailbox_column(scheme, mailbox_id.clone(), state, frame, area)
+        }
+        ColumnStackEntry::Thread(thread_id) => {
+            todo!();
+        }
     }
 }
 

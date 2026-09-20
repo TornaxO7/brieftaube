@@ -23,11 +23,11 @@ impl MailboxColumn {
 
 impl MailfsColumn for MailboxColumn {
     fn navigate_up(&mut self) {
-        todo!()
+        self.state.select_previous();
     }
 
     fn navigate_down(&mut self) {
-        todo!()
+        self.state.select_next();
     }
 
     fn navigate_to_bottom(&mut self) {
