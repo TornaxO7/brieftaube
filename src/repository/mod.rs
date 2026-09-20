@@ -268,11 +268,3 @@ impl RepositoryHandler {
         Self { tx }
     }
 }
-
-impl Drop for RepositoryHandler {
-    fn drop(&mut self) {
-        if let Err(err) = self.tx.blocking_send(Command::Quit) {
-            error!("Couldn't gracefully quit repository: {err}");
-        }
-    }
-}
