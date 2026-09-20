@@ -17,6 +17,9 @@ use ratatui::{
     widgets::{Cell, Fill, Paragraph, Row, Table, Wrap},
 };
 use throbber_widgets_tui::Throbber;
+use tracing::debug;
+
+const MAX_DATE_LENGTH: usize = "Jan 10, 1996".len();
 
 const COLLAPSED: &str = "▸";
 const UNCOLLAPSED: &str = "▾";
@@ -24,6 +27,9 @@ const UNCOLLAPSED_CHILD: &str = "├";
 const UNCOLLAPSED_END: &str = "└";
 const SEPARATION_LINE: &str = "│";
 const PLACEHOLDER: &str = " ";
+
+const FOLDER_ICON: &str = "🖿";
+const MAIL_UNREAD_ICON: &str = "●";
 
 // TODO: create cache for rendering
 
@@ -135,41 +141,7 @@ fn render_right_column(scheme: &Scheme, state: &mut super::State, frame: &mut Fr
             }
         }
         ColumnStackEntry::Mailbox(mailbox_id) => todo!(),
-        ColumnStackEntry::Thread(thread_id) => {
-            let thread = state.thread_columns.get(thread_id).unwrap();
-
-            match &thread.mails {
-                Loadable::NotLoaded => {
-                    frame.render_widget(
-                        Paragraph::new("Mail preview not loaded (should start soon).")
-                            .style(Style::new().fg(scheme.secondary.into_color())),
-                        area,
-                    );
-                }
-                Loadable::Loading => {
-                    frame.render_widget(
-                        Paragraph::new("Loading mail preview...")
-                            .style(Style::new().fg(scheme.primary.into_color())),
-                        area,
-                    );
-                }
-                Loadable::Loaded(thread_mail_ids) => {
-                    let Some(selected_idx) = thread.state.selected() else {
-                        return;
-                    };
-
-                    let mail_id = thread_mail_ids[selected_idx].clone();
-                    render_mail_preview(scheme, mail_id, state, frame, area);
-                }
-                Loadable::Error(err) => {
-                    frame.render_widget(
-                        Paragraph::new(format!("Can't preview mail:\n{err}"))
-                            .style(Style::new().fg(scheme.error.into_color())),
-                        area,
-                    );
-                }
-            }
-        }
+        ColumnStackEntry::Thread(thread_id) => todo!(),
     }
 }
 
@@ -279,13 +251,87 @@ fn render_user_accounts_column(
 }
 
 fn render_mailbox_column(
-    _scheme: &Scheme,
-    _mailbox_id: ParentMailboxId,
-    _state: &mut super::State,
-    _frame: &mut Frame,
-    _area: Rect,
+    scheme: &Scheme,
+    mailbox_id: ParentMailboxId,
+    state: &mut super::State,
+    frame: &mut Frame,
+    area: Rect,
 ) {
-    tracing::debug!("hello");
+    let Some(account) = state.users_column.get_selected_account() else {
+        return;
+    };
+
+    let key = account.as_key(mailbox_id);
+    let mailbox_column = state.mailbox_columns.get_mut(&key).unwrap();
+
+    let widths = [
+        Constraint::Length(2),
+        Constraint::Fill(1),
+        Constraint::Length(MAX_DATE_LENGTH as u16),
+    ];
+
+    let rows: Vec<Row<'_>> = {
+        let mut rows = Vec::with_capacity(area.height.into());
+
+        // mailboxes
+        match &mailbox_column.mailboxes {
+            Loadable::NotLoaded => {
+                rows.push(Row::new([Cell::from("Mailboxes not requested yet.")
+                    .style(scheme.primary.into_color())
+                    .column_span(widths.len() as u16)]));
+            }
+            Loadable::Loading => {
+                let throbber = Throbber::default()
+                    .throbber_style(Style::new().fg(scheme.primary.into_color()))
+                    .to_symbol_span(&state.throbber);
+
+                let line = Cell::from(Line::from(vec![
+                    throbber,
+                    Span::styled(
+                        "Fetching mailboxes...",
+                        Style::new().fg(scheme.primary.into_color()),
+                    ),
+                ]))
+                .column_span(widths.len() as u16);
+
+                rows.push(Row::new([line]))
+            }
+            Loadable::Loaded(mailboxes) => {
+                for mailbox in mailboxes {
+                    let unread_style = if mailbox.unread_mails > 0 {
+                        Style::new().fg(scheme.primary_container.into_color())
+                    } else {
+                        Style::new().fg(scheme.secondary.into_color())
+                    };
+
+                    rows.push(Row::new([
+                        Cell::new(FOLDER_ICON).style(unread_style),
+                        Cell::new(mailbox.name.as_str()),
+                        Cell::new(format!("{}", mailbox.unread_mails)).style(unread_style),
+                    ]))
+                }
+            }
+            Loadable::Error(_) => {
+                rows.push(Row::new([Cell::new("Couldn't fetch mailboxes")
+                    .column_span(widths.len() as u16)
+                    .style(Style::new().fg(scheme.error.into_color()))]));
+            }
+        }
+
+        // mails
+
+        rows
+    };
+
+    frame.render_stateful_widget(
+        Table::new(rows, widths).row_highlight_style(
+            Style::new()
+                .bg(scheme.primary_container.into_color())
+                .fg(scheme.on_primary_container.into_color()),
+        ),
+        area,
+        &mut mailbox_column.state,
+    );
 }
 
 fn render_thread_column(

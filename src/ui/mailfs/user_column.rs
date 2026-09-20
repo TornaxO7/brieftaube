@@ -2,7 +2,10 @@ use crate::{
     CONFIG,
     config::{self, UserConfig},
     types::AccountData,
-    ui::{Loadable, mailfs::MailfsColumn},
+    ui::{
+        Loadable,
+        mailfs::{AccountKey, MailfsColumn},
+    },
 };
 use ratatui::widgets::TableState;
 
@@ -185,14 +188,41 @@ impl UserColumn {
         None
     }
 
-    pub fn get_selected_account<'a>(&'a self) -> Option<&'a AccountData> {
-        match self.get_selected_entry()? {
-            UserColumnEntry::User(_)
-            | UserColumnEntry::AccountNotLoaded
-            | UserColumnEntry::AccountLoading
-            | UserColumnEntry::AccountError(_) => None,
-            UserColumnEntry::Account(account_data) => Some(account_data),
+    pub fn get_selected_account<'a>(&'a self) -> Option<AccountKey> {
+        let selected_idx = self.state.selected()?;
+
+        let mut idx = 0;
+        for user in self.users.iter() {
+            if idx == selected_idx {
+                return None;
+            }
+
+            idx += 1;
+
+            match &user.accounts {
+                Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
+                    if idx == selected_idx {
+                        return None;
+                    }
+
+                    idx += 1;
+                }
+                Loadable::Loaded(accounts) => {
+                    for account in accounts.iter() {
+                        if idx == selected_idx {
+                            return Some(AccountKey {
+                                username: user.config.username.clone(),
+                                account_id: account.id.clone(),
+                            });
+                        }
+
+                        idx += 1;
+                    }
+                }
+            }
         }
+
+        None
     }
 
     pub fn navigate_right(&mut self) -> Vec<crate::ui::Message> {
@@ -233,22 +263,20 @@ impl UserColumn {
 }
 
 impl MailfsColumn for UserColumn {
-    fn navigate_up(&mut self) -> Vec<crate::ui::Message> {
+    fn navigate_up(&mut self) {
         self.state.select_previous();
-        vec![]
     }
 
-    fn navigate_down(&mut self) -> Vec<crate::ui::Message> {
+    fn navigate_down(&mut self) {
         self.state.select_next();
-        vec![]
     }
 
-    fn navigate_to_bottom(&mut self) -> Vec<crate::ui::Message> {
-        todo!()
+    fn navigate_to_bottom(&mut self) {
+        self.state.select_last();
     }
 
-    fn navigate_to_top(&mut self) -> Vec<crate::ui::Message> {
-        todo!()
+    fn navigate_to_top(&mut self) {
+        self.state.select_first();
     }
 }
 

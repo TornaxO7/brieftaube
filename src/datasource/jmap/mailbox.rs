@@ -9,9 +9,11 @@ use crate::{
 use async_trait::async_trait;
 use color_eyre::Result;
 use jmap_client::core::set::SetObject;
+use tracing::instrument;
 
 #[async_trait]
 impl MailboxRemote for JmapAccount {
+    #[instrument(skip(self))]
     async fn fetch_mailboxes_all(&self) -> Result<remote::GetOneResult<Vec<MailboxData>>> {
         let mut response = {
             let mut request = self.build_request();

@@ -11,14 +11,13 @@ pub mod prompt;
 // pub mod reader;
 pub mod statusbar;
 
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, oneshot};
 pub use types::*;
 
 use crate::{
-    CONFIG,
     config::{self, Username},
-    datasource::{self, Cache, RemoteAccount, RemoteSession, jmap::JmapDescriptor},
-    repository::RepositoryHandler,
+    datasource::{self, Cache, RemoteSession, jmap::JmapDescriptor},
+    repository::{self, RepositoryHandler},
     ui::palette::PaletteEntry,
 };
 use color_eyre::eyre;
@@ -196,8 +195,40 @@ impl Ui {
                         self.task_manager
                             .spawn(mailfs_repository_create(user_config));
                     }
-                    mailfs::MessageRequest::RepositoryCommand { user, command } => todo!(),
-                    mailfs::MessageRequest::GetChildMailboxes { account_id, parent } => todo!(),
+                    mailfs::MessageRequest::GetChildMailboxes {
+                        username,
+                        account_id,
+                        parent_id,
+                    } => {
+                        let handler = self.repos.get(&username).unwrap().clone();
+
+                        self.task_manager.spawn(async move {
+                            let (tx, rx) = oneshot::channel();
+
+                            handler
+                                .execute(
+                                    repository::mailbox::Command {
+                                        account_id: account_id.clone(),
+                                        kind: repository::mailbox::CommandKind::GetChildren {
+                                            id: parent_id.clone(),
+                                            tx,
+                                        },
+                                    }
+                                    .into(),
+                                )
+                                .await;
+
+                            vec![
+                                mailfs::Message::SetChildMailboxes {
+                                    username,
+                                    account_id,
+                                    parent_id,
+                                    child_mailboxes: rx.await.unwrap(),
+                                }
+                                .into(),
+                            ]
+                        });
+                    }
                     mailfs::MessageRequest::QueryMails {
                         account_id,
                         mailbox,

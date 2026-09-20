@@ -44,6 +44,7 @@ impl Repository {
             .get_mailbox_state()
             .await
             .is_some();
+
         if mailboxes_are_fetched {
             return Ok(());
         }

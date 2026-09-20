@@ -266,4 +266,8 @@ impl RepositoryHandler {
 
         Self { tx }
     }
+
+    pub async fn execute(&self, command: Command) {
+        self.tx.send(command).await.unwrap();
+    }
 }

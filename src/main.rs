@@ -11,7 +11,9 @@ use config::Config;
 use material_theme_loader::MaterialTheme;
 use std::{fs::OpenOptions, io, path::PathBuf, sync::OnceLock};
 use tracing::{level_filters::LevelFilter, warn};
-use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{
+    EnvFilter, Layer, filter::Targets, layer::SubscriberExt, util::SubscriberInitExt,
+};
 use xdg::BaseDirectories;
 
 const APP_NAME: &str = env!("CARGO_PKG_NAME");

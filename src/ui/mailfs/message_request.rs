@@ -1,19 +1,15 @@
 use crate::{
     config,
     datasource::types::QueryWindow,
-    repository,
     types::{AccountId, MailboxId, ParentMailboxId, ThreadId},
 };
 
 pub enum MessageRequest {
     GetAccountsOf(config::UserConfig),
-    RepositoryCommand {
-        user: config::Username,
-        command: repository::Command,
-    },
     GetChildMailboxes {
+        username: config::Username,
         account_id: AccountId,
-        parent: ParentMailboxId,
+        parent_id: ParentMailboxId,
     },
     QueryMails {
         account_id: AccountId,

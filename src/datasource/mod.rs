@@ -10,6 +10,7 @@ use crate::types::{
 use async_trait::async_trait;
 use color_eyre::Result;
 use std::collections::{HashMap, HashSet};
+use tracing::instrument;
 use types::{GetState, QueryState, QueryWindow, cache, remote};
 
 pub trait Cache: MailCache + RootMailsCache + MailboxCache + ThreadCache + Send + Sync {}

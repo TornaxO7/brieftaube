@@ -20,19 +20,19 @@ impl ThreadColumn {
 }
 
 impl MailfsColumn for ThreadColumn {
-    fn navigate_up(&mut self) -> Vec<crate::ui::Message> {
+    fn navigate_up(&mut self) {
         todo!()
     }
 
-    fn navigate_down(&mut self) -> Vec<crate::ui::Message> {
+    fn navigate_down(&mut self) {
         todo!()
     }
 
-    fn navigate_to_bottom(&mut self) -> Vec<crate::ui::Message> {
+    fn navigate_to_bottom(&mut self) {
         todo!()
     }
 
-    fn navigate_to_top(&mut self) -> Vec<crate::ui::Message> {
+    fn navigate_to_top(&mut self) {
         todo!()
     }
 }
