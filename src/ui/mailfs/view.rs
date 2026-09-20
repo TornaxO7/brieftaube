@@ -1,6 +1,11 @@
 use crate::{
     THEME,
-    ui::{Loadable, mailfs::user_column::UserColumnEntry, statusbar::Statusbar},
+    types::{MailId, ParentMailboxId, ROOT_MAILBOX_ID, ThreadId},
+    ui::{
+        Loadable,
+        mailfs::{ColumnStackEntry, user_column::UserColumnEntry},
+        statusbar::Statusbar,
+    },
     utils::IntoColor,
 };
 use material_theme_loader::Scheme;
@@ -41,11 +46,6 @@ pub fn view(state: &mut super::State, frame: &mut Frame, area: Rect) {
 fn render_path(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
     let mut path: Vec<Span> = Vec::new();
 
-    // account name
-    let Some(idx) = state.users_column.state.selected() else {
-        return;
-    };
-
     let Some(UserColumnEntry::Account(account)) = state.users_column.get_selected_entry() else {
         return;
     };
@@ -60,7 +60,7 @@ fn render_path(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, are
     frame.render_widget(Line::from(path), area);
 }
 
-fn render_statusbar(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
+fn render_statusbar(_scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
     let layer_name = format!("Mailifs({})", state.mode);
 
     frame.render_widget(Statusbar::default().layer_name(layer_name.as_str()), area);
@@ -84,58 +84,110 @@ fn render_columns(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, 
 }
 
 fn render_left_column(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
-    if state.column_stack.len() <= 1 {
+    let Some(prev_last) = state.column_stack.iter().rev().skip(1).next().cloned() else {
         return;
-    }
+    };
 
-    if state.column_stack.len() == 2 {
-        render_user_accounts_column(scheme, state, frame, area);
-    }
+    render_column(scheme, prev_last, state, frame, area);
 }
 
 fn render_middle_column(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
-    if state.column_stack.len() == 1 {
-        render_user_accounts_column(scheme, state, frame, area);
-    } else {
-    }
+    let entry = state.column_stack.last().cloned().unwrap();
+    render_column(scheme, entry, state, frame, area);
 }
 
 fn render_right_column(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
-    let middle_is_user_accounts = state.column_stack.len() == 1;
-    if middle_is_user_accounts {
-        let Some(selected_entry) = state.users_column.get_selected_entry() else {
-            return;
-        };
+    match state.column_stack.last().unwrap() {
+        ColumnStackEntry::Users => {
+            let Some(selected_entry) = state.users_column.get_selected_entry() else {
+                return;
+            };
 
-        match selected_entry {
-            UserColumnEntry::User(_user_ctx) => {}
-            UserColumnEntry::Account(_account_data) => {
-                todo!()
-            }
-            UserColumnEntry::AccountNotLoaded => {
-                frame.render_widget(
-                    Paragraph::new("Accounts haven't been loaded yet.")
-                        .style(Style::new().fg(scheme.primary.into_color())),
-                    area,
-                );
-            }
-            UserColumnEntry::AccountLoading => {
-                frame.render_widget(
-                    Paragraph::new("Connecting to server...")
-                        .style(Style::new().fg(scheme.primary.into_color())),
-                    area,
-                );
-            }
-            UserColumnEntry::AccountError(error) => {
-                frame.render_widget(
-                    Paragraph::new(format!("Couldn't connect to server:\n{error}"))
-                        .wrap(Wrap { trim: false })
-                        .style(Style::new().fg(scheme.error.into_color())),
-                    area,
-                );
+            match selected_entry {
+                UserColumnEntry::User(_user_ctx) => {
+                    // IDEA: Maybe render some stats from the config?
+                }
+                UserColumnEntry::Account(_account_data) => {
+                    render_mailbox_column(scheme, ROOT_MAILBOX_ID, state, frame, area);
+                }
+                UserColumnEntry::AccountNotLoaded => {
+                    frame.render_widget(
+                        Paragraph::new("Accounts haven't been loaded yet.")
+                            .style(Style::new().fg(scheme.primary.into_color())),
+                        area,
+                    );
+                }
+                UserColumnEntry::AccountLoading => {
+                    frame.render_widget(
+                        Paragraph::new("Connecting to server...")
+                            .style(Style::new().fg(scheme.primary.into_color())),
+                        area,
+                    );
+                }
+                UserColumnEntry::AccountError(error) => {
+                    frame.render_widget(
+                        Paragraph::new(format!("Couldn't connect to server:\n{error}"))
+                            .wrap(Wrap { trim: false })
+                            .style(Style::new().fg(scheme.error.into_color())),
+                        area,
+                    );
+                }
             }
         }
-        return;
+        ColumnStackEntry::Mailbox(mailbox_id) => todo!(),
+        ColumnStackEntry::Thread(thread_id) => {
+            let thread = state.thread_columns.get(thread_id).unwrap();
+
+            match &thread.mails {
+                Loadable::NotLoaded => {
+                    frame.render_widget(
+                        Paragraph::new("Mail preview not loaded (should start soon).")
+                            .style(Style::new().fg(scheme.secondary.into_color())),
+                        area,
+                    );
+                }
+                Loadable::Loading => {
+                    frame.render_widget(
+                        Paragraph::new("Loading mail preview...")
+                            .style(Style::new().fg(scheme.primary.into_color())),
+                        area,
+                    );
+                }
+                Loadable::Loaded(thread_mail_ids) => {
+                    let Some(selected_idx) = thread.state.selected() else {
+                        return;
+                    };
+
+                    let mail_id = thread_mail_ids[selected_idx].clone();
+                    render_mail_preview(scheme, mail_id, state, frame, area);
+                }
+                Loadable::Error(err) => {
+                    frame.render_widget(
+                        Paragraph::new(format!("Can't preview mail:\n{err}"))
+                            .style(Style::new().fg(scheme.error.into_color())),
+                        area,
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn render_column(
+    scheme: &Scheme,
+    entry: ColumnStackEntry,
+    state: &mut super::State,
+    frame: &mut Frame,
+    area: Rect,
+) {
+    match entry {
+        ColumnStackEntry::Users => render_user_accounts_column(scheme, state, frame, area),
+        ColumnStackEntry::Mailbox(mailbox_id) => {
+            render_mailbox_column(scheme, mailbox_id, state, frame, area)
+        }
+        ColumnStackEntry::Thread(thread_id) => {
+            render_thread_column(scheme, thread_id, state, frame, area)
+        }
     }
 }
 
@@ -226,8 +278,33 @@ fn render_user_accounts_column(
     );
 }
 
-fn render_mail_list_column(state: &mut super::State, frame: &mut Frame, area: Rect) {}
-fn render_mail_preview(state: &mut super::State, frame: &mut Frame, area: Rect) {}
+fn render_mailbox_column(
+    _scheme: &Scheme,
+    _mailbox_id: ParentMailboxId,
+    _state: &mut super::State,
+    _frame: &mut Frame,
+    _area: Rect,
+) {
+    tracing::debug!("hello");
+}
+
+fn render_thread_column(
+    _scheme: &Scheme,
+    _thread_id: ThreadId,
+    _state: &mut super::State,
+    _frame: &mut Frame,
+    _area: Rect,
+) {
+}
+
+fn render_mail_preview(
+    _scheme: &Scheme,
+    _mail_id: MailId,
+    _state: &mut super::State,
+    _frame: &mut Frame,
+    _area: Rect,
+) {
+}
 
 fn render_left_separation_lines(scheme: &Scheme, frame: &mut Frame, area: Rect) {
     let [left_area, _rest] =
