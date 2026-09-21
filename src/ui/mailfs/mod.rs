@@ -304,7 +304,14 @@ impl State {
 
     fn navigate_left(&mut self) -> Vec<super::Message> {
         match self.column_stack.last_mut().unwrap() {
-            ColumnStackEntry::Users => self.users_column.navigate_left(),
+            ColumnStackEntry::Users => {
+                let Some(user) = self.users_column.get_selected_user_mut() else {
+                    return vec![];
+                };
+
+                user.is_collapsed = true;
+                vec![]
+            }
             ColumnStackEntry::Mailbox(_) | ColumnStackEntry::Thread(_) => {
                 self.column_stack.pop();
                 vec![]
@@ -355,6 +362,8 @@ impl State {
 
 // helpers
 impl State {
+    /// Depending on what is selected in the middle column it will return the suitable requests so that the
+    /// right column can display things.
     fn ensure_right_column_data(&mut self) -> Vec<crate::ui::Message> {
         match self.column_stack.last().unwrap().clone() {
             ColumnStackEntry::Users => {
@@ -367,8 +376,10 @@ impl State {
                 if self.mailbox_columns.contains_key(&key) {
                     vec![]
                 } else {
-                    self.mailbox_columns
-                        .insert(key.clone(), MailboxColumn::new_root());
+                    self.mailbox_columns.insert(
+                        key.clone(),
+                        MailboxColumn::new(Loadable::Loading, Loadable::Loaded(vec![])),
+                    );
 
                     vec![
                         MessageRequest::GetChildMailboxes {
@@ -386,22 +397,12 @@ impl State {
                 };
 
                 let key = account_key.as_key(mailbox_id);
+                let middle_mailbox_column = self
+                    .mailbox_columns
+                    .get(&key)
+                    .expect("Middle column must exist!");
 
-                if self.mailbox_columns.contains_key(&key) {
-                    vec![]
-                } else {
-                    self.mailbox_columns
-                        .insert(key.clone(), MailboxColumn::new_root());
-
-                    vec![
-                        MessageRequest::GetChildMailboxes {
-                            username: key.0,
-                            account_id: key.1,
-                            parent_id: key.2,
-                        }
-                        .into(),
-                    ]
-                }
+                todo!();
             }
             ColumnStackEntry::Thread(_thread_id) => todo!(),
         }

@@ -230,6 +230,7 @@ impl Ui {
                         });
                     }
                     mailfs::MessageRequest::QueryMails {
+                        username,
                         account_id,
                         mailbox,
                         window,

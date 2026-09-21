@@ -224,42 +224,6 @@ impl UserColumn {
 
         None
     }
-
-    pub fn navigate_right(&mut self) -> Vec<crate::ui::Message> {
-        let Some(selected_entry) = self.get_selected_entry_mut() else {
-            return vec![];
-        };
-
-        match selected_entry {
-            UserColumnEntryMut::User(user_ctx) => {
-                if user_ctx.is_collapsed {
-                    user_ctx.is_collapsed = false;
-                }
-
-                if matches!(user_ctx.accounts, Loadable::NotLoaded | Loadable::Error(_)) {
-                    user_ctx.accounts = Loadable::Loading;
-                    return vec![
-                        super::MessageRequest::GetAccountsOf(user_ctx.config.clone()).into(),
-                    ];
-                }
-
-                vec![]
-            }
-            UserColumnEntryMut::Account(_account_data) => todo!(),
-            UserColumnEntryMut::AccountNotLoaded => todo!(),
-            UserColumnEntryMut::AccountLoading => todo!(),
-            UserColumnEntryMut::AccountError(_err) => todo!(),
-        }
-    }
-
-    pub fn navigate_left(&mut self) -> Vec<crate::ui::Message> {
-        let Some(user) = self.get_selected_user_mut() else {
-            return vec![];
-        };
-
-        user.is_collapsed = true;
-        vec![]
-    }
 }
 
 impl MailfsColumn for UserColumn {

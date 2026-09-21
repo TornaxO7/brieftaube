@@ -1,5 +1,5 @@
 use super::MailKeyword;
-use crate::types::MailboxId;
+use crate::types::{MailboxId, ThreadId};
 use chrono::{DateTime, Local, Utc};
 use jmap_client::email::{Email, Property};
 use std::collections::HashSet;
@@ -12,10 +12,11 @@ pub struct MailDataCore {
     pub received_at: DateTime<Local>,
     pub has_attachment: bool,
     pub mailbox_ids: Vec<MailboxId>,
+    pub thread_id: ThreadId,
 }
 
 impl MailDataCore {
-    pub const GET_REQUEST_PROPERTIES: [Property; 7] = [
+    pub const GET_REQUEST_PROPERTIES: [Property; 8] = [
         Property::Id,
         Property::MessageId,
         Property::Keywords,
@@ -23,6 +24,7 @@ impl MailDataCore {
         Property::ReceivedAt,
         Property::HasAttachment,
         Property::MailboxIds,
+        Property::ThreadId,
     ];
 
     pub fn from_get_request(mut mail: Email) -> Self {
@@ -42,6 +44,7 @@ impl MailDataCore {
                 .into_iter()
                 .map(|id| MailboxId(id.to_string()))
                 .collect(),
+            thread_id: mail.take_thread_id().unwrap().into(),
         }
     }
 }

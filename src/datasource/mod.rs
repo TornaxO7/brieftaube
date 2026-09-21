@@ -270,6 +270,9 @@ pub trait RootMailsCache: MailCache {
 
     async fn get_root_mails_last_id(&self, mailbox: &MailboxId) -> Option<MailId>;
 
+    // TODO:
+    // 1. Rename this method
+    // 2. Always query threads with its mails
     async fn query_root_mails(
         &self,
         mailbox: &MailboxId,

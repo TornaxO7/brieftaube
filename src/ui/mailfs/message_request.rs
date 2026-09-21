@@ -12,6 +12,7 @@ pub enum MessageRequest {
         parent_id: ParentMailboxId,
     },
     QueryMails {
+        username: config::Username,
         account_id: AccountId,
         mailbox: MailboxId,
         window: QueryWindow,
