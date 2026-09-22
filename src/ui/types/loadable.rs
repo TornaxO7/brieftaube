@@ -34,4 +34,20 @@ impl<T> Loadable<T> {
             Loadable::Error(message) => Loadable::Error(message),
         }
     }
+
+    pub fn and_then<U>(self, f: impl FnOnce(T) -> Loadable<U>) -> Loadable<U> {
+        match self {
+            Loadable::NotLoaded => Loadable::NotLoaded,
+            Loadable::Loading => Loadable::Loading,
+            Loadable::Loaded(value) => f(value),
+            Loadable::Error(err) => Loadable::Error(err),
+        }
+    }
+
+    pub fn loaded(&self) -> Option<&T> {
+        match self {
+            Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => None,
+            Loadable::Loaded(value) => Some(value),
+        }
+    }
 }

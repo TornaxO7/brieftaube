@@ -234,7 +234,9 @@ impl Ui {
                         account_id,
                         mailbox,
                         window,
-                    } => todo!(),
+                    } => {
+                        todo!()
+                    }
                     mailfs::MessageRequest::GetThreadMails { account_id, thread } => todo!(),
                 };
                 vec![]

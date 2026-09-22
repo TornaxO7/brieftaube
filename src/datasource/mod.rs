@@ -10,7 +10,6 @@ use crate::types::{
 use async_trait::async_trait;
 use color_eyre::Result;
 use std::collections::{HashMap, HashSet};
-use tracing::instrument;
 use types::{GetState, QueryState, QueryWindow, cache, remote};
 
 pub trait Cache: MailCache + RootMailsCache + MailboxCache + ThreadCache + Send + Sync {}
@@ -270,9 +269,6 @@ pub trait RootMailsCache: MailCache {
 
     async fn get_root_mails_last_id(&self, mailbox: &MailboxId) -> Option<MailId>;
 
-    // TODO:
-    // 1. Rename this method
-    // 2. Always query threads with its mails
     async fn query_root_mails(
         &self,
         mailbox: &MailboxId,

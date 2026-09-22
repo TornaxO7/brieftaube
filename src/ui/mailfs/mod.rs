@@ -10,6 +10,7 @@ mod user_column;
 
 use crate::{
     config::{self, Username},
+    datasource::types::QueryWindow,
     types::{
         AccountData, AccountId, MailKeyword, MailboxData, ParentMailboxId, ROOT_MAILBOX_ID,
         ThreadId,
@@ -17,7 +18,7 @@ use crate::{
     ui::{
         Layer, Loadable,
         mailfs::{
-            mailbox_column::MailboxColumn,
+            mailbox_column::{MailboxColumn, MailboxColumnEntry},
             thread_column::ThreadColumn,
             user_column::{UserColumn, UserColumnEntryMut},
         },
@@ -103,6 +104,7 @@ impl State {
         match event {
             Event::Mouse(_)
             | Event::Paste(_)
+            // TODO: Check if the query-window is still within the new height
             | Event::Resize(_, _)
             | Event::FocusGained
             | Event::FocusLost => vec![],
@@ -164,7 +166,6 @@ impl State {
         child_mailboxes: color_eyre::Result<Vec<MailboxData>>,
     ) -> Vec<super::Message> {
         let key = (username, account_id, parent_id);
-
         let mailbox_column = self.mailbox_columns.get_mut(&key).unwrap();
 
         mailbox_column.mailboxes = match child_mailboxes {
@@ -376,10 +377,8 @@ impl State {
                 if self.mailbox_columns.contains_key(&key) {
                     vec![]
                 } else {
-                    self.mailbox_columns.insert(
-                        key.clone(),
-                        MailboxColumn::new(Loadable::Loading, Loadable::Loaded(vec![])),
-                    );
+                    self.mailbox_columns
+                        .insert(key.clone(), MailboxColumn::new());
 
                     vec![
                         MessageRequest::GetChildMailboxes {
@@ -402,9 +401,61 @@ impl State {
                     .get(&key)
                     .expect("Middle column must exist!");
 
-                todo!();
+                let Some(middle_column_selected_entry) = middle_mailbox_column.get_selected_entry()
+                else {
+                    return vec![];
+                };
+
+                match middle_column_selected_entry {
+                    Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => vec![],
+                    Loadable::Loaded(entry) => match entry {
+                        MailboxColumnEntry::Mailbox(mailbox_data) => {
+                            let mailbox_id = mailbox_data.id.clone();
+
+                            let account_key = self.users_column.get_selected_account().expect(
+                                "If we're in a mailbox, then an account must've been selected.",
+                            );
+
+                            let key = account_key.as_key(Some(mailbox_id.clone()));
+
+                            if self.mailbox_columns.contains_key(&key) {
+                                vec![]
+                            } else {
+                                self.mailbox_columns
+                                    .insert(key.clone(), MailboxColumn::new());
+
+                                vec![
+                                    MessageRequest::GetChildMailboxes {
+                                        username: key.0.clone(),
+                                        account_id: key.1.clone(),
+                                        parent_id: key.2.clone(),
+                                    }
+                                    .into(),
+                                    MessageRequest::QueryMails {
+                                        username: key.0.clone(),
+                                        account_id: key.1.clone(),
+                                        mailbox: mailbox_id.clone(),
+                                        window: QueryWindow {
+                                            start: 0,
+                                            limit: 16,
+                                        },
+                                    }
+                                    .into(),
+                                ]
+                            }
+                        }
+                        MailboxColumnEntry::Thread(mail) => {
+                            let _thread_id = mail.thread_id.clone();
+                            todo!("Fetch thread");
+                        }
+                    },
+                }
             }
-            ColumnStackEntry::Thread(_thread_id) => todo!(),
+            ColumnStackEntry::Thread(_thread_id) => {
+                todo!(
+                    "Usually if a thread gets requested, all its mail datas should be also fetched. Just check if they're there."
+                )
+            }
         }
     }
 }

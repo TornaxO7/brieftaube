@@ -7,44 +7,98 @@ use ratatui::widgets::TableState;
 #[derive(Debug)]
 pub struct MailboxColumn {
     pub mailboxes: Loadable<Vec<MailboxData>>,
-    pub mails: Loadable<Vec<MailDataCore>>,
-    pub state: TableState,
+    pub mails: Loadable<Vec<Loadable<MailDataCore>>>,
+
+    pub mailbox_state: TableState,
+    pub mail_state: TableState,
 }
 
 impl MailboxColumn {
-    pub fn new(mailboxes: Loadable<Vec<MailboxData>>, mails: Loadable<Vec<MailDataCore>>) -> Self {
+    pub fn new() -> Self {
         Self {
-            mailboxes,
-            mails,
-            state: TableState::new().with_selected(Some(0)),
+            mailboxes: Loadable::Loading,
+            mails: Loadable::Loading,
+
+            mailbox_state: TableState::new().with_selected(Some(0)),
+            mail_state: TableState::new().with_selected(None),
         }
     }
 
-    pub fn get_selected_entry(&self) {
-        todo!();
+    pub fn get_selected_entry<'a>(&'a self) -> Option<Loadable<MailboxColumnEntry<'a>>> {
+        match (self.mailbox_state.selected(), self.mail_state.selected()) {
+            (Some(idx), None) => Some(
+                self.mailboxes
+                    .as_ref()
+                    .map(|mailboxes| MailboxColumnEntry::Mailbox(&mailboxes[idx])),
+            ),
+            (None, Some(idx)) => Some(self.mails.as_ref().and_then(|mails| {
+                mails[idx]
+                    .as_ref()
+                    .map(|mail| MailboxColumnEntry::Thread(mail))
+            })),
+            _ => todo!(),
+        }
+    }
+
+    pub fn mailboxes_len(&self) -> usize {
+        self.mailboxes
+            .loaded()
+            .map(|mailboxes| mailboxes.len())
+            .unwrap_or(1)
     }
 }
 
 impl MailfsColumn for MailboxColumn {
     fn navigate_up(&mut self) {
-        self.state.select_previous();
+        match (self.mailbox_state.selected(), self.mail_state.selected()) {
+            (Some(_), None) => {
+                self.mailbox_state.select_previous();
+            }
+            (None, Some(idx)) => {
+                if idx == 0 {
+                    let last_mailbox_idx = self.mailboxes_len() - 1;
+                    self.mailbox_state.select(Some(last_mailbox_idx));
+
+                    self.mail_state.select(None);
+                } else {
+                    self.mail_state.select_previous();
+                }
+            }
+            _ => unreachable!(),
+        }
     }
 
     fn navigate_down(&mut self) {
-        self.state.select_next();
+        match (self.mailbox_state.selected(), self.mail_state.selected()) {
+            (Some(idx), None) => {
+                let last_mailbox_idx = self.mailboxes_len() - 1;
+
+                if last_mailbox_idx == idx {
+                    self.mailbox_state.select(None);
+                    self.mail_state.select(Some(0));
+                } else {
+                    self.mailbox_state.select_next();
+                }
+            }
+            (None, Some(_)) => {
+                self.mail_state.select_next();
+            }
+            _ => unreachable!(),
+        }
     }
 
     fn navigate_to_bottom(&mut self) {
-        todo!()
+        todo!("get the oldest mail from the mailbox")
     }
 
     fn navigate_to_top(&mut self) {
-        todo!()
+        self.mailbox_state.select(Some(0));
+        self.mail_state.select(None);
     }
 }
 
-pub enum MailboxColumnEntry {
-    Mailbox(),
-    Mail,
-    Thread,
+#[derive(Debug)]
+pub enum MailboxColumnEntry<'a> {
+    Mailbox(&'a MailboxData),
+    Thread(&'a MailDataCore),
 }
