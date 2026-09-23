@@ -203,7 +203,10 @@ impl State {
 
         match result {
             Ok((mails, total_mails)) => {
-                let end = window_range.end.max(total_mails.unwrap_or(0));
+                let end = match total_mails {
+                    Some(max) => window_range.end.min(max),
+                    None => window_range.end,
+                };
 
                 match &mut column.mails {
                     Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {

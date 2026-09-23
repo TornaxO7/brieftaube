@@ -84,7 +84,15 @@ fn render_statusbar(_scheme: &Scheme, state: &mut super::State, frame: &mut Fram
 }
 
 fn render_columns(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
-    let [left_area, sep1, middle_area, sep2, right_area] = Layout::horizontal([
+    let [
+        _left_padding,
+        left_area,
+        sep1,
+        middle_area,
+        sep2,
+        right_area,
+    ] = Layout::horizontal([
+        Constraint::Length(1),
         Constraint::Fill(1),
         Constraint::Length(1),
         Constraint::Fill(1),
@@ -293,8 +301,8 @@ fn render_mailbox_column(
         Constraint::Length(MAX_DATE_LENGTH as u16),
     ];
 
+    // mailboxes
     if mailbox_area.height > 0 {
-        // mailboxes
         let rows: Vec<Row<'_>> = match &mailbox_column.mailboxes {
             Loadable::NotLoaded => {
                 vec![Row::new([Cell::from("Mailboxes not requested yet.")
@@ -352,8 +360,8 @@ fn render_mailbox_column(
         );
     }
 
+    // mails
     if mails_area.height > 0 {
-        // mails
         let rows: Vec<Row<'_>> = match &mailbox_column.mails {
             Loadable::NotLoaded => {
                 vec![Row::new([Cell::from("Mails not requested yet.")
