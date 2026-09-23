@@ -303,7 +303,7 @@ fn render_mailbox_column(
 
     // mailboxes
     if mailbox_area.height > 0 {
-        let rows: Vec<Row<'_>> = match &mailbox_column.mailboxes {
+        let mailbox_rows: Vec<Row<'_>> = match &mailbox_column.mailboxes {
             Loadable::NotLoaded => {
                 vec![Row::new([Cell::from("Mailboxes not requested yet.")
                     .style(Style::new().fg(scheme.primary.into_color()))
@@ -350,7 +350,7 @@ fn render_mailbox_column(
         };
 
         frame.render_stateful_widget(
-            Table::new(rows, widths).row_highlight_style(
+            Table::new(mailbox_rows, widths).row_highlight_style(
                 Style::new()
                     .bg(scheme.primary_container.into_color())
                     .fg(scheme.on_primary_container.into_color()),
@@ -362,7 +362,7 @@ fn render_mailbox_column(
 
     // mails
     if mails_area.height > 0 {
-        let rows: Vec<Row<'_>> = match &mailbox_column.mails {
+        let mail_rows: Vec<Row<'_>> = match &mailbox_column.mails {
             Loadable::NotLoaded => {
                 vec![Row::new([Cell::from("Mails not requested yet.")
                     .style(Style::new().fg(scheme.primary.into_color()))
@@ -443,7 +443,7 @@ fn render_mailbox_column(
         };
 
         frame.render_stateful_widget(
-            Table::new(rows, widths).row_highlight_style(
+            Table::new(mail_rows, widths).row_highlight_style(
                 Style::new()
                     .bg(scheme.primary_container.into_color())
                     .fg(scheme.on_primary_container.into_color()),
