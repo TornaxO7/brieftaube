@@ -179,11 +179,7 @@ impl State {
     ) -> Vec<super::Message> {
         let key = (username, account_id, parent_id);
         let mailbox_column = self.mailbox_columns.get_mut(&key).unwrap();
-
-        mailbox_column.mailboxes = match child_mailboxes {
-            Ok(mailboxes) => Loadable::Loaded(mailboxes),
-            Err(err) => Loadable::Error(err.to_string()),
-        };
+        mailbox_column.set_mailboxes(child_mailboxes);
 
         vec![]
     }
@@ -383,11 +379,39 @@ impl State {
                     | UserColumnEntryMut::AccountError(_) => vec![],
                 }
             }
-            ColumnStackEntry::Mailbox(_mailbox_id) => {
-                todo!();
+            ColumnStackEntry::Mailbox(mailbox_id) => {
+                let Some(account) = self.users_column.get_selected_account() else {
+                    return vec![];
+                };
+
+                let key = account.as_key(mailbox_id.clone());
+                let column = self.mailbox_columns.get(&key).unwrap();
+                let Some(selected_entry) = column.get_selected_entry() else {
+                    return vec![];
+                };
+
+                match selected_entry {
+                    Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
+                        vec![]
+                    }
+                    Loadable::Loaded(entry) => {
+                        match entry {
+                            MailboxColumnEntry::Mailbox(mailbox_data) => {
+                                self.column_stack
+                                    .push(ColumnStackEntry::Mailbox(Some(mailbox_data.id.clone())));
+                            }
+                            MailboxColumnEntry::RootMail(root_mail) => {
+                                self.column_stack
+                                    .push(ColumnStackEntry::Thread(root_mail.thread_id.clone()));
+                            }
+                        };
+
+                        self.ensure_right_column_data()
+                    }
+                }
             }
             ColumnStackEntry::Thread(_thread_id) => {
-                todo!()
+                todo!("open mail")
             }
         }
     }
@@ -538,7 +562,7 @@ impl State {
                                 ]
                             }
                         }
-                        MailboxColumnEntry::Thread(mail) => {
+                        MailboxColumnEntry::RootMail(mail) => {
                             let _thread_id = mail.thread_id.clone();
                             todo!("Fetch thread");
                         }

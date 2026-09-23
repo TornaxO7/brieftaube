@@ -24,7 +24,7 @@ impl MailboxColumn {
             mailboxes,
             mails,
 
-            mailbox_state: TableState::new().with_selected(Some(0)),
+            mailbox_state: TableState::new().with_selected(None),
             mail_state: TableState::new().with_selected(None),
         }
     }
@@ -39,9 +39,10 @@ impl MailboxColumn {
             (None, Some(idx)) => Some(self.mails.as_ref().and_then(|mails| {
                 mails[idx]
                     .as_ref()
-                    .map(|mail| MailboxColumnEntry::Thread(mail))
+                    .map(|mail| MailboxColumnEntry::RootMail(mail))
             })),
-            _ => todo!(),
+            (Some(_), Some(_)) => unreachable!(),
+            (None, None) => None,
         }
     }
 
@@ -50,6 +51,30 @@ impl MailboxColumn {
             .loaded()
             .map(|mailboxes| mailboxes.len())
             .unwrap_or(1)
+    }
+
+    pub fn set_mailboxes(&mut self, children: color_eyre::Result<Vec<MailboxData>>) {
+        match children {
+            Ok(mailboxes) => {
+                let none_selected =
+                    self.mailbox_state.selected().is_none() && self.mail_state.selected().is_none();
+                if none_selected && !mailboxes.is_empty() {
+                    self.mailbox_state.select(Some(0));
+                }
+
+                self.mailboxes = Loadable::Loaded(mailboxes);
+            }
+            Err(err) => {
+                self.mailboxes = Loadable::Error(err.to_string());
+
+                let none_selected =
+                    self.mailbox_state.selected().is_none() && self.mail_state.selected().is_none();
+
+                if none_selected {
+                    self.mailbox_state.select(Some(0));
+                }
+            }
+        }
     }
 }
 
@@ -69,7 +94,8 @@ impl MailfsColumn for MailboxColumn {
                     self.mail_state.select_previous();
                 }
             }
-            _ => unreachable!(),
+            (None, None) => {}
+            (Some(_), Some(_)) => unreachable!(),
         }
     }
 
@@ -88,7 +114,8 @@ impl MailfsColumn for MailboxColumn {
             (None, Some(_)) => {
                 self.mail_state.select_next();
             }
-            _ => unreachable!(),
+            (None, None) => {}
+            (Some(_), Some(_)) => unreachable!(),
         }
     }
 
@@ -97,13 +124,25 @@ impl MailfsColumn for MailboxColumn {
     }
 
     fn navigate_to_top(&mut self) {
-        self.mailbox_state.select(Some(0));
         self.mail_state.select(None);
+
+        match &self.mailboxes {
+            Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
+                self.mailbox_state.select(Some(0));
+            }
+            Loadable::Loaded(mailboxes) => {
+                if mailboxes.is_empty() {
+                    self.mailbox_state.select(None);
+                } else {
+                    self.mailbox_state.select(Some(0));
+                }
+            }
+        }
     }
 }
 
 #[derive(Debug)]
 pub enum MailboxColumnEntry<'a> {
     Mailbox(&'a MailboxData),
-    Thread(&'a MailDataCore),
+    RootMail(&'a MailDataCore),
 }
