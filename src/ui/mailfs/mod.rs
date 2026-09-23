@@ -29,7 +29,7 @@ use crossterm::event::Event;
 use ratatui::layout::Rect;
 use std::{collections::HashMap, str::FromStr};
 use throbber_widgets_tui::ThrobberState;
-use tracing::{debug, instrument::WithSubscriber};
+use tracing::debug;
 use user_action::UserAction;
 
 pub use message::*;
@@ -323,8 +323,18 @@ impl State {
                 self.users_column.navigate_to_top();
                 vec![]
             }
-            ColumnStackEntry::Mailbox(_mailbox_id) => {
-                todo!()
+            ColumnStackEntry::Mailbox(mailbox_id) => {
+                let Some(account) = self.users_column.get_selected_account() else {
+                    return vec![];
+                };
+
+                let key = account.as_key(mailbox_id.clone());
+
+                self.mailbox_columns
+                    .get_mut(&key)
+                    .unwrap()
+                    .navigate_to_top();
+                vec![]
             }
             ColumnStackEntry::Thread(_thread_id) => {
                 todo!();

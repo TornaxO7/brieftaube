@@ -9,8 +9,6 @@ pub struct MailboxColumn {
     pub mailboxes: Loadable<Vec<MailboxData>>,
     pub mails: Loadable<Vec<Loadable<MailDataCore>>>,
 
-    // TODO: add boolean to check if the total amount of mails (aka the total amount of entries for a query) has been requested before
-    //       and that the vec of `mails` is adjusted accordingly
     pub mailbox_state: TableState,
     pub mail_state: TableState,
 }
