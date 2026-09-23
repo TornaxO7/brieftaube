@@ -3,7 +3,9 @@ use crate::{
     types::{MailId, MailKeyword, ParentMailboxId, ROOT_MAILBOX_ID, ThreadId},
     ui::{
         Loadable,
-        mailfs::{ColumnStackEntry, user_column::UserColumnEntry},
+        mailfs::{
+            ColumnStackEntry, mailbox_column::MailboxColumnEntry, user_column::UserColumnEntry,
+        },
         statusbar::Statusbar,
     },
     utils::IntoColor,
@@ -160,6 +162,47 @@ fn render_right_column(scheme: &Scheme, state: &mut super::State, frame: &mut Fr
             }
         }
         ColumnStackEntry::Mailbox(mailbox_id) => {
+            let account = state.users_column.get_selected_account().unwrap();
+            let key = account.as_key(mailbox_id.clone());
+
+            let column = state.mailbox_columns.get(&key).unwrap();
+            let Some(selected_entry) = column.get_selected_entry() else {
+                return;
+            };
+
+            match selected_entry {
+                Loadable::NotLoaded => todo!("Maybe display some information?"),
+                Loadable::Loading => {}
+                Loadable::Error(err) => {
+                    frame.render_widget(
+                        Paragraph::new(format!("Couldn't load mailbox: {}", err))
+                            .wrap(Wrap { trim: false })
+                            .style(Style::new().fg(scheme.error.into_color())),
+                        area,
+                    );
+                }
+                Loadable::Loaded(entry) => match entry {
+                    MailboxColumnEntry::Mailbox(mailbox_data) => {
+                        render_mailbox_column(
+                            scheme,
+                            Some(mailbox_data.id.clone()),
+                            state,
+                            frame,
+                            area,
+                        );
+                    }
+                    MailboxColumnEntry::RootMail(mail_data_core) => {
+                        render_thread_column(
+                            scheme,
+                            mail_data_core.thread_id.clone(),
+                            state,
+                            frame,
+                            area,
+                        );
+                    }
+                },
+            }
+
             // TODO: get selected entry of this given mailbox and render it.
             // render_mailbox_column(scheme, mailbox_id.clone(), state, frame, area)
         }

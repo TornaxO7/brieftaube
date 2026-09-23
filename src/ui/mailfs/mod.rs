@@ -180,7 +180,6 @@ impl State {
         let key = (username, account_id, parent_id);
         let mailbox_column = self.mailbox_columns.get_mut(&key).unwrap();
         mailbox_column.set_mailboxes(child_mailboxes);
-
         vec![]
     }
 
@@ -198,67 +197,8 @@ impl State {
             .mailbox_columns
             .get_mut(&key)
             .expect("The mailbox column itself should request this so it must be there.");
-
-        let window_range = window.as_range();
-
-        match result {
-            Ok((mails, total_mails)) => {
-                let end = match total_mails {
-                    Some(max) => window_range.end.min(max),
-                    None => window_range.end,
-                };
-
-                match &mut column.mails {
-                    Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
-                        let mut mail_entries = vec![Loadable::NotLoaded; end];
-
-                        for (offset, new_mail) in mails.into_iter().enumerate() {
-                            let idx = window.start as usize + offset;
-                            mail_entries[idx] = Loadable::Loaded(new_mail);
-                        }
-
-                        column.mails = Loadable::Loaded(mail_entries);
-
-                        vec![]
-                    }
-                    Loadable::Loaded(current_mails) => {
-                        if current_mails.len() < end {
-                            current_mails.resize(end, Loadable::NotLoaded);
-                        }
-
-                        for (offset, new_mail) in mails.into_iter().enumerate() {
-                            let idx = window.start as usize + offset;
-                            current_mails[idx] = Loadable::Loaded(new_mail);
-                        }
-
-                        vec![]
-                    }
-                }
-            }
-            Err(err) => match &mut column.mails {
-                Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
-                    let mut mail_entries = vec![Loadable::NotLoaded; window_range.end];
-
-                    for idx in window_range {
-                        mail_entries[idx] = Loadable::Error(err.to_string());
-                    }
-
-                    column.mails = Loadable::Loaded(mail_entries);
-
-                    vec![]
-                }
-                Loadable::Loaded(mails) => {
-                    if mails.len() < window_range.end {
-                        mails.resize(window_range.end, Loadable::NotLoaded);
-                    }
-                    for idx in window_range {
-                        mails[idx] = Loadable::Error(err.to_string());
-                    }
-
-                    vec![]
-                }
-            },
-        }
+        column.set_mails(window, result);
+        vec![]
     }
 }
 

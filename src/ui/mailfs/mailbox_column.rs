@@ -1,4 +1,5 @@
 use crate::{
+    datasource::types::QueryWindow,
     types::{MailDataCore, MailboxData},
     ui::{Loadable, mailfs::MailfsColumn},
 };
@@ -54,22 +55,106 @@ impl MailboxColumn {
     pub fn set_mailboxes(&mut self, children: color_eyre::Result<Vec<MailboxData>>) {
         match children {
             Ok(mailboxes) => {
-                let none_selected =
-                    self.mailbox_state.selected().is_none() && self.mail_state.selected().is_none();
-                if none_selected && !mailboxes.is_empty() {
-                    self.mailbox_state.select(Some(0));
-                }
-
                 self.mailboxes = Loadable::Loaded(mailboxes);
             }
             Err(err) => {
                 self.mailboxes = Loadable::Error(err.to_string());
+            }
+        };
 
-                let none_selected =
-                    self.mailbox_state.selected().is_none() && self.mail_state.selected().is_none();
+        self.init_selection();
+    }
 
-                if none_selected {
+    pub fn set_mails(
+        &mut self,
+        window: QueryWindow,
+        result: color_eyre::Result<(Vec<MailDataCore>, Option<usize>)>,
+    ) {
+        let window_range = window.as_range();
+
+        match result {
+            Ok((mails, total_mails)) => {
+                let end = match total_mails {
+                    Some(max) => window_range.end.min(max),
+                    None => window_range.end,
+                };
+
+                match &mut self.mails {
+                    Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
+                        let mut mail_entries = vec![Loadable::NotLoaded; end];
+
+                        for (offset, new_mail) in mails.into_iter().enumerate() {
+                            let idx = window.start as usize + offset;
+                            mail_entries[idx] = Loadable::Loaded(new_mail);
+                        }
+
+                        self.mails = Loadable::Loaded(mail_entries);
+                    }
+                    Loadable::Loaded(current_mails) => {
+                        if current_mails.len() < end {
+                            current_mails.resize(end, Loadable::NotLoaded);
+                        }
+
+                        for (offset, new_mail) in mails.into_iter().enumerate() {
+                            let idx = window.start as usize + offset;
+                            current_mails[idx] = Loadable::Loaded(new_mail);
+                        }
+                    }
+                }
+            }
+            Err(err) => match &mut self.mails {
+                Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
+                    let mut mail_entries = vec![Loadable::NotLoaded; window_range.end];
+
+                    for idx in window_range {
+                        mail_entries[idx] = Loadable::Error(err.to_string());
+                    }
+
+                    self.mails = Loadable::Loaded(mail_entries);
+                }
+                Loadable::Loaded(mails) => {
+                    if mails.len() < window_range.end {
+                        mails.resize(window_range.end, Loadable::NotLoaded);
+                    }
+                    for idx in window_range {
+                        mails[idx] = Loadable::Error(err.to_string());
+                    }
+                }
+            },
+        };
+
+        self.init_selection();
+    }
+}
+
+impl MailboxColumn {
+    fn init_selection(&mut self) {
+        let none_selected =
+            self.mailbox_state.selected().is_none() && self.mail_state.selected().is_none();
+
+        if none_selected {
+            match &self.mailboxes {
+                Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
                     self.mailbox_state.select(Some(0));
+                    return;
+                }
+                Loadable::Loaded(mailboxes) => {
+                    if !mailboxes.is_empty() {
+                        self.mailbox_state.select(Some(0));
+                        return;
+                    }
+                }
+            };
+
+            match &self.mails {
+                Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
+                    self.mail_state.select(Some(0));
+                    return;
+                }
+                Loadable::Loaded(mails) => {
+                    if !mails.is_empty() {
+                        self.mail_state.select(Some(0));
+                    }
                 }
             }
         }
