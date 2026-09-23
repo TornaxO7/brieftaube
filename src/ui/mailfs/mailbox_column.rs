@@ -103,8 +103,18 @@ impl MailfsColumn for MailboxColumn {
                 let last_mailbox_idx = self.mailboxes_len() - 1;
 
                 if last_mailbox_idx == idx {
-                    self.mailbox_state.select(None);
-                    self.mail_state.select(Some(0));
+                    match &self.mails {
+                        Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
+                            self.mailbox_state.select(None);
+                            self.mail_state.select(Some(0));
+                        }
+                        Loadable::Loaded(mails) => {
+                            if !mails.is_empty() {
+                                self.mailbox_state.select(None);
+                                self.mail_state.select(Some(0));
+                            }
+                        }
+                    }
                 } else {
                     self.mailbox_state.select_next();
                 }
