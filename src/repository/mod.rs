@@ -5,9 +5,9 @@ pub mod thread;
 use crate::{
     datasource::{
         Cache, RemoteSession,
-        types::{cache, remote},
+        types::{GetState, QueryState, cache, remote},
     },
-    types::{AccountId, MailId, MailboxId},
+    types::{AccountId, MailId, MailboxId, ThreadId},
 };
 use std::collections::HashMap;
 use tokio::sync::{RwLock, RwLockWriteGuard, mpsc};
@@ -89,6 +89,25 @@ impl Repository {
 
     fn quit(&mut self) {
         self.rx.close();
+    }
+
+    async fn ensure_email_changes(
+        &self,
+        account_id: &AccountId,
+        state: &GetState,
+        cache_lock: &mut RwLockWriteGuard<'_, Box<dyn Cache>>,
+    ) -> color_eyre::Result<()> {
+        match cache_lock.get_mail_state().await {
+            Some(current_state) => {
+                if current_state != state {
+                    self.apply_email_get_changes(account_id, cache_lock).await?;
+                }
+
+                debug_assert_eq!(cache_lock.get_mail_state().await.unwrap(), state);
+                Ok(())
+            }
+            None => cache_lock.set_mail_state(state.clone()).await,
+        }
     }
 
     async fn apply_email_get_changes(
@@ -196,6 +215,27 @@ impl Repository {
         Ok(())
     }
 
+    async fn ensure_root_mail_changes(
+        &self,
+        account_id: &AccountId,
+        id: &MailboxId,
+        state: &QueryState,
+        cache_lock: &mut RwLockWriteGuard<'_, Box<dyn Cache>>,
+    ) -> color_eyre::Result<()> {
+        match cache_lock.get_root_mails_state(id).await {
+            Some(current_state) => {
+                if current_state != state {
+                    self.apply_root_mail_query_changes(account_id, id, cache_lock)
+                        .await?;
+                }
+
+                debug_assert_eq!(cache_lock.get_root_mails_state(id).await.unwrap(), state);
+                Ok(())
+            }
+            None => cache_lock.set_root_mails_state(id, state.clone()).await,
+        }
+    }
+
     async fn apply_root_mail_query_changes(
         &self,
         account_id: &AccountId,
@@ -236,6 +276,25 @@ impl Repository {
         };
 
         todo!()
+    }
+
+    async fn ensure_thread_changes(
+        &self,
+        account_id: &AccountId,
+        state: &GetState,
+        cache_lock: &mut RwLockWriteGuard<'_, Box<dyn Cache>>,
+    ) -> color_eyre::Result<()> {
+        match cache_lock.get_thread_state().await {
+            Some(current_state) => {
+                if current_state != state {
+                    self.apply_thread_get_changes(cache_lock).await?;
+                }
+
+                debug_assert_eq!(cache_lock.get_thread_state().await.unwrap(), state);
+                Ok(())
+            }
+            None => cache_lock.set_thread_state(state.clone()).await,
+        }
     }
 
     async fn apply_thread_get_changes(

@@ -82,18 +82,13 @@ impl Repository {
                     .await?;
 
                 let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
-                if let Some(current_email_get_state) = cache_lock.get_mail_state().await {
-                    if *current_email_get_state != result.state {
-                        self.apply_email_get_changes(&account_id, &mut cache_lock)
-                            .await?;
-                    }
-                }
+
+                self.ensure_email_changes(&account_id, &result.state, &mut cache_lock)
+                    .await?;
 
                 cache_lock
                     .upsert_mails_core(vec![(id, result.value.clone())])
                     .await?;
-
-                cache_lock.set_mail_state(result.state).await?;
 
                 Ok(result.value)
             }
@@ -125,18 +120,12 @@ impl Repository {
                     .await?;
 
                 let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
-                if let Some(current_email_get_state) = cache_lock.get_mail_state().await {
-                    if *current_email_get_state != result.state {
-                        self.apply_email_get_changes(&account_id, &mut cache_lock)
-                            .await?;
-                    }
-                }
+                self.ensure_email_changes(&account_id, &result.state, &mut cache_lock)
+                    .await?;
 
                 cache_lock
                     .upsert_mails_preview(vec![(id, result.value.clone())])
                     .await?;
-
-                cache_lock.set_mail_state(result.state).await?;
 
                 Ok(result.value)
             }
@@ -172,13 +161,8 @@ impl Repository {
                     .await?;
 
                 let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
-                let opt_current_state = cache_lock.get_mail_state().await;
-                if opt_current_state.is_some_and(|current_state| *current_state != state) {
-                    self.apply_email_get_changes(&account_id, &mut cache_lock)
-                        .await?;
-                }
-
-                debug_assert_eq!(cache_lock.get_mail_state().await, Some(&state));
+                self.ensure_email_changes(&account_id, &state, &mut cache_lock)
+                    .await?;
 
                 cache_lock
                     .upsert_mail_text_body(&id, text_body.clone())
@@ -218,13 +202,9 @@ impl Repository {
                     .await?;
 
                 let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
-                let opt_current_state = cache_lock.get_mail_state().await;
-                if opt_current_state.is_some_and(|current_state| *current_state != state) {
-                    self.apply_email_get_changes(&account_id, &mut cache_lock)
-                        .await?;
-                }
 
-                debug_assert_eq!(cache_lock.get_mail_state().await, Some(&state));
+                self.ensure_email_changes(&account_id, &state, &mut cache_lock)
+                    .await?;
 
                 cache_lock
                     .upsert_mail_html_body(&id, html_body.clone())
@@ -292,19 +272,9 @@ impl Repository {
                     .await?;
 
                 let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
-                match cache_lock.get_mail_state().await {
-                    Some(current_email_get_state) => {
-                        if *current_email_get_state != missing_mails_data.state {
-                            self.apply_email_get_changes(&account_id, &mut cache_lock)
-                                .await?;
-                        }
-                    }
-                    None => {
-                        cache_lock
-                            .set_mail_state(missing_mails_data.state.clone())
-                            .await?
-                    }
-                }
+
+                self.ensure_email_changes(&account_id, &missing_mails_data.state, &mut cache_lock)
+                    .await?;
 
                 cache_lock
                     .upsert_mails_core(missing_mails_data.values.into_iter().collect())
@@ -343,35 +313,11 @@ impl Repository {
 
         let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
 
-        match cache_lock.get_mail_state().await {
-            Some(current_email_get_state) => {
-                if *current_email_get_state != email_get_state {
-                    self.apply_email_get_changes(&account_id, &mut cache_lock)
-                        .await?;
-                }
-            }
-            None => cache_lock.set_mail_state(email_get_state.clone()).await?,
-        }
+        self.ensure_email_changes(&account_id, &email_get_state, &mut cache_lock)
+            .await?;
 
-        match cache_lock.get_root_mails_state(&id).await {
-            Some(current_root_mail_query_state) => {
-                if *current_root_mail_query_state != root_mails_query_state {
-                    self.apply_root_mail_query_changes(&account_id, &id, &mut cache_lock)
-                        .await?;
-                }
-            }
-            None => {
-                cache_lock
-                    .set_root_mails_state(&id, root_mails_query_state.clone())
-                    .await?
-            }
-        }
-
-        debug_assert_eq!(cache_lock.get_mail_state().await, Some(&email_get_state));
-        debug_assert_eq!(
-            cache_lock.get_root_mails_state(&id).await,
-            Some(&root_mails_query_state)
-        );
+        self.ensure_root_mail_changes(&account_id, &id, &root_mails_query_state, &mut cache_lock)
+            .await?;
 
         let cache_root_mails: Vec<(MailId, usize)> = root_mails
             .iter()
@@ -383,12 +329,7 @@ impl Repository {
             .collect();
 
         cache_lock.insert_root_mails(&id, cache_root_mails).await?;
-
         cache_lock.upsert_mails_core(root_mails.clone()).await?;
-
-        cache_lock
-            .set_root_mails_state(&id, root_mails_query_state)
-            .await?;
 
         let root_mails = root_mails.into_iter().map(|(_id, data)| data).collect();
 

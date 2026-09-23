@@ -71,12 +71,9 @@ impl Repository {
                         .await?;
 
                     let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
-                    if let Some(current_state) = cache_lock.get_mail_state().await {
-                        if *current_state != result.state {
-                            self.apply_email_get_changes(&account_id, &mut cache_lock)
-                                .await?;
-                        }
-                    }
+
+                    self.ensure_email_changes(&account_id, &result.state, &mut cache_lock)
+                        .await?;
 
                     cache_lock
                         .upsert_mails_core(result.values.into_iter().collect())
@@ -84,6 +81,7 @@ impl Repository {
 
                     let thread_mail_cores_result =
                         cache_lock.get_mails_core(&thread_mail_ids).await?;
+
                     debug_assert!(thread_mail_cores_result.missing.is_empty());
 
                     let thread_mail_cores = thread_mail_ids
@@ -110,23 +108,11 @@ impl Repository {
 
                 let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
 
-                let opt_current_email_get_state = cache_lock.get_mail_state().await;
-                if opt_current_email_get_state
-                    .is_some_and(|current_state| current_state != &get_mail_state)
-                {
-                    self.apply_email_get_changes(&account_id, &mut cache_lock)
-                        .await?;
-                }
+                self.ensure_email_changes(&account_id, &get_mail_state, &mut cache_lock)
+                    .await?;
 
-                let opt_current_thread_get_state = cache_lock.get_thread_state().await;
-                if opt_current_thread_get_state
-                    .is_some_and(|current_state| current_state != &thread_get_state)
-                {
-                    self.apply_thread_get_changes(&mut cache_lock).await?;
-                }
-
-                debug_assert_eq!(cache_lock.get_mail_state().await, Some(&get_mail_state));
-                debug_assert_eq!(cache_lock.get_thread_state().await, Some(&thread_get_state));
+                self.ensure_thread_changes(&account_id, &thread_get_state, &mut cache_lock)
+                    .await?;
 
                 let thread_mail_ids: Vec<MailId> =
                     thread_mails.iter().map(|(id, _data)| id.clone()).collect();
@@ -138,8 +124,6 @@ impl Repository {
 
                 cache_lock.upsert_mails_core(thread_mails).await?;
                 cache_lock.upsert_thread(id, thread_mail_ids).await?;
-                cache_lock.set_mail_state(get_mail_state).await?;
-                cache_lock.set_thread_state(thread_get_state).await?;
 
                 Ok(thread_mail_datas)
             }
