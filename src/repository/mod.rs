@@ -62,12 +62,12 @@ impl Repository {
                     }
                     mail::CommandKind::QueryRootMails {
                         mailbox,
-                        start,
-                        limit,
+                        window,
+                        calculate_total,
                         tx,
                     } => {
                         let _ = tx.send(
-                            repo.query_root_mails(cmd.account_id, mailbox, start, limit)
+                            repo.query_root_mails(cmd.account_id, mailbox, window, calculate_total)
                                 .await,
                         );
                     }

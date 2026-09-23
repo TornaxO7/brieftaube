@@ -275,6 +275,8 @@ pub trait RootMailsCache: MailCache {
         window: QueryWindow,
     ) -> Result<Option<cache::QueryResponse<MailId>>>;
 
+    async fn calculate_total_root_mails(&self, mailbox: &MailboxId) -> Result<Option<usize>>;
+
     async fn insert_root_mails(
         &mut self,
         mailbox: &MailboxId,
@@ -290,6 +292,7 @@ pub trait RootMailsRemote: MailRemote {
         &self,
         mailbox: &MailboxId,
         window: &QueryWindow,
+        calculate_total: bool,
     ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<(MailId, MailDataCore)>>>>;
 
     async fn fetch_root_mails_changes(

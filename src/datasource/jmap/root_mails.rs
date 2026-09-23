@@ -15,6 +15,7 @@ impl RootMailsRemote for JmapAccount {
         &self,
         mailbox: &MailboxId,
         window: &QueryWindow,
+        calculate_total: bool,
     ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<(MailId, MailDataCore)>>>> {
         let mut response = {
             let mut request = self.build_request();
@@ -26,7 +27,8 @@ impl RootMailsRemote for JmapAccount {
                 })
                 .sort([jmap_client::email::query::Comparator::received_at().descending()])
                 .position(window.start as i32)
-                .limit(window.limit);
+                .limit(window.limit)
+                .calculate_total(calculate_total);
 
             query_request.arguments().collapse_threads(true);
 
@@ -67,6 +69,7 @@ impl RootMailsRemote for JmapAccount {
         Ok(remote::QueryResponse {
             value: get_email_result,
             state: query_mails_response.take_query_state().into(),
+            total: query_mails_response.total(),
         })
     }
 

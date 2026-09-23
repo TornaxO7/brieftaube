@@ -12,8 +12,8 @@ use crate::{
     config::{self, Username},
     datasource::types::QueryWindow,
     types::{
-        AccountData, AccountId, MailKeyword, MailboxData, ParentMailboxId, ROOT_MAILBOX_ID,
-        ThreadId,
+        AccountData, AccountId, MailDataCore, MailKeyword, MailboxData, MailboxId, ParentMailboxId,
+        ROOT_MAILBOX_ID, ThreadId,
     },
     ui::{
         Layer, Loadable,
@@ -26,9 +26,10 @@ use crate::{
     },
 };
 use crossterm::event::Event;
+use ratatui::layout::Rect;
 use std::{collections::HashMap, str::FromStr};
 use throbber_widgets_tui::ThrobberState;
-use tracing::debug;
+use tracing::{debug, instrument::WithSubscriber};
 use user_action::UserAction;
 
 pub use message::*;
@@ -43,13 +44,15 @@ pub struct State {
 
     column_stack: Vec<ColumnStackEntry>,
 
+    terminal_height: u16,
+
     users_column: UserColumn,
     mailbox_columns: HashMap<(Username, AccountId, ParentMailboxId), MailboxColumn>,
     thread_columns: HashMap<(Username, AccountId, ThreadId), HashMap<ThreadId, ThreadColumn>>,
 }
 
 impl State {
-    pub fn new() -> Self {
+    pub fn new(init_rect: Rect) -> Self {
         let users_column = UserColumn::new();
         let thread_columns = HashMap::new();
         let mailbox_columns = HashMap::new();
@@ -58,6 +61,7 @@ impl State {
             throbber: ThrobberState::default(),
             mode: Mode::Normal,
             column_stack: vec![ColumnStackEntry::Users],
+            terminal_height: init_rect.height,
 
             thread_columns,
             users_column,
@@ -95,6 +99,13 @@ impl Layer<Message> for State {
                 parent_id,
                 child_mailboxes,
             } => self.handle_set_child_mailboxes(username, account_id, parent_id, child_mailboxes),
+            Message::SetMails {
+                username,
+                account_id,
+                mailbox,
+                window,
+                result,
+            } => self.handle_set_mails(username, account_id, mailbox, window, result),
         }
     }
 }
@@ -102,12 +113,13 @@ impl Layer<Message> for State {
 impl State {
     fn handle_event(&mut self, event: Event) -> Vec<super::Message> {
         match event {
-            Event::Mouse(_)
-            | Event::Paste(_)
-            // TODO: Check if the query-window is still within the new height
-            | Event::Resize(_, _)
-            | Event::FocusGained
-            | Event::FocusLost => vec![],
+            Event::Mouse(_) | Event::Paste(_) | Event::FocusGained | Event::FocusLost => vec![],
+            Event::Resize(_, new_height) => {
+                self.terminal_height = new_height;
+
+                // TODO: If new height exceeds mails list for mailbox column => query more
+                vec![]
+            }
             Event::Key(key_event) => match self.keybindings.handle_event(key_event) {
                 keybindmanager::HandleEvent::Action(action) => self.handle_user_action(action),
                 keybindmanager::HandleEvent::Registered => vec![],
@@ -175,6 +187,80 @@ impl State {
 
         vec![]
     }
+
+    fn handle_set_mails(
+        &mut self,
+        username: Username,
+        account_id: AccountId,
+        mailbox_id: MailboxId,
+        window: QueryWindow,
+        result: color_eyre::Result<(Vec<MailDataCore>, Option<usize>)>,
+    ) -> Vec<super::Message> {
+        let key = (username, account_id, Some(mailbox_id.clone()));
+
+        let column = self
+            .mailbox_columns
+            .get_mut(&key)
+            .expect("The mailbox column itself should request this so it must be there.");
+
+        let window_range = window.as_range();
+
+        match result {
+            Ok((mails, total_mails)) => {
+                let end = window_range.end.max(total_mails.unwrap_or(0));
+
+                match &mut column.mails {
+                    Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
+                        let mut mail_entries = vec![Loadable::NotLoaded; end];
+
+                        for (offset, new_mail) in mails.into_iter().enumerate() {
+                            let idx = window.start as usize + offset;
+                            mail_entries[idx] = Loadable::Loaded(new_mail);
+                        }
+
+                        column.mails = Loadable::Loaded(mail_entries);
+
+                        vec![]
+                    }
+                    Loadable::Loaded(current_mails) => {
+                        if current_mails.len() < end {
+                            current_mails.resize(end, Loadable::NotLoaded);
+                        }
+
+                        for (offset, new_mail) in mails.into_iter().enumerate() {
+                            let idx = window.start as usize + offset;
+                            current_mails[idx] = Loadable::Loaded(new_mail);
+                        }
+
+                        vec![]
+                    }
+                }
+            }
+            Err(err) => match &mut column.mails {
+                Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
+                    let mut mail_entries = vec![Loadable::NotLoaded; window_range.end];
+
+                    for idx in window_range {
+                        mail_entries[idx] = Loadable::Error(err.to_string());
+                    }
+
+                    column.mails = Loadable::Loaded(mail_entries);
+
+                    vec![]
+                }
+                Loadable::Loaded(mails) => {
+                    if mails.len() < window_range.end {
+                        mails.resize(window_range.end, Loadable::NotLoaded);
+                    }
+                    for idx in window_range {
+                        mails[idx] = Loadable::Error(err.to_string());
+                    }
+
+                    vec![]
+                }
+            },
+        }
+    }
 }
 
 /// Action implementations
@@ -203,7 +289,11 @@ impl State {
 
                 let mailbox_column = self.mailbox_columns.get_mut(&key).unwrap();
                 mailbox_column.navigate_down();
-                self.ensure_right_column_data()
+
+                let mut msgs = vec![];
+                // TODO: Check if the query-window is still within the new height
+                msgs.extend(self.ensure_right_column_data());
+                msgs
             }
             ColumnStackEntry::Thread(_thread_id) => {
                 todo!()
@@ -286,8 +376,7 @@ impl State {
                     UserColumnEntryMut::Account(_account_data) => {
                         self.column_stack
                             .push(ColumnStackEntry::Mailbox(ROOT_MAILBOX_ID));
-
-                        vec![]
+                        self.ensure_right_column_data()
                     }
                     UserColumnEntryMut::AccountNotLoaded
                     | UserColumnEntryMut::AccountLoading
@@ -377,8 +466,10 @@ impl State {
                 if self.mailbox_columns.contains_key(&key) {
                     vec![]
                 } else {
-                    self.mailbox_columns
-                        .insert(key.clone(), MailboxColumn::new());
+                    self.mailbox_columns.insert(
+                        key.clone(),
+                        MailboxColumn::new(Loadable::Loading, Loadable::Loaded(vec![])),
+                    );
 
                     vec![
                         MessageRequest::GetChildMailboxes {
@@ -421,8 +512,10 @@ impl State {
                             if self.mailbox_columns.contains_key(&key) {
                                 vec![]
                             } else {
-                                self.mailbox_columns
-                                    .insert(key.clone(), MailboxColumn::new());
+                                self.mailbox_columns.insert(
+                                    key.clone(),
+                                    MailboxColumn::new(Loadable::Loading, Loadable::Loading),
+                                );
 
                                 vec![
                                     MessageRequest::GetChildMailboxes {
@@ -437,8 +530,9 @@ impl State {
                                         mailbox: mailbox_id.clone(),
                                         window: QueryWindow {
                                             start: 0,
-                                            limit: 16,
+                                            limit: (self.terminal_height * 3) as usize,
                                         },
+                                        calculate_total: true,
                                     }
                                     .into(),
                                 ]

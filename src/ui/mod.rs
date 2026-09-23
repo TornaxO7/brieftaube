@@ -23,7 +23,7 @@ use crate::{
 use color_eyre::eyre;
 use crossterm::event::Event;
 use futures::{FutureExt, StreamExt};
-use ratatui::{DefaultTerminal, Frame};
+use ratatui::{DefaultTerminal, Frame, layout::Rect};
 use std::{collections::HashMap, time::Duration};
 use task_manager::TaskManager;
 use tracing::error;
@@ -74,10 +74,10 @@ pub struct Ui {
 }
 
 impl Ui {
-    pub fn new() -> Self {
+    pub fn new(init_rect: Rect) -> Self {
         let task_manager = TaskManager::new();
 
-        let mailfs = mailfs::State::new();
+        let mailfs = mailfs::State::new(init_rect.clone());
         let palette = palette::State::new();
         let prompt = prompt::State::new();
 
@@ -234,8 +234,41 @@ impl Ui {
                         account_id,
                         mailbox,
                         window,
+                        calculate_total,
                     } => {
-                        todo!()
+                        let handler = self.repos.get(&username).unwrap().clone();
+
+                        self.task_manager.spawn(async move {
+                            let (tx, rx) = oneshot::channel();
+
+                            handler
+                                .execute(
+                                    repository::mail::Command {
+                                        account_id: account_id.clone(),
+                                        kind: repository::mail::CommandKind::QueryRootMails {
+                                            mailbox: mailbox.clone(),
+                                            window: window.clone(),
+                                            calculate_total,
+                                            tx,
+                                        },
+                                    }
+                                    .into(),
+                                )
+                                .await;
+
+                            tracing::debug!("huh?");
+
+                            vec![
+                                mailfs::Message::SetMails {
+                                    username,
+                                    account_id,
+                                    mailbox,
+                                    window,
+                                    result: rx.await.unwrap(),
+                                }
+                                .into(),
+                            ]
+                        });
                     }
                     mailfs::MessageRequest::GetThreadMails { account_id, thread } => todo!(),
                 };

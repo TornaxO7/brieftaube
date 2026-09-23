@@ -15,7 +15,9 @@ pub enum MessageRequest {
         username: config::Username,
         account_id: AccountId,
         mailbox: MailboxId,
+
         window: QueryWindow,
+        calculate_total: bool,
     },
     GetThreadMails {
         account_id: AccountId,

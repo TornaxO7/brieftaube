@@ -75,6 +75,13 @@ impl RootMailsCache for HashMapDataSource {
 
         Ok(())
     }
+
+    async fn calculate_total_root_mails(&self, mailbox: &MailboxId) -> Result<Option<usize>> {
+        Ok(self
+            .root_mails
+            .get(mailbox)
+            .map(|root_mails| root_mails.len()))
+    }
 }
 
 pub struct RootMails {
@@ -191,6 +198,10 @@ impl RootMails {
             .find(|id| id.is_some())
             .cloned()
             .flatten()
+    }
+
+    pub fn len(&self) -> usize {
+        self.ids.len()
     }
 }
 

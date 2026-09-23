@@ -34,9 +34,10 @@ pub enum CommandKind {
     },
     QueryRootMails {
         mailbox: MailboxId,
-        start: i32,
-        limit: u32,
-        tx: oneshot::Sender<color_eyre::Result<Vec<MailDataCore>>>,
+        window: QueryWindow,
+        calculate_total: bool,
+
+        tx: oneshot::Sender<color_eyre::Result<(Vec<MailDataCore>, Option<usize>)>>,
     },
 }
 
@@ -238,26 +239,9 @@ impl Repository {
         &self,
         account_id: AccountId,
         id: MailboxId,
-        start: i32,
-        limit: u32,
-    ) -> color_eyre::Result<Vec<MailDataCore>> {
-        let mailbox = self.get_mailbox(account_id.clone(), id.clone()).await?;
-        let amount_threads = mailbox.total_threads;
-
-        let window = {
-            let normalized_start = if start < 0 {
-                // according to spec (see `position` from `/query` in `core`)
-                (amount_threads as i32 + start).max(0) as u32
-            } else {
-                start as u32
-            };
-
-            QueryWindow {
-                start: normalized_start,
-                limit: limit as usize,
-            }
-        };
-
+        window: QueryWindow,
+        calculate_total: bool,
+    ) -> color_eyre::Result<(Vec<MailDataCore>, Option<usize>)> {
         let _enter = self.mail_locks.query_root_mails.lock().await;
 
         let opt_root_mail_ids = self
@@ -275,7 +259,7 @@ impl Repository {
             debug_assert_eq!(root_mails.values.len(), 1, "Full window was loaded");
             let root_mails = root_mails.values.into_iter().next().unwrap().values;
 
-            let opt_root_mails = self
+            let opt_root_mails_data = self
                 .caches
                 .get(&account_id)
                 .unwrap()
@@ -284,29 +268,46 @@ impl Repository {
                 .get_mails_core(&root_mails)
                 .await?;
 
-            if opt_root_mails.missing.is_empty() {
-                let root_mails_core = root_mails
+            if opt_root_mails_data.missing.is_empty() {
+                let root_mails_data = root_mails
                     .into_iter()
-                    .map(|id| opt_root_mails.value.get(&id).cloned().unwrap())
+                    .map(|id| opt_root_mails_data.value.get(&id).cloned().unwrap())
                     .collect();
-                return Ok(root_mails_core);
+
+                let total = self
+                    .caches
+                    .get(&account_id)
+                    .unwrap()
+                    .read()
+                    .await
+                    .calculate_total_root_mails(&id)
+                    .await?;
+
+                return Ok((root_mails_data, total));
             } else {
-                let missing_mails_core = self
+                let missing_mails_data = self
                     .remote
                     .get_remote_account(account_id.clone())
-                    .fetch_mails_core(&opt_root_mails.missing)
+                    .fetch_mails_core(&opt_root_mails_data.missing)
                     .await?;
 
                 let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
-                if let Some(current_email_get_state) = cache_lock.get_mail_state().await {
-                    if *current_email_get_state != missing_mails_core.state {
-                        self.apply_email_get_changes(&account_id, &mut cache_lock)
-                            .await?;
+                match cache_lock.get_mail_state().await {
+                    Some(current_email_get_state) => {
+                        if *current_email_get_state != missing_mails_data.state {
+                            self.apply_email_get_changes(&account_id, &mut cache_lock)
+                                .await?;
+                        }
+                    }
+                    None => {
+                        cache_lock
+                            .set_mail_state(missing_mails_data.state.clone())
+                            .await?
                     }
                 }
 
                 cache_lock
-                    .upsert_mails_core(missing_mails_core.values.into_iter().collect())
+                    .upsert_mails_core(missing_mails_data.values.into_iter().collect())
                     .await?;
 
                 let result = cache_lock.get_mails_core(&root_mails).await?;
@@ -318,7 +319,9 @@ impl Repository {
                     .map(|id| result.value.get(&id).cloned().unwrap())
                     .collect();
 
-                return Ok(root_mails_core);
+                let total = cache_lock.calculate_total_root_mails(&id).await?;
+
+                return Ok((root_mails_core, total));
             }
         }
 
@@ -331,25 +334,36 @@ impl Repository {
                     state: email_get_state,
                 },
             state: root_mails_query_state,
+            total,
         } = self
             .remote
             .get_remote_account(account_id.clone())
-            .fetch_root_mails(&id, &window)
+            .fetch_root_mails(&id, &window, calculate_total)
             .await?;
 
         let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
 
-        if let Some(current_email_get_state) = cache_lock.get_mail_state().await {
-            if *current_email_get_state != email_get_state {
-                self.apply_email_get_changes(&account_id, &mut cache_lock)
-                    .await?;
+        match cache_lock.get_mail_state().await {
+            Some(current_email_get_state) => {
+                if *current_email_get_state != email_get_state {
+                    self.apply_email_get_changes(&account_id, &mut cache_lock)
+                        .await?;
+                }
             }
+            None => cache_lock.set_mail_state(email_get_state.clone()).await?,
         }
 
-        if let Some(current_root_mail_query_state) = cache_lock.get_root_mails_state(&id).await {
-            if *current_root_mail_query_state != root_mails_query_state {
-                self.apply_root_mail_query_changes(&account_id, &id, &mut cache_lock)
-                    .await?;
+        match cache_lock.get_root_mails_state(&id).await {
+            Some(current_root_mail_query_state) => {
+                if *current_root_mail_query_state != root_mails_query_state {
+                    self.apply_root_mail_query_changes(&account_id, &id, &mut cache_lock)
+                        .await?;
+                }
+            }
+            None => {
+                cache_lock
+                    .set_root_mails_state(&id, root_mails_query_state.clone())
+                    .await?
             }
         }
 
@@ -376,8 +390,8 @@ impl Repository {
             .set_root_mails_state(&id, root_mails_query_state)
             .await?;
 
-        let root_mails_core = root_mails.into_iter().map(|(_id, data)| data).collect();
+        let root_mails = root_mails.into_iter().map(|(_id, data)| data).collect();
 
-        Ok(root_mails_core)
+        Ok((root_mails, total))
     }
 }

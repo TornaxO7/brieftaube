@@ -11,9 +11,7 @@ use config::Config;
 use material_theme_loader::MaterialTheme;
 use std::{fs::OpenOptions, io, path::PathBuf, sync::OnceLock};
 use tracing::{level_filters::LevelFilter, warn};
-use tracing_subscriber::{
-    EnvFilter, Layer, filter::Targets, layer::SubscriberExt, util::SubscriberInitExt,
-};
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use xdg::BaseDirectories;
 
 const APP_NAME: &str = env!("CARGO_PKG_NAME");
@@ -26,12 +24,15 @@ static CONFIG: OnceLock<Config> = OnceLock::new();
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     color_eyre::install()?;
+    init_panic_hook();
     init_logging()?;
     init_theme();
     init_config()?;
 
     let mut terminal = ratatui::init();
-    Ui::new().run(&mut terminal).await?;
+    Ui::new(terminal.get_frame().area())
+        .run(&mut terminal)
+        .await?;
     ratatui::restore();
     Ok(())
 }
@@ -87,6 +88,14 @@ fn init_config() -> eyre::Result<()> {
 
     CONFIG.set(config).unwrap();
     Ok(())
+}
+
+fn init_panic_hook() {
+    let hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        let _ = ratatui::restore();
+        hook(panic_info);
+    }));
 }
 
 fn try_load_custom_theme() -> eyre::Result<MaterialTheme> {
