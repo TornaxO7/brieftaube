@@ -7,7 +7,7 @@ use crate::{
         Cache, RemoteSession,
         types::{GetState, QueryState, cache, remote},
     },
-    types::{AccountId, MailId, MailboxId, ThreadId},
+    types::{AccountId, MailId, MailboxId},
 };
 use std::collections::HashMap;
 use tokio::sync::{RwLock, RwLockWriteGuard, mpsc};
