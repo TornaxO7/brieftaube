@@ -52,6 +52,10 @@ impl MailboxColumn {
             .unwrap_or(1)
     }
 
+    pub fn mails_len(&self) -> usize {
+        self.mails.loaded().map(|mails| mails.len()).unwrap_or(1)
+    }
+
     pub fn set_mailboxes(&mut self, children: color_eyre::Result<Vec<MailboxData>>) {
         match children {
             Ok(mailboxes) => {
@@ -204,8 +208,12 @@ impl MailfsColumn for MailboxColumn {
                     self.mailbox_state.select_next();
                 }
             }
-            (None, Some(_)) => {
-                self.mail_state.select_next();
+            (None, Some(idx)) => {
+                let last_mail_idx = self.mails_len() - 1;
+
+                if idx < last_mail_idx {
+                    self.mail_state.select_next();
+                }
             }
             (None, None) => {}
             (Some(_), Some(_)) => unreachable!(),
