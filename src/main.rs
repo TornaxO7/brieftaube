@@ -37,7 +37,7 @@ async fn main() -> eyre::Result<()> {
     Ok(())
 }
 
-fn init_logging() -> eyre::Result {
+fn init_logging() -> eyre::Result<()> {
     let log_file = OpenOptions::new()
         .write(true)
         .truncate(true)

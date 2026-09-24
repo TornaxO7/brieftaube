@@ -273,16 +273,37 @@ impl Ui {
                     mailfs::MessageRequest::GetThreadMails {
                         username,
                         account_id,
-                        thread,
+                        thread: thread_id,
                     } => {
                         let handler = self.repos.get(&username).unwrap().clone();
 
                         self.task_manager.spawn(async move {
                             let (tx, rx) = oneshot::channel();
 
-                            handler.execute(repository::thread::)
+                            handler
+                                .execute(
+                                    repository::thread::Command {
+                                        account_id: account_id.clone(),
+                                        kind: repository::thread::CommandKind::GetThread {
+                                            id: thread_id.clone(),
+                                            tx,
+                                        },
+                                    }
+                                    .into(),
+                                )
+                                .await;
+
+                            vec![
+                                mailfs::Message::SetThreadMails {
+                                    username,
+                                    account_id,
+                                    thread_id,
+                                    thread_mails: rx.await.unwrap(),
+                                }
+                                .into(),
+                            ]
                         });
-                    },
+                    }
                 };
                 vec![]
             }

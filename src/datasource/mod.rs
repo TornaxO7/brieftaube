@@ -67,6 +67,7 @@ pub trait MailCache {
         ids: &[MailId],
     ) -> Result<cache::GetBatchResult<HashMap<MailId, MailDataPreview>, Vec<MailId>>>;
 
+    // TODO: Change `mails` to `Vec<MailDataCore>`
     async fn upsert_mails_core(&mut self, mails: Vec<(MailId, MailDataCore)>) -> Result<()>;
 
     async fn upsert_mails_preview(&mut self, mails: Vec<(MailId, MailDataPreview)>) -> Result<()>;

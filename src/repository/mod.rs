@@ -7,7 +7,7 @@ use crate::{
         Cache, RemoteSession,
         types::{GetState, QueryState, cache, remote},
     },
-    types::{AccountId, MailId, MailboxId, ThreadId},
+    types::{AccountId, MailDataCore, MailId, MailboxId, ThreadId},
 };
 use std::collections::HashMap;
 use tokio::sync::{RwLock, RwLockWriteGuard, mpsc};
@@ -343,10 +343,17 @@ impl Repository {
                     })
                     .collect();
 
-                cache_lock.upsert_threads(&new_thread_mails_ids).await?;
-                cache_lock.upsert_mails_core().await?;
+                let tmp_mails: Vec<(MailId, MailDataCore)> =
+                    new_thread_mails.values().fold(vec![], |mut prev, mails| {
+                        for mail in mails {
+                            prev.push((mail.id.clone(), mail.clone()));
+                        }
+                        prev
+                    });
 
-                todo!("Retrieve the threads which we've cached and update them");
+                cache_lock.upsert_threads(&new_thread_mails_ids).await?;
+                cache_lock.upsert_mails_core(tmp_mails).await?;
+                cache_lock.set_thread_state(new_thread_get_state).await?;
             }
 
             cache_lock.evict_threads(&changes.destroyed).await?;

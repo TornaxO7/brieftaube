@@ -565,9 +565,7 @@ impl State {
                 }
             }
             ColumnStackEntry::Thread(_thread_id) => {
-                todo!(
-                    "Usually if a thread gets requested, all its mail datas should be also fetched. Just check if they're there."
-                )
+                todo!("Fetch the preview data of the selected mail")
             }
         }
     }

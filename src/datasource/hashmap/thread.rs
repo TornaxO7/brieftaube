@@ -39,8 +39,10 @@ impl ThreadCache for HashMapDataSource {
         })
     }
 
-    async fn upsert_thread(&mut self, id: ThreadId, mails: Vec<MailId>) -> Result<()> {
-        self.threads.insert(id, mails);
+    async fn upsert_threads(&mut self, threads: &[(ThreadId, Vec<MailId>)]) -> Result<()> {
+        for (thread_id, thread_mails) in threads {
+            self.threads.insert(thread_id.clone(), thread_mails.clone());
+        }
         Ok(())
     }
 
