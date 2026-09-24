@@ -7,7 +7,7 @@ use crate::{
         Cache, RemoteSession,
         types::{GetState, QueryState, cache, remote},
     },
-    types::{AccountId, MailId, MailboxId},
+    types::{AccountId, MailId, MailboxId, ThreadId},
 };
 use std::collections::HashMap;
 use tokio::sync::{RwLock, RwLockWriteGuard, mpsc};
@@ -94,19 +94,19 @@ impl Repository {
     async fn ensure_email_changes(
         &self,
         account_id: &AccountId,
-        state: &GetState,
+        new_state: &GetState,
         cache_lock: &mut RwLockWriteGuard<'_, Box<dyn Cache>>,
     ) -> color_eyre::Result<()> {
         match cache_lock.get_mail_state().await {
             Some(current_state) => {
-                if current_state != state {
+                if current_state != new_state {
                     self.apply_email_get_changes(account_id, cache_lock).await?;
                 }
 
-                debug_assert_eq!(cache_lock.get_mail_state().await.unwrap(), state);
+                debug_assert_eq!(cache_lock.get_mail_state().await.unwrap(), new_state);
                 Ok(())
             }
-            None => cache_lock.set_mail_state(state.clone()).await,
+            None => cache_lock.set_mail_state(new_state.clone()).await,
         }
     }
 
@@ -287,7 +287,8 @@ impl Repository {
         match cache_lock.get_thread_state().await {
             Some(current_state) => {
                 if current_state != state {
-                    self.apply_thread_get_changes(cache_lock).await?;
+                    self.apply_thread_get_changes(account_id, cache_lock)
+                        .await?;
                 }
 
                 debug_assert_eq!(cache_lock.get_thread_state().await.unwrap(), state);
@@ -299,13 +300,66 @@ impl Repository {
 
     async fn apply_thread_get_changes(
         &self,
+        account_id: &AccountId,
         cache_lock: &mut RwLockWriteGuard<'_, Box<dyn Cache>>,
     ) -> color_eyre::Result<()> {
-        let Some(mut _current_state) = cache_lock.get_thread_state().await.cloned() else {
+        let Some(mut current_state) = cache_lock.get_thread_state().await.cloned() else {
             return Ok(());
         };
 
-        todo!()
+        let remote = self.remote.get_remote_account(account_id.clone());
+
+        loop {
+            let changes = remote.fetch_thread_changes(&current_state).await?;
+
+            if !changes.updated.is_empty() {
+                let cache::GetBatchResult {
+                    value: cached_thread_ids,
+                    ..
+                } = cache_lock.get_threads(&changes.updated).await?;
+
+                let cached_thread_ids: Vec<ThreadId> = cached_thread_ids.into_keys().collect();
+
+                let remote::GetBatchResult {
+                    values:
+                        remote::GetOneResult {
+                            value: new_thread_mails,
+                            state: new_mail_get_state,
+                        },
+                    state: new_thread_get_state,
+                    ..
+                } = remote.fetch_threads(&cached_thread_ids).await?;
+
+                self.ensure_email_changes(account_id, &new_mail_get_state, cache_lock)
+                    .await?;
+
+                let new_thread_mails_ids: Vec<(ThreadId, Vec<MailId>)> = new_thread_mails
+                    .iter()
+                    .map(|(thread_id, thread_mails)| {
+                        let mail_ids: Vec<MailId> =
+                            thread_mails.iter().map(|mail| mail.id.clone()).collect();
+
+                        (thread_id.clone(), mail_ids)
+                    })
+                    .collect();
+
+                cache_lock.upsert_threads(&new_thread_mails_ids).await?;
+                cache_lock.upsert_mails_core().await?;
+
+                todo!("Retrieve the threads which we've cached and update them");
+            }
+
+            cache_lock.evict_threads(&changes.destroyed).await?;
+
+            current_state = changes.new_state;
+            cache_lock.set_thread_state(current_state.clone()).await?;
+
+            if !changes.has_more_changes {
+                break;
+            }
+        }
+
+        Ok(())
     }
 }
 

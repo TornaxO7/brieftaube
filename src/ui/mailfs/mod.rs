@@ -48,7 +48,7 @@ pub struct State {
 
     users_column: UserColumn,
     mailbox_columns: HashMap<(Username, AccountId, ParentMailboxId), MailboxColumn>,
-    thread_columns: HashMap<(Username, AccountId, ThreadId), HashMap<ThreadId, ThreadColumn>>,
+    thread_columns: HashMap<(Username, AccountId, ThreadId), ThreadColumn>,
 }
 
 impl State {
@@ -106,6 +106,12 @@ impl Layer<Message> for State {
                 window,
                 result,
             } => self.handle_set_mails(username, account_id, mailbox, window, result),
+            Message::SetThreadMails {
+                username,
+                account_id,
+                thread_id,
+                thread_mails,
+            } => self.handle_set_thread_mails(username, account_id, thread_id, thread_mails),
         }
     }
 }
@@ -198,6 +204,23 @@ impl State {
             .get_mut(&key)
             .expect("The mailbox column itself should request this so it must be there.");
         column.set_mails(window, result);
+        vec![]
+    }
+
+    fn handle_set_thread_mails(
+        &mut self,
+        username: Username,
+        account_id: AccountId,
+        thread_id: ThreadId,
+        thread_mails: color_eyre::Result<Vec<MailDataCore>>,
+    ) -> Vec<super::Message> {
+        let key = (username, account_id, thread_id);
+
+        let column = self
+            .thread_columns
+            .get_mut(&key)
+            .expect("Requested must've come from an existing thread column.");
+        column.set_mails(thread_mails);
         vec![]
     }
 }
@@ -516,8 +539,27 @@ impl State {
                             }
                         }
                         MailboxColumnEntry::RootMail(mail) => {
-                            let _thread_id = mail.thread_id.clone();
-                            todo!("Fetch thread");
+                            let account = self
+                                .users_column
+                                .get_selected_account()
+                                .expect("If we're in a mailbox, an account must've been selected.");
+                            let key = account.as_key(mail.thread_id.clone());
+
+                            if self.thread_columns.contains_key(&key) {
+                                vec![]
+                            } else {
+                                self.thread_columns
+                                    .insert(key.clone(), ThreadColumn::new(Loadable::Loading));
+
+                                vec![
+                                    MessageRequest::GetThreadMails {
+                                        username: key.0,
+                                        account_id: key.1,
+                                        thread: key.2,
+                                    }
+                                    .into(),
+                                ]
+                            }
                         }
                     },
                 }

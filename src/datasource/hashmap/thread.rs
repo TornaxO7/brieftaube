@@ -1,5 +1,11 @@
+use std::collections::HashMap;
+
 use crate::{
-    datasource::{ThreadCache, hashmap::HashMapDataSource, types::GetState},
+    datasource::{
+        ThreadCache,
+        hashmap::HashMapDataSource,
+        types::{GetState, cache},
+    },
     types::{MailId, ThreadId},
 };
 use async_trait::async_trait;
@@ -11,8 +17,26 @@ impl ThreadCache for HashMapDataSource {
         self.threads_get_state.as_ref()
     }
 
-    async fn get_thread(&self, id: &ThreadId) -> Result<Option<Vec<MailId>>> {
-        Ok(self.threads.get(id).cloned())
+    async fn get_threads(
+        &self,
+        ids: &[ThreadId],
+    ) -> Result<cache::GetBatchResult<HashMap<ThreadId, Vec<MailId>>, Vec<ThreadId>>> {
+        let mut datas = HashMap::new();
+        let mut missing = Vec::new();
+
+        for id in ids {
+            match self.threads.get(id) {
+                Some(thread_mails) => {
+                    datas.insert(id.clone(), thread_mails.clone());
+                }
+                None => missing.push(id.clone()),
+            }
+        }
+
+        Ok(cache::GetBatchResult {
+            value: datas,
+            missing,
+        })
     }
 
     async fn upsert_thread(&mut self, id: ThreadId, mails: Vec<MailId>) -> Result<()> {
@@ -25,8 +49,10 @@ impl ThreadCache for HashMapDataSource {
         Ok(())
     }
 
-    async fn evict_thread(&mut self, id: &ThreadId) -> Result<()> {
-        self.threads.remove(id);
+    async fn evict_threads(&mut self, ids: &[ThreadId]) -> Result<()> {
+        for id in ids {
+            self.threads.remove(id);
+        }
         Ok(())
     }
 }

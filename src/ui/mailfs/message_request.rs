@@ -20,6 +20,7 @@ pub enum MessageRequest {
         calculate_total: bool,
     },
     GetThreadMails {
+        username: config::Username,
         account_id: AccountId,
         thread: ThreadId,
     },

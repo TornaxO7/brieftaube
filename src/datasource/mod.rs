@@ -366,11 +366,28 @@ pub trait ThreadCache {
 
     async fn set_thread_state(&mut self, new_state: GetState) -> Result<()>;
 
-    async fn get_thread(&self, id: &ThreadId) -> Result<Option<Vec<MailId>>>;
+    async fn get_thread(&self, id: &ThreadId) -> Result<Option<Vec<MailId>>> {
+        let result = self.get_threads(&[id.clone()]).await?;
 
-    async fn upsert_thread(&mut self, id: ThreadId, mails: Vec<MailId>) -> Result<()>;
+        if result.missing.is_empty() {
+            Ok(Some(result.value.into_iter().next().unwrap().1))
+        } else {
+            Ok(None)
+        }
+    }
 
-    async fn evict_thread(&mut self, id: &ThreadId) -> Result<()>;
+    async fn get_threads(
+        &self,
+        ids: &[ThreadId],
+    ) -> Result<cache::GetBatchResult<HashMap<ThreadId, Vec<MailId>>, Vec<ThreadId>>>;
+
+    async fn upsert_thread(&mut self, id: ThreadId, mails: Vec<MailId>) -> Result<()> {
+        self.upsert_threads(&[(id, mails)]).await
+    }
+
+    async fn upsert_threads(&mut self, threads: &[(ThreadId, Vec<MailId>)]) -> Result<()>;
+
+    async fn evict_threads(&mut self, ids: &[ThreadId]) -> Result<()>;
 }
 
 #[async_trait]
@@ -379,6 +396,16 @@ pub trait ThreadRemote {
         &self,
         id: &ThreadId,
     ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<(MailId, MailDataCore)>>>>;
+
+    async fn fetch_threads(
+        &self,
+        ids: &[ThreadId],
+    ) -> Result<
+        remote::GetBatchResult<
+            remote::GetOneResult<HashMap<ThreadId, Vec<MailDataCore>>>,
+            Vec<ThreadId>,
+        >,
+    >;
 
     async fn fetch_thread_changes(
         &self,

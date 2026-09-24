@@ -270,7 +270,19 @@ impl Ui {
                             ]
                         });
                     }
-                    mailfs::MessageRequest::GetThreadMails { account_id, thread } => todo!(),
+                    mailfs::MessageRequest::GetThreadMails {
+                        username,
+                        account_id,
+                        thread,
+                    } => {
+                        let handler = self.repos.get(&username).unwrap().clone();
+
+                        self.task_manager.spawn(async move {
+                            let (tx, rx) = oneshot::channel();
+
+                            handler.execute(repository::thread::)
+                        });
+                    },
                 };
                 vec![]
             }

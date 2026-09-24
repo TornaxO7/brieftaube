@@ -191,7 +191,7 @@ fn render_right_column(scheme: &Scheme, state: &mut super::State, frame: &mut Fr
                             area,
                         );
                     }
-                    MailboxColumnEntry::RootMail(mail_data_core) => {
+                    MailboxColumnEntry::Thread(mail_data_core) => {
                         render_thread_column(
                             scheme,
                             mail_data_core.thread_id.clone(),

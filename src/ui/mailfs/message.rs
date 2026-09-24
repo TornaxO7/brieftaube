@@ -1,7 +1,9 @@
 use crate::{
     config::Username,
     datasource::types::QueryWindow,
-    types::{AccountData, AccountId, MailDataCore, MailboxData, MailboxId, ParentMailboxId},
+    types::{
+        AccountData, AccountId, MailDataCore, MailboxData, MailboxId, ParentMailboxId, ThreadId,
+    },
     ui::{Loadable, mailfs::user_action::UserAction},
 };
 use crossterm::event::Event;
@@ -28,6 +30,13 @@ pub enum Message {
         window: QueryWindow,
 
         result: color_eyre::Result<(Vec<MailDataCore>, Option<usize>)>,
+    },
+    SetThreadMails {
+        username: Username,
+        account_id: AccountId,
+        thread_id: ThreadId,
+
+        thread_mails: color_eyre::Result<Vec<MailDataCore>>,
     },
 
     SelectedPaletteEntry(String),

@@ -1,11 +1,12 @@
 use super::MailKeyword;
-use crate::types::{MailboxId, ThreadId};
+use crate::types::{MailId, MailboxId, ThreadId};
 use chrono::{DateTime, Local, Utc};
 use jmap_client::email::{Email, Property};
 use std::collections::HashSet;
 
 #[derive(Debug, Clone)]
 pub struct MailDataCore {
+    pub id: MailId,
     pub message_id: Option<String>,
     pub keywords: HashSet<MailKeyword>,
     pub subject: Option<String>,
@@ -29,6 +30,7 @@ impl MailDataCore {
 
     pub fn from_get_request(mut mail: Email) -> Self {
         Self {
+            id: mail.take_id().into(),
             message_id: mail
                 .message_id()
                 .map(|ids| ids.iter().next().cloned())
