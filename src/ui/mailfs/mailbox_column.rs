@@ -146,6 +146,8 @@ impl MailboxColumn {
                     if !mailboxes.is_empty() {
                         self.mailbox_state.select(Some(0));
                         return;
+                    } else {
+                        self.mailbox_state.select(None);
                     }
                 }
             };
@@ -158,6 +160,8 @@ impl MailboxColumn {
                 Loadable::Loaded(mails) => {
                     if !mails.is_empty() {
                         self.mail_state.select(Some(0));
+                    } else {
+                        self.mail_state.select(None);
                     }
                 }
             }
