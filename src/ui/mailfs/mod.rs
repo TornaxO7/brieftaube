@@ -12,8 +12,8 @@ use crate::{
     config::{self, Username},
     datasource::types::QueryWindow,
     types::{
-        AccountData, AccountId, MailDataCore, MailKeyword, MailboxData, MailboxId, ParentMailboxId,
-        ROOT_MAILBOX_ID, ThreadId,
+        AccountData, AccountId, MailDataCore, MailDataPreview, MailId, MailKeyword, MailboxData,
+        MailboxId, ParentMailboxId, ROOT_MAILBOX_ID, ThreadId,
     },
     ui::{
         Layer, Loadable,
@@ -49,6 +49,7 @@ pub struct State {
     users_column: UserColumn,
     mailbox_columns: HashMap<(Username, AccountId, ParentMailboxId), MailboxColumn>,
     thread_columns: HashMap<(Username, AccountId, ThreadId), ThreadColumn>,
+    mail_previews: HashMap<(Username, AccountId, MailId), Loadable<MailDataPreview>>,
 }
 
 impl State {
@@ -56,6 +57,7 @@ impl State {
         let users_column = UserColumn::new();
         let thread_columns = HashMap::new();
         let mailbox_columns = HashMap::new();
+        let mail_previews = HashMap::new();
 
         Self {
             throbber: ThrobberState::default(),
@@ -66,6 +68,7 @@ impl State {
             thread_columns,
             users_column,
             mailbox_columns,
+            mail_previews,
 
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", UserAction::Quit),
@@ -112,6 +115,12 @@ impl Layer<Message> for State {
                 thread_id,
                 thread_mails,
             } => self.handle_set_thread_mails(username, account_id, thread_id, thread_mails),
+            Message::SetMailPreview {
+                username,
+                account_id,
+                mail_id,
+                preview,
+            } => self.handle_set_mail_preview(username, account_id, mail_id, preview),
         }
     }
 }
@@ -221,6 +230,25 @@ impl State {
             .get_mut(&key)
             .expect("Requested must've come from an existing thread column.");
         column.set_mails(thread_mails);
+        vec![]
+    }
+
+    fn handle_set_mail_preview(
+        &mut self,
+        username: Username,
+        account_id: AccountId,
+        mail_id: MailId,
+        mail_preview: color_eyre::Result<MailDataPreview>,
+    ) -> Vec<super::Message> {
+        let key = (username, account_id, mail_id);
+
+        let current_preview = self.mail_previews.get_mut(&key).unwrap();
+
+        *current_preview = match mail_preview {
+            Ok(preview) => Loadable::Loaded(preview),
+            Err(err) => Loadable::Error(err.to_string()),
+        };
+
         vec![]
     }
 }
@@ -564,8 +592,38 @@ impl State {
                     },
                 }
             }
-            ColumnStackEntry::Thread(_thread_id) => {
-                todo!("Fetch the preview data of the selected mail")
+            ColumnStackEntry::Thread(thread_id) => {
+                let account = self.users_column.get_selected_account().unwrap();
+                let thread_key = account.as_key(thread_id);
+                let column = self.thread_columns.get(&thread_key).unwrap();
+
+                let Some(selected_entry) = column.get_selected_entry() else {
+                    return vec![];
+                };
+
+                match selected_entry {
+                    Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => vec![],
+                    Loadable::Loaded(selected_thread_mail) => {
+                        let id = selected_thread_mail.id.clone();
+                        let preview_key = account.as_key(id);
+
+                        if self.mail_previews.contains_key(&preview_key) {
+                            vec![]
+                        } else {
+                            self.mail_previews
+                                .insert(preview_key.clone(), Loadable::Loading);
+
+                            vec![
+                                MessageRequest::GetMailPreview {
+                                    username: preview_key.0,
+                                    account_id: preview_key.1,
+                                    mail_id: preview_key.2,
+                                }
+                                .into(),
+                            ]
+                        }
+                    }
+                }
             }
         }
     }

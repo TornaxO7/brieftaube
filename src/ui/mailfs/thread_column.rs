@@ -14,7 +14,7 @@ impl ThreadColumn {
     pub fn new(mails: Loadable<Vec<MailDataCore>>) -> Self {
         Self {
             mails,
-            state: TableState::new(),
+            state: TableState::new().with_selected(Some(0)),
         }
     }
 
@@ -24,22 +24,28 @@ impl ThreadColumn {
             Err(err) => self.mails = Loadable::Error(err.to_string()),
         }
     }
+
+    pub fn get_selected_entry<'a>(&'a self) -> Option<Loadable<&'a MailDataCore>> {
+        let selected_idx = self.state.selected()?;
+
+        Some(self.mails.as_ref().map(|mails| &mails[selected_idx]))
+    }
 }
 
 impl MailfsColumn for ThreadColumn {
     fn navigate_up(&mut self) {
-        todo!()
+        self.state.select_previous();
     }
 
     fn navigate_down(&mut self) {
-        todo!()
+        self.state.select_next();
     }
 
     fn navigate_to_bottom(&mut self) {
-        todo!()
+        self.state.select_last();
     }
 
     fn navigate_to_top(&mut self) {
-        todo!()
+        self.state.select_first();
     }
 }

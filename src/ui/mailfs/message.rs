@@ -2,7 +2,8 @@ use crate::{
     config::Username,
     datasource::types::QueryWindow,
     types::{
-        AccountData, AccountId, MailDataCore, MailboxData, MailboxId, ParentMailboxId, ThreadId,
+        AccountData, AccountId, MailDataCore, MailDataPreview, MailId, MailboxData, MailboxId,
+        ParentMailboxId, ThreadId,
     },
     ui::{Loadable, mailfs::user_action::UserAction},
 };
@@ -37,6 +38,13 @@ pub enum Message {
         thread_id: ThreadId,
 
         thread_mails: color_eyre::Result<Vec<MailDataCore>>,
+    },
+    SetMailPreview {
+        username: Username,
+        account_id: AccountId,
+        mail_id: MailId,
+
+        preview: color_eyre::Result<MailDataPreview>,
     },
 
     SelectedPaletteEntry(String),

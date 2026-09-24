@@ -304,6 +304,40 @@ impl Ui {
                             ]
                         });
                     }
+                    mailfs::MessageRequest::GetMailPreview {
+                        username,
+                        account_id,
+                        mail_id,
+                    } => {
+                        let handler = self.repos.get(&username).unwrap().clone();
+
+                        self.task_manager.spawn(async move {
+                            let (tx, rx) = oneshot::channel();
+
+                            handler
+                                .execute(
+                                    repository::mail::Command {
+                                        account_id: account_id.clone(),
+                                        kind: repository::mail::CommandKind::GetPreview {
+                                            id: mail_id.clone(),
+                                            tx,
+                                        },
+                                    }
+                                    .into(),
+                                )
+                                .await;
+
+                            vec![
+                                mailfs::Message::SetMailPreview {
+                                    username,
+                                    account_id,
+                                    mail_id,
+                                    preview: rx.await.unwrap(),
+                                }
+                                .into(),
+                            ]
+                        });
+                    }
                 };
                 vec![]
             }

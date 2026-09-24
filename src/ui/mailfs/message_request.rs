@@ -1,7 +1,7 @@
 use crate::{
     config,
     datasource::types::QueryWindow,
-    types::{AccountId, MailboxId, ParentMailboxId, ThreadId},
+    types::{AccountId, MailId, MailboxId, ParentMailboxId, ThreadId},
 };
 
 pub enum MessageRequest {
@@ -23,6 +23,11 @@ pub enum MessageRequest {
         username: config::Username,
         account_id: AccountId,
         thread: ThreadId,
+    },
+    GetMailPreview {
+        username: config::Username,
+        account_id: AccountId,
+        mail_id: MailId,
     },
 }
 

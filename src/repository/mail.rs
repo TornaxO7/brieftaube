@@ -120,6 +120,7 @@ impl Repository {
                     .await?;
 
                 let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
+
                 self.ensure_email_changes(&account_id, &result.state, &mut cache_lock)
                     .await?;
 

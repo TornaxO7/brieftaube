@@ -202,12 +202,40 @@ fn render_right_column(scheme: &Scheme, state: &mut super::State, frame: &mut Fr
                     }
                 },
             }
-
-            // TODO: get selected entry of this given mailbox and render it.
-            // render_mailbox_column(scheme, mailbox_id.clone(), state, frame, area)
         }
         ColumnStackEntry::Thread(thread_id) => {
-            todo!();
+            let account = state
+                .users_column
+                .get_selected_account()
+                .expect("A account must've been selected");
+            let thread_key = account.as_key(thread_id.clone());
+            let column = state.thread_columns.get(&thread_key).unwrap();
+
+            let Some(selected_mail) = column.get_selected_entry() else {
+                return;
+            };
+
+            match selected_mail {
+                Loadable::NotLoaded => {}
+                Loadable::Loading => {
+                    frame.render_stateful_widget(
+                        Throbber::default()
+                            .throbber_style(Style::default().fg(scheme.primary.into_color())),
+                        area,
+                        &mut state.throbber,
+                    );
+                }
+                Loadable::Loaded(entry) => {
+                    let mail_id = entry.id.clone();
+                    render_mail_preview(scheme, mail_id, state, frame, area);
+                }
+                Loadable::Error(err) => frame.render_widget(
+                    Paragraph::new(format!("Couldn't load preview of mail:\n{err}"))
+                        .wrap(Wrap { trim: false })
+                        .style(Style::new().fg(scheme.error.into_color())),
+                    area,
+                ),
+            }
         }
     }
 }
@@ -498,12 +526,88 @@ fn render_mailbox_column(
 }
 
 fn render_thread_column(
-    _scheme: &Scheme,
-    _thread_id: ThreadId,
-    _state: &mut super::State,
-    _frame: &mut Frame,
-    _area: Rect,
+    scheme: &Scheme,
+    thread_id: ThreadId,
+    state: &mut super::State,
+    frame: &mut Frame,
+    area: Rect,
 ) {
+    let Some(account) = state.users_column.get_selected_account() else {
+        return;
+    };
+    let key = account.as_key(thread_id);
+    let column = state.thread_columns.get_mut(&key).unwrap();
+
+    let widths = [
+        Constraint::Length(2),
+        Constraint::Fill(1),
+        Constraint::Length(MAX_DATE_LENGTH as u16),
+    ];
+
+    let rows: Vec<Row<'_>> = match &column.mails {
+        Loadable::NotLoaded => {
+            vec![Row::new([Cell::from("Thread not requested yet.")
+                .style(Style::new().fg(scheme.primary.into_color()))
+                .column_span(widths.len() as u16)])]
+        }
+        Loadable::Loading => {
+            let throbber = Throbber::default()
+                .throbber_style(Style::new().fg(scheme.primary.into_color()))
+                .to_symbol_span(&state.throbber);
+
+            let line = Cell::from(Line::from(vec![
+                throbber,
+                Span::styled(
+                    "Loading thread...",
+                    Style::new().fg(scheme.primary.into_color()),
+                ),
+            ]))
+            .column_span(widths.len() as u16);
+
+            vec![Row::new([line])]
+        }
+        Loadable::Loaded(mails) => mails
+            .iter()
+            .map(|mail| {
+                let unread_symbol = if !mail.keywords.contains(&MailKeyword::Seen) {
+                    MAIL_UNREAD_ICON
+                } else {
+                    PLACEHOLDER
+                };
+
+                let subject = mail
+                    .subject
+                    .as_ref()
+                    .map(|s| s.as_str())
+                    .unwrap_or("<No subject>");
+
+                let received_at = mail.received_at.format("%b %e, %Y").to_string();
+
+                Row::new([
+                    Cell::from(unread_symbol)
+                        .style(Style::new().fg(scheme.primary_container.into_color())),
+                    Cell::from(subject).style(Style::new().fg(scheme.primary.into_color())),
+                    Cell::from(received_at)
+                        .style(Style::new().fg(scheme.on_tertiary_container.into_color())),
+                ])
+            })
+            .collect(),
+        Loadable::Error(_) => {
+            vec![Row::new([Cell::new("Couldn't fetch thread")
+                .column_span(widths.len() as u16)
+                .style(Style::new().fg(scheme.error.into_color()))])]
+        }
+    };
+
+    frame.render_stateful_widget(
+        Table::new(rows, widths).row_highlight_style(
+            Style::new()
+                .bg(scheme.primary_container.into_color())
+                .fg(scheme.on_primary_container.into_color()),
+        ),
+        area,
+        &mut column.state,
+    );
 }
 
 fn render_mail_preview(
