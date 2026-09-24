@@ -173,7 +173,12 @@ impl MailfsColumn for MailboxColumn {
             }
             (None, Some(idx)) => {
                 if idx == 0 {
-                    let last_mailbox_idx = self.mailboxes_len() - 1;
+                    let mailboxes_len = self.mailboxes_len();
+                    if mailboxes_len == 0 {
+                        return;
+                    }
+
+                    let last_mailbox_idx = mailboxes_len - 1;
                     self.mailbox_state.select(Some(last_mailbox_idx));
 
                     self.mail_state.select(None);
