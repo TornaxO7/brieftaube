@@ -11,7 +11,7 @@ pub mod prompt;
 // pub mod reader;
 pub mod statusbar;
 
-use tokio::sync::{Mutex, Notify, RwLock, oneshot};
+use tokio::sync::{RwLock, oneshot, watch};
 pub use types::*;
 
 use crate::{
@@ -24,7 +24,7 @@ use color_eyre::eyre;
 use crossterm::event::Event;
 use futures::{FutureExt, StreamExt};
 use ratatui::{DefaultTerminal, Frame, layout::Rect};
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, time::Duration};
 use task_manager::TaskManager;
 use tracing::error;
 
@@ -65,7 +65,7 @@ pub struct Ui {
     needs_full_redraw: bool,
     task_manager: TaskManager,
 
-    repos: HashMap<Username, Arc<Mutex<RepositoryState>>>,
+    repos: HashMap<Username, watch::Receiver<RepositoryState>>,
 
     mailfs: mailfs::State,
     palette: palette::State,
@@ -186,19 +186,10 @@ impl Ui {
             Message::MailfsRequest(message_request) => {
                 match message_request {
                     mailfs::MessageRequest::GetAccountsOf(user_config) => {
-                        let notifier = Arc::new(Notify::new());
-
-                        let state =
-                            Arc::new(Mutex::new(RepositoryState::Loading(notifier.clone())));
-
-                        self.repos
-                            .insert(user_config.username.clone(), state.clone());
-
-                        self.task_manager.spawn(mailfs_repository_create(
-                            user_config,
-                            notifier,
-                            state,
-                        ));
+                        let (tx, rx) = watch::channel(RepositoryState::Loading);
+                        self.repos.insert(user_config.username.clone(), rx);
+                        self.task_manager
+                            .spawn(mailfs_repository_create(user_config, tx));
                     }
                     mailfs::MessageRequest::GetChildMailboxes {
                         username,
@@ -208,17 +199,9 @@ impl Ui {
                         let state = self.repos.get(&username).unwrap().clone();
 
                         self.task_manager.spawn(async move {
-                            let handler = loop {
-                                match state.lock().await.clone() {
-                                    RepositoryState::Loading(notify) => {
-                                        notify.notified().await;
-                                    }
-                                    RepositoryState::Loaded(handler) => break handler.clone(),
-                                    RepositoryState::Error(err) => {
-                                        error!("Can't get handler: {err}");
-                                        return vec![];
-                                    }
-                                }
+                            let handler = match get_handler(state).await {
+                                Ok(handler) => handler,
+                                Err(()) => return vec![],
                             };
 
                             let (tx, rx) = oneshot::channel();
@@ -257,17 +240,9 @@ impl Ui {
                         let state = self.repos.get(&username).unwrap().clone();
 
                         self.task_manager.spawn(async move {
-                            let handler = loop {
-                                match state.lock().await.clone() {
-                                    RepositoryState::Loading(notify) => {
-                                        notify.notified().await;
-                                    }
-                                    RepositoryState::Loaded(handler) => break handler.clone(),
-                                    RepositoryState::Error(err) => {
-                                        error!("Can't get handler: {err}");
-                                        return vec![];
-                                    }
-                                }
+                            let handler = match get_handler(state).await {
+                                Ok(handler) => handler,
+                                Err(()) => return vec![],
                             };
 
                             let (tx, rx) = oneshot::channel();
@@ -309,17 +284,9 @@ impl Ui {
                         let state = self.repos.get(&username).unwrap().clone();
 
                         self.task_manager.spawn(async move {
-                            let handler = loop {
-                                match state.lock().await.clone() {
-                                    RepositoryState::Loading(notify) => {
-                                        notify.notified().await;
-                                    }
-                                    RepositoryState::Loaded(handler) => break handler.clone(),
-                                    RepositoryState::Error(err) => {
-                                        error!("Can't get handler: {err}");
-                                        return vec![];
-                                    }
-                                }
+                            let handler = match get_handler(state).await {
+                                Ok(handler) => handler,
+                                Err(()) => return vec![],
                             };
 
                             let (tx, rx) = oneshot::channel();
@@ -356,17 +323,9 @@ impl Ui {
                         let state = self.repos.get(&username).unwrap().clone();
 
                         self.task_manager.spawn(async move {
-                            let handler = loop {
-                                match state.lock().await.clone() {
-                                    RepositoryState::Loading(notify) => {
-                                        notify.notified().await;
-                                    }
-                                    RepositoryState::Loaded(handler) => break handler.clone(),
-                                    RepositoryState::Error(err) => {
-                                        error!("Can't get handler: {err}");
-                                        return vec![];
-                                    }
-                                }
+                            let handler = match get_handler(state).await {
+                                Ok(handler) => handler,
+                                Err(()) => return vec![],
                             };
 
                             let (tx, rx) = oneshot::channel();
@@ -411,8 +370,7 @@ pub trait Layer<LayerMsg, ParentLayerMsg = Message> {
 
 async fn mailfs_repository_create(
     user_config: config::UserConfig,
-    notifier: Arc<Notify>,
-    state: Arc<Mutex<RepositoryState>>,
+    tx: watch::Sender<RepositoryState>,
 ) -> Vec<Message> {
     let remote = match user_config.backend {
         config::Backend::Jmap => {
@@ -429,7 +387,7 @@ async fn mailfs_repository_create(
                 Err(err) => {
                     error!("Couldn't connect to jmap account: {}", err);
 
-                    *state.lock().await = RepositoryState::Error(err.to_string());
+                    tx.send_replace(RepositoryState::Error(err.to_string()));
 
                     return vec![
                         mailfs::Message::SetUserAccounts {
@@ -459,8 +417,9 @@ async fn mailfs_repository_create(
         })
         .collect();
 
-    *state.lock().await = RepositoryState::Loaded(RepositoryHandler::new(caches, remote));
-    notifier.notify_waiters();
+    tx.send_replace(RepositoryState::Loaded(RepositoryHandler::new(
+        caches, remote,
+    )));
 
     vec![
         mailfs::Message::SetUserAccounts {
@@ -471,9 +430,28 @@ async fn mailfs_repository_create(
     ]
 }
 
+async fn get_handler(
+    mut waiter: watch::Receiver<RepositoryState>,
+) -> Result<RepositoryHandler, ()> {
+    let state = waiter
+        .wait_for(|current_state| !matches!(current_state, RepositoryState::Loading))
+        .await
+        .expect("Repository creation should finish.")
+        .clone();
+
+    match state {
+        RepositoryState::Loading => unreachable!(),
+        RepositoryState::Loaded(handler) => Ok(handler.clone()),
+        RepositoryState::Error(err) => {
+            error!("Can't get handler: {err}");
+            Err(())
+        }
+    }
+}
+
 #[derive(Clone)]
 enum RepositoryState {
-    Loading(Arc<Notify>),
+    Loading,
     Loaded(RepositoryHandler),
     Error(String),
 }
