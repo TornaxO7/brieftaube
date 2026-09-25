@@ -16,7 +16,7 @@ impl RootMailsRemote for JmapAccount {
         mailbox: &MailboxId,
         window: &QueryWindow,
         calculate_total: bool,
-    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<(MailId, MailDataCore)>>>> {
+    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<MailDataCore>>>> {
         let mut response = {
             let mut request = self.build_request();
 
@@ -57,11 +57,7 @@ impl RootMailsRemote for JmapAccount {
             value: get_mails_response
                 .take_list()
                 .into_iter()
-                .map(|mut mail| {
-                    let id = mail.take_id().into();
-                    let data = MailDataCore::from_get_request(mail);
-                    (id, data)
-                })
+                .map(MailDataCore::from_get_request)
                 .collect(),
             state: get_mails_response.take_state().into(),
         };

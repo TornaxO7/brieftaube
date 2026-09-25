@@ -38,7 +38,7 @@ pub trait MailCache {
         let result = self.get_mails_core(&[id.clone()]).await?;
 
         if result.missing.is_empty() {
-            Ok(Some(result.value.into_iter().next().unwrap().1))
+            Ok(Some(result.value.into_iter().next().unwrap()))
         } else {
             Ok(None)
         }
@@ -47,7 +47,7 @@ pub trait MailCache {
     async fn get_mails_core(
         &self,
         ids: &[MailId],
-    ) -> Result<cache::GetBatchResult<HashMap<MailId, MailDataCore>, Vec<MailId>>>;
+    ) -> Result<cache::GetBatchResult<Vec<MailDataCore>, Vec<MailId>>>;
 
     async fn get_mail_preview(&self, id: &MailId) -> Result<Option<MailDataPreview>>
     where
@@ -56,7 +56,7 @@ pub trait MailCache {
         let result = self.get_mails_preview(&[id.clone()]).await?;
 
         if result.missing.is_empty() {
-            Ok(Some(result.value.into_iter().next().unwrap().1))
+            Ok(Some(result.value.into_iter().next().unwrap()))
         } else {
             Ok(None)
         }
@@ -65,12 +65,11 @@ pub trait MailCache {
     async fn get_mails_preview(
         &self,
         ids: &[MailId],
-    ) -> Result<cache::GetBatchResult<HashMap<MailId, MailDataPreview>, Vec<MailId>>>;
+    ) -> Result<cache::GetBatchResult<Vec<MailDataPreview>, Vec<MailId>>>;
 
-    // TODO: Change `mails` to `Vec<MailDataCore>`
-    async fn upsert_mails_core(&mut self, mails: Vec<(MailId, MailDataCore)>) -> Result<()>;
+    async fn upsert_mails_core(&mut self, mails: Vec<MailDataCore>) -> Result<()>;
 
-    async fn upsert_mails_preview(&mut self, mails: Vec<(MailId, MailDataPreview)>) -> Result<()>;
+    async fn upsert_mails_preview(&mut self, mails: Vec<MailDataPreview>) -> Result<()>;
 
     async fn get_mail_text_body(&self, id: &MailId) -> Result<Option<MailDataTextBody>>
     where
@@ -79,7 +78,7 @@ pub trait MailCache {
         let result = self.get_mails_text_body(&[id.clone()]).await?;
 
         if !result.value.is_empty() {
-            Ok(Some(result.value.into_iter().next().unwrap().1))
+            Ok(Some(result.value.into_iter().next().unwrap()))
         } else {
             Ok(None)
         }
@@ -88,14 +87,11 @@ pub trait MailCache {
     async fn get_mails_text_body(
         &self,
         ids: &[MailId],
-    ) -> Result<cache::GetBatchResult<HashMap<MailId, MailDataTextBody>, Vec<MailId>>>;
+    ) -> Result<cache::GetBatchResult<Vec<MailDataTextBody>, Vec<MailId>>>;
 
     async fn upsert_mail_text_body(&mut self, id: &MailId, body: MailDataTextBody) -> Result<()>;
 
-    async fn upsert_mails_text_body(
-        &mut self,
-        text_bodies: &[(MailId, MailDataTextBody)],
-    ) -> Result<()>;
+    async fn upsert_mails_text_body(&mut self, text_bodies: &[MailDataTextBody]) -> Result<()>;
 
     async fn get_mail_html_body(&self, id: &MailId) -> Result<Option<MailDataHtmlBody>>
     where
@@ -104,7 +100,7 @@ pub trait MailCache {
         let result = self.get_mails_html_body(&[id.clone()]).await?;
 
         if !result.value.is_empty() {
-            Ok(Some(result.value.into_iter().next().unwrap().1))
+            Ok(Some(result.value.into_iter().next().unwrap()))
         } else {
             Ok(None)
         }
@@ -113,14 +109,11 @@ pub trait MailCache {
     async fn get_mails_html_body(
         &self,
         ids: &[MailId],
-    ) -> Result<cache::GetBatchResult<HashMap<MailId, MailDataHtmlBody>, Vec<MailId>>>;
+    ) -> Result<cache::GetBatchResult<Vec<MailDataHtmlBody>, Vec<MailId>>>;
 
     async fn upsert_mail_html_body(&mut self, id: &MailId, body: MailDataHtmlBody) -> Result<()>;
 
-    async fn upsert_mails_html_body(
-        &mut self,
-        html_bodies: &[(MailId, MailDataHtmlBody)],
-    ) -> Result<()>;
+    async fn upsert_mails_html_body(&mut self, html_bodies: &[MailDataHtmlBody]) -> Result<()>;
 
     async fn evict_mails(&mut self, mails: &[MailId]) -> Result<()>;
 }
@@ -134,12 +127,7 @@ pub trait MailRemote {
         let result = self.fetch_mails_core(&[id.clone()]).await?;
 
         Ok(remote::GetOneResult {
-            value: result
-                .values
-                .into_iter()
-                .next()
-                .map(|(_id, data)| data)
-                .expect("Id is valid"),
+            value: result.values.into_iter().next().expect("Id is valid"),
             state: result.state,
         })
     }
@@ -147,7 +135,7 @@ pub trait MailRemote {
     async fn fetch_mails_core(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataCore>, Vec<MailId>>>;
+    ) -> Result<remote::GetBatchResult<Vec<MailDataCore>, Vec<MailId>>>;
 
     async fn fetch_mail_preview(&self, id: MailId) -> Result<remote::GetOneResult<MailDataPreview>>
     where
@@ -156,12 +144,7 @@ pub trait MailRemote {
         let result = self.fetch_mails_preview(&[id.clone()]).await?;
 
         Ok(remote::GetOneResult {
-            value: result
-                .values
-                .into_iter()
-                .next()
-                .map(|(_id, data)| data)
-                .expect("Id is valid"),
+            value: result.values.into_iter().next().expect("Id is valid"),
             state: result.state,
         })
     }
@@ -169,17 +152,17 @@ pub trait MailRemote {
     async fn fetch_mails_preview(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataPreview>, Vec<MailId>>>;
+    ) -> Result<remote::GetBatchResult<Vec<MailDataPreview>, Vec<MailId>>>;
 
     async fn fetch_mails_text_body(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataTextBody>, Vec<MailId>>>;
+    ) -> Result<remote::GetBatchResult<Vec<MailDataTextBody>, Vec<MailId>>>;
 
     async fn fetch_mails_html_body(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataHtmlBody>, Vec<MailId>>>;
+    ) -> Result<remote::GetBatchResult<Vec<MailDataHtmlBody>, Vec<MailId>>>;
 
     async fn fetch_mail_updates(
         &self,
@@ -189,10 +172,10 @@ pub trait MailRemote {
         html: &[MailId],
     ) -> Result<
         remote::GetOneResult<(
-            Vec<(MailId, MailDataCore)>,
-            Vec<(MailId, MailDataPreview)>,
-            Vec<(MailId, MailDataTextBody)>,
-            Vec<(MailId, MailDataHtmlBody)>,
+            Vec<MailDataCore>,
+            Vec<MailDataPreview>,
+            Vec<MailDataTextBody>,
+            Vec<MailDataHtmlBody>,
         )>,
     >;
 
@@ -227,12 +210,7 @@ pub trait MailRemote {
         let result = self.fetch_mails_text_body(&[id.clone()]).await?;
 
         Ok(remote::GetOneResult {
-            value: result
-                .values
-                .into_iter()
-                .next()
-                .map(|(_id, text_body)| text_body)
-                .expect("Id is valid"),
+            value: result.values.into_iter().next().expect("Id is valid"),
             state: result.state,
         })
     }
@@ -247,12 +225,7 @@ pub trait MailRemote {
         let result = self.fetch_mails_html_body(&[id.clone()]).await?;
 
         Ok(remote::GetOneResult {
-            value: result
-                .values
-                .into_iter()
-                .next()
-                .map(|(_id, html_body)| html_body)
-                .expect("MailId is valid"),
+            value: result.values.into_iter().next().expect("MailId is valid"),
             state: result.state,
         })
     }
@@ -294,7 +267,7 @@ pub trait RootMailsRemote: MailRemote {
         mailbox: &MailboxId,
         window: &QueryWindow,
         calculate_total: bool,
-    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<(MailId, MailDataCore)>>>>;
+    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<MailDataCore>>>>;
 
     async fn fetch_root_mails_changes(
         &self,
@@ -396,7 +369,7 @@ pub trait ThreadRemote {
     async fn fetch_thread(
         &self,
         id: &ThreadId,
-    ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<(MailId, MailDataCore)>>>>;
+    ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<MailDataCore>>>>;
 
     async fn fetch_threads(
         &self,

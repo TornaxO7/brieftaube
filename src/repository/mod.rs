@@ -138,7 +138,7 @@ impl Repository {
                         ..
                     } = cache_lock.get_mails_core(&result.updated).await?;
 
-                    cached_datas.into_iter().map(|(id, _data)| id).collect()
+                    cached_datas.into_iter().map(|data| data.id).collect()
                 };
                 let updated_mail_preview_ids: Vec<MailId> = {
                     let cache::GetBatchResult {
@@ -146,7 +146,7 @@ impl Repository {
                         ..
                     } = cache_lock.get_mails_preview(&result.updated).await?;
 
-                    cached_datas.into_iter().map(|(id, _data)| id).collect()
+                    cached_datas.into_iter().map(|data| data.id).collect()
                 };
                 let updated_mail_text_body_ids: Vec<MailId> = {
                     let cache::GetBatchResult {
@@ -154,10 +154,7 @@ impl Repository {
                         ..
                     } = cache_lock.get_mails_text_body(&result.updated).await?;
 
-                    cached_text_bodies
-                        .into_iter()
-                        .map(|(id, _content)| id)
-                        .collect()
+                    cached_text_bodies.into_iter().map(|data| data.id).collect()
                 };
                 let updated_mail_html_body_ids: Vec<MailId> = {
                     let cache::GetBatchResult {
@@ -165,10 +162,7 @@ impl Repository {
                         ..
                     } = cache_lock.get_mails_html_body(&result.updated).await?;
 
-                    cache_html_bodies
-                        .into_iter()
-                        .map(|(id, _html_body)| id)
-                        .collect()
+                    cache_html_bodies.into_iter().map(|data| data.id).collect()
                 };
 
                 let remote::GetOneResult {
@@ -346,16 +340,11 @@ impl Repository {
                     })
                     .collect();
 
-                let tmp_mails: Vec<(MailId, MailDataCore)> =
-                    new_thread_mails.values().fold(vec![], |mut prev, mails| {
-                        for mail in mails {
-                            prev.push((mail.id.clone(), mail.clone()));
-                        }
-                        prev
-                    });
+                let all_fetched_mails: Vec<MailDataCore> =
+                    new_thread_mails.values().cloned().flatten().collect();
 
                 cache_lock.upsert_threads(&new_thread_mails_ids).await?;
-                cache_lock.upsert_mails_core(tmp_mails).await?;
+                cache_lock.upsert_mails_core(all_fetched_mails).await?;
                 cache_lock.set_thread_state(new_thread_get_state).await?;
             }
 

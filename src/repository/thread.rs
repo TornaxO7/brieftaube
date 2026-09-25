@@ -58,11 +58,7 @@ impl Repository {
                     .await?;
 
                 if opt_thread_mails.missing.is_empty() {
-                    let thread_mails = thread_mail_ids
-                        .into_iter()
-                        .map(|id| opt_thread_mails.value.get(&id).cloned().unwrap())
-                        .collect();
-                    return Ok(thread_mails);
+                    return Ok(opt_thread_mails.value);
                 } else {
                     let result = self
                         .remote
@@ -84,12 +80,7 @@ impl Repository {
 
                     debug_assert!(thread_mail_cores_result.missing.is_empty());
 
-                    let thread_mail_cores = thread_mail_ids
-                        .into_iter()
-                        .map(|id| thread_mail_cores_result.value.get(&id).cloned().unwrap())
-                        .collect();
-
-                    return Ok(thread_mail_cores);
+                    return Ok(thread_mail_cores_result.value);
                 }
             }
             None => {
@@ -115,17 +106,12 @@ impl Repository {
                     .await?;
 
                 let thread_mail_ids: Vec<MailId> =
-                    thread_mails.iter().map(|(id, _data)| id.clone()).collect();
+                    thread_mails.iter().map(|data| data.id.clone()).collect();
 
-                let thread_mail_datas: Vec<MailDataCore> = thread_mails
-                    .iter()
-                    .map(|(_id, data)| data.clone())
-                    .collect();
-
-                cache_lock.upsert_mails_core(thread_mails).await?;
+                cache_lock.upsert_mails_core(thread_mails.clone()).await?;
                 cache_lock.upsert_thread(id, thread_mail_ids).await?;
 
-                Ok(thread_mail_datas)
+                Ok(thread_mails)
             }
         }
     }

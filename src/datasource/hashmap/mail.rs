@@ -8,7 +8,6 @@ use crate::{
 };
 use async_trait::async_trait;
 use color_eyre::Result;
-use std::collections::HashMap;
 
 #[async_trait]
 impl MailCache for HashMapDataSource {
@@ -24,14 +23,14 @@ impl MailCache for HashMapDataSource {
     async fn get_mails_core(
         &self,
         ids: &[MailId],
-    ) -> Result<cache::GetBatchResult<HashMap<MailId, MailDataCore>, Vec<MailId>>> {
-        let mut datas = HashMap::new();
+    ) -> Result<cache::GetBatchResult<Vec<MailDataCore>, Vec<MailId>>> {
+        let mut datas = Vec::with_capacity(ids.len());
         let mut missing = Vec::new();
 
         for id in ids {
             match self.mails_core.get(id) {
                 Some(core) => {
-                    datas.insert(id.clone(), core.clone());
+                    datas.push(core.clone());
                 }
                 None => missing.push(id.clone()),
             }
@@ -46,14 +45,14 @@ impl MailCache for HashMapDataSource {
     async fn get_mails_preview(
         &self,
         ids: &[MailId],
-    ) -> Result<cache::GetBatchResult<HashMap<MailId, MailDataPreview>, Vec<MailId>>> {
-        let mut datas = HashMap::new();
+    ) -> Result<cache::GetBatchResult<Vec<MailDataPreview>, Vec<MailId>>> {
+        let mut datas = Vec::with_capacity(ids.len());
         let mut missing = Vec::new();
 
         for id in ids {
             match self.mails_preview.get(id) {
                 Some(core) => {
-                    datas.insert(id.clone(), core.clone());
+                    datas.push(core.clone());
                 }
                 None => missing.push(id.clone()),
             }
@@ -68,14 +67,14 @@ impl MailCache for HashMapDataSource {
     async fn get_mails_text_body(
         &self,
         ids: &[MailId],
-    ) -> Result<cache::GetBatchResult<HashMap<MailId, MailDataTextBody>, Vec<MailId>>> {
-        let mut cached_text_bodies = HashMap::new();
+    ) -> Result<cache::GetBatchResult<Vec<MailDataTextBody>, Vec<MailId>>> {
+        let mut cached_text_bodies = Vec::with_capacity(ids.len());
         let mut missing = Vec::new();
 
         for id in ids {
             match self.mail_text_body.get(&id) {
                 Some(text_body) => {
-                    cached_text_bodies.insert(id.clone(), text_body.clone());
+                    cached_text_bodies.push(text_body.clone());
                 }
                 None => missing.push(id.clone()),
             }
@@ -92,12 +91,10 @@ impl MailCache for HashMapDataSource {
         Ok(())
     }
 
-    async fn upsert_mails_text_body(
-        &mut self,
-        text_bodies: &[(MailId, MailDataTextBody)],
-    ) -> Result<()> {
-        for (id, text_body) in text_bodies {
-            self.mail_text_body.insert(id.clone(), text_body.clone());
+    async fn upsert_mails_text_body(&mut self, text_bodies: &[MailDataTextBody]) -> Result<()> {
+        for text_body in text_bodies {
+            self.mail_text_body
+                .insert(text_body.id.clone(), text_body.clone());
         }
         Ok(())
     }
@@ -105,14 +102,14 @@ impl MailCache for HashMapDataSource {
     async fn get_mails_html_body(
         &self,
         ids: &[MailId],
-    ) -> Result<cache::GetBatchResult<HashMap<MailId, MailDataHtmlBody>, Vec<MailId>>> {
-        let mut cached_html_bodies = HashMap::new();
+    ) -> Result<cache::GetBatchResult<Vec<MailDataHtmlBody>, Vec<MailId>>> {
+        let mut cached_html_bodies = Vec::with_capacity(ids.len());
         let mut missing = Vec::new();
 
         for id in ids {
             match self.mail_html_body.get(&id) {
                 Some(html_body) => {
-                    cached_html_bodies.insert(id.clone(), html_body.clone());
+                    cached_html_bodies.push(html_body.clone());
                 }
                 None => missing.push(id.clone()),
             }
@@ -129,12 +126,10 @@ impl MailCache for HashMapDataSource {
         Ok(())
     }
 
-    async fn upsert_mails_html_body(
-        &mut self,
-        html_bodies: &[(MailId, MailDataHtmlBody)],
-    ) -> Result<()> {
-        for (id, html_body) in html_bodies {
-            self.mail_html_body.insert(id.clone(), html_body.clone());
+    async fn upsert_mails_html_body(&mut self, html_bodies: &[MailDataHtmlBody]) -> Result<()> {
+        for html_body in html_bodies {
+            self.mail_html_body
+                .insert(html_body.id.clone(), html_body.clone());
         }
         Ok(())
     }
@@ -159,17 +154,17 @@ impl MailCache for HashMapDataSource {
         Ok(())
     }
 
-    async fn upsert_mails_core(&mut self, mails: Vec<(MailId, MailDataCore)>) -> Result<()> {
-        for (id, mail) in mails {
-            self.mails_core.insert(id, mail);
+    async fn upsert_mails_core(&mut self, mails: Vec<MailDataCore>) -> Result<()> {
+        for mail in mails {
+            self.mails_core.insert(mail.id.clone(), mail);
         }
 
         Ok(())
     }
 
-    async fn upsert_mails_preview(&mut self, mails: Vec<(MailId, MailDataPreview)>) -> Result<()> {
-        for (id, mail) in mails {
-            self.mails_preview.insert(id, mail);
+    async fn upsert_mails_preview(&mut self, mails: Vec<MailDataPreview>) -> Result<()> {
+        for mail in mails {
+            self.mails_preview.insert(mail.id.clone(), mail);
         }
         Ok(())
     }

@@ -87,7 +87,7 @@ impl Repository {
                     .await?;
 
                 cache_lock
-                    .upsert_mails_core(vec![(id, result.value.clone())])
+                    .upsert_mails_core(vec![result.value.clone()])
                     .await?;
 
                 Ok(result.value)
@@ -125,7 +125,7 @@ impl Repository {
                     .await?;
 
                 cache_lock
-                    .upsert_mails_preview(vec![(id, result.value.clone())])
+                    .upsert_mails_preview(vec![result.value.clone()])
                     .await?;
 
                 Ok(result.value)
@@ -250,11 +250,6 @@ impl Repository {
                 .await?;
 
             if opt_root_mails_data.missing.is_empty() {
-                let root_mails_data = root_mails
-                    .into_iter()
-                    .map(|id| opt_root_mails_data.value.get(&id).cloned().unwrap())
-                    .collect();
-
                 let total = self
                     .caches
                     .get(&account_id)
@@ -264,7 +259,7 @@ impl Repository {
                     .calculate_total_root_mails(&id)
                     .await?;
 
-                return Ok((root_mails_data, total));
+                return Ok((opt_root_mails_data.value, total));
             } else {
                 let missing_mails_data = self
                     .remote
@@ -285,14 +280,9 @@ impl Repository {
 
                 debug_assert!(result.missing.is_empty());
 
-                let root_mails_core = root_mails
-                    .into_iter()
-                    .map(|id| result.value.get(&id).cloned().unwrap())
-                    .collect();
-
                 let total = cache_lock.calculate_total_root_mails(&id).await?;
 
-                return Ok((root_mails_core, total));
+                return Ok((result.value, total));
             }
         }
 
@@ -323,16 +313,14 @@ impl Repository {
         let cache_root_mails: Vec<(MailId, usize)> = root_mails
             .iter()
             .enumerate()
-            .map(|(idx, (id, _root_mail_core))| {
+            .map(|(idx, root_mail_core)| {
                 let position = window.start as usize + idx;
-                (id.clone(), position)
+                (root_mail_core.id.clone(), position)
             })
             .collect();
 
         cache_lock.insert_root_mails(&id, cache_root_mails).await?;
         cache_lock.upsert_mails_core(root_mails.clone()).await?;
-
-        let root_mails = root_mails.into_iter().map(|(_id, data)| data).collect();
 
         Ok((root_mails, total))
     }

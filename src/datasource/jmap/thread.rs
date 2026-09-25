@@ -16,7 +16,7 @@ impl ThreadRemote for JmapAccount {
     async fn fetch_thread(
         &self,
         id: &ThreadId,
-    ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<(MailId, MailDataCore)>>>> {
+    ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<MailDataCore>>>> {
         let mut response = {
             let mut request = self.build_request();
 
@@ -48,11 +48,7 @@ impl ThreadRemote for JmapAccount {
             value: get_email_response
                 .take_list()
                 .into_iter()
-                .map(|mut mail| {
-                    let id = mail.take_id().into();
-                    let data = MailDataCore::from_get_request(mail);
-                    (id, data)
-                })
+                .map(MailDataCore::from_get_request)
                 .collect(),
             state: get_email_response.take_state().into(),
         };

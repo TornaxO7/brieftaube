@@ -8,14 +8,13 @@ use crate::{
 };
 use async_trait::async_trait;
 use color_eyre::Result;
-use std::collections::HashMap;
 
 #[async_trait]
 impl MailRemote for JmapAccount {
     async fn fetch_mails_core(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataCore>, Vec<MailId>>> {
+    ) -> Result<remote::GetBatchResult<Vec<MailDataCore>, Vec<MailId>>> {
         let mut response = {
             let mut request = self.build_request();
 
@@ -30,11 +29,7 @@ impl MailRemote for JmapAccount {
         let values = response
             .take_list()
             .into_iter()
-            .map(|mut email| {
-                let id = email.take_id().into();
-                let data = MailDataCore::from_get_request(email);
-                (id, data)
-            })
+            .map(MailDataCore::from_get_request)
             .collect();
 
         let not_found = response.take_not_found().into_iter().map(MailId).collect();
@@ -49,7 +44,7 @@ impl MailRemote for JmapAccount {
     async fn fetch_mails_preview(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataPreview>, Vec<MailId>>> {
+    ) -> Result<remote::GetBatchResult<Vec<MailDataPreview>, Vec<MailId>>> {
         let mut response = {
             let mut request = self.build_request();
 
@@ -64,12 +59,7 @@ impl MailRemote for JmapAccount {
         let values = response
             .take_list()
             .into_iter()
-            .map(|mut email| {
-                let id = email.take_id().into();
-                let data = MailDataPreview::from_get_request(email);
-
-                (id, data)
-            })
+            .map(MailDataPreview::from_get_request)
             .collect();
 
         let not_found = response.take_not_found().into_iter().map(MailId).collect();
@@ -84,7 +74,7 @@ impl MailRemote for JmapAccount {
     async fn fetch_mails_text_body(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataTextBody>, Vec<MailId>>> {
+    ) -> Result<remote::GetBatchResult<Vec<MailDataTextBody>, Vec<MailId>>> {
         let mut response = {
             let mut request = self.build_request();
 
@@ -104,12 +94,7 @@ impl MailRemote for JmapAccount {
         let body = response
             .list()
             .into_iter()
-            .map(|server_mail| {
-                let id: MailId = server_mail.id().unwrap().into();
-                let body = MailDataTextBody::new(server_mail).unwrap();
-
-                (id, body)
-            })
+            .map(|mail| MailDataTextBody::new(mail).unwrap())
             .collect();
 
         let not_found = response.take_not_found().into_iter().map(MailId).collect();
@@ -124,7 +109,7 @@ impl MailRemote for JmapAccount {
     async fn fetch_mails_html_body(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetBatchResult<HashMap<MailId, MailDataHtmlBody>, Vec<MailId>>> {
+    ) -> Result<remote::GetBatchResult<Vec<MailDataHtmlBody>, Vec<MailId>>> {
         let mut response = {
             let mut request = self.build_request();
 
@@ -144,12 +129,7 @@ impl MailRemote for JmapAccount {
         let values = response
             .list()
             .into_iter()
-            .map(|server_mail| {
-                let id: MailId = server_mail.id().unwrap().into();
-                let body = MailDataHtmlBody::new(server_mail).unwrap();
-
-                (id, body)
-            })
+            .map(|mail| MailDataHtmlBody::new(mail).unwrap())
             .collect();
 
         let not_found = response.take_not_found().into_iter().map(MailId).collect();
@@ -169,10 +149,10 @@ impl MailRemote for JmapAccount {
         html: &[MailId],
     ) -> Result<
         remote::GetOneResult<(
-            Vec<(MailId, MailDataCore)>,
-            Vec<(MailId, MailDataPreview)>,
-            Vec<(MailId, MailDataTextBody)>,
-            Vec<(MailId, MailDataHtmlBody)>,
+            Vec<MailDataCore>,
+            Vec<MailDataPreview>,
+            Vec<MailDataTextBody>,
+            Vec<MailDataHtmlBody>,
         )>,
     > {
         let mut response = {
@@ -221,11 +201,7 @@ impl MailRemote for JmapAccount {
             let fetched_html = response
                 .take_list()
                 .into_iter()
-                .map(|mut html_mail| {
-                    let id: MailId = html_mail.take_id().into();
-                    let html = MailDataHtmlBody::new(&html_mail).unwrap();
-                    (id, html)
-                })
+                .map(|mail| MailDataHtmlBody::new(&mail).unwrap())
                 .collect();
 
             (fetched_html, response.take_state().into())
@@ -238,11 +214,7 @@ impl MailRemote for JmapAccount {
             .unwrap()
             .take_list()
             .into_iter()
-            .map(|mut text_mail| {
-                let id = text_mail.take_id().into();
-                let text = MailDataTextBody::new(&text_mail).unwrap();
-                (id, text)
-            })
+            .map(|mail| MailDataTextBody::new(&mail).unwrap())
             .collect();
 
         let fetched_mail_preview = response
@@ -252,11 +224,7 @@ impl MailRemote for JmapAccount {
             .unwrap()
             .take_list()
             .into_iter()
-            .map(|mut mail| {
-                let id = mail.take_id().into();
-                let data = MailDataPreview::from_get_request(mail);
-                (id, data)
-            })
+            .map(MailDataPreview::from_get_request)
             .collect();
 
         let fetched_mail_core = response
@@ -266,11 +234,7 @@ impl MailRemote for JmapAccount {
             .unwrap()
             .take_list()
             .into_iter()
-            .map(|mut mail| {
-                let id = mail.take_id().into();
-                let data = MailDataCore::from_get_request(mail);
-                (id, data)
-            })
+            .map(MailDataCore::from_get_request)
             .collect();
 
         Ok(remote::GetOneResult {
