@@ -11,13 +11,13 @@ pub mod prompt;
 // pub mod reader;
 pub mod statusbar;
 
-use tokio::sync::{RwLock, oneshot, watch};
+use tokio::sync::{RwLock, watch};
 pub use types::*;
 
 use crate::{
     config::{self, Username},
     datasource::{self, Cache, RemoteSession, jmap::JmapDescriptor},
-    repository::{self, RepositoryHandler},
+    repository::RepositoryHandler,
     ui::palette::PaletteEntry,
 };
 use color_eyre::eyre;
@@ -204,27 +204,14 @@ impl Ui {
                                 Err(()) => return vec![],
                             };
 
-                            let (tx, rx) = oneshot::channel();
-
-                            handler
-                                .execute(
-                                    repository::mailbox::Command {
-                                        account_id: account_id.clone(),
-                                        kind: repository::mailbox::CommandKind::GetChildren {
-                                            id: parent_id.clone(),
-                                            tx,
-                                        },
-                                    }
-                                    .into(),
-                                )
-                                .await;
-
                             vec![
                                 mailfs::Message::SetChildMailboxes {
                                     username,
-                                    account_id,
-                                    parent_id,
-                                    child_mailboxes: rx.await.unwrap(),
+                                    account_id: account_id.clone(),
+                                    parent_id: parent_id.clone(),
+                                    child_mailboxes: handler
+                                        .get_child_mailboxes(account_id, parent_id)
+                                        .await,
                                 }
                                 .into(),
                             ]
@@ -245,32 +232,15 @@ impl Ui {
                                 Err(()) => return vec![],
                             };
 
-                            let (tx, rx) = oneshot::channel();
-
-                            handler
-                                .execute(
-                                    repository::mail::Command {
-                                        account_id: account_id.clone(),
-                                        kind: repository::mail::CommandKind::QueryRootMails {
-                                            mailbox: mailbox.clone(),
-                                            window: window.clone(),
-                                            calculate_total,
-                                            tx,
-                                        },
-                                    }
-                                    .into(),
-                                )
-                                .await;
-
-                            tracing::debug!("huh?");
-
                             vec![
                                 mailfs::Message::SetMails {
                                     username,
-                                    account_id,
-                                    mailbox,
-                                    window,
-                                    result: rx.await.unwrap(),
+                                    account_id: account_id.clone(),
+                                    mailbox: mailbox.clone(),
+                                    window: window.clone(),
+                                    result: handler
+                                        .query_mails(account_id, mailbox, window, calculate_total)
+                                        .await,
                                 }
                                 .into(),
                             ]
@@ -289,27 +259,14 @@ impl Ui {
                                 Err(()) => return vec![],
                             };
 
-                            let (tx, rx) = oneshot::channel();
-
-                            handler
-                                .execute(
-                                    repository::thread::Command {
-                                        account_id: account_id.clone(),
-                                        kind: repository::thread::CommandKind::GetThread {
-                                            id: thread_id.clone(),
-                                            tx,
-                                        },
-                                    }
-                                    .into(),
-                                )
-                                .await;
-
                             vec![
                                 mailfs::Message::SetThreadMails {
                                     username,
-                                    account_id,
-                                    thread_id,
-                                    thread_mails: rx.await.unwrap(),
+                                    account_id: account_id.clone(),
+                                    thread_id: thread_id.clone(),
+                                    thread_mails: handler
+                                        .get_thread_mails(account_id, thread_id)
+                                        .await,
                                 }
                                 .into(),
                             ]
@@ -328,27 +285,12 @@ impl Ui {
                                 Err(()) => return vec![],
                             };
 
-                            let (tx, rx) = oneshot::channel();
-
-                            handler
-                                .execute(
-                                    repository::mail::Command {
-                                        account_id: account_id.clone(),
-                                        kind: repository::mail::CommandKind::GetPreview {
-                                            id: mail_id.clone(),
-                                            tx,
-                                        },
-                                    }
-                                    .into(),
-                                )
-                                .await;
-
                             vec![
                                 mailfs::Message::SetMailPreview {
                                     username,
-                                    account_id,
-                                    mail_id,
-                                    preview: rx.await.unwrap(),
+                                    account_id: account_id.clone(),
+                                    mail_id: mail_id.clone(),
+                                    preview: handler.get_mail_preview(account_id, mail_id).await,
                                 }
                                 .into(),
                             ]

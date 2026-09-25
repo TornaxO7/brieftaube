@@ -5,15 +5,18 @@ pub mod thread;
 use crate::{
     datasource::{
         Cache, RemoteSession,
-        types::{GetState, QueryState, cache, remote},
+        types::{GetState, QueryState, QueryWindow, cache, remote},
     },
-    types::{AccountId, MailDataCore, MailId, MailboxId, ThreadId},
+    types::{
+        AccountId, MailDataCore, MailDataPreview, MailId, MailboxData, MailboxId, ParentMailboxId,
+        ThreadId,
+    },
 };
 use std::collections::HashMap;
-use tokio::sync::{RwLock, RwLockWriteGuard, mpsc};
+use tokio::sync::{RwLock, RwLockWriteGuard, mpsc, oneshot};
 
 #[derive(Debug)]
-pub enum Command {
+enum Command {
     Mail(mail::Command),
     Mailbox(mailbox::Command),
     Thread(thread::Command),
@@ -387,7 +390,80 @@ impl RepositoryHandler {
         Self { tx }
     }
 
-    pub async fn execute(&self, command: Command) {
-        self.tx.send(command).await.unwrap();
+    async fn execute<T>(&self, into_command: impl FnOnce(oneshot::Sender<T>) -> Command) -> T {
+        let (tx, rx) = oneshot::channel();
+        let _ = self.tx.send(into_command(tx)).await;
+        rx.await.expect("`tx` didn't drop first")
+    }
+
+    pub async fn quit(&self) {
+        self.execute::<()>(|_| Command::Quit).await;
+    }
+
+    pub async fn get_child_mailboxes(
+        &self,
+        account_id: AccountId,
+        parent_id: ParentMailboxId,
+    ) -> color_eyre::Result<Vec<MailboxData>> {
+        self.execute(|tx| {
+            mailbox::Command {
+                account_id,
+                kind: mailbox::CommandKind::GetChildren { id: parent_id, tx },
+            }
+            .into()
+        })
+        .await
+    }
+
+    pub async fn query_mails(
+        &self,
+        account_id: AccountId,
+        mailbox: MailboxId,
+        window: QueryWindow,
+        calculate_total: bool,
+    ) -> color_eyre::Result<(Vec<MailDataCore>, Option<usize>)> {
+        self.execute(|tx| {
+            mail::Command {
+                account_id,
+                kind: mail::CommandKind::QueryRootMails {
+                    mailbox,
+                    window,
+                    calculate_total,
+                    tx,
+                },
+            }
+            .into()
+        })
+        .await
+    }
+
+    pub async fn get_thread_mails(
+        &self,
+        account_id: AccountId,
+        thread_id: ThreadId,
+    ) -> color_eyre::Result<Vec<MailDataCore>> {
+        self.execute(|tx| {
+            thread::Command {
+                account_id,
+                kind: thread::CommandKind::GetThread { id: thread_id, tx },
+            }
+            .into()
+        })
+        .await
+    }
+
+    pub async fn get_mail_preview(
+        &self,
+        account_id: AccountId,
+        mail_id: MailId,
+    ) -> color_eyre::Result<MailDataPreview> {
+        self.execute(|tx| {
+            mail::Command {
+                account_id,
+                kind: mail::CommandKind::GetPreview { id: mail_id, tx },
+            }
+            .into()
+        })
+        .await
     }
 }
