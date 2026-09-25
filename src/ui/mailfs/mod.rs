@@ -88,7 +88,7 @@ impl State {
 impl Layer<Message> for State {
     fn update(&mut self, msg: Message) -> Vec<super::Message> {
         self.throbber.calc_next();
-        match msg {
+        let mut response_msgs = match msg {
             Message::Event(event) => self.handle_event(event),
             Message::UserAction(action) => self.handle_user_action(action),
             Message::SelectedPaletteEntry(entry) => self.handle_selected_palette_entry(entry),
@@ -121,7 +121,11 @@ impl Layer<Message> for State {
                 mail_id,
                 preview,
             } => self.handle_set_mail_preview(username, account_id, mail_id, preview),
-        }
+        };
+
+        response_msgs.extend(self.ensure_right_column_data());
+
+        response_msgs
     }
 }
 
