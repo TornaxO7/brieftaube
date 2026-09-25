@@ -133,36 +133,42 @@ impl MailboxColumn {
 
 impl MailboxColumn {
     fn init_selection(&mut self) {
-        let none_selected =
-            self.mailbox_state.selected().is_none() && self.mail_state.selected().is_none();
+        let at_least_one_selected =
+            self.mailbox_state.selected().is_some() && self.mail_state.selected().is_some();
 
-        if none_selected {
-            match &self.mailboxes {
-                Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
+        debug_assert!(
+            !(self.mailbox_state.selected().is_some() && self.mail_state.selected().is_some())
+        );
+
+        if at_least_one_selected {
+            return;
+        }
+
+        match &self.mailboxes {
+            Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
+                self.mailbox_state.select(Some(0));
+                return;
+            }
+            Loadable::Loaded(mailboxes) => {
+                if !mailboxes.is_empty() {
                     self.mailbox_state.select(Some(0));
                     return;
+                } else {
+                    self.mailbox_state.select(None);
                 }
-                Loadable::Loaded(mailboxes) => {
-                    if !mailboxes.is_empty() {
-                        self.mailbox_state.select(Some(0));
-                        return;
-                    } else {
-                        self.mailbox_state.select(None);
-                    }
-                }
-            };
+            }
+        };
 
-            match &self.mails {
-                Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
+        match &self.mails {
+            Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
+                self.mail_state.select(Some(0));
+                return;
+            }
+            Loadable::Loaded(mails) => {
+                if !mails.is_empty() {
                     self.mail_state.select(Some(0));
-                    return;
-                }
-                Loadable::Loaded(mails) => {
-                    if !mails.is_empty() {
-                        self.mail_state.select(Some(0));
-                    } else {
-                        self.mail_state.select(None);
-                    }
+                } else {
+                    self.mail_state.select(None);
                 }
             }
         }
