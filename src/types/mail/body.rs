@@ -1,26 +1,39 @@
+use crate::types::MailId;
 use jmap_client::email::{Email, EmailBodyPart};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MailDataTextBody(pub String);
+pub struct MailDataTextBody {
+    pub id: MailId,
+    pub content: String,
+}
 
 impl MailDataTextBody {
     pub fn new(mail: &Email) -> Option<Self> {
         let parts = mail.text_body()?;
         let content = join_body_values(mail, parts)?;
 
-        Some(Self(content))
+        Some(Self {
+            id: mail.id().unwrap().into(),
+            content,
+        })
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MailDataHtmlBody(pub String);
+pub struct MailDataHtmlBody {
+    pub id: MailId,
+    pub content: String,
+}
 
 impl MailDataHtmlBody {
     pub fn new(mail: &Email) -> Option<Self> {
         let parts = mail.html_body()?;
         let content = join_body_values(mail, parts)?;
 
-        Some(Self(content))
+        Some(Self {
+            id: mail.id().unwrap().into(),
+            content,
+        })
     }
 }
 fn join_body_values(mail: &Email, parts: &[EmailBodyPart]) -> Option<String> {

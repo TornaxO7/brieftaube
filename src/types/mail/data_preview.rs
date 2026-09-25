@@ -1,8 +1,9 @@
-use crate::types::{MailAddresses, MailDataAttachment};
+use crate::types::{MailAddresses, MailDataAttachment, MailId};
 use jmap_client::email::{Email, Property};
 
 #[derive(Debug, Clone)]
 pub struct MailDataPreview {
+    pub id: MailId,
     pub from: Option<MailAddresses>,
     pub to: Option<MailAddresses>,
     pub cc: Option<MailAddresses>,
@@ -24,6 +25,7 @@ impl MailDataPreview {
 
     pub fn from_get_request(mut mail: Email) -> Self {
         Self {
+            id: mail.take_id().into(),
             from: mail.take_from().map(MailAddresses::from),
             to: mail.take_to().map(MailAddresses::from),
             cc: mail.take_cc().map(MailAddresses::from),
