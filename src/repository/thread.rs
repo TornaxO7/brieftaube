@@ -71,9 +71,7 @@ impl Repository {
                     self.ensure_email_changes(&account_id, &result.state, &mut cache_lock)
                         .await?;
 
-                    cache_lock
-                        .upsert_mails_core(result.values.into_iter().collect())
-                        .await?;
+                    cache_lock.upsert_mails_core(result.values).await?;
 
                     let thread_mail_cores_result =
                         cache_lock.get_mails_core(&thread_mail_ids).await?;
