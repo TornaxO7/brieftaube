@@ -64,15 +64,16 @@ impl Repository {
     ) -> color_eyre::Result<MailDataCore> {
         let _entry = self.mail_locks.get_mail_core.lock().await;
 
-        match self
+        let opt_mail_core = self
             .caches
             .get(&account_id)
             .unwrap()
             .read()
             .await
             .get_mail_core(&id)
-            .await?
-        {
+            .await?;
+
+        match opt_mail_core {
             Some(data) => Ok(data),
             None => {
                 let result = self
@@ -102,15 +103,16 @@ impl Repository {
     ) -> color_eyre::Result<MailDataPreview> {
         let _enter = self.mail_locks.get_mail_preview.lock().await;
 
-        match self
+        let opt_mail_preview = self
             .caches
             .get(&account_id)
             .unwrap()
             .read()
             .await
             .get_mail_preview(&id)
-            .await?
-        {
+            .await?;
+
+        match opt_mail_preview {
             Some(data) => Ok(data),
             None => {
                 let result = self

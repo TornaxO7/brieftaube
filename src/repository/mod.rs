@@ -381,7 +381,7 @@ impl RepositoryHandler {
 
     async fn execute<T>(&self, into_command: impl FnOnce(oneshot::Sender<T>) -> Command) -> T {
         let (tx, rx) = oneshot::channel();
-        let _ = self.tx.send(into_command(tx)).await;
+        self.tx.send(into_command(tx)).await.unwrap();
         rx.await.expect("`tx` didn't drop first")
     }
 

@@ -12,8 +12,8 @@ use crate::{
     config::{self, Username},
     datasource::types::QueryWindow,
     types::{
-        AccountData, AccountId, MailDataCore, MailDataPreview, MailId, MailKeyword, MailboxData,
-        MailboxId, ParentMailboxId, ROOT_MAILBOX_ID, ThreadId,
+        AccountData, AccountId, MailDataCore, MailDataPreview, MailId, MailboxData, MailboxId,
+        ParentMailboxId, ROOT_MAILBOX_ID, ThreadId,
     },
     ui::{
         Layer, Loadable,
@@ -280,21 +280,18 @@ impl State {
             ColumnStackEntry::Mailbox(mailbox_id) => {
                 let selected_account = self.users_column.get_selected_account().unwrap();
                 let key = selected_account.as_key(mailbox_id);
+                let column = self.mailbox_columns.get_mut(&key).unwrap();
+                column.navigate_down();
 
-                let mailbox_column = self.mailbox_columns.get_mut(&key).unwrap();
-                mailbox_column.navigate_down();
-
-                let mut msgs = vec![];
                 // TODO: Check if the query-window is still within the new height
-                msgs.extend(self.ensure_right_column_data());
-                msgs
+                self.ensure_right_column_data()
             }
             ColumnStackEntry::Thread(thread_id) => {
                 let account = self.users_column.get_selected_account().unwrap();
                 let key = account.as_key(thread_id);
-
                 let column = self.thread_columns.get_mut(&key).unwrap();
                 column.navigate_down();
+
                 self.ensure_right_column_data()
             }
         }
@@ -495,10 +492,6 @@ impl State {
     fn remove_mailbox(&mut self) -> Vec<super::Message> {
         todo!();
     }
-
-    fn mail_patch_keywords(&mut self, _patch: &[(MailKeyword, bool)]) -> Vec<super::Message> {
-        todo!();
-    }
 }
 
 // helpers
@@ -549,15 +542,12 @@ impl State {
                 };
 
                 match middle_column_selected_entry {
-                    Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => vec![],
+                    Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
+                        vec![]
+                    }
                     Loadable::Loaded(entry) => match entry {
                         MailboxColumnEntry::Mailbox(mailbox_data) => {
                             let mailbox_id = mailbox_data.id.clone();
-
-                            let account_key = self.users_column.get_selected_account().expect(
-                                "If we're in a mailbox, then an account must've been selected.",
-                            );
-
                             let key = account_key.as_key(Some(mailbox_id.clone()));
 
                             if self.mailbox_columns.contains_key(&key) {
@@ -590,11 +580,7 @@ impl State {
                             }
                         }
                         MailboxColumnEntry::RootMail(mail) => {
-                            let account = self
-                                .users_column
-                                .get_selected_account()
-                                .expect("If we're in a mailbox, an account must've been selected.");
-                            let key = account.as_key(mail.thread_id.clone());
+                            let key = account_key.as_key(mail.thread_id.clone());
 
                             if self.thread_columns.contains_key(&key) {
                                 vec![]
@@ -606,7 +592,7 @@ impl State {
                                     MessageRequest::GetThreadMails {
                                         username: key.0,
                                         account_id: key.1,
-                                        thread: key.2,
+                                        thread_id: key.2,
                                     }
                                     .into(),
                                 ]

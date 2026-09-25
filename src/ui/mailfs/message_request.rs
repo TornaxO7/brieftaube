@@ -22,7 +22,7 @@ pub enum MessageRequest {
     GetThreadMails {
         username: config::Username,
         account_id: AccountId,
-        thread: ThreadId,
+        thread_id: ThreadId,
     },
     GetMailPreview {
         username: config::Username,

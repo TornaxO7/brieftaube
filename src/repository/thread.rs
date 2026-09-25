@@ -37,6 +37,7 @@ impl Repository {
         id: ThreadId,
     ) -> color_eyre::Result<Vec<MailDataCore>> {
         let _enter = self.thread_locks.get_thread.lock().await;
+
         let opt_thread_mail_ids = self
             .caches
             .get(&account_id)

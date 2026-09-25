@@ -249,7 +249,7 @@ impl Ui {
                     mailfs::MessageRequest::GetThreadMails {
                         username,
                         account_id,
-                        thread: thread_id,
+                        thread_id,
                     } => {
                         let state = self.repos.get(&username).unwrap().clone();
 
