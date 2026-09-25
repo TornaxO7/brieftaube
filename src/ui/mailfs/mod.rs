@@ -289,8 +289,13 @@ impl State {
                 msgs.extend(self.ensure_right_column_data());
                 msgs
             }
-            ColumnStackEntry::Thread(_thread_id) => {
-                todo!()
+            ColumnStackEntry::Thread(thread_id) => {
+                let account = self.users_column.get_selected_account().unwrap();
+                let key = account.as_key(thread_id);
+
+                let column = self.thread_columns.get_mut(&key).unwrap();
+                column.navigate_down();
+                self.ensure_right_column_data()
             }
         }
     }
@@ -309,8 +314,13 @@ impl State {
                 mailbox_column.navigate_up();
                 self.ensure_right_column_data()
             }
-            ColumnStackEntry::Thread(_thread_id) => {
-                todo!();
+            ColumnStackEntry::Thread(thread_id) => {
+                let account = self.users_column.get_selected_account().unwrap();
+                let key = account.as_key(thread_id);
+
+                let column = self.thread_columns.get_mut(&key).unwrap();
+                column.navigate_up();
+                self.ensure_right_column_data()
             }
         }
     }
@@ -334,8 +344,11 @@ impl State {
                     .navigate_to_top();
                 vec![]
             }
-            ColumnStackEntry::Thread(_thread_id) => {
-                todo!();
+            ColumnStackEntry::Thread(thread_id) => {
+                let account = self.users_column.get_selected_account().unwrap();
+                let key = account.as_key(thread_id.clone());
+                self.thread_columns.get_mut(&key).unwrap().navigate_to_top();
+                vec![]
             }
         }
     }
@@ -349,8 +362,14 @@ impl State {
             ColumnStackEntry::Mailbox(_mailbox_id) => {
                 todo!();
             }
-            ColumnStackEntry::Thread(_thread_id) => {
-                todo!();
+            ColumnStackEntry::Thread(thread_id) => {
+                let account = self.users_column.get_selected_account().unwrap();
+                let key = account.as_key(thread_id.clone());
+                self.thread_columns
+                    .get_mut(&key)
+                    .unwrap()
+                    .navigate_to_bottom();
+                self.ensure_right_column_data()
             }
         }
     }

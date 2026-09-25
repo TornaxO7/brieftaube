@@ -30,6 +30,10 @@ impl ThreadColumn {
 
         Some(self.mails.as_ref().map(|mails| &mails[selected_idx]))
     }
+
+    pub fn len(&self) -> usize {
+        self.mails.loaded().map(|mails| mails.len()).unwrap_or(1)
+    }
 }
 
 impl MailfsColumn for ThreadColumn {
@@ -38,11 +42,18 @@ impl MailfsColumn for ThreadColumn {
     }
 
     fn navigate_down(&mut self) {
-        self.state.select_next();
+        match self.state.selected() {
+            Some(current_idx) => {
+                if current_idx < self.len() - 1 {
+                    self.state.select_next();
+                }
+            }
+            None => self.state.select(Some(0)),
+        }
     }
 
     fn navigate_to_bottom(&mut self) {
-        self.state.select_last();
+        self.state.select(Some(self.len() - 1));
     }
 
     fn navigate_to_top(&mut self) {
