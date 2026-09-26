@@ -713,33 +713,36 @@ fn render_mail_preview(
             frame.render_widget(Table::new(headers_rows, header_widths), headers_area);
 
             // preview
-            let rest_area = match &mail.preview {
-                None => rest,
-                Some(preview_content) => {
-                    let [preview_area, rest] = Layout::vertical([
-                        Constraint::Length(preview_content.lines().count() as u16),
-                        Constraint::Fill(1),
-                    ])
-                    .areas(rest);
+            let rest_area = if let Some(preview_content) = &mail.preview
+                && !preview_content.trim().is_empty()
+            {
+                let [preview_area, rest] = Layout::vertical([
+                    Constraint::Length(preview_content.lines().count() as u16 + 1),
+                    Constraint::Fill(1),
+                ])
+                .areas(rest);
 
-                    frame.render_widget(
-                        Paragraph::new(preview_content.as_str())
-                            .style(Style::new())
-                            .block(
-                                Block::new()
-                                    .borders(Borders::TOP)
-                                    .style(Style::new().fg(scheme.outline.into_color())),
-                            )
-                            .wrap(Wrap { trim: false }),
-                        preview_area,
-                    );
+                frame.render_widget(
+                    Paragraph::new(preview_content.as_str())
+                        .style(Style::new())
+                        .block(
+                            Block::new()
+                                .borders(Borders::TOP)
+                                .style(Style::new().fg(scheme.outline.into_color())),
+                        )
+                        .wrap(Wrap { trim: false }),
+                    preview_area,
+                );
 
-                    rest
-                }
+                rest
+            } else {
+                rest
             };
 
             // attachments
-            if let Some(attachments) = &mail.attachments {
+            if let Some(attachments) = &mail.attachments
+                && !attachments.is_empty()
+            {
                 let max_content_type_name_len = attachments
                     .iter()
                     .map(|attachment| attachment.content_type.len())
