@@ -15,7 +15,7 @@ use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
     style::Style,
-    text::{Line, Span},
+    text::{Line, Span, Text},
     widgets::{Block, Borders, Cell, Fill, Paragraph, Row, Table, Wrap},
 };
 use throbber_widgets_tui::Throbber;
@@ -739,15 +739,39 @@ fn render_mail_preview(
             };
 
             // attachments
-            // if let Some(attachments) = &mail.attachments {
-            //     let content_type_len = attachments.iter().map(|attachment| attachment.content_type.len()).max().unwrap_or(0);
-            //     attachments.iter().map(|a| a.size)
+            if let Some(attachments) = &mail.attachments {
+                let max_content_type_name_len = attachments
+                    .iter()
+                    .map(|attachment| attachment.content_type.len())
+                    .max()
+                    .unwrap_or(0);
 
-            //     let widths = [
-            //         Constraint::Length(content_type_len as u16),
+                let widths = [
+                    Constraint::Length(max_content_type_name_len as u16),
+                    Constraint::Fill(1),
+                    Constraint::Length("123,1 KB".len() as u16),
+                ];
 
-            //     ];
-            // }
+                let rows: Vec<Row<'_>> = attachments
+                    .iter()
+                    .map(|attachment| {
+                        let content_type_name = Cell::from(attachment.content_type.as_str())
+                            .style(Style::new().fg(scheme.secondary.into_color()));
+                        let name = Cell::from(attachment.name.as_str())
+                            .style(Style::new().fg(scheme.primary.into_color()));
+                        let size =
+                            Cell::from(Text::from(format_size(attachment.size)).right_aligned())
+                                .style(Style::new().fg(scheme.tertiary.into_color()));
+
+                        Row::new([content_type_name, name, size])
+                    })
+                    .collect();
+
+                frame.render_widget(
+                    Table::new(rows, widths).block(Block::new().borders(Borders::TOP)),
+                    rest_area,
+                );
+            }
         }
     }
 }
@@ -760,4 +784,19 @@ fn render_left_separation_lines(scheme: &Scheme, frame: &mut Frame, area: Rect) 
         Fill::new(SEPARATION_LINE).style(Style::new().fg(scheme.outline.into_color())),
         left_area,
     );
+}
+
+fn format_size(size: usize) -> String {
+    const UNITS: [(usize, &str); 3] = [(1_000_000_000, "GB"), (1_000_000, "MB"), (1_000, "KB")];
+
+    for (unit, suffix) in UNITS {
+        if size >= unit {
+            let tenths = (size * 10 + unit / 2) / unit;
+            if tenths >= 10 {
+                return format!("{},{} {suffix}", tenths / 10, tenths % 10);
+            }
+        }
+    }
+
+    format!("{size} B")
 }
