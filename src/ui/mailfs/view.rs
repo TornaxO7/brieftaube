@@ -13,7 +13,7 @@ use crate::{
 use material_theme_loader::Scheme;
 use ratatui::{
     Frame,
-    layout::{Constraint, Layout, Rect},
+    layout::{Constraint, HorizontalAlignment, Layout, Rect},
     style::Style,
     text::{Line, Span, Text},
     widgets::{Block, Borders, Cell, Fill, Paragraph, Row, Table, Wrap},
@@ -661,42 +661,40 @@ fn render_mail_preview(
             let headers_rows = {
                 let mut rows = Vec::with_capacity(5);
 
+                let header_style = Style::new().fg(scheme.primary.into_color()).bold();
+                let value_style = Style::new().fg(scheme.secondary.into_color());
+
                 if let Some(from) = &mail.from {
                     rows.push(Row::new(vec![
-                        Cell::from("From:")
-                            .style(Style::new().fg(scheme.primary.into_color()).bold()),
-                        Cell::from(from.to_string()),
+                        Cell::from("From:").style(header_style),
+                        Cell::from(from.to_string()).style(value_style),
                     ]))
                 }
 
                 if let Some(to) = &mail.to {
                     rows.push(Row::new(vec![
-                        Cell::from("To:")
-                            .style(Style::new().fg(scheme.primary.into_color()).bold()),
-                        Cell::from(to.to_string()),
+                        Cell::from("To:").style(header_style),
+                        Cell::from(to.to_string()).style(value_style),
                     ]));
                 }
 
                 if let Some(cc) = &mail.cc {
                     rows.push(Row::new(vec![
-                        Cell::from("Cc:")
-                            .style(Style::new().fg(scheme.primary.into_color()).bold()),
-                        Cell::from(cc.to_string()),
+                        Cell::from("Cc:").style(header_style),
+                        Cell::from(cc.to_string()).style(value_style),
                     ]));
                 }
 
                 if let Some(subject) = &mail.subject {
                     rows.push(Row::new(vec![
-                        Cell::from("Subject:")
-                            .style(Style::new().fg(scheme.primary.into_color()).bold()),
-                        Cell::from(subject.as_str()),
+                        Cell::from("Subject:").style(header_style),
+                        Cell::from(subject.as_str()).style(value_style),
                     ]));
                 }
 
                 rows.push(Row::new(vec![
-                    Cell::from("Received at:")
-                        .style(Style::new().fg(scheme.primary.into_color()).bold()),
-                    Cell::from(received_at.as_str()),
+                    Cell::from("Received at:").style(header_style),
+                    Cell::from(received_at.as_str()).style(value_style),
                 ]));
 
                 rows
@@ -704,13 +702,23 @@ fn render_mail_preview(
 
             let [headers_area, rest] = {
                 Layout::vertical([
-                    Constraint::Length(headers_rows.len() as u16),
+                    Constraint::Length(headers_rows.len() as u16 + 1),
                     Constraint::Fill(1),
                 ])
+                .spacing(1)
                 .areas(area)
             };
 
-            frame.render_widget(Table::new(headers_rows, header_widths), headers_area);
+            frame.render_widget(
+                Table::new(headers_rows, header_widths).block(
+                    Block::new()
+                        .title(" Headers ")
+                        .title_alignment(HorizontalAlignment::Center)
+                        .borders(Borders::TOP)
+                        .style(Style::new().fg(scheme.outline.into_color())),
+                ),
+                headers_area,
+            );
 
             // preview
             let rest_area = if let Some(preview_content) = &mail.preview
@@ -720,13 +728,16 @@ fn render_mail_preview(
                     Constraint::Length(preview_content.lines().count() as u16 + 1),
                     Constraint::Fill(1),
                 ])
+                .spacing(1)
                 .areas(rest);
 
                 frame.render_widget(
                     Paragraph::new(preview_content.as_str())
-                        .style(Style::new())
+                        .style(Style::new().fg(scheme.secondary.into_color()))
                         .block(
                             Block::new()
+                                .title(" Content (preview) ")
+                                .title_alignment(HorizontalAlignment::Center)
                                 .borders(Borders::TOP)
                                 .style(Style::new().fg(scheme.outline.into_color())),
                         )
@@ -771,7 +782,13 @@ fn render_mail_preview(
                     .collect();
 
                 frame.render_widget(
-                    Table::new(rows, widths).block(Block::new().borders(Borders::TOP)),
+                    Table::new(rows, widths).block(
+                        Block::new()
+                            .title(" Attachments ")
+                            .title_alignment(HorizontalAlignment::Center)
+                            .borders(Borders::TOP)
+                            .style(Style::new().fg(scheme.outline.into_color())),
+                    ),
                     rest_area,
                 );
             }
