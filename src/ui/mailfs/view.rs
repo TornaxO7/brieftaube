@@ -16,7 +16,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::Style,
     text::{Line, Span},
-    widgets::{Cell, Fill, Paragraph, Row, Table, Wrap},
+    widgets::{Block, Borders, Cell, Fill, Paragraph, Row, Table, Wrap},
 };
 use throbber_widgets_tui::Throbber;
 
@@ -367,7 +367,7 @@ fn render_mailbox_column(
     .areas(area);
 
     let widths = [
-        Constraint::Length(2),
+        Constraint::Length(1),
         Constraint::Fill(1),
         Constraint::Length(MAX_DATE_LENGTH as u16),
     ];
@@ -539,7 +539,7 @@ fn render_thread_column(
     let column = state.thread_columns.get_mut(&key).unwrap();
 
     let widths = [
-        Constraint::Length(2),
+        Constraint::Length(1),
         Constraint::Fill(1),
         Constraint::Length(MAX_DATE_LENGTH as u16),
     ];
@@ -611,12 +611,145 @@ fn render_thread_column(
 }
 
 fn render_mail_preview(
-    _scheme: &Scheme,
-    _mail_id: MailId,
-    _state: &mut super::State,
-    _frame: &mut Frame,
-    _area: Rect,
+    scheme: &Scheme,
+    mail_id: MailId,
+    state: &mut super::State,
+    frame: &mut Frame,
+    area: Rect,
 ) {
+    let Some(account) = state.users_column.get_selected_account() else {
+        return;
+    };
+    let key = account.as_key(mail_id);
+    let Some(preview) = state.mail_previews.get(&key) else {
+        return;
+    };
+
+    match preview {
+        Loadable::NotLoaded => {
+            frame.render_widget(
+                Paragraph::new("Preview not loaded yet.")
+                    .style(Style::new().fg(scheme.tertiary.into_color())),
+                area,
+            );
+        }
+        Loadable::Loading => {
+            frame.render_stateful_widget(
+                Throbber::default()
+                    .label("Loading preview...")
+                    .throbber_style(Style::new().fg(scheme.primary.into_color())),
+                area,
+                &mut state.throbber,
+            );
+        }
+        Loadable::Error(err) => {
+            frame.render_widget(
+                Paragraph::new(format!("Couldn't load mail preview:\n{err}"))
+                    .style(Style::new().fg(scheme.error.into_color())),
+                area,
+            );
+        }
+        Loadable::Loaded(mail) => {
+            let received_at = mail.received_at.format("%c").to_string();
+
+            // headers
+            let header_widths = [
+                Constraint::Length("Received at:".len() as u16),
+                Constraint::Fill(1),
+            ];
+
+            let headers_rows = {
+                let mut rows = Vec::with_capacity(5);
+
+                if let Some(from) = &mail.from {
+                    rows.push(Row::new(vec![
+                        Cell::from("From:")
+                            .style(Style::new().fg(scheme.primary.into_color()).bold()),
+                        Cell::from(from.to_string()),
+                    ]))
+                }
+
+                if let Some(to) = &mail.to {
+                    rows.push(Row::new(vec![
+                        Cell::from("To:")
+                            .style(Style::new().fg(scheme.primary.into_color()).bold()),
+                        Cell::from(to.to_string()),
+                    ]));
+                }
+
+                if let Some(cc) = &mail.cc {
+                    rows.push(Row::new(vec![
+                        Cell::from("Cc:")
+                            .style(Style::new().fg(scheme.primary.into_color()).bold()),
+                        Cell::from(cc.to_string()),
+                    ]));
+                }
+
+                if let Some(subject) = &mail.subject {
+                    rows.push(Row::new(vec![
+                        Cell::from("Subject:")
+                            .style(Style::new().fg(scheme.primary.into_color()).bold()),
+                        Cell::from(subject.as_str()),
+                    ]));
+                }
+
+                rows.push(Row::new(vec![
+                    Cell::from("Received at:")
+                        .style(Style::new().fg(scheme.primary.into_color()).bold()),
+                    Cell::from(received_at.as_str()),
+                ]));
+
+                rows
+            };
+
+            let [headers_area, rest] = {
+                Layout::vertical([
+                    Constraint::Length(headers_rows.len() as u16),
+                    Constraint::Fill(1),
+                ])
+                .areas(area)
+            };
+
+            frame.render_widget(Table::new(headers_rows, header_widths), headers_area);
+
+            // preview
+            let rest_area = match &mail.preview {
+                None => rest,
+                Some(preview_content) => {
+                    let [preview_area, rest] = Layout::vertical([
+                        Constraint::Length(preview_content.lines().count() as u16),
+                        Constraint::Fill(1),
+                    ])
+                    .areas(rest);
+
+                    frame.render_widget(
+                        Paragraph::new(preview_content.as_str())
+                            .style(Style::new())
+                            .block(
+                                Block::new()
+                                    .borders(Borders::TOP)
+                                    .style(Style::new().fg(scheme.outline.into_color())),
+                            )
+                            .wrap(Wrap { trim: false }),
+                        preview_area,
+                    );
+
+                    rest
+                }
+            };
+
+            // attachments
+            // if let Some(attachments) = &mail.attachments {
+            //     let content_type_len = attachments.iter().map(|attachment| attachment.content_type.len()).max().unwrap_or(0);
+            //     attachments.iter().map(|a| a.size)
+
+            //     let widths = [
+            //         Constraint::Length(content_type_len as u16),
+
+            //     ];
+            // }
+        }
+    }
 }
 
 fn render_left_separation_lines(scheme: &Scheme, frame: &mut Frame, area: Rect) {
