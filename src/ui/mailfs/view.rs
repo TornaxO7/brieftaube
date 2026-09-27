@@ -40,7 +40,7 @@ pub fn view(state: &mut super::State, frame: &mut Frame, area: Rect) {
     let scheme = &theme.schemes.dark;
 
     let [path_area, columns_area, statusbar_area] = Layout::vertical([
-        Constraint::Length(1),
+        Constraint::Length(2),
         Constraint::Fill(1),
         Constraint::Length(1),
     ])
@@ -54,18 +54,64 @@ pub fn view(state: &mut super::State, frame: &mut Frame, area: Rect) {
 fn render_path(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
     let mut path: Vec<Span> = Vec::new();
 
-    let Some(UserColumnEntry::Account(account)) = state.users_column.get_selected_entry() else {
-        return;
-    };
+    for column_entry in state.column_stack.iter().cloned() {
+        match column_entry {
+            ColumnStackEntry::Users => {
+                let Some(UserColumnEntry::Account(account)) =
+                    state.users_column.get_selected_entry()
+                else {
+                    break;
+                };
 
-    path.push(Span::styled(
-        account.name.as_str(),
-        Style::new()
-            .fg(scheme.on_primary.into_color())
-            .bg(scheme.primary.into_color()),
-    ));
+                path.push(Span::styled(
+                    format!("{}:", account.name.as_str()),
+                    Style::new().fg(scheme.primary.into_color()),
+                ));
+            }
+            ColumnStackEntry::Mailbox(mailbox_id) => {
+                let account = state.users_column.get_selected_account().unwrap();
+                let key = account.as_key(mailbox_id);
+                let column = state.mailbox_columns.get(&key).unwrap();
 
-    frame.render_widget(Line::from(path), area);
+                let Some(selected_entry) = column.get_selected_entry() else {
+                    break;
+                };
+
+                match selected_entry {
+                    Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
+                        break;
+                    }
+                    Loadable::Loaded(entry) => match entry {
+                        MailboxColumnEntry::Mailbox(mailbox) => {
+                            path.push(Span::styled(
+                                format!("/{}", mailbox.name.as_str()),
+                                Style::new().fg(scheme.secondary.into_color()),
+                            ));
+                        }
+                        MailboxColumnEntry::RootMail(_mail) => {
+                            continue;
+                        }
+                    },
+                }
+            }
+            ColumnStackEntry::Thread(_thread_id) => {
+                path.push(Span::styled(
+                    "/<Thread>",
+                    Style::new().fg(scheme.secondary.into_color()),
+                ));
+                continue;
+            }
+        }
+    }
+
+    frame.render_widget(
+        Paragraph::new(Line::from(path)).block(
+            Block::new()
+                .borders(Borders::BOTTOM)
+                .style(Style::new().fg(scheme.outline.into_color())),
+        ),
+        area,
+    );
 }
 
 fn render_statusbar(_scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
