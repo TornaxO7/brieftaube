@@ -213,4 +213,23 @@ fn render_attachments_tab(
     frame: &mut Frame,
     area: Rect,
 ) {
+    match state.attachments {
+        None => {
+            const LABEL: &str = "Loading attachments";
+
+            let area = area.centered(
+                Constraint::Length(LABEL.len() as u16 + 2),
+                Constraint::Length(1),
+            );
+
+            frame.render_stateful_widget(
+                Throbber::default()
+                    .label(LABEL)
+                    .style(Style::new().fg(scheme.primary.into_color())),
+                area,
+                &mut state.throbber,
+            );
+        }
+        Some(_) => todo!(),
+    }
 }
