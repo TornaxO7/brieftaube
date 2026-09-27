@@ -7,7 +7,8 @@ use ratatui::{
     Frame,
     layout::{Constraint, HorizontalAlignment, Layout, Rect},
     style::Style,
-    widgets::{Block, Borders, Cell, Row, Table, Tabs},
+    text::Text,
+    widgets::{Block, Borders, Cell, Paragraph, Row, Table, Tabs},
 };
 use throbber_widgets_tui::Throbber;
 
@@ -156,11 +157,13 @@ fn render_text_body(
     area: Rect,
     block: Block,
 ) {
-    match state.text_body {
+    match &state.text_body {
         None => {
             const LABEL: &str = "Loading text body";
 
-            let area = area.centered(
+            frame.render_widget(block.clone(), area);
+
+            let area = block.inner(area).centered(
                 Constraint::Length(LABEL.len() as u16 + 2),
                 Constraint::Length(1),
             );
@@ -173,7 +176,13 @@ fn render_text_body(
                 &mut state.throbber,
             );
         }
-        Some(_) => todo!(),
+        Some(text_body) => {
+            frame.render_widget(
+                Paragraph::new(text_body.as_str())
+                    .style(Style::new().fg(scheme.primary.into_color())),
+                area,
+            );
+        }
     }
 }
 
@@ -184,8 +193,9 @@ fn render_html_body(
     area: Rect,
     block: Block,
 ) {
-    match state.html_body {
+    match &state.html_body {
         None => {
+            // TODO: Maybe merge it with the loading screen of text-body? Like a generic one
             const LABEL: &str = "Loading html body";
 
             frame.render_widget(block.clone(), area);
@@ -203,7 +213,22 @@ fn render_html_body(
                 &mut state.throbber,
             );
         }
-        Some(_) => todo!(),
+        Some(html_body) => match &html_body.markdown {
+            Ok(markdown_body) => {
+                frame.render_widget(
+                    Paragraph::new(markdown_body.as_str())
+                        .style(Style::new().fg(scheme.primary.into_color())),
+                    area,
+                );
+            }
+            Err(err) => {
+                frame.render_widget(
+                    Paragraph::new(err.to_string())
+                        .style(Style::new().fg(scheme.primary.into_color())),
+                    area,
+                );
+            }
+        },
     }
 }
 
@@ -213,7 +238,7 @@ fn render_attachments_tab(
     frame: &mut Frame,
     area: Rect,
 ) {
-    match state.attachments {
+    match &state.attachments {
         None => {
             const LABEL: &str = "Loading attachments";
 
@@ -230,6 +255,49 @@ fn render_attachments_tab(
                 &mut state.throbber,
             );
         }
-        Some(_) => todo!(),
+        Some(attachments) => {
+            let widths = [
+                Constraint::Fill(1),
+                Constraint::Length("123,1 KB".len() as u16),
+            ];
+
+            let rows: Vec<Row<'_>> = attachments
+                .iter()
+                .map(|attachment| {
+                    let name = Cell::from(attachment.name.as_str())
+                        .style(Style::new().fg(scheme.primary.into_color()));
+                    let size = Cell::from(Text::from(format_size(attachment.size)).right_aligned())
+                        .style(Style::new().fg(scheme.tertiary.into_color()));
+
+                    Row::new([name, size])
+                })
+                .collect();
+
+            frame.render_widget(
+                Table::new(rows, widths).block(
+                    Block::new()
+                        .title(" Attachments ")
+                        .title_alignment(HorizontalAlignment::Center)
+                        .borders(Borders::TOP)
+                        .style(Style::new().fg(scheme.outline.into_color())),
+                ),
+                area,
+            );
+        }
     }
+}
+
+fn format_size(size: usize) -> String {
+    const UNITS: [(usize, &str); 3] = [(1_000_000_000, "GB"), (1_000_000, "MB"), (1_000, "KB")];
+
+    for (unit, suffix) in UNITS {
+        if size >= unit {
+            let tenths = (size * 10 + unit / 2) / unit;
+            if tenths >= 10 {
+                return format!("{},{} {suffix}", tenths / 10, tenths % 10);
+            }
+        }
+    }
+
+    format!("{size} B")
 }
