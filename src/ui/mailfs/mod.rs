@@ -1,4 +1,3 @@
-mod column;
 mod message;
 mod message_request;
 mod user_action;
