@@ -2,11 +2,15 @@ mod message;
 mod user_action;
 mod view;
 
-use crate::ui::{
-    Layer,
-    utils::keybindmanager::{HandleEvent, KeybindManager},
+use crate::{
+    types::{MailAddresses, MailDataAttachment, MailDataHtmlBody, MailDataTextBody},
+    ui::{
+        Layer,
+        utils::keybindmanager::{HandleEvent, KeybindManager},
+    },
 };
 use crossterm::event::Event;
+use htmd::HtmlToMarkdown;
 use std::{collections::HashMap, str::FromStr};
 use throbber_widgets_tui::ThrobberState;
 use tracing::debug;
@@ -18,8 +22,12 @@ pub use view::view;
 pub struct State {
     keybindings: KeybindManager<UserAction>,
     throbber: ThrobberState,
-
     selected_tab: SelectedTab,
+
+    headers: Option<ReaderHeaders>,
+    text_body: Option<String>,
+    html_body: Option<HtmlBody>,
+    attachments: Option<Vec<MailDataAttachment>>,
 }
 
 impl State {
@@ -32,6 +40,10 @@ impl State {
             ])),
 
             selected_tab: SelectedTab::Mail,
+            headers: None,
+            text_body: None,
+            html_body: None,
+            attachments: None,
         }
     }
 }
@@ -41,10 +53,10 @@ impl Layer<Message> for State {
         self.throbber.calc_next();
 
         match msg {
+            Message::Event(event) => self.handle_event(event),
             Message::UserAction(action) => self.handle_user_action(action),
             Message::SelectedPaletteEntry(entry) => self.handle_selected_palette_entry(entry),
-            Message::Event(event) => self.handle_event(event),
-            Message::Reset => vec![],
+            Message::Reset => self.handle_reset(),
         }
     }
 }
@@ -87,6 +99,15 @@ impl State {
         let action = UserAction::from_str(entry.as_str()).unwrap();
         vec![super::Message::Reader(Message::UserAction(action))]
     }
+
+    fn handle_reset(&mut self) -> Vec<super::Message> {
+        self.selected_tab = SelectedTab::Mail;
+        self.headers = None;
+        self.text_body = None;
+        self.html_body = None;
+        self.attachments = None;
+        vec![]
+    }
 }
 
 // user-action handlers
@@ -120,4 +141,26 @@ impl State {
 enum SelectedTab {
     Mail,
     Attachments,
+}
+
+pub struct ReaderHeaders {
+    pub from: Option<String>,
+    pub to: Option<String>,
+    pub cc: Option<String>,
+    pub subject: Option<String>,
+    pub received_at: String,
+}
+
+struct HtmlBody {
+    html: String,
+    markdown: std::io::Result<String>,
+}
+
+impl From<MailDataHtmlBody> for HtmlBody {
+    fn from(html: MailDataHtmlBody) -> Self {
+        Self {
+            html: html.content.clone(),
+            markdown: HtmlToMarkdown::new().convert(html.content.as_str()),
+        }
+    }
 }
