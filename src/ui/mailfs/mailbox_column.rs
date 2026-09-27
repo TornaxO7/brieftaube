@@ -58,7 +58,14 @@ impl MailboxColumn {
 
     pub fn set_mailboxes(&mut self, children: color_eyre::Result<Vec<MailboxData>>) {
         match children {
-            Ok(mailboxes) => {
+            Ok(mut mailboxes) => {
+                mailboxes.sort_by(|a, b| {
+                    if a.sort_order != b.sort_order {
+                        a.sort_order.cmp(&b.sort_order)
+                    } else {
+                        a.name.cmp(&b.name)
+                    }
+                });
                 self.mailboxes = Loadable::Loaded(mailboxes);
             }
             Err(err) => {
