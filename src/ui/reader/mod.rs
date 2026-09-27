@@ -3,7 +3,7 @@ mod user_action;
 mod view;
 
 use crate::{
-    types::{MailAddresses, MailDataAttachment, MailDataHtmlBody, MailDataTextBody},
+    types::{MailDataAttachment, MailDataHtmlBody},
     ui::{
         Layer,
         utils::keybindmanager::{HandleEvent, KeybindManager},
@@ -22,7 +22,9 @@ pub use view::view;
 pub struct State {
     keybindings: KeybindManager<UserAction>,
     throbber: ThrobberState,
+
     selected_tab: SelectedTab,
+    selected_body_type: SelectedBodyType,
 
     headers: Option<ReaderHeaders>,
     text_body: Option<String>,
@@ -40,6 +42,8 @@ impl State {
             ])),
 
             selected_tab: SelectedTab::Mail,
+            selected_body_type: SelectedBodyType::Html,
+
             headers: None,
             text_body: None,
             html_body: None,
@@ -102,6 +106,8 @@ impl State {
 
     fn handle_reset(&mut self) -> Vec<super::Message> {
         self.selected_tab = SelectedTab::Mail;
+        self.selected_body_type = SelectedBodyType::Html;
+
         self.headers = None;
         self.text_body = None;
         self.html_body = None;
@@ -143,12 +149,22 @@ enum SelectedTab {
     Attachments,
 }
 
+enum SelectedBodyType {
+    Text,
+    Html,
+}
+
 pub struct ReaderHeaders {
     pub from: Option<String>,
     pub to: Option<String>,
     pub cc: Option<String>,
     pub subject: Option<String>,
     pub received_at: String,
+}
+
+impl ReaderHeaders {
+    const MAX_AMOUNT_HEADERS: usize = 5;
+    const LONGEST_HEADER_LENGTH: usize = "Received at:".len();
 }
 
 struct HtmlBody {
