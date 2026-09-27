@@ -1,5 +1,4 @@
 use crate::{
-    THEME,
     types::{MailId, MailKeyword, ParentMailboxId, ROOT_MAILBOX_ID, ThreadId},
     ui::{
         Loadable,
@@ -35,10 +34,7 @@ const PAPERCLIP: &str = "📎";
 
 // TODO: create cache for rendering
 
-pub fn view(state: &mut super::State, frame: &mut Frame, area: Rect) {
-    let theme = THEME.get().unwrap();
-    let scheme = &theme.schemes.dark;
-
+pub fn view(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
     let [path_area, columns_area, statusbar_area] = Layout::vertical([
         Constraint::Length(2),
         Constraint::Fill(1),

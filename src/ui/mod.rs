@@ -10,10 +10,12 @@ pub mod prompt;
 pub mod reader;
 pub mod statusbar;
 
+use material_theme_loader::Scheme;
 use tokio::sync::{RwLock, watch};
 pub use types::*;
 
 use crate::{
+    THEME,
     config::{self, Username},
     datasource::{self, Cache, RemoteSession, jmap::JmapDescriptor},
     repository::RepositoryHandler,
@@ -71,6 +73,7 @@ pub struct Ui {
     layers: Vec<ActiveLayer>,
     needs_full_redraw: bool,
     task_manager: TaskManager,
+    scheme: Scheme,
 
     repos: HashMap<Username, watch::Receiver<RepositoryState>>,
 
@@ -89,6 +92,11 @@ impl Ui {
         let palette = palette::State::new();
         let prompt = prompt::State::new();
 
+        let scheme = {
+            let theme = THEME.get().unwrap();
+            theme.schemes.dark.clone()
+        };
+
         Self {
             mailfs,
             reader,
@@ -101,6 +109,7 @@ impl Ui {
             layers: vec![ActiveLayer::Mailfs],
             needs_full_redraw: false,
             task_manager,
+            scheme,
         }
     }
 
@@ -144,18 +153,18 @@ impl Ui {
 
         if is_overlay {
             match self.layers.iter().rev().skip(1).next().unwrap() {
-                ActiveLayer::Mailfs => mailfs::view(&mut self.mailfs, frame, area),
-                ActiveLayer::Reader => reader::view(&mut self.reader, frame, area),
-                ActiveLayer::Palette => palette::view(&mut self.palette, frame, area),
-                ActiveLayer::Prompt => prompt::view(&mut self.prompt, frame, area),
+                ActiveLayer::Mailfs => mailfs::view(&self.scheme, &mut self.mailfs, frame, area),
+                ActiveLayer::Reader => reader::view(&self.scheme, &mut self.reader, frame, area),
+                ActiveLayer::Palette => palette::view(&self.scheme, &mut self.palette, frame, area),
+                ActiveLayer::Prompt => prompt::view(&self.scheme, &mut self.prompt, frame, area),
             }
         }
 
         match self.layers.last_mut().unwrap() {
-            ActiveLayer::Mailfs => mailfs::view(&mut self.mailfs, frame, area),
-            ActiveLayer::Reader => reader::view(&mut self.reader, frame, area),
-            ActiveLayer::Palette => palette::view(&mut self.palette, frame, area),
-            ActiveLayer::Prompt => prompt::view(&mut self.prompt, frame, area),
+            ActiveLayer::Mailfs => mailfs::view(&self.scheme, &mut self.mailfs, frame, area),
+            ActiveLayer::Reader => reader::view(&self.scheme, &mut self.reader, frame, area),
+            ActiveLayer::Palette => palette::view(&self.scheme, &mut self.palette, frame, area),
+            ActiveLayer::Prompt => prompt::view(&self.scheme, &mut self.prompt, frame, area),
         }
     }
 

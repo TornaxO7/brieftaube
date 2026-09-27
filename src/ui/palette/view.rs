@@ -1,3 +1,5 @@
+use crate::utils::IntoColor;
+use material_theme_loader::Scheme;
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
@@ -6,12 +8,7 @@ use ratatui::{
     widgets::{Block, Clear, List, ListDirection, ListItem, Paragraph, Wrap},
 };
 
-use crate::{THEME, utils::IntoColor};
-
-pub fn view(state: &mut super::State, frame: &mut Frame, area: Rect) {
-    let theme = THEME.get().unwrap();
-    let scheme = &theme.schemes.dark;
-
+pub fn view(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
     let centered_area = area.centered(Constraint::Percentage(80), Constraint::Percentage(80));
     frame.render_widget(Clear, centered_area);
 
