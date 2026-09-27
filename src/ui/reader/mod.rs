@@ -3,7 +3,7 @@ mod user_action;
 mod view;
 
 use crate::{
-    types::{MailDataAttachment, MailDataHtmlBody},
+    types::{MailDataAttachment, MailDataHtmlBody, MailDataTextBody},
     ui::{
         Layer,
         utils::keybindmanager::{HandleEvent, KeybindManager},
@@ -61,6 +61,11 @@ impl Layer<Message> for State {
             Message::UserAction(action) => self.handle_user_action(action),
             Message::SelectedPaletteEntry(entry) => self.handle_selected_palette_entry(entry),
             Message::Reset => self.handle_reset(),
+
+            Message::SetHeaders(headers) => self.handle_set_headres(headers),
+            Message::SetTextBody(body) => self.handle_set_text_body(body),
+            Message::SetHtmlBody(body) => self.handle_set_html_body(body),
+            Message::SetAttachments(attachments) => self.handle_set_attachments(attachments),
         }
     }
 }
@@ -112,6 +117,29 @@ impl State {
         self.text_body = None;
         self.html_body = None;
         self.attachments = None;
+        vec![]
+    }
+
+    fn handle_set_headres(&mut self, headers: ReaderHeaders) -> Vec<super::Message> {
+        self.headers = Some(headers);
+        vec![]
+    }
+
+    fn handle_set_text_body(&mut self, body: MailDataTextBody) -> Vec<super::Message> {
+        self.text_body = Some(body.content);
+        vec![]
+    }
+
+    fn handle_set_html_body(&mut self, body: MailDataHtmlBody) -> Vec<super::Message> {
+        self.html_body = Some(HtmlBody::from(body));
+        vec![]
+    }
+
+    fn handle_set_attachments(
+        &mut self,
+        attachments: Vec<MailDataAttachment>,
+    ) -> Vec<super::Message> {
+        self.attachments = Some(attachments);
         vec![]
     }
 }
