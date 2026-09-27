@@ -26,7 +26,10 @@ impl State {
     pub fn new() -> Self {
         Self {
             throbber: ThrobberState::default(),
-            keybindings: KeybindManager::new(HashMap::from([("q", UserAction::Quit)])),
+            keybindings: KeybindManager::new(HashMap::from([
+                ("q", UserAction::Quit),
+                ("<Tab>", UserAction::FocusNextTab),
+            ])),
 
             selected_tab: SelectedTab::Mail,
         }
@@ -74,7 +77,8 @@ impl State {
             UserAction::NavigateToBottom => todo!(),
             UserAction::NavigateRight => todo!(),
             UserAction::NavigateLeft => todo!(),
-            UserAction::Quit => todo!(),
+            UserAction::FocusNextTab => self.focus_next_tab(),
+            UserAction::Quit => self.quit(),
             UserAction::Back => self.back(),
         }
     }
@@ -94,6 +98,18 @@ impl State {
             entries,
             map: |entry| super::Message::Reader(Message::SelectedPaletteEntry(entry)),
         }]
+    }
+
+    fn focus_next_tab(&mut self) -> Vec<super::Message> {
+        self.selected_tab = match self.selected_tab {
+            SelectedTab::Mail => SelectedTab::Attachments,
+            SelectedTab::Attachments => SelectedTab::Mail,
+        };
+        vec![]
+    }
+
+    fn quit(&self) -> Vec<super::Message> {
+        vec![super::Message::Quit]
     }
 
     fn back(&self) -> Vec<super::Message> {

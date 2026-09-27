@@ -33,6 +33,9 @@ pub enum UserAction {
     #[strum(message = "Open the selected mailbox.")]
     NavigateLeft,
 
+    #[strum(message = "")]
+    FocusNextTab,
+
     #[strum(message = "Go back")]
     Back,
     #[strum(message = "Quit the application")]
