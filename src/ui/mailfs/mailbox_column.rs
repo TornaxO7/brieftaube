@@ -236,7 +236,37 @@ impl MailfsColumn for MailboxColumn {
     }
 
     fn navigate_to_bottom(&mut self) {
-        todo!("get the oldest mail from the mailbox")
+        self.mailbox_state.select(None);
+
+        match &self.mails {
+            Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
+                self.mail_state.select(Some(0));
+                return;
+            }
+            Loadable::Loaded(mails) => {
+                if mails.is_empty() {
+                    self.mail_state.select(None);
+                } else {
+                    self.mail_state.select(Some(mails.len() - 1));
+                    return;
+                }
+            }
+        };
+
+        match &self.mailboxes {
+            Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
+                self.mailbox_state.select(Some(0));
+            }
+            Loadable::Loaded(mailboxes) => {
+                if !mailboxes.is_empty() {
+                    self.mailbox_state.select(Some(mailboxes.len() - 1));
+                }
+            }
+        }
+
+        debug_assert!(
+            !(self.mailbox_state.selected().is_some() && self.mail_state.selected().is_some())
+        );
     }
 
     fn navigate_to_top(&mut self) {
@@ -245,6 +275,7 @@ impl MailfsColumn for MailboxColumn {
         match &self.mailboxes {
             Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
                 self.mailbox_state.select(Some(0));
+                return;
             }
             Loadable::Loaded(mailboxes) => {
                 if mailboxes.is_empty() {
@@ -268,6 +299,10 @@ impl MailfsColumn for MailboxColumn {
                 }
             }
         }
+
+        debug_assert!(
+            !(self.mailbox_state.selected().is_some() && self.mail_state.selected().is_some())
+        );
     }
 }
 

@@ -355,8 +355,14 @@ impl State {
                 self.users_column.navigate_to_bottom();
                 vec![]
             }
-            ColumnStackEntry::Mailbox(_mailbox_id) => {
-                todo!();
+            ColumnStackEntry::Mailbox(mailbox_id) => {
+                let account = self.users_column.get_selected_account().unwrap();
+                let key = account.as_key(mailbox_id.clone());
+                self.mailbox_columns
+                    .get_mut(&key)
+                    .unwrap()
+                    .navigate_to_bottom();
+                self.ensure_right_column_data()
             }
             ColumnStackEntry::Thread(thread_id) => {
                 let account = self.users_column.get_selected_account().unwrap();
@@ -549,6 +555,8 @@ impl State {
                             let mailbox_id = mailbox_data.id.clone();
                             let key = account_key.as_key(Some(mailbox_id.clone()));
 
+                            // TODO: Make sure that every mail is fetched
+                            //       which can be seen
                             if self.mailbox_columns.contains_key(&key) {
                                 vec![]
                             } else {
