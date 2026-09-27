@@ -439,8 +439,23 @@ impl State {
                     }
                 }
             }
-            ColumnStackEntry::Thread(_thread_id) => {
-                todo!("open mail")
+            ColumnStackEntry::Thread(thread_id) => {
+                let account = self.users_column.get_selected_account().unwrap();
+                let key = account.as_key(thread_id);
+                let column = self.thread_columns.get(&key).unwrap();
+
+                let Some(selected_entry) = column.get_selected_entry() else {
+                    return vec![];
+                };
+
+                match selected_entry {
+                    Loadable::NotLoaded => todo!("Start loading?"),
+                    Loadable::Loading => vec![],
+                    Loadable::Error(_) => todo!("Retry loading?"),
+                    Loadable::Loaded(mail) => vec![super::Message::OpenReader {
+                        mail_id: mail.id.clone(),
+                    }],
+                }
             }
         }
     }

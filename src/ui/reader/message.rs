@@ -4,4 +4,6 @@ pub enum Message {
     UserAction(super::UserAction),
     Event(Event),
     SelectedPaletteEntry(String),
+
+    Reset,
 }

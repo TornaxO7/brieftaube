@@ -17,6 +17,7 @@ use crate::{
     config::{self, Username},
     datasource::{self, Cache, RemoteSession, jmap::JmapDescriptor},
     repository::RepositoryHandler,
+    types::MailId,
     ui::palette::PaletteEntry,
 };
 use color_eyre::eyre;
@@ -53,6 +54,9 @@ pub enum Message {
     OpenPalette {
         entries: Vec<PaletteEntry>,
         map: fn(String) -> Message,
+    },
+    OpenReader {
+        mail_id: MailId,
     },
 
     Back,
@@ -174,6 +178,13 @@ impl Ui {
                 self.palette
                     .update(palette::Message::Restart { entries, map });
                 self.layers.push(ActiveLayer::Palette);
+                vec![]
+            }
+            Message::OpenReader { mail_id: _ } => {
+                self.reader.update(reader::Message::Reset);
+                self.layers.push(ActiveLayer::Reader);
+
+                // TODO: Send headers and request body
                 vec![]
             }
 

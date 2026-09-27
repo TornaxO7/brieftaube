@@ -18,6 +18,8 @@ pub use view::view;
 pub struct State {
     keybindings: KeybindManager<UserAction>,
     throbber: ThrobberState,
+
+    selected_tab: SelectedTab,
 }
 
 impl State {
@@ -25,6 +27,8 @@ impl State {
         Self {
             throbber: ThrobberState::default(),
             keybindings: KeybindManager::new(HashMap::from([("q", UserAction::Quit)])),
+
+            selected_tab: SelectedTab::Mail,
         }
     }
 }
@@ -37,6 +41,7 @@ impl Layer<Message> for State {
             Message::UserAction(action) => self.handle_user_action(action),
             Message::SelectedPaletteEntry(entry) => self.handle_selected_palette_entry(entry),
             Message::Event(event) => self.handle_event(event),
+            Message::Reset => vec![],
         }
     }
 }
@@ -94,4 +99,9 @@ impl State {
     fn back(&self) -> Vec<super::Message> {
         vec![super::Message::Back]
     }
+}
+
+enum SelectedTab {
+    Mail,
+    Attachments,
 }
