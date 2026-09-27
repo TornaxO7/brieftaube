@@ -7,7 +7,7 @@ mod utils;
 pub mod mailfs;
 pub mod palette;
 pub mod prompt;
-// pub mod reader;
+pub mod reader;
 pub mod statusbar;
 
 use tokio::sync::{RwLock, watch};
@@ -30,6 +30,8 @@ use tracing::error;
 #[derive(Debug, Clone, Copy)]
 enum ActiveLayer {
     Mailfs,
+    Reader,
+
     Palette,
     Prompt,
 }
@@ -37,6 +39,8 @@ enum ActiveLayer {
 pub enum Message {
     Mailfs(mailfs::Message),
     MailfsRequest(mailfs::MessageRequest),
+
+    Reader(reader::Message),
 
     Palette(palette::Message),
     Prompt(prompt::Message),
@@ -67,6 +71,7 @@ pub struct Ui {
     repos: HashMap<Username, watch::Receiver<RepositoryState>>,
 
     mailfs: mailfs::State,
+    reader: reader::State,
     palette: palette::State,
     prompt: prompt::State,
 }
@@ -76,11 +81,13 @@ impl Ui {
         let task_manager = TaskManager::new();
 
         let mailfs = mailfs::State::new(init_rect.clone());
+        let reader = reader::State::new();
         let palette = palette::State::new();
         let prompt = prompt::State::new();
 
         Self {
             mailfs,
+            reader,
             palette,
             prompt,
 
@@ -127,13 +134,14 @@ impl Ui {
         let area = frame.area();
 
         let is_overlay = match self.layers.last().unwrap() {
-            ActiveLayer::Mailfs => false,
+            ActiveLayer::Mailfs | ActiveLayer::Reader => false,
             ActiveLayer::Palette | ActiveLayer::Prompt => true,
         };
 
         if is_overlay {
             match self.layers.iter().rev().skip(1).next().unwrap() {
                 ActiveLayer::Mailfs => mailfs::view(&mut self.mailfs, frame, area),
+                ActiveLayer::Reader => reader::view(&mut self.reader, frame, area),
                 ActiveLayer::Palette => palette::view(&mut self.palette, frame, area),
                 ActiveLayer::Prompt => prompt::view(&mut self.prompt, frame, area),
             }
@@ -141,6 +149,7 @@ impl Ui {
 
         match self.layers.last_mut().unwrap() {
             ActiveLayer::Mailfs => mailfs::view(&mut self.mailfs, frame, area),
+            ActiveLayer::Reader => reader::view(&mut self.reader, frame, area),
             ActiveLayer::Palette => palette::view(&mut self.palette, frame, area),
             ActiveLayer::Prompt => prompt::view(&mut self.prompt, frame, area),
         }
@@ -150,6 +159,7 @@ impl Ui {
         match msg {
             Message::Event(event) => match self.layers.last_mut().unwrap() {
                 ActiveLayer::Mailfs => self.mailfs.update(mailfs::Message::Event(event)),
+                ActiveLayer::Reader => self.reader.update(reader::Message::Event(event)),
                 ActiveLayer::Palette => self.palette.update(palette::Message::Event(event)),
                 ActiveLayer::Prompt => self.prompt.update(prompt::Message::Event(event)),
             },
@@ -298,6 +308,8 @@ impl Ui {
                 };
                 vec![]
             }
+
+            Message::Reader(message) => self.reader.update(message),
 
             Message::Palette(message) => self.palette.update(message),
             Message::Prompt(message) => self.prompt.update(message),
