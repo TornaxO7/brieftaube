@@ -31,6 +31,7 @@ const PLACEHOLDER: &str = " ";
 
 const FOLDER_ICON: &str = "🖿";
 const MAIL_UNREAD_ICON: &str = "●";
+const PAPERCLIP: &str = "📎";
 
 // TODO: create cache for rendering
 
@@ -754,14 +755,8 @@ fn render_mail_preview(
             if let Some(attachments) = &mail.attachments
                 && !attachments.is_empty()
             {
-                let max_content_type_name_len = attachments
-                    .iter()
-                    .map(|attachment| attachment.content_type.len())
-                    .max()
-                    .unwrap_or(0);
-
                 let widths = [
-                    Constraint::Length(max_content_type_name_len as u16),
+                    Constraint::Length(2),
                     Constraint::Fill(1),
                     Constraint::Length("123,1 KB".len() as u16),
                 ];
@@ -769,7 +764,7 @@ fn render_mail_preview(
                 let rows: Vec<Row<'_>> = attachments
                     .iter()
                     .map(|attachment| {
-                        let content_type_name = Cell::from(attachment.content_type.as_str())
+                        let paperclip = Cell::from(PAPERCLIP)
                             .style(Style::new().fg(scheme.secondary.into_color()));
                         let name = Cell::from(attachment.name.as_str())
                             .style(Style::new().fg(scheme.primary.into_color()));
@@ -777,7 +772,7 @@ fn render_mail_preview(
                             Cell::from(Text::from(format_size(attachment.size)).right_aligned())
                                 .style(Style::new().fg(scheme.tertiary.into_color()));
 
-                        Row::new([content_type_name, name, size])
+                        Row::new([paperclip, name, size])
                     })
                     .collect();
 
