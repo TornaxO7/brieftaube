@@ -39,6 +39,7 @@ impl State {
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", UserAction::Quit),
                 ("<Tab>", UserAction::FocusNextTab),
+                ("h", UserAction::Back),
             ])),
 
             selected_tab: SelectedTab::Mail,
