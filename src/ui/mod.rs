@@ -201,6 +201,7 @@ impl Ui {
                 self.reader.update(reader::Message::Reset {
                     username: username.clone(),
                     account_id: account_id.clone(),
+                    mail_id: mail_id.clone(),
                 });
 
                 vec![

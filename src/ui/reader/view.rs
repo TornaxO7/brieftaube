@@ -185,7 +185,8 @@ fn render_mail_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
 }
 
 fn render_text_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
-    match &state.text_body {
+    let text_body = match &state.text_body {
+        Some(text_body) => text_body,
         None => {
             const LABEL: &str = "Loading text body";
 
@@ -201,24 +202,42 @@ fn render_text_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
                 area,
                 &mut state.throbber,
             );
-        }
-        Some(text_body) => match text_body {
-            Ok(body) => {
-                frame.render_widget(
-                    Paragraph::new(body.as_str())
-                        .style(Style::new().fg(scheme.primary.into_color())),
-                    area,
-                );
-            }
-            Err(err) => {
-                let msg = format!("Couldn't get `text/body` of mail:\n{}", err.to_string());
 
-                frame.render_widget(
-                    Paragraph::new(msg).style(Style::new().fg(scheme.error.into_color())),
-                    area,
-                );
-            }
-        },
+            return;
+        }
+    };
+
+    let text_body = match text_body {
+        Ok(text_body) => text_body,
+        Err(err) => {
+            let msg = format!("Couldn't get `text/body` of mail:\n{}", err.to_string());
+
+            frame.render_widget(
+                Paragraph::new(msg).style(Style::new().fg(scheme.error.into_color())),
+                area,
+            );
+            return;
+        }
+    };
+
+    match text_body {
+        Some(text_body) => {
+            frame.render_widget(
+                Paragraph::new(text_body.as_str())
+                    .style(Style::new().fg(scheme.primary.into_color())),
+                area,
+            );
+        }
+        None => {
+            const MSG: &str = "Mail doesn't have `text/body`.";
+
+            let area = area.centered(Constraint::Length(MSG.len() as u16), Constraint::Length(1));
+
+            frame.render_widget(
+                Paragraph::new(MSG).style(Style::new().fg(scheme.primary.into_color())),
+                area,
+            );
+        }
     }
 }
 

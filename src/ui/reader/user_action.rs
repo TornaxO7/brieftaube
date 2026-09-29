@@ -19,6 +19,11 @@ pub enum UserAction {
     #[strum(props(intern = true))]
     OpenCommandPalette,
 
+    #[strum(message = "Open html body")]
+    OpenHtmlBody,
+    #[strum(message = "Open text body")]
+    OpenTextBody,
+
     #[strum(message = "Navigate to the next (below) mailbox.")]
     NavigateDown,
     #[strum(message = "Navigate to the previous (above) mailbox.")]

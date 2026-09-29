@@ -5,7 +5,7 @@ mod view;
 
 use crate::{
     config::Username,
-    types::{AccountId, MailDataAttachment, MailDataHtmlBody, MailDataTextBody},
+    types::{AccountId, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId},
     ui::{
         Layer,
         utils::keybindmanager::{HandleEvent, KeybindManager},
@@ -31,7 +31,7 @@ pub struct State {
 
     ctx: Option<Ctx>,
     headers: Option<color_eyre::Result<ReaderHeaders>>,
-    text_body: Option<color_eyre::Result<String>>,
+    text_body: Option<color_eyre::Result<Option<String>>>,
     html_body: Option<color_eyre::Result<Option<HtmlBody>>>,
     attachments: Option<color_eyre::Result<Vec<MailDataAttachment>>>,
 }
@@ -44,6 +44,7 @@ impl State {
                 ("q", UserAction::Quit),
                 ("<Tab>", UserAction::FocusNextTab),
                 ("h", UserAction::Back),
+                (":", UserAction::OpenCommandPalette),
             ])),
 
             selected_tab: SelectedTab::Mail,
@@ -69,7 +70,8 @@ impl Layer<Message> for State {
             Message::Reset {
                 username,
                 account_id,
-            } => self.handle_reset(username, account_id),
+                mail_id,
+            } => self.handle_reset(username, account_id, mail_id),
 
             Message::SetHeaders(headers) => self.handle_set_headres(headers),
             Message::SetTextBody(body) => self.handle_set_text_body(body),
@@ -101,6 +103,8 @@ impl State {
 
         match action {
             UserAction::OpenCommandPalette => self.open_command_palette(),
+            UserAction::OpenTextBody => self.open_text_body(),
+            UserAction::OpenHtmlBody => self.open_html_body(),
             UserAction::NavigateDown => todo!(),
             UserAction::NavigateUp => todo!(),
             UserAction::NavigateToTop => todo!(),
@@ -118,13 +122,19 @@ impl State {
         vec![super::Message::Reader(Message::UserAction(action))]
     }
 
-    fn handle_reset(&mut self, username: Username, account_id: AccountId) -> Vec<super::Message> {
+    fn handle_reset(
+        &mut self,
+        username: Username,
+        account_id: AccountId,
+        mail_id: MailId,
+    ) -> Vec<super::Message> {
         self.selected_tab = SelectedTab::Mail;
         self.selected_body_type = SelectedBodyType::Html;
 
         self.ctx = Some(Ctx {
             username,
             account_id,
+            mail_id,
         });
         self.headers = None;
         self.text_body = None;
@@ -177,6 +187,39 @@ impl State {
         }]
     }
 
+    fn open_text_body(&mut self) -> Vec<super::Message> {
+        self.selected_body_type = SelectedBodyType::Text;
+        let ctx = self.ctx.as_ref().unwrap();
+
+        match self.text_body {
+            Some(_) => vec![],
+            None => vec![
+                MessageRequest::GetTextBody {
+                    username: ctx.username.clone(),
+                    account_id: ctx.account_id.clone(),
+                    mail_id: ctx.mail_id.clone(),
+                }
+                .into(),
+            ],
+        }
+    }
+
+    fn open_html_body(&mut self) -> Vec<super::Message> {
+        self.selected_body_type = SelectedBodyType::Html;
+        let ctx = self.ctx.as_ref().unwrap();
+
+        match self.html_body {
+            Some(_) => vec![],
+            None => vec![
+                MessageRequest::GetHtmlBody {
+                    username: ctx.username.clone(),
+                    account_id: ctx.account_id.clone(),
+                    mail_id: ctx.mail_id.clone(),
+                }
+                .into(),
+            ],
+        }
+    }
     fn focus_next_tab(&mut self) -> Vec<super::Message> {
         self.selected_tab = match self.selected_tab {
             SelectedTab::Mail => SelectedTab::Attachments,
@@ -236,4 +279,5 @@ impl HtmlBody {
 struct Ctx {
     username: Username,
     account_id: AccountId,
+    mail_id: MailId,
 }

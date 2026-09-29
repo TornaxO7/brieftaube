@@ -4,13 +4,13 @@ use jmap_client::email::{Email, EmailBodyPart};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MailDataTextBody {
     pub id: MailId,
-    pub content: String,
+    pub content: Option<String>,
 }
 
 impl MailDataTextBody {
     pub fn new(mail: &Email) -> Option<Self> {
         let parts = mail.text_body()?;
-        let content = join_body_values(mail, parts)?;
+        let content = join_body_values(mail, parts);
 
         Some(Self {
             id: mail.id().unwrap().into(),

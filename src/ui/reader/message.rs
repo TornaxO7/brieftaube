@@ -1,6 +1,6 @@
 use crate::{
     config::Username,
-    types::{AccountId, MailDataAttachment, MailDataHtmlBody, MailDataTextBody},
+    types::{AccountId, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId},
     ui::reader::ReaderHeaders,
 };
 use crossterm::event::Event;
@@ -18,6 +18,7 @@ pub enum Message {
     Reset {
         username: Username,
         account_id: AccountId,
+        mail_id: MailId,
     },
 }
 
