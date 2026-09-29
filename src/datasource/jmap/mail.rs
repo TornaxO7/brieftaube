@@ -84,6 +84,7 @@ impl MailRemote for JmapAccount {
                 .properties([
                     jmap_client::email::Property::Id,
                     jmap_client::email::Property::TextBody,
+                    jmap_client::email::Property::BodyValues,
                 ])
                 .arguments()
                 .fetch_text_body_values(true);
@@ -119,6 +120,7 @@ impl MailRemote for JmapAccount {
                 .properties([
                     jmap_client::email::Property::Id,
                     jmap_client::email::Property::HtmlBody,
+                    jmap_client::email::Property::BodyValues,
                 ])
                 .arguments()
                 .fetch_html_body_values(true);

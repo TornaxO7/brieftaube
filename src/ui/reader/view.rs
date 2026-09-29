@@ -8,7 +8,7 @@ use ratatui::{
     layout::{Constraint, HorizontalAlignment, Layout, Rect},
     style::Style,
     text::Text,
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table, Tabs},
+    widgets::{Block, Borders, Cell, Paragraph, Row, Table, Tabs, Wrap},
 };
 use throbber_widgets_tui::Throbber;
 
@@ -224,6 +224,7 @@ fn render_text_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
         Some(text_body) => {
             frame.render_widget(
                 Paragraph::new(text_body.as_str())
+                    .wrap(Wrap { trim: false })
                     .style(Style::new().fg(scheme.primary.into_color())),
                 area,
             );
@@ -283,6 +284,7 @@ fn render_html_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
             Ok(markdown_body) => {
                 frame.render_widget(
                     Paragraph::new(markdown_body.as_str())
+                        .wrap(Wrap { trim: false })
                         .style(Style::new().fg(scheme.primary.into_color())),
                     area,
                 );
