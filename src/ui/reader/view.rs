@@ -359,8 +359,6 @@ fn render_attachments_tab(
             frame.render_widget(
                 Table::new(rows, widths).block(
                     Block::new()
-                        .title(" Attachments ")
-                        .title_alignment(HorizontalAlignment::Center)
                         .borders(Borders::TOP)
                         .style(Style::new().fg(scheme.outline.into_color())),
                 ),

@@ -25,8 +25,12 @@ pub trait RemoteAccount:
 {
 }
 
-// TODO: Introduce one single `get_mail` method, which takes `Vec<(Mailid, Vec<MailProperty>)>, map(Dto) -> T`
-//       or create extra methods for `reader` etc.
+// TODO: Introduce a `MailDto` or so which contains three stages of data:
+// 1. MailDataCore
+// 2. MailDataPreview
+// 3. Body
+//
+// Which gets incrementally loaded
 #[async_trait]
 pub trait MailCache {
     async fn get_mail_state(&self) -> Option<&GetState>;
