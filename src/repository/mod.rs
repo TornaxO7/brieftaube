@@ -8,8 +8,8 @@ use crate::{
         types::{GetState, QueryState, QueryWindow, cache, remote},
     },
     types::{
-        AccountId, MailDataCore, MailDataPreview, MailId, MailboxData, MailboxId, ParentMailboxId,
-        ThreadId,
+        AccountId, MailDataAttachment, MailDataCore, MailDataHtmlBody, MailDataPreview,
+        MailDataTextBody, MailId, MailboxData, MailboxId, ParentMailboxId, ThreadId,
     },
 };
 use std::collections::HashMap;
@@ -404,6 +404,21 @@ impl RepositoryHandler {
         .await
     }
 
+    pub async fn get_mail_core(
+        &self,
+        account_id: AccountId,
+        mail_id: MailId,
+    ) -> color_eyre::Result<MailDataCore> {
+        self.execute(|tx| {
+            mail::Command {
+                account_id,
+                kind: mail::CommandKind::GetCore { id: mail_id, tx },
+            }
+            .into()
+        })
+        .await
+    }
+
     pub async fn query_mails(
         &self,
         account_id: AccountId,
@@ -450,6 +465,36 @@ impl RepositoryHandler {
             mail::Command {
                 account_id,
                 kind: mail::CommandKind::GetPreview { id: mail_id, tx },
+            }
+            .into()
+        })
+        .await
+    }
+
+    pub async fn get_mail_text_body(
+        &self,
+        account_id: AccountId,
+        mail_id: MailId,
+    ) -> color_eyre::Result<MailDataTextBody> {
+        self.execute(|tx| {
+            mail::Command {
+                account_id,
+                kind: mail::CommandKind::GetTextBody { id: mail_id, tx },
+            }
+            .into()
+        })
+        .await
+    }
+
+    pub async fn get_mail_html_body(
+        &self,
+        account_id: AccountId,
+        mail_id: MailId,
+    ) -> color_eyre::Result<MailDataHtmlBody> {
+        self.execute(|tx| {
+            mail::Command {
+                account_id,
+                kind: mail::CommandKind::GetHtmlBody { id: mail_id, tx },
             }
             .into()
         })

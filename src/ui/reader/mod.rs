@@ -1,9 +1,11 @@
 mod message;
+mod message_request;
 mod user_action;
 mod view;
 
 use crate::{
-    types::{MailDataAttachment, MailDataHtmlBody, MailDataTextBody},
+    config::Username,
+    types::{AccountId, MailDataAttachment, MailDataHtmlBody, MailDataTextBody},
     ui::{
         Layer,
         utils::keybindmanager::{HandleEvent, KeybindManager},
@@ -17,6 +19,7 @@ use tracing::debug;
 use user_action::UserAction;
 
 pub use message::Message;
+pub use message_request::MessageRequest;
 pub use view::view;
 
 pub struct State {
@@ -26,10 +29,11 @@ pub struct State {
     selected_tab: SelectedTab,
     selected_body_type: SelectedBodyType,
 
-    headers: Option<ReaderHeaders>,
-    text_body: Option<String>,
-    html_body: Option<HtmlBody>,
-    attachments: Option<Vec<MailDataAttachment>>,
+    ctx: Option<Ctx>,
+    headers: Option<color_eyre::Result<ReaderHeaders>>,
+    text_body: Option<color_eyre::Result<String>>,
+    html_body: Option<color_eyre::Result<Option<HtmlBody>>>,
+    attachments: Option<color_eyre::Result<Vec<MailDataAttachment>>>,
 }
 
 impl State {
@@ -45,6 +49,7 @@ impl State {
             selected_tab: SelectedTab::Mail,
             selected_body_type: SelectedBodyType::Html,
 
+            ctx: None,
             headers: None,
             text_body: None,
             html_body: None,
@@ -61,7 +66,10 @@ impl Layer<Message> for State {
             Message::Event(event) => self.handle_event(event),
             Message::UserAction(action) => self.handle_user_action(action),
             Message::SelectedPaletteEntry(entry) => self.handle_selected_palette_entry(entry),
-            Message::Reset => self.handle_reset(),
+            Message::Reset {
+                username,
+                account_id,
+            } => self.handle_reset(username, account_id),
 
             Message::SetHeaders(headers) => self.handle_set_headres(headers),
             Message::SetTextBody(body) => self.handle_set_text_body(body),
@@ -110,10 +118,14 @@ impl State {
         vec![super::Message::Reader(Message::UserAction(action))]
     }
 
-    fn handle_reset(&mut self) -> Vec<super::Message> {
+    fn handle_reset(&mut self, username: Username, account_id: AccountId) -> Vec<super::Message> {
         self.selected_tab = SelectedTab::Mail;
         self.selected_body_type = SelectedBodyType::Html;
 
+        self.ctx = Some(Ctx {
+            username,
+            account_id,
+        });
         self.headers = None;
         self.text_body = None;
         self.html_body = None;
@@ -121,24 +133,33 @@ impl State {
         vec![]
     }
 
-    fn handle_set_headres(&mut self, headers: ReaderHeaders) -> Vec<super::Message> {
+    fn handle_set_headres(
+        &mut self,
+        headers: color_eyre::Result<ReaderHeaders>,
+    ) -> Vec<super::Message> {
         self.headers = Some(headers);
         vec![]
     }
 
-    fn handle_set_text_body(&mut self, body: MailDataTextBody) -> Vec<super::Message> {
-        self.text_body = Some(body.content);
+    fn handle_set_text_body(
+        &mut self,
+        body: color_eyre::Result<MailDataTextBody>,
+    ) -> Vec<super::Message> {
+        self.text_body = Some(body.map(|body| body.content));
         vec![]
     }
 
-    fn handle_set_html_body(&mut self, body: MailDataHtmlBody) -> Vec<super::Message> {
-        self.html_body = Some(HtmlBody::from(body));
+    fn handle_set_html_body(
+        &mut self,
+        body: color_eyre::Result<MailDataHtmlBody>,
+    ) -> Vec<super::Message> {
+        self.html_body = Some(body.map(HtmlBody::new));
         vec![]
     }
 
     fn handle_set_attachments(
         &mut self,
-        attachments: Vec<MailDataAttachment>,
+        attachments: color_eyre::Result<Vec<MailDataAttachment>>,
     ) -> Vec<super::Message> {
         self.attachments = Some(attachments);
         vec![]
@@ -201,11 +222,18 @@ struct HtmlBody {
     markdown: std::io::Result<String>,
 }
 
-impl From<MailDataHtmlBody> for HtmlBody {
-    fn from(html: MailDataHtmlBody) -> Self {
-        Self {
-            html: html.content.clone(),
-            markdown: HtmlToMarkdown::new().convert(html.content.as_str()),
-        }
+impl HtmlBody {
+    pub fn new(html: MailDataHtmlBody) -> Option<Self> {
+        let content = html.content?;
+
+        Some(Self {
+            html: content.clone(),
+            markdown: HtmlToMarkdown::new().convert(content.as_str()),
+        })
     }
+}
+
+struct Ctx {
+    username: Username,
+    account_id: AccountId,
 }

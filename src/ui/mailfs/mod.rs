@@ -453,6 +453,8 @@ impl State {
                     Loadable::Loading => vec![],
                     Loadable::Error(_) => todo!("Retry loading?"),
                     Loadable::Loaded(mail) => vec![super::Message::OpenReader {
+                        username: key.0,
+                        account_id: key.1,
                         mail_id: mail.id.clone(),
                     }],
                 }

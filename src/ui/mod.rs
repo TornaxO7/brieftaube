@@ -19,7 +19,7 @@ use crate::{
     config::{self, Username},
     datasource::{self, Cache, RemoteSession, jmap::JmapDescriptor},
     repository::RepositoryHandler,
-    types::MailId,
+    types::{AccountId, MailId},
     ui::palette::PaletteEntry,
 };
 use color_eyre::eyre;
@@ -44,6 +44,7 @@ pub enum Message {
     MailfsRequest(mailfs::MessageRequest),
 
     Reader(reader::Message),
+    ReaderRequest(reader::MessageRequest),
 
     Palette(palette::Message),
     Prompt(prompt::Message),
@@ -58,6 +59,8 @@ pub enum Message {
         map: fn(String) -> Message,
     },
     OpenReader {
+        username: Username,
+        account_id: AccountId,
         mail_id: MailId,
     },
 
@@ -189,12 +192,34 @@ impl Ui {
                 self.layers.push(ActiveLayer::Palette);
                 vec![]
             }
-            Message::OpenReader { mail_id: _ } => {
-                self.reader.update(reader::Message::Reset);
+            Message::OpenReader {
+                username,
+                account_id,
+                mail_id,
+            } => {
                 self.layers.push(ActiveLayer::Reader);
+                self.reader.update(reader::Message::Reset {
+                    username: username.clone(),
+                    account_id: account_id.clone(),
+                });
 
-                // TODO: Send headers and request body
-                vec![]
+                vec![
+                    Message::ReaderRequest(reader::MessageRequest::GetHeaders {
+                        username: username.clone(),
+                        account_id: account_id.clone(),
+                        mail_id: mail_id.clone(),
+                    }),
+                    Message::ReaderRequest(reader::MessageRequest::GetHtmlBody {
+                        username: username.clone(),
+                        account_id: account_id.clone(),
+                        mail_id: mail_id.clone(),
+                    }),
+                    Message::ReaderRequest(reader::MessageRequest::GetAttachments {
+                        username: username.clone(),
+                        account_id: account_id.clone(),
+                        mail_id: mail_id.clone(),
+                    }),
+                ]
             }
 
             Message::Back => {
@@ -330,6 +355,106 @@ impl Ui {
             }
 
             Message::Reader(message) => self.reader.update(message),
+            Message::ReaderRequest(message_request) => {
+                match message_request {
+                    reader::MessageRequest::GetHeaders {
+                        username,
+                        account_id,
+                        mail_id,
+                    } => {
+                        let state = self.repos.get(&username).unwrap().clone();
+
+                        self.task_manager.spawn(async move {
+                            let handler = match get_handler(state).await {
+                                Ok(handler) => handler,
+                                Err(()) => return vec![],
+                            };
+
+                            let headers = handler.get_mail_preview(account_id, mail_id).await.map(
+                                |preview| reader::ReaderHeaders {
+                                    from: preview.from.map(|from| from.to_string()),
+                                    to: preview.to.map(|to| to.to_string()),
+                                    cc: preview.cc.map(|cc| cc.to_string()),
+                                    subject: preview.subject,
+                                    received_at: preview
+                                        .received_at
+                                        .format("%b %e, %Y")
+                                        .to_string(),
+                                },
+                            );
+
+                            vec![Message::Reader(reader::Message::SetHeaders(headers)).into()]
+                        });
+                    }
+                    reader::MessageRequest::GetTextBody {
+                        username,
+                        account_id,
+                        mail_id,
+                    } => {
+                        let state = self.repos.get(&username).unwrap().clone();
+
+                        self.task_manager.spawn(async move {
+                            let handler = match get_handler(state).await {
+                                Ok(handler) => handler,
+                                Err(()) => return vec![],
+                            };
+
+                            vec![
+                                reader::Message::SetTextBody(
+                                    handler.get_mail_text_body(account_id, mail_id).await,
+                                )
+                                .into(),
+                            ]
+                        });
+                    }
+                    reader::MessageRequest::GetHtmlBody {
+                        username,
+                        account_id,
+                        mail_id,
+                    } => {
+                        let state = self.repos.get(&username).unwrap().clone();
+
+                        self.task_manager.spawn(async move {
+                            let handler = match get_handler(state).await {
+                                Ok(handler) => handler,
+                                Err(()) => return vec![],
+                            };
+
+                            vec![
+                                reader::Message::SetHtmlBody(
+                                    handler.get_mail_html_body(account_id, mail_id).await,
+                                )
+                                .into(),
+                            ]
+                        });
+                    }
+                    reader::MessageRequest::GetAttachments {
+                        username,
+                        account_id,
+                        mail_id,
+                    } => {
+                        let state = self.repos.get(&username).unwrap().clone();
+
+                        self.task_manager.spawn(async move {
+                            let handler = match get_handler(state).await {
+                                Ok(handler) => handler,
+                                Err(()) => return vec![],
+                            };
+
+                            vec![
+                                reader::Message::SetAttachments(
+                                    handler
+                                        .get_mail_preview(account_id, mail_id)
+                                        .await
+                                        .map(|preview| preview.attachments.unwrap_or(vec![])),
+                                )
+                                .into(),
+                            ]
+                        });
+                    }
+                };
+                vec![]
+            }
 
             Message::Palette(message) => self.palette.update(message),
             Message::Prompt(message) => self.prompt.update(message),
@@ -427,4 +552,22 @@ enum RepositoryState {
     Loading,
     Loaded(RepositoryHandler),
     Error(String),
+}
+
+// TODO: Seperate the structs which are stored in the datasource and the ui.
+//
+// This function for example should be invoked here, not in the `view` method.
+fn format_size(size: usize) -> String {
+    const UNITS: [(usize, &str); 3] = [(1_000_000_000, "GB"), (1_000_000, "MB"), (1_000, "KB")];
+
+    for (unit, suffix) in UNITS {
+        if size >= unit {
+            let tenths = (size * 10 + unit / 2) / unit;
+            if tenths >= 10 {
+                return format!("{},{} {suffix}", tenths / 10, tenths % 10);
+            }
+        }
+    }
+
+    format!("{size} B")
 }
