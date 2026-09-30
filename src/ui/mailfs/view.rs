@@ -572,8 +572,14 @@ fn render_thread_column(
                     let subject = mail
                         .subject
                         .as_ref()
-                        .map(|s| s.as_str())
-                        .unwrap_or("<No subject>");
+                        .map(|s| {
+                            if mail.has_attachment {
+                                format!("{} {}", PAPERCLIP, s)
+                            } else {
+                                s.clone()
+                            }
+                        })
+                        .unwrap_or("<No subject>".to_string());
 
                     let received_at = mail.received_at.format("%b %e, %Y").to_string();
 
