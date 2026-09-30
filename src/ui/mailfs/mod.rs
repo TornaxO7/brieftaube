@@ -164,7 +164,6 @@ impl State {
             UserAction::NavigateToBottom => self.navigate_to_bottom(),
             UserAction::NavigateRight => self.navigate_right(),
             UserAction::NavigateLeft => self.navigate_left(),
-            UserAction::NavigateToParent => self.navigate_to_parent(),
 
             UserAction::SelectEntryToggle => self.select_entry(),
             UserAction::CutSelectedEntries => self.cut_selected_entries(),
@@ -559,10 +558,6 @@ impl State {
                 vec![]
             }
         }
-    }
-
-    fn navigate_to_parent(&mut self) -> Vec<super::Message> {
-        todo!();
     }
 
     fn select_entry(&mut self) -> Vec<super::Message> {

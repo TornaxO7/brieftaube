@@ -33,9 +33,6 @@ pub enum UserAction {
     #[strum(message = "Open the selected mailbox.")]
     NavigateLeft,
 
-    #[strum(message = "Open the parent mailbox.")]
-    NavigateToParent,
-
     #[strum(message = "Toggle entry selection")]
     SelectEntryToggle,
     #[strum(message = "Mark the current selection as 'cut'.")]
