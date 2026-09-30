@@ -1,3 +1,4 @@
+mod attachments_tab;
 mod message;
 mod message_request;
 mod user_action;
@@ -8,6 +9,7 @@ use crate::{
     types::{AccountId, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId},
     ui::{
         Layer,
+        reader::attachments_tab::AttachmentsTab,
         utils::keybindmanager::{HandleEvent, KeybindManager},
     },
 };
@@ -33,7 +35,7 @@ pub struct State {
     headers: Option<color_eyre::Result<ReaderHeaders>>,
     text_body: Option<color_eyre::Result<Option<String>>>,
     html_body: Option<color_eyre::Result<Option<HtmlBody>>>,
-    attachments: Option<color_eyre::Result<Vec<MailDataAttachment>>>,
+    attachments: Option<AttachmentsTab>,
 }
 
 impl State {
@@ -45,6 +47,10 @@ impl State {
                 ("<Tab>", UserAction::FocusNextTab),
                 ("h", UserAction::Back),
                 (":", UserAction::OpenCommandPalette),
+                ("j", UserAction::NavigateDown),
+                ("k", UserAction::NavigateUp),
+                ("gg", UserAction::NavigateToTop),
+                ("ge", UserAction::NavigateToBottom),
             ])),
 
             selected_tab: SelectedTab::Mail,
@@ -105,10 +111,10 @@ impl State {
             UserAction::OpenCommandPalette => self.open_command_palette(),
             UserAction::OpenTextBody => self.open_text_body(),
             UserAction::OpenHtmlBody => self.open_html_body(),
-            UserAction::NavigateDown => todo!(),
-            UserAction::NavigateUp => todo!(),
-            UserAction::NavigateToTop => todo!(),
-            UserAction::NavigateToBottom => todo!(),
+            UserAction::NavigateDown => self.navigate_down(),
+            UserAction::NavigateUp => self.navigate_up(),
+            UserAction::NavigateToTop => self.navigate_to_top(),
+            UserAction::NavigateToBottom => self.navigate_to_bottom(),
             UserAction::NavigateRight => todo!(),
             UserAction::NavigateLeft => todo!(),
             UserAction::FocusNextTab => self.focus_next_tab(),
@@ -171,7 +177,7 @@ impl State {
         &mut self,
         attachments: color_eyre::Result<Vec<MailDataAttachment>>,
     ) -> Vec<super::Message> {
-        self.attachments = Some(attachments);
+        self.attachments = Some(AttachmentsTab::new(attachments));
         vec![]
     }
 }
@@ -220,6 +226,63 @@ impl State {
             ],
         }
     }
+
+    fn navigate_down(&mut self) -> Vec<super::Message> {
+        match self.selected_tab {
+            SelectedTab::Mail => todo!(),
+            SelectedTab::Attachments => {
+                let Some(tab) = &mut self.attachments else {
+                    return vec![];
+                };
+
+                tab.navigate_down();
+                vec![]
+            }
+        }
+    }
+
+    fn navigate_up(&mut self) -> Vec<super::Message> {
+        match self.selected_tab {
+            SelectedTab::Mail => todo!(),
+            SelectedTab::Attachments => {
+                let Some(tab) = &mut self.attachments else {
+                    return vec![];
+                };
+
+                tab.navigate_up();
+                vec![]
+            }
+        }
+    }
+
+    fn navigate_to_top(&mut self) -> Vec<super::Message> {
+        match self.selected_tab {
+            SelectedTab::Mail => todo!(),
+            SelectedTab::Attachments => {
+                let Some(tab) = &mut self.attachments else {
+                    return vec![];
+                };
+
+                tab.navigate_to_top();
+                vec![]
+            }
+        }
+    }
+
+    fn navigate_to_bottom(&mut self) -> Vec<super::Message> {
+        match self.selected_tab {
+            SelectedTab::Mail => todo!(),
+            SelectedTab::Attachments => {
+                let Some(tab) = &mut self.attachments else {
+                    return vec![];
+                };
+
+                tab.navigate_to_bottom();
+                vec![]
+            }
+        }
+    }
+
     fn focus_next_tab(&mut self) -> Vec<super::Message> {
         self.selected_tab = match self.selected_tab {
             SelectedTab::Mail => SelectedTab::Attachments,

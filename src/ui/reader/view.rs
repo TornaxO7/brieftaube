@@ -316,7 +316,7 @@ fn render_attachments_tab(
     frame: &mut Frame,
     area: Rect,
 ) {
-    let attachments = match &state.attachments {
+    let attachments_tab = match &mut state.attachments {
         Some(attachments) => attachments,
         None => {
             const LABEL: &str = "Loading attachments";
@@ -337,7 +337,7 @@ fn render_attachments_tab(
         }
     };
 
-    match attachments {
+    match &attachments_tab.attachments {
         Ok(attachments) => {
             let widths = [
                 Constraint::Fill(1),
@@ -356,13 +356,20 @@ fn render_attachments_tab(
                 })
                 .collect();
 
-            frame.render_widget(
-                Table::new(rows, widths).block(
-                    Block::new()
-                        .borders(Borders::TOP)
-                        .style(Style::new().fg(scheme.outline.into_color())),
-                ),
+            frame.render_stateful_widget(
+                Table::new(rows, widths)
+                    .row_highlight_style(
+                        Style::new()
+                            .fg(scheme.on_primary_container.into_color())
+                            .bg(scheme.primary_container.into_color()),
+                    )
+                    .block(
+                        Block::new()
+                            .borders(Borders::TOP)
+                            .style(Style::new().fg(scheme.outline.into_color())),
+                    ),
                 area,
+                &mut attachments_tab.state,
             );
         }
         Err(err) => {
