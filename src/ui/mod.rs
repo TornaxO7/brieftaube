@@ -90,10 +90,12 @@ impl Ui {
     pub fn new(init_rect: Rect) -> Self {
         let task_manager = TaskManager::new();
 
-        let mailfs = mailfs::State::new(init_rect.clone());
+        let (mailfs, initial_user) = mailfs::State::new(init_rect.clone());
         let reader = reader::State::new();
         let palette = palette::State::new();
         let prompt = prompt::State::new();
+
+        task_manager.spawn(init_user(initial_user));
 
         let scheme = {
             let theme = THEME.get().unwrap();
@@ -491,7 +493,7 @@ async fn mailfs_repository_create(
                     return vec![
                         mailfs::Message::SetUserAccounts {
                             username: user_config.username.clone(),
-                            accounts: Loadable::Error(err.to_string()),
+                            accounts: Err(err.into()),
                         }
                         .into(),
                     ];
@@ -523,7 +525,7 @@ async fn mailfs_repository_create(
     vec![
         mailfs::Message::SetUserAccounts {
             username: user_config.username.clone(),
-            accounts: Loadable::Loaded(accounts),
+            accounts: Ok(accounts),
         }
         .into(),
     ]
@@ -571,4 +573,10 @@ fn format_size(size: usize) -> String {
     }
 
     format!("{size} B")
+}
+
+async fn init_user(user: config::UserConfig) -> Vec<Message> {
+    vec![Message::MailfsRequest(
+        mailfs::MessageRequest::GetAccountsOf(user),
+    )]
 }

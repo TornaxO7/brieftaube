@@ -8,8 +8,8 @@ use crate::{
         types::{GetState, QueryState, QueryWindow, cache, remote},
     },
     types::{
-        AccountId, MailDataAttachment, MailDataCore, MailDataHtmlBody, MailDataPreview,
-        MailDataTextBody, MailId, MailboxData, MailboxId, ParentMailboxId, ThreadId,
+        AccountId, MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody, MailId,
+        MailboxData, MailboxId, ParentMailboxId, ThreadId,
     },
 };
 use std::collections::HashMap;

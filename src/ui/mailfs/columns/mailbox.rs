@@ -1,7 +1,7 @@
 use crate::{
     datasource::types::QueryWindow,
     types::{MailDataCore, MailboxData},
-    ui::{Loadable, mailfs::MailfsColumn},
+    ui::{Loadable, mailfs::columns::MailfsColumn},
 };
 use ratatui::widgets::TableState;
 
@@ -310,6 +310,10 @@ impl MailfsColumn for MailboxColumn {
         debug_assert!(
             !(self.mailbox_state.selected().is_some() && self.mail_state.selected().is_some())
         );
+    }
+
+    fn len(&self) -> usize {
+        self.mailboxes_len() + self.mails_len()
     }
 }
 

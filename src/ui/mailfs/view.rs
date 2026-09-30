@@ -3,7 +3,8 @@ use crate::{
     ui::{
         Loadable,
         mailfs::{
-            ColumnStackEntry, mailbox_column::MailboxColumnEntry, user_column::UserColumnEntry,
+            ColumnStackEntry,
+            columns::{MailboxColumnEntry, MailfsColumn},
         },
         statusbar::Statusbar,
     },
@@ -21,18 +22,12 @@ use throbber_widgets_tui::Throbber;
 
 const MAX_DATE_LENGTH: usize = "Jan 10, 1996".len();
 
-const COLLAPSED: &str = "▸";
-const UNCOLLAPSED: &str = "▾";
-const UNCOLLAPSED_CHILD: &str = "├";
-const UNCOLLAPSED_END: &str = "└";
 const SEPARATION_LINE: &str = "│";
 const PLACEHOLDER: &str = " ";
 
 const FOLDER_ICON: &str = "🖿";
 const MAIL_UNREAD_ICON: &str = "●";
 const PAPERCLIP: &str = "📎";
-
-// TODO: create cache for rendering
 
 pub fn view(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
     let [path_area, columns_area, statusbar_area] = Layout::vertical([
@@ -52,21 +47,25 @@ fn render_path(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, are
 
     for column_entry in state.column_stack.iter().cloned() {
         match column_entry {
-            ColumnStackEntry::Users => {
-                let Some(UserColumnEntry::Account(account)) =
-                    state.users_column.get_selected_entry()
-                else {
-                    break;
-                };
+            ColumnStackEntry::Users => {}
+            ColumnStackEntry::Accounts => {
+                let selected_user = &state.users_column.get_selected_entry().username;
+                let account = &state
+                    .accounts_column
+                    .get(selected_user)
+                    .expect("Account column exists")
+                    .loaded()
+                    .unwrap()
+                    .get_selected_entry()
+                    .name;
 
                 path.push(Span::styled(
-                    format!("{}:", account.name.as_str()),
+                    format!("[{}]:", account.as_str()),
                     Style::new().fg(scheme.primary.into_color()),
                 ));
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
-                let account = state.users_column.get_selected_account().unwrap();
-                let key = account.as_key(mailbox_id);
+                let key = state.get_account_ctx().as_key(mailbox_id);
                 let column = state.mailbox_columns.get(&key).unwrap();
 
                 let Some(selected_entry) = column.get_selected_entry() else {
@@ -114,6 +113,7 @@ fn render_statusbar(_scheme: &Scheme, state: &mut super::State, frame: &mut Fram
     let layer_name = {
         let column_type = match state.column_stack.last().unwrap() {
             ColumnStackEntry::Users => "Users",
+            ColumnStackEntry::Accounts => "Accounts",
             ColumnStackEntry::Mailbox(_) => "Mailbox",
             ColumnStackEntry::Thread(_) => "Thread",
         };
@@ -169,44 +169,13 @@ fn render_middle_column(scheme: &Scheme, state: &mut super::State, frame: &mut F
 fn render_right_column(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
     match state.column_stack.last().unwrap() {
         ColumnStackEntry::Users => {
-            let Some(selected_entry) = state.users_column.get_selected_entry() else {
-                return;
-            };
-
-            match selected_entry {
-                UserColumnEntry::User(_user_ctx) => {
-                    // IDEA: Maybe render some stats from the config?
-                }
-                UserColumnEntry::Account(_account_data) => {
-                    render_mailbox_column(scheme, ROOT_MAILBOX_ID, state, frame, area);
-                }
-                UserColumnEntry::AccountNotLoaded => {
-                    frame.render_widget(
-                        Paragraph::new("Accounts haven't been loaded yet.")
-                            .style(Style::new().fg(scheme.primary.into_color())),
-                        area,
-                    );
-                }
-                UserColumnEntry::AccountLoading => {
-                    frame.render_widget(
-                        Paragraph::new("Connecting to server...")
-                            .style(Style::new().fg(scheme.primary.into_color())),
-                        area,
-                    );
-                }
-                UserColumnEntry::AccountError(error) => {
-                    frame.render_widget(
-                        Paragraph::new(format!("Couldn't connect to server:\n{error}"))
-                            .wrap(Wrap { trim: false })
-                            .style(Style::new().fg(scheme.error.into_color())),
-                        area,
-                    );
-                }
-            }
+            render_accounts_column(scheme, state, frame, area);
+        }
+        ColumnStackEntry::Accounts => {
+            render_mailbox_column(scheme, ROOT_MAILBOX_ID, state, frame, area);
         }
         ColumnStackEntry::Mailbox(mailbox_id) => {
-            let account = state.users_column.get_selected_account().unwrap();
-            let key = account.as_key(mailbox_id.clone());
+            let key = state.get_account_ctx().as_key(mailbox_id.clone());
 
             let column = state.mailbox_columns.get(&key).unwrap();
             let Some(selected_entry) = column.get_selected_entry() else {
@@ -247,19 +216,14 @@ fn render_right_column(scheme: &Scheme, state: &mut super::State, frame: &mut Fr
             }
         }
         ColumnStackEntry::Thread(thread_id) => {
-            let account = state
-                .users_column
-                .get_selected_account()
-                .expect("A account must've been selected");
-            let thread_key = account.as_key(thread_id.clone());
-            let column = state.thread_columns.get(&thread_key).unwrap();
+            let thread_key = state.get_account_ctx().as_key(thread_id.clone());
 
-            let Some(selected_mail) = column.get_selected_entry() else {
-                return;
-            };
-
-            match selected_mail {
-                Loadable::NotLoaded => {}
+            match state
+                .thread_columns
+                .get(&thread_key)
+                .expect("Column exists")
+            {
+                Loadable::NotLoaded => unreachable!(),
                 Loadable::Loading => {
                     frame.render_stateful_widget(
                         Throbber::default()
@@ -268,12 +232,12 @@ fn render_right_column(scheme: &Scheme, state: &mut super::State, frame: &mut Fr
                         &mut state.throbber,
                     );
                 }
-                Loadable::Loaded(entry) => {
-                    let mail_id = entry.id.clone();
+                Loadable::Loaded(column) => {
+                    let mail_id = column.get_selected_entry().id.clone();
                     render_mail_preview(scheme, mail_id, state, frame, area);
                 }
                 Loadable::Error(err) => frame.render_widget(
-                    Paragraph::new(format!("Couldn't load preview of mail:\n{err}"))
+                    Paragraph::new(format!("Couldn't load thread:\n{err}"))
                         .wrap(Wrap { trim: false })
                         .style(Style::new().fg(scheme.error.into_color())),
                     area,
@@ -291,7 +255,10 @@ fn render_column(
     area: Rect,
 ) {
     match entry {
-        ColumnStackEntry::Users => render_user_accounts_column(scheme, state, frame, area),
+        ColumnStackEntry::Users => render_users_column(scheme, state, frame, area),
+        ColumnStackEntry::Accounts => {
+            render_accounts_column(scheme, state, frame, area);
+        }
         ColumnStackEntry::Mailbox(mailbox_id) => {
             render_mailbox_column(scheme, mailbox_id, state, frame, area)
         }
@@ -301,91 +268,89 @@ fn render_column(
     }
 }
 
-fn render_user_accounts_column(
-    scheme: &Scheme,
-    state: &mut super::State,
-    frame: &mut Frame,
-    area: Rect,
-) {
-    let rows: Vec<Row> = {
-        let mut rows = vec![];
+fn render_users_column(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
+    let rows: Vec<Row<'_>> = {
+        let mut rows = Vec::new();
 
         for user in state.users_column.users.iter() {
-            if user.is_collapsed {
-                rows.push(Row::new([
-                    Cell::from(COLLAPSED),
-                    Cell::from(user.config.username.as_str())
-                        .style(Style::new().fg(scheme.secondary.into_color())),
-                ]));
-                continue;
-            } else {
-                rows.push(Row::new([
-                    Cell::from(UNCOLLAPSED),
-                    Cell::from(user.config.username.as_str())
-                        .style(Style::new().fg(scheme.secondary.into_color())),
-                ]));
-            }
+            let row = Row::new([Cell::new(user.username.as_str())
+                .style(Style::new().fg(scheme.secondary.into_color()))]);
 
-            // accounts
-            match &user.accounts {
-                Loadable::NotLoaded => {
-                    rows.push(Row::new([
-                        Cell::from(UNCOLLAPSED_END),
-                        Cell::from("Not loaded"),
-                    ]));
-                }
-                Loadable::Loading => {
-                    let throbber = Throbber::default()
-                        .throbber_style(Style::default().fg(scheme.primary.into_color()))
-                        .to_symbol_span(&state.throbber);
-
-                    let line = Cell::from(Line::from(vec![
-                        throbber,
-                        Span::styled(
-                            "Loading account...",
-                            Style::default().fg(scheme.primary.into_color()),
-                        ),
-                    ]));
-
-                    rows.push(Row::new([Cell::from(UNCOLLAPSED_END), line]))
-                }
-                Loadable::Loaded(accounts) => {
-                    let (last, rest) = accounts.split_last().unwrap();
-
-                    for account in rest {
-                        rows.push(Row::new([
-                            Cell::from(UNCOLLAPSED_CHILD),
-                            Cell::from(account.name.as_str()),
-                        ]));
-                    }
-
-                    rows.push(Row::new([
-                        Cell::from(UNCOLLAPSED_END),
-                        Cell::from(last.name.as_str()),
-                    ]));
-                }
-                Loadable::Error(_) => rows.push(Row::new([
-                    Cell::from(UNCOLLAPSED_END),
-                    Cell::from("Error: Login failed")
-                        .style(Style::default().fg(scheme.error.into_color())),
-                ])),
-            }
+            rows.push(row);
         }
 
         rows
     };
 
-    let widths = [Constraint::Length(2), Constraint::Fill(1)];
+    let widths = [Constraint::Fill(1)];
 
     frame.render_stateful_widget(
         Table::new(rows, widths).row_highlight_style(
             Style::new()
-                .fg(scheme.on_primary_container.into_color())
-                .bg(scheme.primary_container.into_color()),
+                .bg(scheme.primary_container.into_color())
+                .fg(scheme.on_primary_container.into_color()),
         ),
         area,
         &mut state.users_column.state,
     );
+}
+
+fn render_accounts_column(
+    scheme: &Scheme,
+    state: &mut super::State,
+    frame: &mut Frame,
+    area: Rect,
+) {
+    let selected_user = &state.users_column.get_selected_entry().username;
+
+    match state
+        .accounts_column
+        .get_mut(selected_user)
+        .expect("Account column exists")
+    {
+        Loadable::NotLoaded => unreachable!(),
+        Loadable::Loading => {
+            frame.render_stateful_widget(
+                Throbber::default().label("Login user..."),
+                area,
+                &mut state.throbber,
+            );
+        }
+        Loadable::Error(err) => {
+            frame.render_widget(
+                Paragraph::new(format!("Couldn't connect to server:\n{}", err))
+                    .wrap(Wrap { trim: false })
+                    .style(Style::new().fg(scheme.error.into_color())),
+                area,
+            );
+        }
+        Loadable::Loaded(accounts) => {
+            let rows: Vec<Row<'_>> = {
+                let mut rows = Vec::with_capacity(accounts.len());
+
+                for account in &accounts.accounts {
+                    let row = Row::new([Cell::new(account.name.as_str())
+                        .style(Style::new().fg(scheme.primary.into_color()))]);
+
+                    rows.push(row);
+                }
+
+                rows
+            };
+
+            let widths = [Constraint::Fill(1)];
+
+            frame.render_stateful_widget(
+                Table::new(rows, widths).row_highlight_style(
+                    Style::new()
+                        .bg(scheme.primary_container.into_color())
+                        .fg(scheme.on_primary_container.into_color()),
+                ),
+                area,
+                &mut accounts.state,
+            );
+        }
+    }
 }
 
 fn render_mailbox_column(
@@ -395,11 +360,7 @@ fn render_mailbox_column(
     frame: &mut Frame,
     area: Rect,
 ) {
-    let Some(account) = state.users_column.get_selected_account() else {
-        return;
-    };
-
-    let key = account.as_key(mailbox_id);
+    let key = state.get_account_ctx().as_key(mailbox_id);
     let mailbox_column = state.mailbox_columns.get_mut(&key).unwrap();
 
     let mailboxes_len = mailbox_column.mailboxes_len();
@@ -575,82 +536,70 @@ fn render_thread_column(
     frame: &mut Frame,
     area: Rect,
 ) {
-    let Some(account) = state.users_column.get_selected_account() else {
-        return;
-    };
-    let key = account.as_key(thread_id);
-    let column = state.thread_columns.get_mut(&key).unwrap();
-
-    let widths = [
-        Constraint::Length(1),
-        Constraint::Fill(1),
-        Constraint::Length(MAX_DATE_LENGTH as u16),
-    ];
-
-    let rows: Vec<Row<'_>> = match &column.mails {
-        Loadable::NotLoaded => {
-            vec![Row::new([Cell::from("Thread not requested yet.")
-                .style(Style::new().fg(scheme.primary.into_color()))
-                .column_span(widths.len() as u16)])]
-        }
+    let key = state.get_account_ctx().as_key(thread_id);
+    match state.thread_columns.get_mut(&key).unwrap() {
+        Loadable::NotLoaded => unreachable!(),
         Loadable::Loading => {
-            let throbber = Throbber::default()
-                .throbber_style(Style::new().fg(scheme.primary.into_color()))
-                .to_symbol_span(&state.throbber);
+            frame.render_stateful_widget(
+                Throbber::default().label("Loading thread"),
+                area,
+                &mut state.throbber,
+            );
+        }
+        Loadable::Error(err) => {
+            frame.render_widget(
+                Paragraph::new(err.as_str()).style(Style::new().fg(scheme.error.into_color())),
+                area,
+            );
+        }
+        Loadable::Loaded(column) => {
+            let widths = [
+                Constraint::Length(1),
+                Constraint::Fill(1),
+                Constraint::Length(MAX_DATE_LENGTH as u16),
+            ];
 
-            let line = Cell::from(Line::from(vec![
-                throbber,
-                Span::styled(
-                    "Loading thread...",
-                    Style::new().fg(scheme.primary.into_color()),
+            let rows: Vec<Row<'_>> = {
+                let mut rows = Vec::with_capacity(column.len());
+
+                for mail in &column.mails {
+                    let unread_symbol = if !mail.keywords.contains(&MailKeyword::Seen) {
+                        MAIL_UNREAD_ICON
+                    } else {
+                        PLACEHOLDER
+                    };
+
+                    let subject = mail
+                        .subject
+                        .as_ref()
+                        .map(|s| s.as_str())
+                        .unwrap_or("<No subject>");
+
+                    let received_at = mail.received_at.format("%b %e, %Y").to_string();
+
+                    rows.push(Row::new([
+                        Cell::from(unread_symbol)
+                            .style(Style::new().fg(scheme.primary_container.into_color())),
+                        Cell::from(subject).style(Style::new().fg(scheme.primary.into_color())),
+                        Cell::from(received_at)
+                            .style(Style::new().fg(scheme.on_tertiary_container.into_color())),
+                    ]));
+                }
+
+                rows
+            };
+
+            frame.render_stateful_widget(
+                Table::new(rows, widths).row_highlight_style(
+                    Style::new()
+                        .bg(scheme.primary_container.into_color())
+                        .fg(scheme.on_primary_container.into_color()),
                 ),
-            ]))
-            .column_span(widths.len() as u16);
-
-            vec![Row::new([line])]
+                area,
+                &mut column.state,
+            );
         }
-        Loadable::Loaded(mails) => mails
-            .iter()
-            .map(|mail| {
-                let unread_symbol = if !mail.keywords.contains(&MailKeyword::Seen) {
-                    MAIL_UNREAD_ICON
-                } else {
-                    PLACEHOLDER
-                };
-
-                let subject = mail
-                    .subject
-                    .as_ref()
-                    .map(|s| s.as_str())
-                    .unwrap_or("<No subject>");
-
-                let received_at = mail.received_at.format("%b %e, %Y").to_string();
-
-                Row::new([
-                    Cell::from(unread_symbol)
-                        .style(Style::new().fg(scheme.primary_container.into_color())),
-                    Cell::from(subject).style(Style::new().fg(scheme.primary.into_color())),
-                    Cell::from(received_at)
-                        .style(Style::new().fg(scheme.on_tertiary_container.into_color())),
-                ])
-            })
-            .collect(),
-        Loadable::Error(_) => {
-            vec![Row::new([Cell::new("Couldn't fetch thread")
-                .column_span(widths.len() as u16)
-                .style(Style::new().fg(scheme.error.into_color()))])]
-        }
-    };
-
-    frame.render_stateful_widget(
-        Table::new(rows, widths).row_highlight_style(
-            Style::new()
-                .bg(scheme.primary_container.into_color())
-                .fg(scheme.on_primary_container.into_color()),
-        ),
-        area,
-        &mut column.state,
-    );
+    }
 }
 
 fn render_mail_preview(
@@ -660,15 +609,8 @@ fn render_mail_preview(
     frame: &mut Frame,
     area: Rect,
 ) {
-    let Some(account) = state.users_column.get_selected_account() else {
-        return;
-    };
-    let key = account.as_key(mail_id);
-    let Some(preview) = state.mail_previews.get(&key) else {
-        return;
-    };
-
-    match preview {
+    let key = state.get_account_ctx().as_key(mail_id);
+    match state.mail_previews.get(&key).expect("State is there") {
         Loadable::NotLoaded => {
             frame.render_widget(
                 Paragraph::new("Preview not loaded yet.")

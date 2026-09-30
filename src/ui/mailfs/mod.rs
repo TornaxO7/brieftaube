@@ -1,14 +1,11 @@
+mod columns;
 mod message;
 mod message_request;
 mod user_action;
 mod view;
 
-mod mailbox_column;
-mod thread_column;
-mod user_column;
-
 use crate::{
-    config::{self, Username},
+    config::{self, UserConfig, Username},
     datasource::types::QueryWindow,
     types::{
         AccountData, AccountId, MailDataCore, MailDataPreview, MailId, MailboxData, MailboxId,
@@ -16,11 +13,7 @@ use crate::{
     },
     ui::{
         Layer, Loadable,
-        mailfs::{
-            mailbox_column::{MailboxColumn, MailboxColumnEntry},
-            thread_column::ThreadColumn,
-            user_column::{UserColumn, UserColumnEntryMut},
-        },
+        mailfs::columns::*,
         utils::keybindmanager::{self, KeybindManager},
     },
 };
@@ -46,42 +39,54 @@ pub struct State {
 
     terminal_height: u16,
 
-    users_column: UserColumn,
-    mailbox_columns: HashMap<(Username, AccountId, ParentMailboxId), MailboxColumn>,
-    thread_columns: HashMap<(Username, AccountId, ThreadId), ThreadColumn>,
+    users_column: columns::UserColumn,
+    accounts_column: HashMap<Username, Loadable<columns::AccountsColumn>>,
+    mailbox_columns: HashMap<(Username, AccountId, ParentMailboxId), columns::MailboxColumn>,
+    thread_columns: HashMap<(Username, AccountId, ThreadId), Loadable<columns::ThreadColumn>>,
     mail_previews: HashMap<(Username, AccountId, MailId), Loadable<MailDataPreview>>,
 }
 
 impl State {
-    pub fn new(init_rect: Rect) -> Self {
-        let users_column = UserColumn::new();
+    pub fn new(init_rect: Rect) -> (Self, UserConfig) {
+        let users_column = columns::UserColumn::new();
+        let (accounts_column, initial_user) = {
+            let selected_user = users_column.get_selected_entry().clone();
+            (
+                HashMap::from([(selected_user.username.clone(), Loadable::Loading)]),
+                selected_user,
+            )
+        };
         let thread_columns = HashMap::new();
         let mailbox_columns = HashMap::new();
         let mail_previews = HashMap::new();
 
-        Self {
-            throbber: ThrobberState::default(),
-            mode: Mode::Normal,
-            column_stack: vec![ColumnStackEntry::Users],
-            terminal_height: init_rect.height,
+        (
+            Self {
+                throbber: ThrobberState::default(),
+                mode: Mode::Normal,
+                column_stack: vec![ColumnStackEntry::Users],
+                terminal_height: init_rect.height,
 
-            thread_columns,
-            users_column,
-            mailbox_columns,
-            mail_previews,
+                accounts_column,
+                thread_columns,
+                users_column,
+                mailbox_columns,
+                mail_previews,
 
-            keybindings: KeybindManager::new(HashMap::from([
-                ("q", UserAction::Quit),
-                ("j", UserAction::NavigateDown),
-                ("l", UserAction::NavigateRight),
-                ("h", UserAction::NavigateLeft),
-                ("k", UserAction::NavigateUp),
-                ("gg", UserAction::NavigateToTop),
-                ("ge", UserAction::NavigateToBottom),
-                (" ", UserAction::SelectEntryToggle),
-                (":", UserAction::OpenCommandPalette),
-            ])),
-        }
+                keybindings: KeybindManager::new(HashMap::from([
+                    ("q", UserAction::Quit),
+                    ("j", UserAction::NavigateDown),
+                    ("l", UserAction::NavigateRight),
+                    ("h", UserAction::NavigateLeft),
+                    ("k", UserAction::NavigateUp),
+                    ("gg", UserAction::NavigateToTop),
+                    ("ge", UserAction::NavigateToBottom),
+                    (" ", UserAction::SelectEntryToggle),
+                    (":", UserAction::OpenCommandPalette),
+                ])),
+            },
+            initial_user,
+        )
     }
 }
 
@@ -183,9 +188,21 @@ impl State {
     fn handle_set_user_accounts(
         &mut self,
         username: config::Username,
-        accounts: Loadable<Vec<AccountData>>,
+        accounts: color_eyre::Result<Vec<AccountData>>,
     ) -> Vec<super::Message> {
-        self.users_column.set_accounts(username, accounts);
+        match accounts {
+            Ok(accounts) => {
+                let res = self.accounts_column.insert(
+                    username,
+                    Loadable::Loaded(columns::AccountsColumn::new(accounts)),
+                );
+                debug_assert!(res.is_some());
+            }
+            Err(err) => {
+                self.accounts_column
+                    .insert(username, Loadable::Error(err.to_string()));
+            }
+        }
         vec![]
     }
 
@@ -229,11 +246,18 @@ impl State {
     ) -> Vec<super::Message> {
         let key = (username, account_id, thread_id);
 
-        let column = self
-            .thread_columns
-            .get_mut(&key)
-            .expect("Requested must've come from an existing thread column.");
-        column.set_mails(thread_mails);
+        match thread_mails {
+            Ok(mails) => {
+                let res = self
+                    .thread_columns
+                    .insert(key, Loadable::Loaded(ThreadColumn::new(mails)));
+                debug_assert!(res.is_some());
+            }
+            Err(err) => {
+                self.thread_columns
+                    .insert(key, Loadable::Error(err.to_string()));
+            }
+        }
         vec![]
     }
 
@@ -277,21 +301,39 @@ impl State {
                 self.users_column.navigate_down();
                 self.ensure_right_column_data()
             }
+            ColumnStackEntry::Accounts => {
+                let username = &self.users_column.get_selected_entry().username;
+                let Some(column) = self
+                    .accounts_column
+                    .get_mut(username)
+                    .expect("Account column exists")
+                    .loaded_mut()
+                else {
+                    return vec![];
+                };
+
+                column.navigate_down();
+                self.ensure_right_column_data()
+            }
             ColumnStackEntry::Mailbox(mailbox_id) => {
-                let selected_account = self.users_column.get_selected_account().unwrap();
-                let key = selected_account.as_key(mailbox_id);
+                let key = self.get_account_ctx().as_key(mailbox_id);
                 let column = self.mailbox_columns.get_mut(&key).unwrap();
                 column.navigate_down();
-
                 // TODO: Check if the query-window is still within the new height
                 self.ensure_right_column_data()
             }
             ColumnStackEntry::Thread(thread_id) => {
-                let account = self.users_column.get_selected_account().unwrap();
-                let key = account.as_key(thread_id);
-                let column = self.thread_columns.get_mut(&key).unwrap();
-                column.navigate_down();
+                let key = self.get_account_ctx().as_key(thread_id);
+                let Some(column) = self
+                    .thread_columns
+                    .get_mut(&key)
+                    .expect("Column exists")
+                    .loaded_mut()
+                else {
+                    return vec![];
+                };
 
+                column.navigate_down();
                 self.ensure_right_column_data()
             }
         }
@@ -303,19 +345,37 @@ impl State {
                 self.users_column.navigate_up();
                 self.ensure_right_column_data()
             }
-            ColumnStackEntry::Mailbox(mailbox_id) => {
-                let selected_account = self.users_column.get_selected_account().unwrap();
-                let key = selected_account.as_key(mailbox_id);
+            ColumnStackEntry::Accounts => {
+                let username = &self.users_column.get_selected_entry().username;
+                let Some(column) = self
+                    .accounts_column
+                    .get_mut(username)
+                    .expect("Account column exists")
+                    .loaded_mut()
+                else {
+                    return vec![];
+                };
 
+                column.navigate_up();
+                self.ensure_right_column_data()
+            }
+            ColumnStackEntry::Mailbox(mailbox_id) => {
+                let key = self.get_account_ctx().as_key(mailbox_id);
                 let mailbox_column = self.mailbox_columns.get_mut(&key).unwrap();
                 mailbox_column.navigate_up();
                 self.ensure_right_column_data()
             }
             ColumnStackEntry::Thread(thread_id) => {
-                let account = self.users_column.get_selected_account().unwrap();
-                let key = account.as_key(thread_id);
+                let key = self.get_account_ctx().as_key(thread_id);
+                let Some(column) = self
+                    .thread_columns
+                    .get_mut(&key)
+                    .expect("Colum exists")
+                    .loaded_mut()
+                else {
+                    return vec![];
+                };
 
-                let column = self.thread_columns.get_mut(&key).unwrap();
                 column.navigate_up();
                 self.ensure_right_column_data()
             }
@@ -328,13 +388,22 @@ impl State {
                 self.users_column.navigate_to_top();
                 vec![]
             }
-            ColumnStackEntry::Mailbox(mailbox_id) => {
-                let Some(account) = self.users_column.get_selected_account() else {
+            ColumnStackEntry::Accounts => {
+                let selected_user = &self.users_column.get_selected_entry().username;
+                let Some(column) = self
+                    .accounts_column
+                    .get_mut(selected_user)
+                    .expect("Account column exist")
+                    .loaded_mut()
+                else {
                     return vec![];
                 };
 
-                let key = account.as_key(mailbox_id.clone());
-
+                column.navigate_to_top();
+                self.ensure_right_column_data()
+            }
+            ColumnStackEntry::Mailbox(mailbox_id) => {
+                let key = self.get_account_ctx().as_key(mailbox_id.clone());
                 self.mailbox_columns
                     .get_mut(&key)
                     .unwrap()
@@ -342,9 +411,17 @@ impl State {
                 vec![]
             }
             ColumnStackEntry::Thread(thread_id) => {
-                let account = self.users_column.get_selected_account().unwrap();
-                let key = account.as_key(thread_id.clone());
-                self.thread_columns.get_mut(&key).unwrap().navigate_to_top();
+                let key = self.get_account_ctx().as_key(thread_id.clone());
+                let Some(column) = self
+                    .thread_columns
+                    .get_mut(&key)
+                    .expect("Column exists")
+                    .loaded_mut()
+                else {
+                    return vec![];
+                };
+
+                column.navigate_to_top();
                 vec![]
             }
         }
@@ -356,9 +433,21 @@ impl State {
                 self.users_column.navigate_to_bottom();
                 vec![]
             }
+            ColumnStackEntry::Accounts => {
+                let selected_user = &self.users_column.get_selected_entry().username;
+                let Some(column) = self
+                    .accounts_column
+                    .get_mut(selected_user)
+                    .expect("Accounts column exists")
+                    .loaded_mut()
+                else {
+                    return vec![];
+                };
+                column.navigate_to_bottom();
+                self.ensure_right_column_data()
+            }
             ColumnStackEntry::Mailbox(mailbox_id) => {
-                let account = self.users_column.get_selected_account().unwrap();
-                let key = account.as_key(mailbox_id.clone());
+                let key = self.get_account_ctx().as_key(mailbox_id.clone());
                 self.mailbox_columns
                     .get_mut(&key)
                     .unwrap()
@@ -366,12 +455,17 @@ impl State {
                 self.ensure_right_column_data()
             }
             ColumnStackEntry::Thread(thread_id) => {
-                let account = self.users_column.get_selected_account().unwrap();
-                let key = account.as_key(thread_id.clone());
-                self.thread_columns
+                let key = self.get_account_ctx().as_key(thread_id.clone());
+                let Some(column) = self
+                    .thread_columns
                     .get_mut(&key)
-                    .unwrap()
-                    .navigate_to_bottom();
+                    .expect("Column exists")
+                    .loaded_mut()
+                else {
+                    return vec![];
+                };
+
+                column.navigate_to_bottom();
                 self.ensure_right_column_data()
             }
         }
@@ -380,43 +474,34 @@ impl State {
     fn navigate_right(&mut self) -> Vec<super::Message> {
         match self.column_stack.last().cloned().unwrap() {
             ColumnStackEntry::Users => {
-                let Some(selected_entry) = self.users_column.get_selected_entry_mut() else {
-                    return vec![];
-                };
+                let selected_user = self.users_column.get_selected_entry();
 
-                match selected_entry {
-                    UserColumnEntryMut::User(user_ctx) => {
-                        if user_ctx.is_collapsed {
-                            user_ctx.is_collapsed = false;
-                        }
-
-                        if matches!(user_ctx.accounts, Loadable::NotLoaded | Loadable::Error(_)) {
-                            user_ctx.accounts = Loadable::Loading;
-                            return vec![
-                                MessageRequest::GetAccountsOf(user_ctx.config.clone()).into(),
-                            ];
-                        }
-
-                        vec![]
+                match self
+                    .accounts_column
+                    .get(&selected_user.username)
+                    .expect("Accounts column exists")
+                {
+                    Loadable::Loading => vec![],
+                    Loadable::NotLoaded | Loadable::Error(_) => {
+                        // retry
+                        vec![MessageRequest::GetAccountsOf(selected_user.clone()).into()]
                     }
-                    UserColumnEntryMut::Account(_account_data) => {
-                        self.column_stack
-                            .push(ColumnStackEntry::Mailbox(ROOT_MAILBOX_ID));
+                    Loadable::Loaded(_) => {
+                        self.column_stack.push(ColumnStackEntry::Accounts);
                         self.ensure_right_column_data()
                     }
-                    UserColumnEntryMut::AccountNotLoaded
-                    | UserColumnEntryMut::AccountLoading
-                    | UserColumnEntryMut::AccountError(_) => vec![],
                 }
             }
+            ColumnStackEntry::Accounts => {
+                self.column_stack
+                    .push(ColumnStackEntry::Mailbox(ROOT_MAILBOX_ID));
+                self.ensure_right_column_data()
+            }
             ColumnStackEntry::Mailbox(mailbox_id) => {
-                let Some(account) = self.users_column.get_selected_account() else {
-                    return vec![];
-                };
-
-                let key = account.as_key(mailbox_id.clone());
+                let key = self.get_account_ctx().as_key(mailbox_id);
                 let column = self.mailbox_columns.get(&key).unwrap();
                 let Some(selected_entry) = column.get_selected_entry() else {
+                    // mailbox could be empty
                     return vec![];
                 };
 
@@ -441,39 +526,35 @@ impl State {
                 }
             }
             ColumnStackEntry::Thread(thread_id) => {
-                let account = self.users_column.get_selected_account().unwrap();
-                let key = account.as_key(thread_id);
-                let column = self.thread_columns.get(&key).unwrap();
+                let key = self.get_account_ctx().as_key(thread_id);
 
-                let Some(selected_entry) = column.get_selected_entry() else {
-                    return vec![];
-                };
-
-                match selected_entry {
-                    Loadable::NotLoaded => todo!("Start loading?"),
+                match self.thread_columns.get(&key).expect("Column exists") {
+                    Loadable::NotLoaded => unreachable!("Start loading?"),
                     Loadable::Loading => vec![],
-                    Loadable::Error(_) => todo!("Retry loading?"),
-                    Loadable::Loaded(mail) => vec![super::Message::OpenReader {
-                        username: key.0,
-                        account_id: key.1,
-                        mail_id: mail.id.clone(),
-                    }],
+                    Loadable::Error(_) => {
+                        unreachable!("Middle column can't be this thread if it's an error")
+                    }
+                    Loadable::Loaded(column) => {
+                        let selected_mail = column.get_selected_entry();
+                        vec![super::Message::OpenReader {
+                            username: key.0,
+                            account_id: key.1,
+                            mail_id: selected_mail.id.clone(),
+                        }]
+                    }
                 }
             }
         }
     }
 
     fn navigate_left(&mut self) -> Vec<super::Message> {
-        match self.column_stack.last_mut().unwrap() {
+        match self.column_stack.last().unwrap() {
             ColumnStackEntry::Users => {
-                let Some(user) = self.users_column.get_selected_user_mut() else {
-                    return vec![];
-                };
-
-                user.is_collapsed = true;
                 vec![]
             }
-            ColumnStackEntry::Mailbox(_) | ColumnStackEntry::Thread(_) => {
+            ColumnStackEntry::Accounts
+            | ColumnStackEntry::Mailbox(_)
+            | ColumnStackEntry::Thread(_) => {
                 self.column_stack.pop();
                 vec![]
             }
@@ -519,16 +600,42 @@ impl State {
 
 // helpers
 impl State {
+    fn get_account_ctx(&self) -> AccountCtx {
+        let selected_username = self.users_column.get_selected_entry().username.clone();
+        let selected_account_id = self
+            .accounts_column
+            .get(&selected_username)
+            .expect("Account column exists")
+            .loaded()
+            .expect("Account column is loaded")
+            .get_selected_entry()
+            .id
+            .clone();
+
+        AccountCtx {
+            username: selected_username,
+            account_id: selected_account_id,
+        }
+    }
+
     /// Depending on what is selected in the middle column it will return the suitable requests so that the
     /// right column can display things.
     fn ensure_right_column_data(&mut self) -> Vec<crate::ui::Message> {
         match self.column_stack.last().unwrap().clone() {
             ColumnStackEntry::Users => {
-                let Some(account_key) = self.users_column.get_selected_account() else {
-                    return vec![];
-                };
+                let selected_user = self.users_column.get_selected_entry();
 
-                let key = account_key.as_key(ROOT_MAILBOX_ID);
+                if self.accounts_column.contains_key(&selected_user.username) {
+                    vec![]
+                } else {
+                    self.accounts_column
+                        .insert(selected_user.username.clone(), Loadable::Loading);
+
+                    vec![MessageRequest::GetAccountsOf(selected_user.clone()).into()]
+                }
+            }
+            ColumnStackEntry::Accounts => {
+                let key = self.get_account_ctx().as_key(ROOT_MAILBOX_ID);
 
                 if self.mailbox_columns.contains_key(&key) {
                     vec![]
@@ -549,11 +656,7 @@ impl State {
                 }
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
-                let Some(account_key) = self.users_column.get_selected_account() else {
-                    return vec![];
-                };
-
-                let key = account_key.as_key(mailbox_id);
+                let key = self.get_account_ctx().as_key(mailbox_id);
                 let middle_mailbox_column = self
                     .mailbox_columns
                     .get(&key)
@@ -571,7 +674,7 @@ impl State {
                     Loadable::Loaded(entry) => match entry {
                         MailboxColumnEntry::Mailbox(mailbox_data) => {
                             let mailbox_id = mailbox_data.id.clone();
-                            let key = account_key.as_key(Some(mailbox_id.clone()));
+                            let key = self.get_account_ctx().as_key(Some(mailbox_id.clone()));
 
                             // TODO: Make sure that every mail is fetched
                             //       which can be seen
@@ -605,13 +708,12 @@ impl State {
                             }
                         }
                         MailboxColumnEntry::RootMail(mail) => {
-                            let key = account_key.as_key(mail.thread_id.clone());
+                            let key = self.get_account_ctx().as_key(mail.thread_id.clone());
 
                             if self.thread_columns.contains_key(&key) {
                                 vec![]
                             } else {
-                                self.thread_columns
-                                    .insert(key.clone(), ThreadColumn::new(Loadable::Loading));
+                                self.thread_columns.insert(key.clone(), Loadable::Loading);
 
                                 vec![
                                     MessageRequest::GetThreadMails {
@@ -627,36 +729,27 @@ impl State {
                 }
             }
             ColumnStackEntry::Thread(thread_id) => {
-                let account = self.users_column.get_selected_account().unwrap();
-                let thread_key = account.as_key(thread_id);
-                let column = self.thread_columns.get(&thread_key).unwrap();
-
-                let Some(selected_entry) = column.get_selected_entry() else {
+                let thread_key = self.get_account_ctx().as_key(thread_id);
+                let Some(column) = self.thread_columns.get(&thread_key).unwrap().loaded() else {
                     return vec![];
                 };
+                let selected_mail = column.get_selected_entry();
 
-                match selected_entry {
-                    Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => vec![],
-                    Loadable::Loaded(selected_thread_mail) => {
-                        let id = selected_thread_mail.id.clone();
-                        let preview_key = account.as_key(id);
+                let preview_key = self.get_account_ctx().as_key(selected_mail.id.clone());
+                if self.mail_previews.contains_key(&preview_key) {
+                    vec![]
+                } else {
+                    self.mail_previews
+                        .insert(preview_key.clone(), Loadable::Loading);
 
-                        if self.mail_previews.contains_key(&preview_key) {
-                            vec![]
-                        } else {
-                            self.mail_previews
-                                .insert(preview_key.clone(), Loadable::Loading);
-
-                            vec![
-                                MessageRequest::GetMailPreview {
-                                    username: preview_key.0,
-                                    account_id: preview_key.1,
-                                    mail_id: preview_key.2,
-                                }
-                                .into(),
-                            ]
+                    vec![
+                        MessageRequest::GetMailPreview {
+                            username: preview_key.0,
+                            account_id: preview_key.1,
+                            mail_id: preview_key.2,
                         }
-                    }
+                        .into(),
+                    ]
                 }
             }
         }
@@ -671,27 +764,18 @@ enum Mode {
 #[derive(Debug, Clone, Hash)]
 enum ColumnStackEntry {
     Users,
+    Accounts,
     Mailbox(ParentMailboxId),
     Thread(ThreadId),
 }
 
-trait MailfsColumn {
-    fn navigate_up(&mut self);
-
-    fn navigate_down(&mut self);
-
-    fn navigate_to_bottom(&mut self);
-
-    fn navigate_to_top(&mut self);
-}
-
 #[derive(Clone, Hash)]
-struct AccountKey {
+struct AccountCtx {
     username: Username,
     account_id: AccountId,
 }
 
-impl AccountKey {
+impl AccountCtx {
     pub fn as_key<T>(&self, other: T) -> (Username, AccountId, T) {
         (self.username.clone(), self.account_id.clone(), other)
     }

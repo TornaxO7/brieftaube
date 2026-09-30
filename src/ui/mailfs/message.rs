@@ -5,7 +5,7 @@ use crate::{
         AccountData, AccountId, MailDataCore, MailDataPreview, MailId, MailboxData, MailboxId,
         ParentMailboxId, ThreadId,
     },
-    ui::{Loadable, mailfs::user_action::UserAction},
+    ui::mailfs::user_action::UserAction,
 };
 use crossterm::event::Event;
 
@@ -15,7 +15,7 @@ pub enum Message {
 
     SetUserAccounts {
         username: Username,
-        accounts: Loadable<Vec<AccountData>>,
+        accounts: color_eyre::Result<Vec<AccountData>>,
     },
     SetChildMailboxes {
         username: Username,
