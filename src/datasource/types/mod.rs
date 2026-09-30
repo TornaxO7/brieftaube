@@ -3,8 +3,6 @@ pub mod remote;
 
 use std::ops::Range;
 
-use crate::types::{MailDataCore, ThreadId};
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GetState(pub String);
 
@@ -74,13 +72,4 @@ impl From<Range<usize>> for QueryWindow {
 
         Self { start, limit }
     }
-}
-
-#[derive(Debug, Clone)]
-pub enum RootMail {
-    Single(MailDataCore),
-    Thread {
-        mails: Vec<MailDataCore>,
-        id: ThreadId,
-    },
 }
