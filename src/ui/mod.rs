@@ -557,24 +557,6 @@ enum RepositoryState {
     Error(String),
 }
 
-// TODO: Seperate the structs which are stored in the datasource and the ui.
-//
-// This function for example should be invoked here, not in the `view` method.
-fn format_size(size: usize) -> String {
-    const UNITS: [(usize, &str); 3] = [(1_000_000_000, "GB"), (1_000_000, "MB"), (1_000, "KB")];
-
-    for (unit, suffix) in UNITS {
-        if size >= unit {
-            let tenths = (size * 10 + unit / 2) / unit;
-            if tenths >= 10 {
-                return format!("{},{} {suffix}", tenths / 10, tenths % 10);
-            }
-        }
-    }
-
-    format!("{size} B")
-}
-
 async fn init_user(user: config::UserConfig) -> Vec<Message> {
     vec![Message::MailfsRequest(
         mailfs::MessageRequest::GetAccountsOf(user),
