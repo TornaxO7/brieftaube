@@ -35,6 +35,7 @@ pub use message::*;
 pub use message_request::*;
 pub use view::view;
 
+// TODO: split up `User & Accounts` into `User` column and `Accounts` column
 pub struct State {
     keybindings: KeybindManager<UserAction>,
 

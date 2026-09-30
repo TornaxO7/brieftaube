@@ -3,6 +3,7 @@ use crate::{
     utils::IntoColor,
 };
 use material_theme_loader::Scheme;
+use pulldown_cmark_mdcat::ratatui::MdcatWidget;
 use ratatui::{
     Frame,
     layout::{Constraint, HorizontalAlignment, Layout, Rect},
@@ -243,7 +244,7 @@ fn render_text_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
 }
 
 fn render_html_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
-    let html_body = match &state.html_body {
+    let html_body = match &mut state.html_body {
         Some(html_body) => html_body,
         None => {
             // TODO: Maybe merge it with the loading screen of text-body? Like a generic one
@@ -282,11 +283,10 @@ fn render_html_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
     match html_body {
         Some(html_body) => match &html_body.markdown {
             Ok(markdown_body) => {
-                frame.render_widget(
-                    Paragraph::new(markdown_body.as_str())
-                        .wrap(Wrap { trim: false })
-                        .style(Style::new().fg(scheme.primary.into_color())),
+                frame.render_stateful_widget(
+                    MdcatWidget::new(markdown_body),
                     area,
+                    &mut html_body.state,
                 );
             }
             Err(err) => {

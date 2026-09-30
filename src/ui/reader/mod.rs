@@ -12,7 +12,7 @@ use crate::{
     },
 };
 use crossterm::event::Event;
-use htmd::HtmlToMarkdown;
+use pulldown_cmark_mdcat::ratatui::MdcatWidgetState;
 use std::{collections::HashMap, str::FromStr};
 use throbber_widgets_tui::ThrobberState;
 use tracing::debug;
@@ -263,15 +263,18 @@ impl ReaderHeaders {
 struct HtmlBody {
     html: String,
     markdown: std::io::Result<String>,
+    state: MdcatWidgetState,
 }
 
 impl HtmlBody {
     pub fn new(html: MailDataHtmlBody) -> Option<Self> {
         let content = html.content?;
+        let markdown = htmd::convert(content.as_str());
 
         Some(Self {
-            html: content.clone(),
-            markdown: HtmlToMarkdown::new().convert(content.as_str()),
+            html: content,
+            markdown,
+            state: MdcatWidgetState::new(),
         })
     }
 }
