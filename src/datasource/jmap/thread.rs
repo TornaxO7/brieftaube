@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     datasource::{
         ThreadRemote,
@@ -10,6 +8,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use color_eyre::Result;
+use std::collections::HashMap;
 
 #[async_trait]
 impl ThreadRemote for JmapAccount {
