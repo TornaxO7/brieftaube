@@ -110,6 +110,15 @@ impl State {
             Event::Key(event) => {
                 match event.code {
                     KeyCode::Esc => {
+                        self.input.clear();
+                        self.nucleo.pattern.reparse(
+                            0,
+                            "",
+                            nucleo::pattern::CaseMatching::Smart,
+                            nucleo::pattern::Normalization::Smart,
+                            false,
+                        );
+                        self.nucleo.tick(10);
                         return vec![super::Message::Back];
                     }
                     KeyCode::Enter => {
