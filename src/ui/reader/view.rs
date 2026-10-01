@@ -401,22 +401,35 @@ fn render_attachments_tab(
 
     match &attachments_tab.attachments {
         Ok(attachments) => {
-            let widths = [
-                Constraint::Fill(1),
-                Constraint::Length("123,1 KB".len() as u16),
-            ];
+            let mut longest_content_type_name = 0;
+            let mut longest_size_name = 0;
 
             let rows: Vec<Row<'_>> = attachments
                 .iter()
                 .map(|attachment| {
+                    let size_name = format_size(attachment.size);
+
+                    longest_size_name = longest_size_name.max(size_name.len());
+
+                    longest_content_type_name =
+                        longest_content_type_name.max(attachment.content_type.len());
+
+                    let size = Cell::from(Text::from(size_name.clone()).right_aligned())
+                        .style(Style::new().fg(scheme.secondary.into_color()));
                     let name = Cell::from(attachment.name.as_str())
                         .style(Style::new().fg(scheme.primary.into_color()));
-                    let size = Cell::from(Text::from(format_size(attachment.size)).right_aligned())
+                    let content_type = Cell::from(attachment.content_type.as_str())
                         .style(Style::new().fg(scheme.tertiary.into_color()));
 
-                    Row::new([name, size])
+                    Row::new([size, name, content_type])
                 })
                 .collect();
+
+            let widths = [
+                Constraint::Length(longest_size_name as u16),
+                Constraint::Fill(1),
+                Constraint::Length(longest_content_type_name as u16),
+            ];
 
             frame.render_stateful_widget(
                 Table::new(rows, widths)
@@ -425,6 +438,7 @@ fn render_attachments_tab(
                             .fg(scheme.on_primary_container.into_color())
                             .bg(scheme.primary_container.into_color()),
                     )
+                    .column_spacing(2)
                     .block(
                         Block::new()
                             .borders(Borders::TOP)
@@ -448,7 +462,7 @@ fn format_size(size: usize) -> String {
         if size >= unit {
             let tenths = (size * 10 + unit / 2) / unit;
             if tenths >= 10 {
-                return format!("{},{} {suffix}", tenths / 10, tenths % 10);
+                return format!("{},{}{suffix}", tenths / 10, tenths % 10);
             }
         }
     }
