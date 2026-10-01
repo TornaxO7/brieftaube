@@ -28,7 +28,18 @@ pub fn view(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: 
 
 fn render_tab_widgets(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
     const TAB1: &str = "Content";
-    const TAB2: &str = "Attachments";
+
+    let tab2 = {
+        let prefix = "Attachments";
+
+        match &state.attachments {
+            Some(attachments_tab) => match &attachments_tab.attachments {
+                Ok(attachments) => format!("{} ({})", prefix, attachments.len()),
+                Err(_) => format!("{} (E)", prefix),
+            },
+            None => format!("{} (?)", prefix),
+        }
+    };
 
     let selected_idx = match state.selected_tab {
         SelectedTab::Mail => 0,
@@ -36,7 +47,7 @@ fn render_tab_widgets(scheme: &Scheme, state: &mut super::State, frame: &mut Fra
     };
 
     frame.render_widget(
-        Tabs::new([TAB1, TAB2])
+        Tabs::new([TAB1, tab2.as_str()])
             .select(selected_idx)
             .block(Block::new().borders(Borders::TOP))
             .style(Style::new().fg(scheme.outline.into_color()))

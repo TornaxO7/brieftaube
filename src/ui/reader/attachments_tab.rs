@@ -1,6 +1,5 @@
-use ratatui::widgets::TableState;
-
 use crate::types::MailDataAttachment;
+use ratatui::widgets::TableState;
 
 pub struct AttachmentsTab {
     pub attachments: color_eyre::Result<Vec<MailDataAttachment>>,
