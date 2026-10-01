@@ -14,7 +14,6 @@ use crate::{
     },
 };
 use crossterm::event::Event;
-use pulldown_cmark_mdcat::ratatui::MdcatWidgetState;
 use std::{collections::HashMap, str::FromStr};
 use throbber_widgets_tui::ThrobberState;
 use tracing::debug;
@@ -33,7 +32,7 @@ pub struct State {
 
     ctx: Option<Ctx>,
     headers: Option<color_eyre::Result<ReaderHeaders>>,
-    text_body: Option<color_eyre::Result<Option<String>>>,
+    text_body: Option<color_eyre::Result<Option<TextBody>>>,
     html_body: Option<color_eyre::Result<Option<HtmlBody>>>,
     attachments: Option<AttachmentsTab>,
 }
@@ -91,11 +90,10 @@ impl Layer<Message> for State {
 impl State {
     fn handle_event(&mut self, event: Event) -> Vec<super::Message> {
         match event {
-            Event::FocusGained
-            | Event::FocusLost
-            | Event::Mouse(_)
-            | Event::Paste(_)
-            | Event::Resize(_, _) => vec![],
+            Event::FocusGained | Event::FocusLost | Event::Mouse(_) | Event::Paste(_) => vec![],
+            Event::Resize(_, _) => {
+                vec![]
+            }
             Event::Key(key_event) => match self.keybindings.handle_event(key_event) {
                 HandleEvent::Action(action) => self.handle_user_action(action),
                 HandleEvent::Registered => vec![],
@@ -161,7 +159,7 @@ impl State {
         &mut self,
         body: color_eyre::Result<MailDataTextBody>,
     ) -> Vec<super::Message> {
-        self.text_body = Some(body.map(|body| body.content));
+        self.text_body = Some(body.map(|body| body.content.map(TextBody::new)));
         vec![]
     }
 
@@ -323,10 +321,25 @@ impl ReaderHeaders {
     const LONGEST_HEADER_LENGTH: usize = "Received at:".len();
 }
 
+struct TextBody {
+    pub content: String,
+    pub scroll_offset: ScrollOffset,
+}
+
+impl TextBody {
+    fn new(content: String) -> Self {
+        Self {
+            content,
+            scroll_offset: ScrollOffset::default(),
+        }
+    }
+}
+
 struct HtmlBody {
     html: String,
     markdown: std::io::Result<String>,
-    state: MdcatWidgetState,
+
+    scroll_offset: ScrollOffset,
 }
 
 impl HtmlBody {
@@ -337,7 +350,7 @@ impl HtmlBody {
         Some(Self {
             html: content,
             markdown,
-            state: MdcatWidgetState::new(),
+            scroll_offset: ScrollOffset::default(),
         })
     }
 }
@@ -346,4 +359,16 @@ struct Ctx {
     username: Username,
     account_id: AccountId,
     mail_id: MailId,
+}
+
+#[derive(Default, Clone, Copy)]
+struct ScrollOffset {
+    pub horizontal: u16,
+    pub vertical: u16,
+}
+
+impl From<ScrollOffset> for (u16, u16) {
+    fn from(offset: ScrollOffset) -> Self {
+        (offset.vertical, offset.horizontal)
+    }
 }

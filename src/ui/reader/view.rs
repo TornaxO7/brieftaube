@@ -3,7 +3,6 @@ use crate::{
     utils::IntoColor,
 };
 use material_theme_loader::Scheme;
-use pulldown_cmark_mdcat::ratatui::MdcatWidget;
 use ratatui::{
     Frame,
     layout::{Constraint, HorizontalAlignment, Layout, Rect},
@@ -212,11 +211,7 @@ fn render_text_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
         Ok(text_body) => text_body,
         Err(err) => {
             let msg = format!("Couldn't get `text/body` of mail:\n{}", err.to_string());
-
-            frame.render_widget(
-                Paragraph::new(msg).style(Style::new().fg(scheme.error.into_color())),
-                area,
-            );
+            render_msg_centered(msg, Style::new().fg(scheme.error.into_color()), frame, area);
             return;
         }
     };
@@ -224,19 +219,19 @@ fn render_text_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
     match text_body {
         Some(text_body) => {
             frame.render_widget(
-                Paragraph::new(text_body.as_str())
+                Paragraph::new(text_body.content.as_str())
                     .wrap(Wrap { trim: false })
+                    .scroll(text_body.scroll_offset.into())
                     .style(Style::new().fg(scheme.primary.into_color())),
                 area,
             );
         }
         None => {
             const MSG: &str = "Mail doesn't have `text/body`.";
-
-            let area = area.centered(Constraint::Length(MSG.len() as u16), Constraint::Length(1));
-
-            frame.render_widget(
-                Paragraph::new(MSG).style(Style::new().fg(scheme.primary.into_color())),
+            render_msg_centered(
+                MSG.to_string(),
+                Style::new().fg(scheme.primary.into_color()),
+                frame,
                 area,
             );
         }
@@ -271,11 +266,7 @@ fn render_html_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
         Ok(html_body) => html_body,
         Err(err) => {
             let msg = format!("Couldn't get `html/body` of mail:\n{}", err.to_string());
-
-            frame.render_widget(
-                Paragraph::new(msg).style(Style::new().fg(scheme.error.into_color())),
-                area,
-            );
+            render_msg_centered(msg, Style::new().fg(scheme.error.into_color()), frame, area);
             return;
         }
     };
@@ -283,16 +274,32 @@ fn render_html_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
     match html_body {
         Some(html_body) => match &html_body.markdown {
             Ok(markdown_body) => {
-                frame.render_stateful_widget(
-                    MdcatWidget::new(markdown_body),
-                    area,
-                    &mut html_body.state,
-                );
+                match pulldown_cmark_mdcat::ratatui::text_from_str(markdown_body, area.width) {
+                    Ok(text) => {
+                        frame.render_widget(
+                            Paragraph::new(text)
+                                .wrap(Wrap { trim: false })
+                                .scroll(html_body.scroll_offset.into())
+                                .style(Style::new().fg(scheme.primary.into_color())),
+                            area,
+                        );
+                    }
+                    Err(err) => {
+                        let msg = format!("Couldn't render markdown:\n{}", err.to_string());
+                        render_msg_centered(
+                            msg,
+                            Style::new().fg(scheme.error.into_color()),
+                            frame,
+                            area,
+                        );
+                    }
+                }
             }
             Err(err) => {
-                frame.render_widget(
-                    Paragraph::new(err.to_string())
-                        .style(Style::new().fg(scheme.primary.into_color())),
+                render_msg_centered(
+                    err.to_string(),
+                    Style::new().fg(scheme.error.into_color()),
+                    frame,
                     area,
                 );
             }
@@ -300,10 +307,10 @@ fn render_html_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
         None => {
             const MSG: &str = "Mail doesn't have `html/body`.";
 
-            let area = area.centered(Constraint::Length(MSG.len() as u16), Constraint::Length(1));
-
-            frame.render_widget(
-                Paragraph::new(MSG).style(Style::new().fg(scheme.primary.into_color())),
+            render_msg_centered(
+                MSG.to_string(),
+                Style::new().fg(scheme.primary.into_color()),
+                frame,
                 area,
             );
         }
@@ -320,9 +327,10 @@ fn render_attachments_tab(
         Some(attachments) => attachments,
         None => {
             const LABEL: &str = "Loading attachments";
+            const THROBBER_SYMBOL_WITH_SPACE: u16 = 2;
 
             let area = area.centered(
-                Constraint::Length(LABEL.len() as u16 + 2),
+                Constraint::Length(LABEL.len() as u16 + THROBBER_SYMBOL_WITH_SPACE),
                 Constraint::Length(1),
             );
 
@@ -374,11 +382,7 @@ fn render_attachments_tab(
         }
         Err(err) => {
             let msg = format!("Couldn't retrieve attachments:\n{}", err.to_string());
-
-            frame.render_widget(
-                Paragraph::new(msg).style(Style::new().fg(scheme.error.into_color())),
-                area,
-            );
+            render_msg_centered(msg, Style::new().fg(scheme.error.into_color()), frame, area);
         }
     };
 }
@@ -396,4 +400,13 @@ fn format_size(size: usize) -> String {
     }
 
     format!("{size} B")
+}
+
+fn render_msg_centered(msg: String, style: Style, frame: &mut Frame, area: Rect) {
+    let area = area.centered(
+        Constraint::Length(msg.lines().map(|line| line.len()).max().unwrap_or(0) as u16),
+        Constraint::Length(msg.lines().count() as u16),
+    );
+
+    frame.render_widget(Paragraph::new(msg).style(style), area);
 }
