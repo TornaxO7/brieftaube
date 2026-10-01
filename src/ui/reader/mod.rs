@@ -14,6 +14,7 @@ use crate::{
     },
 };
 use crossterm::event::Event;
+use ratatui::layout::{Rect, Size};
 use std::{collections::HashMap, str::FromStr};
 use throbber_widgets_tui::ThrobberState;
 use tracing::debug;
@@ -35,10 +36,12 @@ pub struct State {
     text_body: Option<color_eyre::Result<Option<TextBody>>>,
     html_body: Option<color_eyre::Result<Option<HtmlBody>>>,
     attachments: Option<AttachmentsTab>,
+
+    size: Size,
 }
 
 impl State {
-    pub fn new() -> Self {
+    pub fn new(init_rect: Rect) -> Self {
         Self {
             throbber: ThrobberState::default(),
             keybindings: KeybindManager::new(HashMap::from([
@@ -60,7 +63,21 @@ impl State {
             text_body: None,
             html_body: None,
             attachments: None,
+
+            size: init_rect.as_size(),
         }
+    }
+
+    fn get_mail_body_height_area(&self) -> usize {
+        const AMOUNT_SEPARATOR_LINES: usize = 3;
+
+        let mut height = AMOUNT_SEPARATOR_LINES;
+
+        if let Some(Ok(headers)) = &self.headers {
+            height += headers.amount_entries();
+        }
+
+        height
     }
 }
 
@@ -91,7 +108,9 @@ impl State {
     fn handle_event(&mut self, event: Event) -> Vec<super::Message> {
         match event {
             Event::FocusGained | Event::FocusLost | Event::Mouse(_) | Event::Paste(_) => vec![],
-            Event::Resize(_, _) => {
+            Event::Resize(width, height) => {
+                self.size.width = width;
+                self.size.height = height;
                 vec![]
             }
             Event::Key(key_event) => match self.keybindings.handle_event(key_event) {
@@ -230,12 +249,12 @@ impl State {
             SelectedTab::Mail => match self.selected_body_type {
                 SelectedBodyType::Text => {
                     if let Some(Ok(Some(text_body))) = &mut self.text_body {
-                        text_body.scroll_offset.navigate_down();
+                        text_body.navigate_down(self.size.height.into());
                     }
                 }
                 SelectedBodyType::Html => {
                     if let Some(Ok(Some(html_body))) = &mut self.html_body {
-                        html_body.scroll_offset.navigate_down();
+                        html_body.navigate_down(self.size.height.into());
                     }
                 }
             },
@@ -253,12 +272,12 @@ impl State {
             SelectedTab::Mail => match self.selected_body_type {
                 SelectedBodyType::Text => {
                     if let Some(Ok(Some(text_body))) = &mut self.text_body {
-                        text_body.scroll_offset.navigate_up();
+                        text_body.navigate_up();
                     }
                 }
                 SelectedBodyType::Html => {
                     if let Some(Ok(Some(html_body))) = &mut self.html_body {
-                        html_body.scroll_offset.navigate_up();
+                        html_body.navigate_up();
                     }
                 }
             },
@@ -276,12 +295,12 @@ impl State {
             SelectedTab::Mail => match self.selected_body_type {
                 SelectedBodyType::Text => {
                     if let Some(Ok(Some(text_body))) = &mut self.text_body {
-                        text_body.scroll_offset.navigate_to_top();
+                        text_body.navigate_to_top();
                     }
                 }
                 SelectedBodyType::Html => {
                     if let Some(Ok(Some(html_body))) = &mut self.html_body {
-                        html_body.scroll_offset.navigate_to_top();
+                        html_body.navigate_to_top();
                     }
                 }
             },
@@ -300,12 +319,12 @@ impl State {
             SelectedTab::Mail => match self.selected_body_type {
                 SelectedBodyType::Text => {
                     if let Some(Ok(Some(text_body))) = &mut self.text_body {
-                        text_body.scroll_offset.navigate_to_bottom();
+                        text_body.navigate_to_bottom(self.size.height.into());
                     }
                 }
                 SelectedBodyType::Html => {
                     if let Some(Ok(Some(html_body))) = &mut self.html_body {
-                        html_body.scroll_offset.navigate_to_bottom();
+                        html_body.navigate_to_bottom(self.size.height.into());
                     }
                 }
             },
@@ -356,19 +375,45 @@ pub struct ReaderHeaders {
 impl ReaderHeaders {
     const MAX_AMOUNT_HEADERS: usize = 5;
     const LONGEST_HEADER_LENGTH: usize = "Received at:".len();
+
+    pub fn amount_entries(&self) -> usize {
+        let mut counter = 1; // due to `received_at`
+
+        if self.from.is_some() {
+            counter += 1;
+        }
+
+        if self.to.is_some() {
+            counter += 1;
+        }
+
+        if self.cc.is_some() {
+            counter += 1;
+        }
+
+        if self.subject.is_some() {
+            counter += 1;
+        }
+
+        counter
+    }
 }
 
 struct TextBody {
     pub content: String,
-    pub scroll_offset: ScrollOffset,
+    pub vertical_scroll: u16,
 }
 
 impl TextBody {
     fn new(content: String) -> Self {
         Self {
             content,
-            scroll_offset: ScrollOffset::default(),
+            vertical_scroll: 0,
         }
+    }
+
+    fn content_height(&self) -> u16 {
+        self.content.lines().count() as u16
     }
 }
 
@@ -376,7 +421,7 @@ struct HtmlBody {
     html: String,
     markdown: std::io::Result<String>,
 
-    scroll_offset: ScrollOffset,
+    vertical_scroll: u16,
 }
 
 impl HtmlBody {
@@ -387,8 +432,15 @@ impl HtmlBody {
         Some(Self {
             html: content,
             markdown,
-            scroll_offset: ScrollOffset::default(),
+            vertical_scroll: 0,
         })
+    }
+
+    fn content_height(&self) -> Option<u16> {
+        self.markdown
+            .as_ref()
+            .ok()
+            .map(|content| content.lines().count() as u16)
     }
 }
 
@@ -398,32 +450,62 @@ struct Ctx {
     mail_id: MailId,
 }
 
-#[derive(Default, Clone, Copy)]
-struct ScrollOffset {
-    pub horizontal: u16,
-    pub vertical: u16,
+trait Scrollable {
+    fn navigate_down(&mut self, area_height: u16);
+
+    fn navigate_up(&mut self);
+
+    fn navigate_to_top(&mut self);
+
+    fn navigate_to_bottom(&mut self, area_height: u16);
 }
 
-impl ScrollOffset {
-    fn navigate_down(&mut self) {
-        self.vertical += 1;
+impl Scrollable for TextBody {
+    fn navigate_down(&mut self, area_height: u16) {
+        if let Some(unseen_lines) = self.content_height().checked_sub(area_height) {
+            self.vertical_scroll = (self.vertical_scroll + 1).min(unseen_lines);
+        }
     }
 
     fn navigate_up(&mut self) {
-        self.vertical = self.vertical.saturating_sub(1);
+        self.vertical_scroll = self.vertical_scroll.saturating_sub(1);
     }
 
     fn navigate_to_top(&mut self) {
-        self.vertical = 0;
+        self.vertical_scroll = 0;
     }
 
-    fn navigate_to_bottom(&mut self) {
-        todo!()
+    fn navigate_to_bottom(&mut self, area_height: u16) {
+        if let Some(unseen_lines) = self.content_height().checked_sub(area_height) {
+            self.vertical_scroll = unseen_lines;
+        }
     }
 }
 
-impl From<ScrollOffset> for (u16, u16) {
-    fn from(offset: ScrollOffset) -> Self {
-        (offset.vertical, offset.horizontal)
+impl Scrollable for HtmlBody {
+    fn navigate_down(&mut self, area_height: u16) {
+        if let Some(unseen_lines) = self
+            .content_height()
+            .and_then(|content_height| content_height.checked_sub(area_height))
+        {
+            self.vertical_scroll = (self.vertical_scroll + 1).min(unseen_lines);
+        }
+    }
+
+    fn navigate_up(&mut self) {
+        self.vertical_scroll = self.vertical_scroll.saturating_sub(1);
+    }
+
+    fn navigate_to_top(&mut self) {
+        self.vertical_scroll = 0;
+    }
+
+    fn navigate_to_bottom(&mut self, area_height: u16) {
+        if let Some(unseen_lines) = self
+            .content_height()
+            .and_then(|content_height| content_height.checked_sub(area_height))
+        {
+            self.vertical_scroll = unseen_lines;
+        }
     }
 }

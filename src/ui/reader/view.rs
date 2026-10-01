@@ -222,7 +222,7 @@ fn render_text_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
             frame.render_widget(
                 Paragraph::new(text_body.content.as_str())
                     .wrap(Wrap { trim: false })
-                    .scroll(text_body.scroll_offset.into())
+                    .scroll((text_body.vertical_scroll, 0))
                     .style(Style::new().fg(scheme.primary.into_color())),
                 area,
             );
@@ -280,7 +280,7 @@ fn render_html_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
                         frame.render_widget(
                             Paragraph::new(text)
                                 .wrap(Wrap { trim: false })
-                                .scroll(html_body.scroll_offset.into())
+                                .scroll((html_body.vertical_scroll, 0))
                                 .style(Style::new().fg(scheme.primary.into_color())),
                             area,
                         );
