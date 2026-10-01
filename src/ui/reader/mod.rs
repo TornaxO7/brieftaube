@@ -227,58 +227,95 @@ impl State {
 
     fn navigate_down(&mut self) -> Vec<super::Message> {
         match self.selected_tab {
-            SelectedTab::Mail => todo!(),
+            SelectedTab::Mail => match self.selected_body_type {
+                SelectedBodyType::Text => {
+                    if let Some(Ok(Some(text_body))) = &mut self.text_body {
+                        text_body.scroll_offset.navigate_down();
+                    }
+                }
+                SelectedBodyType::Html => {
+                    if let Some(Ok(Some(html_body))) = &mut self.html_body {
+                        html_body.scroll_offset.navigate_down();
+                    }
+                }
+            },
             SelectedTab::Attachments => {
-                let Some(tab) = &mut self.attachments else {
-                    return vec![];
-                };
-
-                tab.navigate_down();
-                vec![]
+                if let Some(tab) = &mut self.attachments {
+                    tab.navigate_down();
+                }
             }
-        }
+        };
+        vec![]
     }
 
     fn navigate_up(&mut self) -> Vec<super::Message> {
         match self.selected_tab {
-            SelectedTab::Mail => todo!(),
+            SelectedTab::Mail => match self.selected_body_type {
+                SelectedBodyType::Text => {
+                    if let Some(Ok(Some(text_body))) = &mut self.text_body {
+                        text_body.scroll_offset.navigate_up();
+                    }
+                }
+                SelectedBodyType::Html => {
+                    if let Some(Ok(Some(html_body))) = &mut self.html_body {
+                        html_body.scroll_offset.navigate_up();
+                    }
+                }
+            },
             SelectedTab::Attachments => {
-                let Some(tab) = &mut self.attachments else {
-                    return vec![];
-                };
-
-                tab.navigate_up();
-                vec![]
+                if let Some(tab) = &mut self.attachments {
+                    tab.navigate_up();
+                }
             }
-        }
+        };
+        vec![]
     }
 
     fn navigate_to_top(&mut self) -> Vec<super::Message> {
         match self.selected_tab {
-            SelectedTab::Mail => todo!(),
+            SelectedTab::Mail => match self.selected_body_type {
+                SelectedBodyType::Text => {
+                    if let Some(Ok(Some(text_body))) = &mut self.text_body {
+                        text_body.scroll_offset.navigate_to_top();
+                    }
+                }
+                SelectedBodyType::Html => {
+                    if let Some(Ok(Some(html_body))) = &mut self.html_body {
+                        html_body.scroll_offset.navigate_to_top();
+                    }
+                }
+            },
             SelectedTab::Attachments => {
-                let Some(tab) = &mut self.attachments else {
-                    return vec![];
-                };
-
-                tab.navigate_to_top();
-                vec![]
+                if let Some(tab) = &mut self.attachments {
+                    tab.navigate_to_top();
+                }
             }
-        }
+        };
+
+        vec![]
     }
 
     fn navigate_to_bottom(&mut self) -> Vec<super::Message> {
         match self.selected_tab {
-            SelectedTab::Mail => todo!(),
+            SelectedTab::Mail => match self.selected_body_type {
+                SelectedBodyType::Text => {
+                    if let Some(Ok(Some(text_body))) = &mut self.text_body {
+                        text_body.scroll_offset.navigate_to_bottom();
+                    }
+                }
+                SelectedBodyType::Html => {
+                    if let Some(Ok(Some(html_body))) = &mut self.html_body {
+                        html_body.scroll_offset.navigate_to_bottom();
+                    }
+                }
+            },
             SelectedTab::Attachments => {
-                let Some(tab) = &mut self.attachments else {
-                    return vec![];
-                };
-
-                tab.navigate_to_bottom();
-                vec![]
+                if let Some(tab) = &mut self.attachments {
+                    tab.navigate_to_bottom();
+                }
             }
-        }
+        };
+        vec![]
     }
 
     fn focus_next_tab(&mut self) -> Vec<super::Message> {
@@ -365,6 +402,24 @@ struct Ctx {
 struct ScrollOffset {
     pub horizontal: u16,
     pub vertical: u16,
+}
+
+impl ScrollOffset {
+    fn navigate_down(&mut self) {
+        self.vertical += 1;
+    }
+
+    fn navigate_up(&mut self) {
+        self.vertical = self.vertical.saturating_sub(1);
+    }
+
+    fn navigate_to_top(&mut self) {
+        self.vertical = 0;
+    }
+
+    fn navigate_to_bottom(&mut self) {
+        todo!()
+    }
 }
 
 impl From<ScrollOffset> for (u16, u16) {
