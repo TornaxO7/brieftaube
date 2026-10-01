@@ -91,7 +91,7 @@ impl Ui {
         let task_manager = TaskManager::new();
 
         let (mailfs, initial_user) = mailfs::State::new(init_rect.clone());
-        let reader = reader::State::new(init_rect.clone());
+        let reader = reader::State::new();
         let palette = palette::State::new();
         let prompt = prompt::State::new();
 

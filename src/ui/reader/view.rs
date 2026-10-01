@@ -225,27 +225,30 @@ fn render_text_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
                 .wrap(Wrap { trim: false })
                 .style(Style::new().fg(scheme.primary.into_color()));
 
-            match text_body.scrollbar.as_mut() {
-                Some(scrollbar) => {
-                    let [body_area, _scrollbar_area] =
-                        Layout::horizontal([Constraint::Fill(1), Constraint::Length(1)])
-                            .areas(area);
+            let [body_area, scrollbar_area] =
+                Layout::horizontal([Constraint::Fill(1), Constraint::Length(1)]).areas(area);
 
-                    frame.render_widget(
-                        content_widget.scroll((scrollbar.get_position() as u16, 0)),
-                        body_area,
-                    );
+            text_body.scrollbar = {
+                let amount_lines = content_widget.line_count(body_area.width);
 
-                    frame.render_stateful_widget(
-                        Scrollbar::new(ScrollbarOrientation::VerticalRight),
-                        area,
-                        scrollbar,
-                    );
-                }
-                None => {
-                    frame.render_widget(content_widget, area);
-                }
-            }
+                // for whatever reason there seems to be a off-by-one-error in the calculation. So just to be sure.
+                let body_area_height = body_area.height.saturating_sub(1);
+
+                text_body
+                    .scrollbar
+                    .content_length(amount_lines.saturating_sub(body_area_height as usize))
+            };
+
+            frame.render_widget(
+                content_widget.scroll((text_body.scrollbar.get_position() as u16, 0)),
+                body_area,
+            );
+
+            frame.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight),
+                scrollbar_area,
+                &mut text_body.scrollbar,
+            );
         }
         None => {
             const MSG: &str = "Mail doesn't have `text/body`.";
@@ -301,29 +304,28 @@ fn render_html_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
                             .wrap(Wrap { trim: false })
                             .style(Style::new().fg(scheme.primary.into_color()));
 
-                        match html_body.scrollbar.as_mut() {
-                            Some(scrollbar) => {
-                                let [body_area, _scrollbar_area] = Layout::horizontal([
-                                    Constraint::Fill(1),
-                                    Constraint::Length(1),
-                                ])
+                        let [body_area, scrollbar_area] =
+                            Layout::horizontal([Constraint::Fill(1), Constraint::Length(1)])
                                 .areas(area);
 
-                                frame.render_widget(
-                                    content_widget.scroll((scrollbar.get_position() as u16, 0)),
-                                    body_area,
-                                );
+                        html_body.scrollbar = {
+                            let amount_lines = content_widget.line_count(body_area.width);
 
-                                frame.render_stateful_widget(
-                                    Scrollbar::new(ScrollbarOrientation::VerticalRight),
-                                    area,
-                                    scrollbar,
-                                );
-                            }
-                            None => {
-                                frame.render_widget(content_widget, area);
-                            }
-                        }
+                            html_body.scrollbar.content_length(
+                                amount_lines.saturating_sub(body_area.height as usize),
+                            )
+                        };
+
+                        frame.render_widget(
+                            content_widget.scroll((html_body.scrollbar.get_position() as u16, 0)),
+                            body_area,
+                        );
+
+                        frame.render_stateful_widget(
+                            Scrollbar::new(ScrollbarOrientation::VerticalRight),
+                            scrollbar_area,
+                            &mut html_body.scrollbar,
+                        );
                     }
                     Err(err) => {
                         let msg = format!("Couldn't render markdown:\n{}", err.to_string());
