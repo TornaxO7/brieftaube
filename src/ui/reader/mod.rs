@@ -68,16 +68,16 @@ impl State {
         }
     }
 
-    fn get_mail_body_height_area(&self) -> usize {
-        const AMOUNT_SEPARATOR_LINES: usize = 3;
+    fn get_available_mail_body_area_height(&self) -> u16 {
+        const AMOUNT_SEPARATOR_LINES: u16 = 3;
 
-        let mut height = AMOUNT_SEPARATOR_LINES;
+        let mut occupied_height = AMOUNT_SEPARATOR_LINES;
 
         if let Some(Ok(headers)) = &self.headers {
-            height += headers.amount_entries();
+            occupied_height += headers.amount_entries();
         }
 
-        height
+        self.size.height.saturating_sub(occupied_height)
     }
 }
 
@@ -111,6 +111,7 @@ impl State {
             Event::Resize(width, height) => {
                 self.size.width = width;
                 self.size.height = height;
+                todo!();
                 vec![]
             }
             Event::Key(key_event) => match self.keybindings.handle_event(key_event) {
@@ -246,18 +247,22 @@ impl State {
 
     fn navigate_down(&mut self) -> Vec<super::Message> {
         match self.selected_tab {
-            SelectedTab::Mail => match self.selected_body_type {
-                SelectedBodyType::Text => {
-                    if let Some(Ok(Some(text_body))) = &mut self.text_body {
-                        text_body.navigate_down(self.size.height.into());
+            SelectedTab::Mail => {
+                let mail_body_area_height = self.get_available_mail_body_area_height();
+
+                match self.selected_body_type {
+                    SelectedBodyType::Text => {
+                        if let Some(Ok(Some(text_body))) = &mut self.text_body {
+                            text_body.navigate_down(mail_body_area_height);
+                        }
+                    }
+                    SelectedBodyType::Html => {
+                        if let Some(Ok(Some(html_body))) = &mut self.html_body {
+                            html_body.navigate_down(mail_body_area_height);
+                        }
                     }
                 }
-                SelectedBodyType::Html => {
-                    if let Some(Ok(Some(html_body))) = &mut self.html_body {
-                        html_body.navigate_down(self.size.height.into());
-                    }
-                }
-            },
+            }
             SelectedTab::Attachments => {
                 if let Some(tab) = &mut self.attachments {
                     tab.navigate_down();
@@ -316,18 +321,21 @@ impl State {
 
     fn navigate_to_bottom(&mut self) -> Vec<super::Message> {
         match self.selected_tab {
-            SelectedTab::Mail => match self.selected_body_type {
-                SelectedBodyType::Text => {
-                    if let Some(Ok(Some(text_body))) = &mut self.text_body {
-                        text_body.navigate_to_bottom(self.size.height.into());
+            SelectedTab::Mail => {
+                let mail_body_area_height = self.get_available_mail_body_area_height();
+                match self.selected_body_type {
+                    SelectedBodyType::Text => {
+                        if let Some(Ok(Some(text_body))) = &mut self.text_body {
+                            text_body.navigate_to_bottom(mail_body_area_height);
+                        }
+                    }
+                    SelectedBodyType::Html => {
+                        if let Some(Ok(Some(html_body))) = &mut self.html_body {
+                            html_body.navigate_to_bottom(mail_body_area_height);
+                        }
                     }
                 }
-                SelectedBodyType::Html => {
-                    if let Some(Ok(Some(html_body))) = &mut self.html_body {
-                        html_body.navigate_to_bottom(self.size.height.into());
-                    }
-                }
-            },
+            }
             SelectedTab::Attachments => {
                 if let Some(tab) = &mut self.attachments {
                     tab.navigate_to_bottom();
@@ -376,7 +384,7 @@ impl ReaderHeaders {
     const MAX_AMOUNT_HEADERS: usize = 5;
     const LONGEST_HEADER_LENGTH: usize = "Received at:".len();
 
-    pub fn amount_entries(&self) -> usize {
+    pub fn amount_entries(&self) -> u16 {
         let mut counter = 1; // due to `received_at`
 
         if self.from.is_some() {
