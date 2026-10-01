@@ -163,7 +163,8 @@ fn render_mail_headers(
 
 fn render_mail_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
     let mut block = Block::new()
-        .style(Style::new().fg(scheme.outline.into_color()))
+        .title_style(Style::new().fg(scheme.tertiary.into_color()))
+        .border_style(Style::new().fg(scheme.outline.into_color()))
         .borders(Borders::TOP)
         .title_alignment(HorizontalAlignment::Right);
     let inner_area = block.inner(area);
