@@ -14,7 +14,10 @@ use crate::{
     },
 };
 use crossterm::event::Event;
-use ratatui::layout::{Rect, Size};
+use ratatui::{
+    layout::{Rect, Size},
+    widgets::ScrollbarState,
+};
 use std::{collections::HashMap, str::FromStr};
 use throbber_widgets_tui::ThrobberState;
 use tracing::debug;
@@ -111,7 +114,33 @@ impl State {
             Event::Resize(width, height) => {
                 self.size.width = width;
                 self.size.height = height;
-                todo!();
+
+                // update scrollbars
+                if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
+                    text_body.scrollbar =
+                        text_body
+                            .content_height()
+                            .checked_sub(height)
+                            .map(|amount_unseen_lines| match text_body.scrollbar.as_mut() {
+                                Some(scrollbar) => {
+                                    scrollbar.content_length(amount_unseen_lines as usize)
+                                }
+                                None => ScrollbarState::new(amount_unseen_lines as usize),
+                            });
+                }
+
+                if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
+                    html_body.scrollbar = html_body
+                        .get_content_height()
+                        .and_then(|content_height| content_height.checked_sub(height))
+                        .map(|amount_unseen_lines| match html_body.scrollbar.as_mut() {
+                            Some(scrollbar) => {
+                                scrollbar.content_length(amount_unseen_lines as usize)
+                            }
+                            None => ScrollbarState::new(amount_unseen_lines as usize),
+                        });
+                }
+
                 vec![]
             }
             Event::Key(key_event) => match self.keybindings.handle_event(key_event) {
@@ -179,7 +208,11 @@ impl State {
         &mut self,
         body: color_eyre::Result<MailDataTextBody>,
     ) -> Vec<super::Message> {
-        self.text_body = Some(body.map(|body| body.content.map(TextBody::new)));
+        let available_body_area_height = self.get_available_mail_body_area_height();
+        self.text_body = Some(body.map(|body| {
+            body.content
+                .map(|content| TextBody::new(content, available_body_area_height))
+        }));
         vec![]
     }
 
@@ -187,7 +220,8 @@ impl State {
         &mut self,
         body: color_eyre::Result<MailDataHtmlBody>,
     ) -> Vec<super::Message> {
-        self.html_body = Some(body.map(HtmlBody::new));
+        let available_body_area_height = self.get_available_mail_body_area_height();
+        self.html_body = Some(body.map(|body| HtmlBody::new(body, available_body_area_height)));
         vec![]
     }
 
@@ -247,22 +281,18 @@ impl State {
 
     fn navigate_down(&mut self) -> Vec<super::Message> {
         match self.selected_tab {
-            SelectedTab::Mail => {
-                let mail_body_area_height = self.get_available_mail_body_area_height();
-
-                match self.selected_body_type {
-                    SelectedBodyType::Text => {
-                        if let Some(Ok(Some(text_body))) = &mut self.text_body {
-                            text_body.navigate_down(mail_body_area_height);
-                        }
-                    }
-                    SelectedBodyType::Html => {
-                        if let Some(Ok(Some(html_body))) = &mut self.html_body {
-                            html_body.navigate_down(mail_body_area_height);
-                        }
+            SelectedTab::Mail => match self.selected_body_type {
+                SelectedBodyType::Text => {
+                    if let Some(Ok(Some(text_body))) = &mut self.text_body {
+                        text_body.navigate_down();
                     }
                 }
-            }
+                SelectedBodyType::Html => {
+                    if let Some(Ok(Some(html_body))) = &mut self.html_body {
+                        html_body.navigate_down();
+                    }
+                }
+            },
             SelectedTab::Attachments => {
                 if let Some(tab) = &mut self.attachments {
                     tab.navigate_down();
@@ -321,21 +351,18 @@ impl State {
 
     fn navigate_to_bottom(&mut self) -> Vec<super::Message> {
         match self.selected_tab {
-            SelectedTab::Mail => {
-                let mail_body_area_height = self.get_available_mail_body_area_height();
-                match self.selected_body_type {
-                    SelectedBodyType::Text => {
-                        if let Some(Ok(Some(text_body))) = &mut self.text_body {
-                            text_body.navigate_to_bottom(mail_body_area_height);
-                        }
-                    }
-                    SelectedBodyType::Html => {
-                        if let Some(Ok(Some(html_body))) = &mut self.html_body {
-                            html_body.navigate_to_bottom(mail_body_area_height);
-                        }
+            SelectedTab::Mail => match self.selected_body_type {
+                SelectedBodyType::Text => {
+                    if let Some(Ok(Some(text_body))) = &mut self.text_body {
+                        text_body.navigate_to_bottom();
                     }
                 }
-            }
+                SelectedBodyType::Html => {
+                    if let Some(Ok(Some(html_body))) = &mut self.html_body {
+                        html_body.navigate_to_bottom();
+                    }
+                }
+            },
             SelectedTab::Attachments => {
                 if let Some(tab) = &mut self.attachments {
                     tab.navigate_to_bottom();
@@ -409,15 +436,24 @@ impl ReaderHeaders {
 
 struct TextBody {
     pub content: String,
-    pub vertical_scroll: u16,
+    pub scrollbar: Option<ScrollbarState>,
 }
 
 impl TextBody {
-    fn new(content: String) -> Self {
-        Self {
+    fn new(content: String, available_body_area_height: u16) -> Self {
+        let mut body = Self {
             content,
-            vertical_scroll: 0,
+            scrollbar: None,
+        };
+
+        if let Some(amount_unseen_lines) = body
+            .content_height()
+            .checked_sub(available_body_area_height)
+        {
+            body.scrollbar = Some(ScrollbarState::new(amount_unseen_lines as usize));
         }
+
+        body
     }
 
     fn content_height(&self) -> u16 {
@@ -429,22 +465,32 @@ struct HtmlBody {
     html: String,
     markdown: std::io::Result<String>,
 
-    vertical_scroll: u16,
+    scrollbar: Option<ScrollbarState>,
 }
 
 impl HtmlBody {
-    pub fn new(html: MailDataHtmlBody) -> Option<Self> {
+    pub fn new(html: MailDataHtmlBody, available_area_height: u16) -> Option<Self> {
         let content = html.content?;
         let markdown = htmd::convert(content.as_str());
 
-        Some(Self {
+        std::fs::write("/tmp/test.md", markdown.as_ref().unwrap()).unwrap();
+
+        let mut body = Self {
             html: content,
             markdown,
-            vertical_scroll: 0,
-        })
+            scrollbar: None,
+        };
+
+        if let Some(displayed_height) = body.get_content_height() {
+            if let Some(amount_unseen_lines) = displayed_height.checked_sub(available_area_height) {
+                body.scrollbar = Some(ScrollbarState::new(amount_unseen_lines as usize));
+            }
+        }
+
+        Some(body)
     }
 
-    fn content_height(&self) -> Option<u16> {
+    fn get_content_height(&self) -> Option<u16> {
         self.markdown
             .as_ref()
             .ok()
@@ -459,61 +505,41 @@ struct Ctx {
 }
 
 trait Scrollable {
-    fn navigate_down(&mut self, area_height: u16);
+    fn scrollbar(&mut self) -> Option<&mut ScrollbarState>;
 
-    fn navigate_up(&mut self);
-
-    fn navigate_to_top(&mut self);
-
-    fn navigate_to_bottom(&mut self, area_height: u16);
-}
-
-impl Scrollable for TextBody {
-    fn navigate_down(&mut self, area_height: u16) {
-        if let Some(unseen_lines) = self.content_height().checked_sub(area_height) {
-            self.vertical_scroll = (self.vertical_scroll + 1).min(unseen_lines);
+    fn navigate_down(&mut self) {
+        if let Some(scrollbar) = self.scrollbar() {
+            scrollbar.next();
         }
     }
 
     fn navigate_up(&mut self) {
-        self.vertical_scroll = self.vertical_scroll.saturating_sub(1);
+        if let Some(scrollbar) = self.scrollbar() {
+            scrollbar.prev();
+        }
     }
 
     fn navigate_to_top(&mut self) {
-        self.vertical_scroll = 0;
+        if let Some(scrollbar) = self.scrollbar() {
+            scrollbar.first();
+        }
     }
 
-    fn navigate_to_bottom(&mut self, area_height: u16) {
-        if let Some(unseen_lines) = self.content_height().checked_sub(area_height) {
-            self.vertical_scroll = unseen_lines;
+    fn navigate_to_bottom(&mut self) {
+        if let Some(scrollbar) = self.scrollbar() {
+            scrollbar.last();
         }
+    }
+}
+
+impl Scrollable for TextBody {
+    fn scrollbar(&mut self) -> Option<&mut ScrollbarState> {
+        self.scrollbar.as_mut()
     }
 }
 
 impl Scrollable for HtmlBody {
-    fn navigate_down(&mut self, area_height: u16) {
-        if let Some(unseen_lines) = self
-            .content_height()
-            .and_then(|content_height| content_height.checked_sub(area_height))
-        {
-            self.vertical_scroll = (self.vertical_scroll + 1).min(unseen_lines);
-        }
-    }
-
-    fn navigate_up(&mut self) {
-        self.vertical_scroll = self.vertical_scroll.saturating_sub(1);
-    }
-
-    fn navigate_to_top(&mut self) {
-        self.vertical_scroll = 0;
-    }
-
-    fn navigate_to_bottom(&mut self, area_height: u16) {
-        if let Some(unseen_lines) = self
-            .content_height()
-            .and_then(|content_height| content_height.checked_sub(area_height))
-        {
-            self.vertical_scroll = unseen_lines;
-        }
+    fn scrollbar(&mut self) -> Option<&mut ScrollbarState> {
+        self.scrollbar.as_mut()
     }
 }

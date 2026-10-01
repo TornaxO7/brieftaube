@@ -8,7 +8,9 @@ use ratatui::{
     layout::{Constraint, HorizontalAlignment, Layout, Rect},
     style::Style,
     text::Text,
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table, Tabs, Wrap},
+    widgets::{
+        Block, Borders, Cell, Paragraph, Row, Scrollbar, ScrollbarOrientation, Table, Tabs, Wrap,
+    },
 };
 use throbber_widgets_tui::Throbber;
 
@@ -186,7 +188,7 @@ fn render_mail_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
 }
 
 fn render_text_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
-    let text_body = match &state.text_body {
+    let text_body = match state.text_body.as_mut() {
         Some(text_body) => text_body,
         None => {
             const LABEL: &str = "Loading text body";
@@ -219,13 +221,31 @@ fn render_text_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
 
     match text_body {
         Some(text_body) => {
-            frame.render_widget(
-                Paragraph::new(text_body.content.as_str())
-                    .wrap(Wrap { trim: false })
-                    .scroll((text_body.vertical_scroll, 0))
-                    .style(Style::new().fg(scheme.primary.into_color())),
-                area,
-            );
+            let content_widget = Paragraph::new(text_body.content.as_str())
+                .wrap(Wrap { trim: false })
+                .style(Style::new().fg(scheme.primary.into_color()));
+
+            match text_body.scrollbar.as_mut() {
+                Some(scrollbar) => {
+                    let [body_area, _scrollbar_area] =
+                        Layout::horizontal([Constraint::Fill(1), Constraint::Length(1)])
+                            .areas(area);
+
+                    frame.render_widget(
+                        content_widget.scroll((scrollbar.get_position() as u16, 0)),
+                        body_area,
+                    );
+
+                    frame.render_stateful_widget(
+                        Scrollbar::new(ScrollbarOrientation::VerticalRight),
+                        area,
+                        scrollbar,
+                    );
+                }
+                None => {
+                    frame.render_widget(content_widget, area);
+                }
+            }
         }
         None => {
             const MSG: &str = "Mail doesn't have `text/body`.";
@@ -277,13 +297,33 @@ fn render_html_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
             Ok(markdown_body) => {
                 match pulldown_cmark_mdcat::ratatui::text_from_str(markdown_body, area.width) {
                     Ok(text) => {
-                        frame.render_widget(
-                            Paragraph::new(text)
-                                .wrap(Wrap { trim: false })
-                                .scroll((html_body.vertical_scroll, 0))
-                                .style(Style::new().fg(scheme.primary.into_color())),
-                            area,
-                        );
+                        let content_widget = Paragraph::new(text)
+                            .wrap(Wrap { trim: false })
+                            .style(Style::new().fg(scheme.primary.into_color()));
+
+                        match html_body.scrollbar.as_mut() {
+                            Some(scrollbar) => {
+                                let [body_area, _scrollbar_area] = Layout::horizontal([
+                                    Constraint::Fill(1),
+                                    Constraint::Length(1),
+                                ])
+                                .areas(area);
+
+                                frame.render_widget(
+                                    content_widget.scroll((scrollbar.get_position() as u16, 0)),
+                                    body_area,
+                                );
+
+                                frame.render_stateful_widget(
+                                    Scrollbar::new(ScrollbarOrientation::VerticalRight),
+                                    area,
+                                    scrollbar,
+                                );
+                            }
+                            None => {
+                                frame.render_widget(content_widget, area);
+                            }
+                        }
                     }
                     Err(err) => {
                         let msg = format!("Couldn't render markdown:\n{}", err.to_string());
