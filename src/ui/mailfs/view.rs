@@ -190,7 +190,7 @@ fn render_right_column(scheme: &Scheme, state: &mut super::State, frame: &mut Fr
                     render_mailbox_column(scheme, Some(mailbox_data.id.clone()), state, frame, area)
                 }
                 MailboxColumnEntry::RootMail(loadable) => match loadable {
-                    Loadable::NotLoaded => unreachable!(),
+                    Loadable::NotLoaded => {}
                     Loadable::Loading => render_loading_column(scheme, state, frame, area),
                     Loadable::Loaded(root_mail) => render_thread_column(
                         scheme,
@@ -414,10 +414,13 @@ fn render_mailbox_column(
             .mails
             .iter()
             .map(|mail| match mail {
-                Loadable::NotLoaded => Row::new([
-                    Cell::from("Mail not requested yet.").column_span(widths.len() as u16)
-                ])
-                .style(Style::new().fg(scheme.primary.into_color())),
+                Loadable::NotLoaded => Row::new([Cell::from(
+                    Text::from("<Mail not requested yet>")
+                        .centered()
+                        .style(Style::new().italic()),
+                )
+                .column_span(widths.len() as u16)])
+                .style(Style::new().fg(scheme.tertiary.into_color())),
                 Loadable::Loading => {
                     let throbber = Throbber::default()
                         .throbber_style(Style::new().fg(scheme.primary.into_color()))
