@@ -17,7 +17,7 @@ use crate::{
     },
 };
 use crossterm::event::Event;
-use ratatui::layout::{Rect, Size};
+use ratatui::layout::Size;
 use std::{collections::HashMap, str::FromStr};
 use throbber_widgets_tui::ThrobberState;
 use tracing::debug;
@@ -35,8 +35,6 @@ pub struct State {
 
     column_stack: Vec<ColumnStackEntry>,
 
-    terminal_height: u16,
-
     users_column: columns::UserColumn,
     accounts_column: HashMap<Username, Loadable<columns::AccountsColumn>>,
     mailbox_columns:
@@ -48,7 +46,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(init_rect: Rect) -> (Self, UserConfig) {
+    pub fn new() -> (Self, UserConfig) {
         let users_column = columns::UserColumn::new();
         let (accounts_column, initial_user) = {
             let selected_user = users_column.get_selected_entry().clone();
@@ -66,7 +64,6 @@ impl State {
                 throbber: ThrobberState::default(),
                 mode: Mode::Normal,
                 column_stack: vec![ColumnStackEntry::Users],
-                terminal_height: init_rect.height,
 
                 accounts_column,
                 thread_columns,
@@ -151,9 +148,7 @@ impl State {
     fn handle_event(&mut self, event: Event) -> Vec<super::Message> {
         match event {
             Event::Mouse(_) | Event::Paste(_) | Event::FocusGained | Event::FocusLost => vec![],
-            Event::Resize(_, new_height) => {
-                self.terminal_height = new_height;
-
+            Event::Resize(_, _) => {
                 // TODO: If new height exceeds mails list for mailbox column => query more
                 vec![]
             }
@@ -847,7 +842,12 @@ impl State {
                                     username: key.0,
                                     account_id: key.1,
                                     mailbox_id: key.2,
-                                    max_init_mails: self.terminal_height as usize,
+                                    max_init_mails: self
+                                        .column_area_size
+                                        .map(|size| size.height)
+                                        .unwrap_or(32)
+                                        as usize
+                                        / 2,
                                 }
                                 .into(),
                             ]

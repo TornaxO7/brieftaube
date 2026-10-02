@@ -90,7 +90,7 @@ impl Ui {
     pub fn new(init_rect: Rect) -> Self {
         let task_manager = TaskManager::new();
 
-        let (mailfs, initial_user) = mailfs::State::new(init_rect.clone());
+        let (mailfs, initial_user) = mailfs::State::new();
         let reader = reader::State::new();
         let palette = palette::State::new();
         let prompt = prompt::State::new();
