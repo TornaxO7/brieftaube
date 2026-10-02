@@ -119,11 +119,11 @@ impl Ui {
     }
 
     pub async fn run(mut self, terminal: &mut DefaultTerminal) -> eyre::Result<()> {
-        let mut reader = crossterm::event::EventStream::new();
-        terminal.draw(|frame| self.draw(frame))?;
-
         let mut msgs = Vec::with_capacity(8);
         let mut interval = tokio::time::interval(Duration::from_millis(500));
+        let mut reader = crossterm::event::EventStream::new();
+
+        terminal.draw(|frame| self.draw(frame, &mut msgs))?;
 
         while self.is_running {
             tokio::select! {
@@ -142,13 +142,13 @@ impl Ui {
                 msgs.extend(self.handle_message(next_message));
             }
 
-            terminal.draw(|frame| self.draw(frame))?;
+            terminal.draw(|frame| self.draw(frame, &mut msgs))?;
         }
 
         Ok(())
     }
 
-    fn draw(&mut self, frame: &mut Frame) {
+    fn draw(&mut self, frame: &mut Frame, msgs: &mut Vec<Message>) {
         let area = frame.area();
 
         let is_overlay = match self.layers.last().unwrap() {
@@ -157,20 +157,20 @@ impl Ui {
         };
 
         if is_overlay {
-            match self.layers.iter().rev().skip(1).next().unwrap() {
+            msgs.extend(match self.layers.iter().rev().skip(1).next().unwrap() {
                 ActiveLayer::Mailfs => mailfs::view(&self.scheme, &mut self.mailfs, frame, area),
                 ActiveLayer::Reader => reader::view(&self.scheme, &mut self.reader, frame, area),
                 ActiveLayer::Palette => palette::view(&self.scheme, &mut self.palette, frame, area),
                 ActiveLayer::Prompt => prompt::view(&self.scheme, &mut self.prompt, frame, area),
-            }
+            });
         }
 
-        match self.layers.last_mut().unwrap() {
+        msgs.extend(match self.layers.last_mut().unwrap() {
             ActiveLayer::Mailfs => mailfs::view(&self.scheme, &mut self.mailfs, frame, area),
             ActiveLayer::Reader => reader::view(&self.scheme, &mut self.reader, frame, area),
             ActiveLayer::Palette => palette::view(&self.scheme, &mut self.palette, frame, area),
             ActiveLayer::Prompt => prompt::view(&self.scheme, &mut self.prompt, frame, area),
-        }
+        })
     }
 
     fn handle_message(&mut self, msg: Message) -> Vec<Message> {

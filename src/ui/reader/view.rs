@@ -5,7 +5,7 @@ use crate::{
 use material_theme_loader::Scheme;
 use ratatui::{
     Frame,
-    layout::{Constraint, HorizontalAlignment, Layout, Rect},
+    layout::{Constraint, HorizontalAlignment, Layout, Rect, Size},
     style::Style,
     text::Text,
     widgets::{
@@ -14,7 +14,12 @@ use ratatui::{
 };
 use throbber_widgets_tui::Throbber;
 
-pub fn view(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
+pub fn view(
+    scheme: &Scheme,
+    state: &mut super::State,
+    frame: &mut Frame,
+    area: Rect,
+) -> Vec<crate::ui::Message> {
     let [tabs_area, content_area] =
         Layout::vertical([Constraint::Length(2), Constraint::Fill(1)]).areas(area);
 
@@ -56,9 +61,14 @@ fn render_tab_widgets(scheme: &Scheme, state: &mut super::State, frame: &mut Fra
     );
 }
 
-fn render_mail_tab(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
+fn render_mail_tab(
+    scheme: &Scheme,
+    state: &mut super::State,
+    frame: &mut Frame,
+    area: Rect,
+) -> Vec<crate::ui::Message> {
     let body_area = render_mail_headers(scheme, state, frame, area);
-    render_mail_body(scheme, state, frame, body_area);
+    render_mail_body(scheme, state, frame, body_area)
 }
 
 fn render_mail_headers(
@@ -174,7 +184,12 @@ fn render_mail_headers(
     }
 }
 
-fn render_mail_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
+fn render_mail_body(
+    scheme: &Scheme,
+    state: &mut super::State,
+    frame: &mut Frame,
+    area: Rect,
+) -> Vec<crate::ui::Message> {
     let mut block = Block::new()
         .title_style(Style::new().fg(scheme.tertiary.into_color()))
         .border_style(Style::new().fg(scheme.outline.into_color()))
@@ -198,7 +213,12 @@ fn render_mail_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
     }
 }
 
-fn render_text_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
+fn render_text_body(
+    scheme: &Scheme,
+    state: &mut super::State,
+    frame: &mut Frame,
+    area: Rect,
+) -> Vec<crate::ui::Message> {
     let text_body = match state.text_body.as_mut() {
         Some(text_body) => text_body,
         None => {
@@ -217,7 +237,7 @@ fn render_text_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
                 &mut state.throbber,
             );
 
-            return;
+            return vec![];
         }
     };
 
@@ -226,7 +246,7 @@ fn render_text_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
         Err(err) => {
             let msg = format!("Couldn't get `text/body` of mail:\n{}", err.to_string());
             render_msg_centered(msg, Style::new().fg(scheme.error.into_color()), frame, area);
-            return;
+            return vec![];
         }
     };
 
@@ -260,6 +280,8 @@ fn render_text_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
                 scrollbar_area,
                 &mut text_body.scrollbar,
             );
+
+            vec![super::Message::SetMailBodySize(Size::from(body_area)).into()]
         }
         None => {
             const MSG: &str = "Mail doesn't have `text/body`.";
@@ -269,11 +291,18 @@ fn render_text_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
                 frame,
                 area,
             );
+
+            vec![]
         }
     }
 }
 
-fn render_html_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
+fn render_html_body(
+    scheme: &Scheme,
+    state: &mut super::State,
+    frame: &mut Frame,
+    area: Rect,
+) -> Vec<crate::ui::Message> {
     let html_body = match &mut state.html_body {
         Some(html_body) => html_body,
         None => {
@@ -293,7 +322,7 @@ fn render_html_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
                 &mut state.throbber,
             );
 
-            return;
+            return vec![];
         }
     };
 
@@ -302,7 +331,7 @@ fn render_html_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
         Err(err) => {
             let msg = format!("Couldn't get `html/body` of mail:\n{}", err.to_string());
             render_msg_centered(msg, Style::new().fg(scheme.error.into_color()), frame, area);
-            return;
+            return vec![];
         }
     };
 
@@ -319,14 +348,6 @@ fn render_html_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
                             Layout::horizontal([Constraint::Fill(1), Constraint::Length(1)])
                                 .areas(area);
 
-                        html_body.scrollbar = {
-                            let amount_lines = content_widget.line_count(body_area.width);
-
-                            html_body.scrollbar.content_length(
-                                amount_lines.saturating_sub(body_area.height as usize),
-                            )
-                        };
-
                         frame.render_widget(
                             content_widget.scroll((html_body.scrollbar.get_position() as u16, 0)),
                             body_area,
@@ -337,6 +358,8 @@ fn render_html_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
                             scrollbar_area,
                             &mut html_body.scrollbar,
                         );
+
+                        vec![super::Message::SetMailBodySize(Size::from(body_area)).into()]
                     }
                     Err(err) => {
                         let msg = format!("Couldn't render markdown:\n{}", err.to_string());
@@ -346,6 +369,8 @@ fn render_html_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
                             frame,
                             area,
                         );
+
+                        vec![]
                     }
                 }
             }
@@ -356,6 +381,8 @@ fn render_html_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
                     frame,
                     area,
                 );
+
+                vec![]
             }
         },
         None => {
@@ -367,6 +394,8 @@ fn render_html_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
                 frame,
                 area,
             );
+
+            vec![]
         }
     }
 }
@@ -376,7 +405,7 @@ fn render_attachments_tab(
     state: &mut super::State,
     frame: &mut Frame,
     area: Rect,
-) {
+) -> Vec<crate::ui::Message> {
     let attachments_tab = match &mut state.attachments {
         Some(attachments) => attachments,
         None => {
@@ -395,7 +424,7 @@ fn render_attachments_tab(
                 area,
                 &mut state.throbber,
             );
-            return;
+            return vec![];
         }
     };
 
@@ -453,6 +482,8 @@ fn render_attachments_tab(
             render_msg_centered(msg, Style::new().fg(scheme.error.into_color()), frame, area);
         }
     };
+
+    vec![]
 }
 
 fn format_size(size: usize) -> String {

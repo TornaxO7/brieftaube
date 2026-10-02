@@ -29,7 +29,12 @@ const FOLDER_ICON: &str = "🖿";
 const MAIL_UNREAD_ICON: &str = "●";
 const PAPERCLIP: &str = "📎";
 
-pub fn view(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
+pub fn view(
+    scheme: &Scheme,
+    state: &mut super::State,
+    frame: &mut Frame,
+    area: Rect,
+) -> Vec<crate::ui::Message> {
     let [path_area, columns_area, statusbar_area] = Layout::vertical([
         Constraint::Length(2),
         Constraint::Fill(1),
@@ -40,6 +45,8 @@ pub fn view(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: 
     render_path(scheme, state, frame, path_area);
     render_columns(scheme, state, frame, columns_area);
     render_statusbar(scheme, state, frame, statusbar_area);
+
+    vec![]
 }
 
 fn render_path(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {

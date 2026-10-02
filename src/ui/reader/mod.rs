@@ -14,7 +14,10 @@ use crate::{
     },
 };
 use crossterm::event::Event;
-use ratatui::widgets::ScrollbarState;
+use ratatui::{
+    layout::Size,
+    widgets::{Paragraph, ScrollbarState, Wrap},
+};
 use std::{collections::HashMap, str::FromStr};
 use throbber_widgets_tui::ThrobberState;
 use tracing::debug;
@@ -36,6 +39,8 @@ pub struct State {
     text_body: Option<color_eyre::Result<Option<TextBody>>>,
     html_body: Option<color_eyre::Result<Option<HtmlBody>>>,
     attachments: Option<AttachmentsTab>,
+
+    body_size: Option<Size>,
 }
 
 impl State {
@@ -61,6 +66,8 @@ impl State {
             text_body: None,
             html_body: None,
             attachments: None,
+
+            body_size: None,
         }
     }
 }
@@ -83,6 +90,8 @@ impl Layer<Message> for State {
             Message::SetTextBody(body) => self.handle_set_text_body(body),
             Message::SetHtmlBody(body) => self.handle_set_html_body(body),
             Message::SetAttachments(attachments) => self.handle_set_attachments(attachments),
+
+            Message::SetMailBodySize(size) => self.handle_set_body_size(size),
         }
     }
 }
@@ -177,6 +186,27 @@ impl State {
         attachments: color_eyre::Result<Vec<MailDataAttachment>>,
     ) -> Vec<super::Message> {
         self.attachments = Some(AttachmentsTab::new(attachments));
+        vec![]
+    }
+
+    fn handle_set_body_size(&mut self, size: Size) -> Vec<super::Message> {
+        if self
+            .body_size
+            .is_some_and(|current_size| current_size == size)
+        {
+            return vec![];
+        }
+
+        self.body_size = Some(size);
+
+        if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
+            text_body.adjust_to_size(size);
+        }
+
+        if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
+            html_body.adjust_to_size(size);
+        }
+
         vec![]
     }
 }
@@ -370,8 +400,19 @@ impl TextBody {
 
         Self { content, scrollbar }
     }
-}
 
+    fn adjust_to_size(&mut self, size: Size) {
+        let widget = Paragraph::new(self.content.as_str()).wrap(Wrap { trim: false });
+        let amount_lines = widget.line_count(size.width);
+
+        // for whatever reason there seems to be a off-by-one-error in the calculation. So just to be sure.
+        let body_area_height = size.height.saturating_sub(1);
+
+        self.scrollbar = self
+            .scrollbar
+            .content_length(amount_lines.saturating_sub(body_area_height as usize));
+    }
+}
 struct HtmlBody {
     html: String,
     markdown: std::io::Result<String>,
@@ -397,6 +438,23 @@ impl HtmlBody {
             markdown,
             scrollbar,
         })
+    }
+
+    fn adjust_to_size(&mut self, size: Size) {
+        let Ok(markdown) = self.markdown.as_ref() else {
+            return;
+        };
+
+        let Ok(text_widget) = pulldown_cmark_mdcat::ratatui::text_from_str(markdown, size.width)
+        else {
+            return;
+        };
+
+        let paragraph = Paragraph::new(text_widget).wrap(Wrap { trim: false });
+        let amount_lines = paragraph.line_count(size.width);
+        self.scrollbar = self
+            .scrollbar
+            .content_length(amount_lines.saturating_sub(size.height as usize));
     }
 }
 

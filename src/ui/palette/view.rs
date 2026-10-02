@@ -8,7 +8,12 @@ use ratatui::{
     widgets::{Block, Clear, List, ListDirection, ListItem, Paragraph, Wrap},
 };
 
-pub fn view(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
+pub fn view(
+    scheme: &Scheme,
+    state: &mut super::State,
+    frame: &mut Frame,
+    area: Rect,
+) -> Vec<crate::ui::Message> {
     let centered_area = area.centered(Constraint::Percentage(80), Constraint::Percentage(80));
     frame.render_widget(Clear, centered_area);
 
@@ -111,5 +116,7 @@ pub fn view(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: 
             options_area,
             &mut state.list_state,
         );
-    }
+    };
+
+    vec![]
 }
