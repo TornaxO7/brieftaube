@@ -33,6 +33,10 @@ pub enum UserAction {
     #[strum(message = "Navigate to the bottom of the list.")]
     NavigateToBottom,
 
+    NavigateHalfPageDown,
+
+    NavigateHalfPageUp,
+
     #[strum(message = "Open the selected mailbox.")]
     NavigateRight,
     #[strum(message = "Open the selected mailbox.")]

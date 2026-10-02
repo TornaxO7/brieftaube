@@ -40,7 +40,7 @@ pub struct State {
     html_body: Option<color_eyre::Result<Option<HtmlBody>>>,
     attachments: Option<AttachmentsTab>,
 
-    body_size: Option<Size>,
+    mailbox_body_area_size: Option<Size>,
 }
 
 impl State {
@@ -67,7 +67,7 @@ impl State {
             html_body: None,
             attachments: None,
 
-            body_size: None,
+            mailbox_body_area_size: None,
         }
     }
 }
@@ -101,7 +101,8 @@ impl State {
     fn handle_event(&mut self, event: Event) -> Vec<super::Message> {
         match event {
             Event::FocusGained | Event::FocusLost | Event::Mouse(_) | Event::Paste(_) => vec![],
-            Event::Resize(_, _) => {
+            Event::Resize(width, height) => {
+                self.handle_set_body_size(Size::from((width, height)));
                 vec![]
             }
             Event::Key(key_event) => match self.keybindings.handle_event(key_event) {
@@ -123,6 +124,8 @@ impl State {
             UserAction::NavigateUp => self.navigate_up(),
             UserAction::NavigateToTop => self.navigate_to_top(),
             UserAction::NavigateToBottom => self.navigate_to_bottom(),
+            UserAction::NavigateHalfPageDown => self.navigate_half_page_down(),
+            UserAction::NavigateHalfPageUp => self.navigate_half_page_up(),
             UserAction::NavigateRight => todo!(),
             UserAction::NavigateLeft => todo!(),
             UserAction::FocusNextTab => self.focus_next_tab(),
@@ -191,20 +194,20 @@ impl State {
 
     fn handle_set_body_size(&mut self, size: Size) -> Vec<super::Message> {
         if self
-            .body_size
+            .mailbox_body_area_size
             .is_some_and(|current_size| current_size == size)
         {
             return vec![];
         }
 
-        self.body_size = Some(size);
+        self.mailbox_body_area_size = Some(size);
 
         if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
-            text_body.adjust_to_size(size);
+            text_body.update_scrollbar_to_new_size(size);
         }
 
         if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
-            html_body.adjust_to_size(size);
+            html_body.update_scrollbar_to_new_height(size);
         }
 
         vec![]
@@ -326,6 +329,77 @@ impl State {
         vec![]
     }
 
+    fn navigate_half_page_down(&mut self) -> Vec<super::Message> {
+        if !matches!(self.selected_tab, SelectedTab::Mail) {
+            return vec![];
+        }
+
+        let Some(body_size) = self.mailbox_body_area_size else {
+            return vec![];
+        };
+
+        let offset = (body_size.height / 2) as usize;
+
+        match self.selected_body_type {
+            SelectedBodyType::Text => {
+                if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
+                    let content_height = text_body.content_height(body_size);
+                    let current_position = text_body.scrollbar.get_position();
+                    text_body.scrollbar = text_body
+                        .scrollbar
+                        .position((current_position + offset).min(content_height));
+                }
+            }
+            SelectedBodyType::Html => {
+                if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
+                    let content_height = html_body.content_height(body_size).unwrap();
+                    let current_position = html_body.scrollbar.get_position();
+
+                    html_body.scrollbar = html_body
+                        .scrollbar
+                        .position((current_position + offset).min(content_height));
+                }
+            }
+        }
+
+        vec![]
+    }
+
+    fn navigate_half_page_up(&mut self) -> Vec<super::Message> {
+        if !matches!(self.selected_tab, SelectedTab::Mail) {
+            return vec![];
+        }
+
+        let Some(body_size) = self.mailbox_body_area_size else {
+            return vec![];
+        };
+
+        let offset = (body_size.height / 2) as usize;
+
+        match self.selected_body_type {
+            SelectedBodyType::Text => {
+                if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
+                    let current_position = text_body.scrollbar.get_position();
+
+                    text_body.scrollbar = text_body
+                        .scrollbar
+                        .position(current_position.saturating_sub(offset));
+                }
+            }
+            SelectedBodyType::Html => {
+                if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
+                    let current_position = html_body.scrollbar.get_position();
+
+                    html_body.scrollbar = html_body
+                        .scrollbar
+                        .position(current_position.saturating_sub(offset));
+                }
+            }
+        }
+
+        vec![]
+    }
+
     fn navigate_to_bottom(&mut self) -> Vec<super::Message> {
         match self.selected_tab {
             SelectedTab::Mail => match self.selected_body_type {
@@ -401,16 +475,21 @@ impl TextBody {
         Self { content, scrollbar }
     }
 
-    fn adjust_to_size(&mut self, size: Size) {
-        let widget = Paragraph::new(self.content.as_str()).wrap(Wrap { trim: false });
-        let amount_lines = widget.line_count(size.width);
+    fn update_scrollbar_to_new_size(&mut self, new_size: Size) {
+        let content_height = self.content_height(new_size);
+        self.scrollbar = self.scrollbar.content_length(content_height);
+    }
 
-        // for whatever reason there seems to be a off-by-one-error in the calculation. So just to be sure.
-        let body_area_height = size.height.saturating_sub(1);
+    fn content_height(&self, render_area_size: Size) -> usize {
+        let amount_lines = Paragraph::new(self.content.as_str())
+            .wrap(Wrap { trim: false })
+            .line_count(render_area_size.width);
 
-        self.scrollbar = self
-            .scrollbar
-            .content_length(amount_lines.saturating_sub(body_area_height as usize));
+        // for whatever reason there seems to be a off-by-one-error in the calculation.
+        // So just to be sure: Assume that the height is less than one
+        let body_area_height = render_area_size.height.saturating_sub(1);
+
+        amount_lines.saturating_sub(body_area_height as usize)
     }
 }
 struct HtmlBody {
@@ -440,21 +519,30 @@ impl HtmlBody {
         })
     }
 
-    fn adjust_to_size(&mut self, size: Size) {
-        let Ok(markdown) = self.markdown.as_ref() else {
+    fn update_scrollbar_to_new_height(&mut self, new_size: Size) {
+        let Some(content_height) = self.content_height(new_size) else {
             return;
         };
 
-        let Ok(text_widget) = pulldown_cmark_mdcat::ratatui::text_from_str(markdown, size.width)
-        else {
-            return;
-        };
+        self.scrollbar = self.scrollbar.content_length(content_height);
+    }
 
-        let paragraph = Paragraph::new(text_widget).wrap(Wrap { trim: false });
-        let amount_lines = paragraph.line_count(size.width);
-        self.scrollbar = self
-            .scrollbar
-            .content_length(amount_lines.saturating_sub(size.height as usize));
+    fn content_height(&self, render_area_size: Size) -> Option<usize> {
+        let raw_markdown = self.markdown.as_ref().ok()?;
+
+        let markdown_text = pulldown_cmark_mdcat::ratatui::text_from_str(
+            raw_markdown.as_str(),
+            // `body_area` is created by split up the bigger area into `Fill` and `Length(1)`.
+            // `+ 1` should be the `Length(1)` for the `scrollbar_area`
+            render_area_size.width + 1,
+        )
+        .ok()?;
+
+        let amount_lines = Paragraph::new(markdown_text)
+            .wrap(Wrap { trim: false })
+            .line_count(render_area_size.width);
+
+        Some(amount_lines.saturating_sub(render_area_size.height as usize))
     }
 }
 

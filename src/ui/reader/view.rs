@@ -338,6 +338,8 @@ fn render_html_body(
     match html_body {
         Some(html_body) => match &html_body.markdown {
             Ok(markdown_body) => {
+                // also adjust `content_height` from `HtmlBody` if you're going to change anything
+                // related to the layout!
                 match pulldown_cmark_mdcat::ratatui::text_from_str(markdown_body, area.width) {
                     Ok(text) => {
                         let content_widget = Paragraph::new(text)
