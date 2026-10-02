@@ -46,7 +46,7 @@ pub fn view(
     render_columns(scheme, state, frame, columns_area);
     render_statusbar(scheme, state, frame, statusbar_area);
 
-    vec![]
+    vec![super::Message::SetColumnAreaSize(columns_area.as_size()).into()]
 }
 
 fn render_path(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {

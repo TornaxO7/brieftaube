@@ -33,6 +33,9 @@ pub enum UserAction {
     #[strum(message = "Open the selected mailbox.")]
     NavigateLeft,
 
+    NavigateHalfPageDown,
+    NavigateHalfPageUp,
+
     #[strum(message = "Toggle entry selection")]
     SelectEntryToggle,
     #[strum(message = "Mark the current selection as 'cut'.")]

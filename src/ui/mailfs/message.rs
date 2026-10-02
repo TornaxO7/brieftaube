@@ -7,6 +7,7 @@ use crate::{
     ui::mailfs::user_action::UserAction,
 };
 use crossterm::event::Event;
+use ratatui::layout::Size;
 
 pub enum Message {
     Event(Event),
@@ -56,6 +57,8 @@ pub enum Message {
     },
 
     SelectedPaletteEntry(String),
+
+    SetColumnAreaSize(Size),
 }
 
 impl From<Message> for crate::ui::Message {

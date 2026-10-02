@@ -17,7 +17,7 @@ use crate::{
     },
 };
 use crossterm::event::Event;
-use ratatui::layout::Rect;
+use ratatui::layout::{Rect, Size};
 use std::{collections::HashMap, str::FromStr};
 use throbber_widgets_tui::ThrobberState;
 use tracing::debug;
@@ -43,6 +43,8 @@ pub struct State {
         HashMap<(Username, AccountId, ParentMailboxId), Loadable<columns::MailboxColumn>>,
     thread_columns: HashMap<(Username, AccountId, ThreadId), Loadable<columns::ThreadColumn>>,
     mail_previews: HashMap<(Username, AccountId, MailId), Loadable<MailDataPreview>>,
+
+    column_area_size: Option<Size>,
 }
 
 impl State {
@@ -72,6 +74,8 @@ impl State {
                 mailbox_columns,
                 mail_previews,
 
+                column_area_size: None,
+
                 keybindings: KeybindManager::new(HashMap::from([
                     ("q", UserAction::Quit),
                     ("j", UserAction::NavigateDown),
@@ -82,6 +86,8 @@ impl State {
                     ("ge", UserAction::NavigateToBottom),
                     (" ", UserAction::SelectEntryToggle),
                     (":", UserAction::OpenCommandPalette),
+                    ("<C-d>", UserAction::NavigateHalfPageDown),
+                    ("<C-u>", UserAction::NavigateHalfPageUp),
                 ])),
             },
             initial_user,
@@ -132,6 +138,7 @@ impl Layer<Message> for State {
                 mail_id,
                 preview,
             } => self.handle_set_mail_preview(username, account_id, mail_id, preview),
+            Message::SetColumnAreaSize(size) => self.handle_set_column_area_size(size),
         };
 
         response_msgs.extend(self.ensure_right_column_data());
@@ -170,6 +177,8 @@ impl State {
             UserAction::NavigateToBottom => self.navigate_to_bottom(),
             UserAction::NavigateRight => self.navigate_right(),
             UserAction::NavigateLeft => self.navigate_left(),
+            UserAction::NavigateHalfPageDown => self.navigate_half_page_down(),
+            UserAction::NavigateHalfPageUp => self.navigate_half_page_up(),
 
             UserAction::SelectEntryToggle => self.select_entry(),
             UserAction::CutSelectedEntries => self.cut_selected_entries(),
@@ -304,6 +313,11 @@ impl State {
 
         vec![]
     }
+
+    fn handle_set_column_area_size(&mut self, new_size: Size) -> Vec<super::Message> {
+        self.column_area_size = Some(new_size);
+        vec![]
+    }
 }
 
 /// Action implementations
@@ -323,7 +337,7 @@ impl State {
     fn navigate_down(&mut self) -> Vec<super::Message> {
         match self.column_stack.last().unwrap().clone() {
             ColumnStackEntry::Users => {
-                self.users_column.navigate_down();
+                self.users_column.navigate_down(1);
                 self.ensure_right_column_data()
             }
             ColumnStackEntry::Accounts => {
@@ -337,7 +351,7 @@ impl State {
                     return vec![];
                 };
 
-                column.navigate_down();
+                column.navigate_down(1);
                 self.ensure_right_column_data()
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
@@ -350,7 +364,7 @@ impl State {
                 else {
                     return vec![];
                 };
-                column.navigate_down();
+                column.navigate_down(1);
                 // TODO: Check if the query-window is still within the new height
                 self.ensure_right_column_data()
             }
@@ -365,7 +379,7 @@ impl State {
                     return vec![];
                 };
 
-                column.navigate_down();
+                column.navigate_down(1);
                 self.ensure_right_column_data()
             }
         }
@@ -374,7 +388,7 @@ impl State {
     fn navigate_up(&mut self) -> Vec<super::Message> {
         match self.column_stack.last().unwrap().clone() {
             ColumnStackEntry::Users => {
-                self.users_column.navigate_up();
+                self.users_column.navigate_up(1);
                 self.ensure_right_column_data()
             }
             ColumnStackEntry::Accounts => {
@@ -388,7 +402,7 @@ impl State {
                     return vec![];
                 };
 
-                column.navigate_up();
+                column.navigate_up(1);
                 self.ensure_right_column_data()
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
@@ -396,7 +410,7 @@ impl State {
                 let Some(column) = self.mailbox_columns.get_mut(&key).unwrap().loaded_mut() else {
                     return vec![];
                 };
-                column.navigate_up();
+                column.navigate_up(1);
                 self.ensure_right_column_data()
             }
             ColumnStackEntry::Thread(thread_id) => {
@@ -410,7 +424,7 @@ impl State {
                     return vec![];
                 };
 
-                column.navigate_up();
+                column.navigate_up(1);
                 self.ensure_right_column_data()
             }
         }
@@ -597,6 +611,120 @@ impl State {
             | ColumnStackEntry::Thread(_) => {
                 self.column_stack.pop();
                 vec![]
+            }
+        }
+    }
+
+    fn navigate_half_page_down(&mut self) -> Vec<super::Message> {
+        let Some(size) = self.column_area_size else {
+            return vec![];
+        };
+
+        let offset = size.height / 2;
+
+        match self.column_stack.last().unwrap() {
+            ColumnStackEntry::Users => {
+                self.users_column.navigate_down(offset);
+                self.ensure_right_column_data()
+            }
+            ColumnStackEntry::Accounts => {
+                let username = &self.users_column.get_selected_entry().username;
+                let Some(column) = self
+                    .accounts_column
+                    .get_mut(username)
+                    .expect("Account column exists")
+                    .loaded_mut()
+                else {
+                    return vec![];
+                };
+
+                column.navigate_down(offset);
+                self.ensure_right_column_data()
+            }
+            ColumnStackEntry::Mailbox(mailbox_id) => {
+                let key = self.get_account_ctx().as_key(mailbox_id.clone());
+                let Some(column) = self
+                    .mailbox_columns
+                    .get_mut(&key)
+                    .expect("Column exists")
+                    .loaded_mut()
+                else {
+                    return vec![];
+                };
+
+                column.navigate_down(offset);
+                self.ensure_right_column_data()
+            }
+            ColumnStackEntry::Thread(thread_id) => {
+                let key = self.get_account_ctx().as_key(thread_id.clone());
+                let Some(column) = self
+                    .thread_columns
+                    .get_mut(&key)
+                    .expect("Column exists")
+                    .loaded_mut()
+                else {
+                    return vec![];
+                };
+
+                column.navigate_down(offset);
+                self.ensure_right_column_data()
+            }
+        }
+    }
+
+    fn navigate_half_page_up(&mut self) -> Vec<super::Message> {
+        let Some(size) = self.column_area_size else {
+            return vec![];
+        };
+
+        let offset = size.height / 2;
+
+        match self.column_stack.last().unwrap() {
+            ColumnStackEntry::Users => {
+                self.users_column.navigate_up(offset);
+                self.ensure_right_column_data()
+            }
+            ColumnStackEntry::Accounts => {
+                let username = &self.users_column.get_selected_entry().username;
+                let Some(column) = self
+                    .accounts_column
+                    .get_mut(username)
+                    .expect("Account column exists")
+                    .loaded_mut()
+                else {
+                    return vec![];
+                };
+
+                column.navigate_up(offset);
+                self.ensure_right_column_data()
+            }
+            ColumnStackEntry::Mailbox(mailbox_id) => {
+                let key = self.get_account_ctx().as_key(mailbox_id.clone());
+                let Some(column) = self
+                    .mailbox_columns
+                    .get_mut(&key)
+                    .expect("Column exists")
+                    .loaded_mut()
+                else {
+                    return vec![];
+                };
+
+                column.navigate_up(offset);
+                self.ensure_right_column_data()
+            }
+            ColumnStackEntry::Thread(thread_id) => {
+                let key = self.get_account_ctx().as_key(thread_id.clone());
+                let Some(column) = self
+                    .thread_columns
+                    .get_mut(&key)
+                    .expect("Column exists")
+                    .loaded_mut()
+                else {
+                    return vec![];
+                };
+
+                column.navigate_up(offset);
+                self.ensure_right_column_data()
             }
         }
     }

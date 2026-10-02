@@ -28,19 +28,19 @@ impl ThreadColumn {
 }
 
 impl MailfsColumn for ThreadColumn {
-    fn navigate_up(&mut self) {
-        self.state.select_previous();
+    fn navigate_up(&mut self, offset: u16) {
+        let idx = self
+            .state
+            .selected()
+            .unwrap_or(0)
+            .saturating_sub(offset as usize);
+
+        self.state.select(Some(idx));
     }
 
-    fn navigate_down(&mut self) {
-        match self.state.selected() {
-            Some(current_idx) => {
-                if current_idx < self.len() - 1 {
-                    self.state.select_next();
-                }
-            }
-            None => self.state.select(Some(0)),
-        }
+    fn navigate_down(&mut self, offset: u16) {
+        let idx = self.state.selected().unwrap_or(0) + offset as usize;
+        self.state.select(Some(idx.min(self.len() - 1)));
     }
 
     fn navigate_to_bottom(&mut self) {

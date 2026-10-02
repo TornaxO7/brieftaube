@@ -9,9 +9,9 @@ pub use thread::*;
 pub use users::*;
 
 pub trait MailfsColumn {
-    fn navigate_up(&mut self);
+    fn navigate_up(&mut self, offset: u16);
 
-    fn navigate_down(&mut self);
+    fn navigate_down(&mut self, offset: u16);
 
     fn navigate_to_bottom(&mut self);
 

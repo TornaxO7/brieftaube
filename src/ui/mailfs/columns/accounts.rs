@@ -27,15 +27,20 @@ impl AccountsColumn {
 }
 
 impl MailfsColumn for AccountsColumn {
-    fn navigate_up(&mut self) {
-        self.state.select_previous();
+    fn navigate_up(&mut self, offset: u16) {
+        let idx = self
+            .state
+            .selected()
+            .unwrap_or(0)
+            .saturating_sub(offset as usize);
+        self.state.select(Some(idx));
     }
 
-    fn navigate_down(&mut self) {
+    fn navigate_down(&mut self, offset: u16) {
         self.state.select(
             self.state
                 .selected()
-                .map(|idx| (idx + 1).min(self.len() - 1)),
+                .map(|idx| (idx + offset as usize).min(self.len() - 1)),
         )
     }
 

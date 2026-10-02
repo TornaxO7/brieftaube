@@ -1,5 +1,4 @@
 use crate::{
-    datasource::types::QueryWindow,
     types::{MailDataCore, MailboxData},
     ui::{Loadable, mailfs::columns::MailfsColumn},
 };
@@ -98,22 +97,30 @@ impl MailboxColumn {
 }
 
 impl MailfsColumn for MailboxColumn {
-    fn navigate_up(&mut self) {
+    fn navigate_up(&mut self, offset: u16) {
         match (self.mailbox_state.selected(), self.mail_state.selected()) {
-            (Some(_), None) => {
-                self.mailbox_state.select_previous();
+            (Some(current_idx), None) => {
+                self.mailbox_state
+                    .select(Some(current_idx.saturating_sub(offset as usize)));
             }
-            (None, Some(idx)) => {
-                if idx == 0 {
-                    let mailboxes_len = self.child_mailboxes.len();
-                    if mailboxes_len == 0 {
+            (None, Some(current_idx)) => {
+                let overflows_to_mailbox = current_idx < offset as usize;
+
+                if overflows_to_mailbox {
+                    if self.child_mailboxes.is_empty() {
+                        self.mail_state.select(Some(0));
                         return;
                     }
 
-                    self.mailbox_state.select_last();
+                    let mailbox_idx = self
+                        .child_mailboxes
+                        .len()
+                        .saturating_sub(offset as usize - current_idx);
+                    self.mailbox_state.select(Some(mailbox_idx));
                     self.mail_state.select(None);
                 } else {
-                    self.mail_state.select_previous();
+                    let next_idx = current_idx - offset as usize;
+                    self.mail_state.select(Some(next_idx));
                 }
             }
             (None, None) => {}
@@ -121,24 +128,31 @@ impl MailfsColumn for MailboxColumn {
         }
     }
 
-    fn navigate_down(&mut self) {
+    fn navigate_down(&mut self, offset: u16) {
         match (self.mailbox_state.selected(), self.mail_state.selected()) {
-            (Some(idx), None) => {
-                let last_mailbox_idx = self.child_mailboxes.len() - 1;
+            (Some(current_idx), None) => {
+                let overflows_to_mails =
+                    (self.child_mailboxes.len() - 1 - current_idx) < offset as usize;
 
-                if idx < last_mailbox_idx {
-                    self.mailbox_state.select_next();
-                } else if !self.mails.is_empty() {
+                if overflows_to_mails {
+                    if self.mails.is_empty() {
+                        self.mailbox_state
+                            .select(Some(self.child_mailboxes.len() - 1));
+                        return;
+                    }
+
+                    let next_mail_idx =
+                        offset as usize - (self.child_mailboxes.len() - 1 - current_idx);
+                    self.mail_state.select(Some(next_mail_idx));
                     self.mailbox_state.select(None);
-                    self.mail_state.select(Some(0));
+                } else {
+                    let next_idx = current_idx + offset as usize;
+                    self.mailbox_state.select(Some(next_idx));
                 }
             }
-            (None, Some(idx)) => {
-                let last_mail_idx = self.mails.len() - 1;
-
-                if idx < last_mail_idx {
-                    self.mail_state.select_next();
-                }
+            (None, Some(current_idx)) => {
+                let next_idx = (current_idx + offset as usize).min(self.mails.len() - 1);
+                self.mail_state.select(Some(next_idx));
             }
             (None, None) => {}
             (Some(_), Some(_)) => unreachable!(),

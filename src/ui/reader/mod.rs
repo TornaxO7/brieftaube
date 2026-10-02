@@ -56,6 +56,8 @@ impl State {
                 ("k", UserAction::NavigateUp),
                 ("gg", UserAction::NavigateToTop),
                 ("ge", UserAction::NavigateToBottom),
+                ("<C-d>", UserAction::NavigateHalfPageDown),
+                ("<C-u>", UserAction::NavigateHalfPageUp),
             ])),
 
             selected_tab: SelectedTab::Mail,
