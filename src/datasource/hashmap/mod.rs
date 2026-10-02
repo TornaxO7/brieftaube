@@ -8,7 +8,7 @@ use crate::{
     datasource::{Cache, types::QueryState},
     types::{
         MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody, MailId, MailboxData,
-        MailboxId, ThreadId,
+        MailboxId, ParentMailboxId, ThreadId,
     },
 };
 use root_mails_linear::RootMails;

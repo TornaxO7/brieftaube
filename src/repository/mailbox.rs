@@ -1,7 +1,7 @@
 use crate::{
-    datasource::types::remote,
+    datasource::types::{QueryWindow, remote},
     repository::Repository,
-    types::{AccountId, MailboxData, MailboxId, ParentMailboxId},
+    types::{AccountId, InitMailboxData, MailboxData, MailboxId, ParentMailboxId},
 };
 use tokio::sync::{Mutex, oneshot};
 
@@ -13,11 +13,17 @@ pub struct Command {
 
 #[derive(Debug)]
 pub enum CommandKind {
-    /// Get the child mailboxes of the given parent mailbox.
-    GetChildren {
+    Init {
         id: ParentMailboxId,
-        tx: oneshot::Sender<color_eyre::Result<Vec<MailboxData>>>,
+        amount_init_mails: usize,
+
+        tx: oneshot::Sender<color_eyre::Result<InitMailboxData>>,
     },
+    // /// Get the child mailboxes of the given parent mailbox.
+    // GetChildren {
+    //     id: ParentMailboxId,
+    //     tx: oneshot::Sender<color_eyre::Result<Vec<MailboxData>>>,
+    // },
 }
 
 impl From<Command> for super::Command {
@@ -82,9 +88,9 @@ impl Repository {
             .unwrap()
             .read()
             .await
-            .get_mailbox(&id)
+            .get_mailbox(id.clone())
             .await?
-            .expect("Mailbox was fetched");
+            .expect(&format!("Mailbox '{:?}' was fetched", id));
 
         Ok(mailbox_data)
     }
@@ -107,5 +113,44 @@ impl Repository {
             .expect("All mailboxes have been cached");
 
         Ok(children)
+    }
+
+    pub async fn get_init_mailbox_data(
+        &self,
+        account_id: AccountId,
+        id: ParentMailboxId,
+        amount_first_mails: usize,
+    ) -> color_eyre::Result<InitMailboxData> {
+        let child_mailboxes = self
+            .get_mailbox_children(account_id.clone(), id.clone())
+            .await?;
+
+        match id {
+            Some(id) => {
+                let data = self.get_mailbox(account_id.clone(), id.clone()).await?;
+
+                let first_mails = self
+                    .query_root_mails(
+                        account_id,
+                        id,
+                        QueryWindow {
+                            start: 0,
+                            limit: amount_first_mails,
+                        },
+                    )
+                    .await?;
+
+                Ok(InitMailboxData {
+                    total_threads: data.total_threads,
+                    child_mailboxes,
+                    first_mails,
+                })
+            }
+            None => Ok(InitMailboxData {
+                total_threads: 0,
+                child_mailboxes,
+                first_mails: vec![],
+            }),
+        }
     }
 }

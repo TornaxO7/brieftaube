@@ -4,7 +4,6 @@ use jmap_client::core::set::SetError;
 pub struct QueryResponse<T> {
     pub value: T,
     pub state: QueryState,
-    pub total: Option<usize>,
 }
 
 pub struct GetOneResult<T> {

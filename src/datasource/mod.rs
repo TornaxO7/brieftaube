@@ -255,8 +255,6 @@ pub trait RootMailsCache: MailCache {
         window: QueryWindow,
     ) -> Result<Option<cache::QueryResponse<MailId>>>;
 
-    async fn calculate_total_root_mails(&self, mailbox: &MailboxId) -> Result<Option<usize>>;
-
     async fn insert_root_mails(
         &mut self,
         mailbox: &MailboxId,
@@ -272,7 +270,6 @@ pub trait RootMailsRemote: MailRemote {
         &self,
         mailbox: &MailboxId,
         window: &QueryWindow,
-        calculate_total: bool,
     ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<MailDataCore>>>>;
 
     async fn fetch_root_mails_changes(
@@ -287,7 +284,7 @@ pub trait RootMailsRemote: MailRemote {
 pub trait MailboxCache {
     async fn get_mailbox_state(&self) -> Option<&GetState>;
 
-    async fn get_mailbox(&self, id: &MailboxId) -> Result<Option<MailboxData>>
+    async fn get_mailbox(&self, id: MailboxId) -> Result<Option<MailboxData>>
     where
         Self: Sync,
     {

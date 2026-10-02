@@ -8,8 +8,8 @@ use crate::{
         types::{GetState, QueryState, QueryWindow, cache, remote},
     },
     types::{
-        AccountId, MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody, MailId,
-        MailboxData, MailboxId, ParentMailboxId, ThreadId,
+        AccountId, InitMailboxData, MailDataCore, MailDataHtmlBody, MailDataPreview,
+        MailDataTextBody, MailId, MailboxId, ParentMailboxId, ThreadId,
     },
 };
 use std::collections::HashMap;
@@ -66,18 +66,25 @@ impl Repository {
                     mail::CommandKind::QueryRootMails {
                         mailbox,
                         window,
-                        calculate_total,
                         tx,
                     } => {
-                        let _ = tx.send(
-                            repo.query_root_mails(cmd.account_id, mailbox, window, calculate_total)
-                                .await,
-                        );
+                        let _ =
+                            tx.send(repo.query_root_mails(cmd.account_id, mailbox, window).await);
                     }
                 },
                 Command::Mailbox(cmd) => match cmd.kind {
-                    mailbox::CommandKind::GetChildren { id, tx } => {
-                        let _ = tx.send(repo.get_mailbox_children(cmd.account_id, id).await);
+                    // mailbox::CommandKind::GetChildren { id, tx } => {
+                    //     let _ = tx.send(repo.get_mailbox_children(cmd.account_id, id).await);
+                    // }
+                    mailbox::CommandKind::Init {
+                        id,
+                        amount_init_mails,
+                        tx,
+                    } => {
+                        let _ = tx.send(
+                            repo.get_init_mailbox_data(cmd.account_id, id, amount_init_mails)
+                                .await,
+                        );
                     }
                 },
                 Command::Thread(cmd) => match cmd.kind {
@@ -389,20 +396,40 @@ impl RepositoryHandler {
         self.execute::<()>(|_| Command::Quit).await;
     }
 
-    pub async fn get_child_mailboxes(
+    pub async fn get_init_mailbox(
         &self,
         account_id: AccountId,
-        parent_id: ParentMailboxId,
-    ) -> color_eyre::Result<Vec<MailboxData>> {
+        id: ParentMailboxId,
+        amount_init_mails: usize,
+    ) -> color_eyre::Result<InitMailboxData> {
         self.execute(|tx| {
             mailbox::Command {
                 account_id,
-                kind: mailbox::CommandKind::GetChildren { id: parent_id, tx },
+                kind: mailbox::CommandKind::Init {
+                    id,
+                    amount_init_mails,
+                    tx,
+                },
             }
             .into()
         })
         .await
     }
+
+    // pub async fn get_child_mailboxes(
+    //     &self,
+    //     account_id: AccountId,
+    //     parent_id: ParentMailboxId,
+    // ) -> color_eyre::Result<Vec<MailboxData>> {
+    //     self.execute(|tx| {
+    //         mailbox::Command {
+    //             account_id,
+    //             kind: mailbox::CommandKind::GetChildren { id: parent_id, tx },
+    //         }
+    //         .into()
+    //     })
+    //     .await
+    // }
 
     pub async fn get_mail_core(
         &self,
@@ -424,15 +451,13 @@ impl RepositoryHandler {
         account_id: AccountId,
         mailbox: MailboxId,
         window: QueryWindow,
-        calculate_total: bool,
-    ) -> color_eyre::Result<(Vec<MailDataCore>, Option<usize>)> {
+    ) -> color_eyre::Result<Vec<MailDataCore>> {
         self.execute(|tx| {
             mail::Command {
                 account_id,
                 kind: mail::CommandKind::QueryRootMails {
                     mailbox,
                     window,
-                    calculate_total,
                     tx,
                 },
             }

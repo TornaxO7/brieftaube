@@ -6,9 +6,8 @@ mod view;
 
 use crate::{
     config::{self, UserConfig, Username},
-    datasource::types::QueryWindow,
     types::{
-        AccountData, AccountId, MailDataCore, MailDataPreview, MailId, MailboxData, MailboxId,
+        AccountData, AccountId, InitMailboxData, MailDataCore, MailDataPreview, MailId,
         ParentMailboxId, ROOT_MAILBOX_ID, ThreadId,
     },
     ui::{
@@ -40,7 +39,8 @@ pub struct State {
 
     users_column: columns::UserColumn,
     accounts_column: HashMap<Username, Loadable<columns::AccountsColumn>>,
-    mailbox_columns: HashMap<(Username, AccountId, ParentMailboxId), columns::MailboxColumn>,
+    mailbox_columns:
+        HashMap<(Username, AccountId, ParentMailboxId), Loadable<columns::MailboxColumn>>,
     thread_columns: HashMap<(Username, AccountId, ThreadId), Loadable<columns::ThreadColumn>>,
     mail_previews: HashMap<(Username, AccountId, MailId), Loadable<MailDataPreview>>,
 }
@@ -100,19 +100,26 @@ impl Layer<Message> for State {
                 username: to,
                 accounts,
             } => self.handle_set_user_accounts(to, accounts),
-            Message::SetChildMailboxes {
+            Message::InitMailbox {
                 username,
                 account_id,
-                parent_id,
-                child_mailboxes,
-            } => self.handle_set_child_mailboxes(username, account_id, parent_id, child_mailboxes),
-            Message::SetMails {
-                username,
-                account_id,
-                mailbox,
-                window,
-                result,
-            } => self.handle_set_mails(username, account_id, mailbox, window, result),
+                mailbox_id,
+
+                data,
+            } => self.handle_init_mailbox(username, account_id, mailbox_id, data),
+            // Message::SetChildMailboxes {
+            //     username,
+            //     account_id,
+            //     parent_id,
+            //     child_mailboxes,
+            // } => self.handle_set_child_mailboxes(username, account_id, parent_id, child_mailboxes),
+            // Message::SetMails {
+            //     username,
+            //     account_id,
+            //     mailbox,
+            //     window,
+            //     result,
+            // } => self.handle_set_mails(username, account_id, mailbox, window, result),
             Message::SetThreadMails {
                 username,
                 account_id,
@@ -204,36 +211,56 @@ impl State {
         vec![]
     }
 
-    fn handle_set_child_mailboxes(
+    fn handle_init_mailbox(
         &mut self,
         username: Username,
         account_id: AccountId,
-        parent_id: ParentMailboxId,
-        child_mailboxes: color_eyre::Result<Vec<MailboxData>>,
+        mailbox_id: ParentMailboxId,
+        data: color_eyre::Result<InitMailboxData>,
     ) -> Vec<super::Message> {
-        let key = (username, account_id, parent_id);
-        let mailbox_column = self.mailbox_columns.get_mut(&key).unwrap();
-        mailbox_column.set_mailboxes(child_mailboxes);
+        let key = (username, account_id, mailbox_id.clone());
+        let column = self.mailbox_columns.get_mut(&key).unwrap();
+
+        *column = match data {
+            Ok(InitMailboxData {
+                total_threads,
+                child_mailboxes,
+                first_mails,
+            }) => {
+                let is_root_mailbox = mailbox_id.is_none();
+                if is_root_mailbox {
+                    debug_assert!(first_mails.is_empty());
+                }
+
+                Loadable::Loaded(MailboxColumn::new(
+                    child_mailboxes,
+                    total_threads,
+                    first_mails,
+                ))
+            }
+            Err(err) => Loadable::Error(err.to_string()),
+        };
+
         vec![]
     }
 
-    fn handle_set_mails(
-        &mut self,
-        username: Username,
-        account_id: AccountId,
-        mailbox_id: MailboxId,
-        window: QueryWindow,
-        result: color_eyre::Result<(Vec<MailDataCore>, Option<usize>)>,
-    ) -> Vec<super::Message> {
-        let key = (username, account_id, Some(mailbox_id.clone()));
+    // fn handle_set_mails(
+    //     &mut self,
+    //     username: Username,
+    //     account_id: AccountId,
+    //     mailbox_id: MailboxId,
+    //     window: QueryWindow,
+    //     result: color_eyre::Result<(Vec<MailDataCore>, Option<usize>)>,
+    // ) -> Vec<super::Message> {
+    //     let key = (username, account_id, Some(mailbox_id.clone()));
 
-        let column = self
-            .mailbox_columns
-            .get_mut(&key)
-            .expect("The mailbox column itself should request this so it must be there.");
-        column.set_mails(window, result);
-        vec![]
-    }
+    //     let column = self
+    //         .mailbox_columns
+    //         .get_mut(&key)
+    //         .expect("The mailbox column itself should request this so it must be there.");
+    //     column.set_mails(window, result);
+    //     vec![]
+    // }
 
     fn handle_set_thread_mails(
         &mut self,
@@ -315,7 +342,14 @@ impl State {
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
                 let key = self.get_account_ctx().as_key(mailbox_id);
-                let column = self.mailbox_columns.get_mut(&key).unwrap();
+                let Some(column) = self
+                    .mailbox_columns
+                    .get_mut(&key)
+                    .expect("Mailbox column exists")
+                    .loaded_mut()
+                else {
+                    return vec![];
+                };
                 column.navigate_down();
                 // TODO: Check if the query-window is still within the new height
                 self.ensure_right_column_data()
@@ -359,8 +393,10 @@ impl State {
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
                 let key = self.get_account_ctx().as_key(mailbox_id);
-                let mailbox_column = self.mailbox_columns.get_mut(&key).unwrap();
-                mailbox_column.navigate_up();
+                let Some(column) = self.mailbox_columns.get_mut(&key).unwrap().loaded_mut() else {
+                    return vec![];
+                };
+                column.navigate_up();
                 self.ensure_right_column_data()
             }
             ColumnStackEntry::Thread(thread_id) => {
@@ -402,10 +438,11 @@ impl State {
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
                 let key = self.get_account_ctx().as_key(mailbox_id.clone());
-                self.mailbox_columns
-                    .get_mut(&key)
-                    .unwrap()
-                    .navigate_to_top();
+                let Some(column) = self.mailbox_columns.get_mut(&key).unwrap().loaded_mut() else {
+                    return vec![];
+                };
+
+                column.navigate_to_top();
                 vec![]
             }
             ColumnStackEntry::Thread(thread_id) => {
@@ -446,10 +483,10 @@ impl State {
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
                 let key = self.get_account_ctx().as_key(mailbox_id.clone());
-                self.mailbox_columns
-                    .get_mut(&key)
-                    .unwrap()
-                    .navigate_to_bottom();
+                let Some(column) = self.mailbox_columns.get_mut(&key).unwrap().loaded_mut() else {
+                    return vec![];
+                };
+                column.navigate_to_bottom();
                 self.ensure_right_column_data()
             }
             ColumnStackEntry::Thread(thread_id) => {
@@ -497,29 +534,34 @@ impl State {
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
                 let key = self.get_account_ctx().as_key(mailbox_id);
-                let column = self.mailbox_columns.get(&key).unwrap();
+                let column = self.mailbox_columns.get(&key).unwrap().loaded().unwrap();
                 let Some(selected_entry) = column.get_selected_entry() else {
                     // mailbox could be empty
                     return vec![];
                 };
 
                 match selected_entry {
-                    Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
-                        vec![]
-                    }
-                    Loadable::Loaded(entry) => {
-                        match entry {
-                            MailboxColumnEntry::Mailbox(mailbox_data) => {
-                                self.column_stack
-                                    .push(ColumnStackEntry::Mailbox(Some(mailbox_data.id.clone())));
-                            }
-                            MailboxColumnEntry::RootMail(root_mail) => {
-                                self.column_stack
-                                    .push(ColumnStackEntry::Thread(root_mail.thread_id.clone()));
-                            }
-                        };
+                    MailboxColumnEntry::Mailbox(mailbox_data) => {
+                        let key = self.get_account_ctx().as_key(Some(mailbox_data.id.clone()));
+                        let next_mailbox_column_is_loaded =
+                            self.mailbox_columns.get(&key).unwrap().loaded().is_some();
 
-                        self.ensure_right_column_data()
+                        if next_mailbox_column_is_loaded {
+                            self.column_stack
+                                .push(ColumnStackEntry::Mailbox(Some(mailbox_data.id.clone())));
+                            self.ensure_right_column_data()
+                        } else {
+                            vec![]
+                        }
+                    }
+                    MailboxColumnEntry::RootMail(loadable_root_mail) => {
+                        if let Some(root_mail) = loadable_root_mail.loaded() {
+                            self.column_stack
+                                .push(ColumnStackEntry::Thread(root_mail.thread_id.clone()));
+                            self.ensure_right_column_data()
+                        } else {
+                            vec![]
+                        }
                     }
                 }
             }
@@ -634,16 +676,14 @@ impl State {
                 if self.mailbox_columns.contains_key(&key) {
                     vec![]
                 } else {
-                    self.mailbox_columns.insert(
-                        key.clone(),
-                        MailboxColumn::new(Loadable::Loading, Loadable::Loaded(vec![])),
-                    );
+                    self.mailbox_columns.insert(key.clone(), Loadable::Loading);
 
                     vec![
-                        MessageRequest::GetChildMailboxes {
+                        MessageRequest::InitMailbox {
                             username: key.0,
                             account_id: key.1,
-                            parent_id: key.2,
+                            mailbox_id: key.2,
+                            max_init_mails: 0,
                         }
                         .into(),
                     ]
@@ -651,10 +691,14 @@ impl State {
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
                 let key = self.get_account_ctx().as_key(mailbox_id);
-                let middle_mailbox_column = self
+                let Some(middle_mailbox_column) = self
                     .mailbox_columns
                     .get(&key)
-                    .expect("Middle column must exist!");
+                    .expect("Middle column must exist!")
+                    .loaded()
+                else {
+                    return vec![];
+                };
 
                 let Some(middle_column_selected_entry) = middle_mailbox_column.get_selected_entry()
                 else {
@@ -662,47 +706,31 @@ impl State {
                 };
 
                 match middle_column_selected_entry {
-                    Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
-                        vec![]
-                    }
-                    Loadable::Loaded(entry) => match entry {
-                        MailboxColumnEntry::Mailbox(mailbox_data) => {
-                            let mailbox_id = mailbox_data.id.clone();
-                            let key = self.get_account_ctx().as_key(Some(mailbox_id.clone()));
+                    MailboxColumnEntry::Mailbox(mailbox_data) => {
+                        let key = self.get_account_ctx().as_key(Some(mailbox_data.id.clone()));
 
-                            // TODO: Make sure that every mail is fetched
-                            //       which can be seen
-                            if self.mailbox_columns.contains_key(&key) {
-                                vec![]
-                            } else {
-                                self.mailbox_columns.insert(
-                                    key.clone(),
-                                    MailboxColumn::new(Loadable::Loading, Loadable::Loading),
-                                );
+                        if self.mailbox_columns.contains_key(&key) {
+                            vec![]
+                        } else {
+                            self.mailbox_columns.insert(key.clone(), Loadable::Loading);
 
-                                vec![
-                                    MessageRequest::GetChildMailboxes {
-                                        username: key.0.clone(),
-                                        account_id: key.1.clone(),
-                                        parent_id: key.2.clone(),
-                                    }
-                                    .into(),
-                                    MessageRequest::QueryMails {
-                                        username: key.0.clone(),
-                                        account_id: key.1.clone(),
-                                        mailbox: mailbox_id.clone(),
-                                        window: QueryWindow {
-                                            start: 0,
-                                            limit: (self.terminal_height * 3) as usize,
-                                        },
-                                        calculate_total: true,
-                                    }
-                                    .into(),
-                                ]
-                            }
+                            vec![
+                                MessageRequest::InitMailbox {
+                                    username: key.0,
+                                    account_id: key.1,
+                                    mailbox_id: key.2,
+                                    max_init_mails: self.terminal_height as usize,
+                                }
+                                .into(),
+                            ]
                         }
-                        MailboxColumnEntry::RootMail(mail) => {
-                            let key = self.get_account_ctx().as_key(mail.thread_id.clone());
+                    }
+                    MailboxColumnEntry::RootMail(loadable_root_mail) => match loadable_root_mail {
+                        Loadable::NotLoaded | Loadable::Loading | Loadable::Error(_) => {
+                            vec![]
+                        }
+                        Loadable::Loaded(root_mail) => {
+                            let key = self.get_account_ctx().as_key(root_mail.thread_id.clone());
 
                             if self.thread_columns.contains_key(&key) {
                                 vec![]

@@ -35,9 +35,8 @@ pub enum CommandKind {
     QueryRootMails {
         mailbox: MailboxId,
         window: QueryWindow,
-        calculate_total: bool,
 
-        tx: oneshot::Sender<color_eyre::Result<(Vec<MailDataCore>, Option<usize>)>>,
+        tx: oneshot::Sender<color_eyre::Result<Vec<MailDataCore>>>,
     },
 }
 
@@ -223,8 +222,7 @@ impl Repository {
         account_id: AccountId,
         id: MailboxId,
         window: QueryWindow,
-        calculate_total: bool,
-    ) -> color_eyre::Result<(Vec<MailDataCore>, Option<usize>)> {
+    ) -> color_eyre::Result<Vec<MailDataCore>> {
         let _enter = self.mail_locks.query_root_mails.lock().await;
 
         let opt_root_mail_ids = self
@@ -252,16 +250,7 @@ impl Repository {
                 .await?;
 
             if opt_root_mails_data.missing.is_empty() {
-                let total = self
-                    .caches
-                    .get(&account_id)
-                    .unwrap()
-                    .read()
-                    .await
-                    .calculate_total_root_mails(&id)
-                    .await?;
-
-                return Ok((opt_root_mails_data.value, total));
+                return Ok(opt_root_mails_data.value);
             } else {
                 let missing_mails_data = self
                     .remote
@@ -282,9 +271,7 @@ impl Repository {
 
                 debug_assert!(result.missing.is_empty());
 
-                let total = cache_lock.calculate_total_root_mails(&id).await?;
-
-                return Ok((result.value, total));
+                return Ok(result.value);
             }
         }
 
@@ -297,11 +284,10 @@ impl Repository {
                     state: email_get_state,
                 },
             state: root_mails_query_state,
-            total,
         } = self
             .remote
             .get_remote_account(account_id.clone())
-            .fetch_root_mails(&id, &window, calculate_total)
+            .fetch_root_mails(&id, &window)
             .await?;
 
         let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
@@ -324,6 +310,6 @@ impl Repository {
         cache_lock.insert_root_mails(&id, cache_root_mails).await?;
         cache_lock.upsert_mails_core(root_mails.clone()).await?;
 
-        Ok((root_mails, total))
+        Ok(root_mails)
     }
 }

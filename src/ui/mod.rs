@@ -248,10 +248,11 @@ impl Ui {
                         self.task_manager
                             .spawn(mailfs_repository_create(user_config, tx));
                     }
-                    mailfs::MessageRequest::GetChildMailboxes {
+                    mailfs::MessageRequest::InitMailbox {
                         username,
                         account_id,
-                        parent_id,
+                        mailbox_id,
+                        max_init_mails: amount_initial_mails,
                     } => {
                         let state = self.repos.get(&username).unwrap().clone();
 
@@ -262,47 +263,78 @@ impl Ui {
                             };
 
                             vec![
-                                mailfs::Message::SetChildMailboxes {
+                                mailfs::Message::InitMailbox {
                                     username,
                                     account_id: account_id.clone(),
-                                    parent_id: parent_id.clone(),
-                                    child_mailboxes: handler
-                                        .get_child_mailboxes(account_id, parent_id)
+                                    mailbox_id: mailbox_id.clone(),
+
+                                    data: handler
+                                        .get_init_mailbox(
+                                            account_id,
+                                            mailbox_id,
+                                            amount_initial_mails,
+                                        )
                                         .await,
                                 }
                                 .into(),
                             ]
                         });
                     }
-                    mailfs::MessageRequest::QueryMails {
-                        username,
-                        account_id,
-                        mailbox,
-                        window,
-                        calculate_total,
-                    } => {
-                        let state = self.repos.get(&username).unwrap().clone();
+                    // mailfs::MessageRequest::GetChildMailboxes {
+                    //     username,
+                    //     account_id,
+                    //     parent_id,
+                    // } => {
+                    //     let state = self.repos.get(&username).unwrap().clone();
 
-                        self.task_manager.spawn(async move {
-                            let handler = match get_handler(state).await {
-                                Ok(handler) => handler,
-                                Err(()) => return vec![],
-                            };
+                    //     self.task_manager.spawn(async move {
+                    //         let handler = match get_handler(state).await {
+                    //             Ok(handler) => handler,
+                    //             Err(()) => return vec![],
+                    //         };
 
-                            vec![
-                                mailfs::Message::SetMails {
-                                    username,
-                                    account_id: account_id.clone(),
-                                    mailbox: mailbox.clone(),
-                                    window: window.clone(),
-                                    result: handler
-                                        .query_mails(account_id, mailbox, window, calculate_total)
-                                        .await,
-                                }
-                                .into(),
-                            ]
-                        });
-                    }
+                    //         vec![
+                    //             mailfs::Message::SetChildMailboxes {
+                    //                 username,
+                    //                 account_id: account_id.clone(),
+                    //                 parent_id: parent_id.clone(),
+                    //                 child_mailboxes: handler
+                    //                     .get_child_mailboxes(account_id, parent_id)
+                    //                     .await,
+                    //             }
+                    //             .into(),
+                    //         ]
+                    //     });
+                    // }
+                    // mailfs::MessageRequest::QueryMails {
+                    //     username,
+                    //     account_id,
+                    //     mailbox,
+                    //     window,
+                    //     calculate_total,
+                    // } => {
+                    //     let state = self.repos.get(&username).unwrap().clone();
+
+                    //     self.task_manager.spawn(async move {
+                    //         let handler = match get_handler(state).await {
+                    //             Ok(handler) => handler,
+                    //             Err(()) => return vec![],
+                    //         };
+
+                    //         vec![
+                    //             mailfs::Message::SetMails {
+                    //                 username,
+                    //                 account_id: account_id.clone(),
+                    //                 mailbox: mailbox.clone(),
+                    //                 window: window.clone(),
+                    //                 result: handler
+                    //                     .query_mails(account_id, mailbox, window, calculate_total)
+                    //                     .await,
+                    //             }
+                    //             .into(),
+                    //         ]
+                    //     });
+                    // }
                     mailfs::MessageRequest::GetThreadMails {
                         username,
                         account_id,
