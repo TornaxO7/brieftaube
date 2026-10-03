@@ -1,7 +1,8 @@
 use crate::{
     config::Username,
+    datasource::types::QueryWindow,
     types::{
-        AccountData, AccountId, InitMailboxData, MailDataCore, MailDataPreview, MailId,
+        AccountData, AccountId, InitMailboxData, MailDataCore, MailDataPreview, MailId, MailboxId,
         ParentMailboxId, ThreadId,
     },
     ui::mailfs::user_action::UserAction,
@@ -32,15 +33,15 @@ pub enum Message {
     //     parent_id: ParentMailboxId,
     //     child_mailboxes: color_eyre::Result<Vec<MailboxData>>,
     // },
-    // SetMails {
-    //     username: Username,
-    //     account_id: AccountId,
-    //     mailbox: MailboxId,
+    SetMails {
+        username: Username,
+        account_id: AccountId,
+        mailbox: MailboxId,
 
-    //     window: QueryWindow,
+        window: QueryWindow,
 
-    //     result: color_eyre::Result<(Vec<MailDataCore>, Option<usize>)>,
-    // },
+        result: color_eyre::Result<Vec<MailDataCore>>,
+    },
     SetThreadMails {
         username: Username,
         account_id: AccountId,

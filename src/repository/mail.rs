@@ -237,7 +237,12 @@ impl Repository {
         if let Some(root_mails) = opt_root_mail_ids
             && root_mails.missing.is_empty()
         {
-            debug_assert_eq!(root_mails.values.len(), 1, "Full window was loaded");
+            debug_assert_eq!(
+                root_mails.values.len(),
+                1,
+                "Full query window is in cache. Got {} windows instead.",
+                root_mails.values.len()
+            );
             let root_mails = root_mails.values.into_iter().next().unwrap().values;
 
             let opt_root_mails_data = self

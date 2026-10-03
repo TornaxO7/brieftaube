@@ -6,8 +6,9 @@ mod view;
 
 use crate::{
     config::{self, UserConfig, Username},
+    datasource::types::QueryWindow,
     types::{
-        AccountData, AccountId, InitMailboxData, MailDataCore, MailDataPreview, MailId,
+        AccountData, AccountId, InitMailboxData, MailDataCore, MailDataPreview, MailId, MailboxId,
         ParentMailboxId, ROOT_MAILBOX_ID, ThreadId,
     },
     ui::{
@@ -116,13 +117,13 @@ impl Layer<Message> for State {
             //     parent_id,
             //     child_mailboxes,
             // } => self.handle_set_child_mailboxes(username, account_id, parent_id, child_mailboxes),
-            // Message::SetMails {
-            //     username,
-            //     account_id,
-            //     mailbox,
-            //     window,
-            //     result,
-            // } => self.handle_set_mails(username, account_id, mailbox, window, result),
+            Message::SetMails {
+                username,
+                account_id,
+                mailbox,
+                window,
+                result,
+            } => self.handle_set_mails(username, account_id, mailbox, window, result),
             Message::SetThreadMails {
                 username,
                 account_id,
@@ -144,6 +145,7 @@ impl Layer<Message> for State {
     }
 }
 
+// Message handling
 impl State {
     fn handle_event(&mut self, event: Event) -> Vec<super::Message> {
         match event {
@@ -248,23 +250,26 @@ impl State {
         vec![]
     }
 
-    // fn handle_set_mails(
-    //     &mut self,
-    //     username: Username,
-    //     account_id: AccountId,
-    //     mailbox_id: MailboxId,
-    //     window: QueryWindow,
-    //     result: color_eyre::Result<(Vec<MailDataCore>, Option<usize>)>,
-    // ) -> Vec<super::Message> {
-    //     let key = (username, account_id, Some(mailbox_id.clone()));
+    fn handle_set_mails(
+        &mut self,
+        username: Username,
+        account_id: AccountId,
+        mailbox_id: MailboxId,
+        window: QueryWindow,
+        result: color_eyre::Result<Vec<MailDataCore>>,
+    ) -> Vec<super::Message> {
+        let key = (username, account_id, Some(mailbox_id.clone()));
 
-    //     let column = self
-    //         .mailbox_columns
-    //         .get_mut(&key)
-    //         .expect("The mailbox column itself should request this so it must be there.");
-    //     column.set_mails(window, result);
-    //     vec![]
-    // }
+        let column = self
+            .mailbox_columns
+            .get_mut(&key)
+            .expect("The mailbox column itself should request this so it must be there.")
+            .loaded_mut()
+            .expect("Request must've come from a loaded mailbox");
+
+        column.set_mails(window, result);
+        vec![]
+    }
 
     fn handle_set_thread_mails(
         &mut self,
@@ -350,7 +355,7 @@ impl State {
                 self.ensure_right_column_data()
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
-                let key = self.get_account_ctx().as_key(mailbox_id);
+                let key = self.get_account_ctx().as_key(mailbox_id.clone());
                 let Some(column) = self
                     .mailbox_columns
                     .get_mut(&key)
@@ -360,8 +365,25 @@ impl State {
                     return vec![];
                 };
                 column.navigate_down(1);
-                // TODO: Check if the query-window is still within the new height
-                self.ensure_right_column_data()
+
+                let mut msgs = Vec::new();
+                if let Some(mailbox_id) = mailbox_id {
+                    let section_size = self.column_area_size.map(|size| size.height as usize);
+                    msgs.extend(column.ensure_loaded_mails(section_size).into_iter().map(
+                        |window| {
+                            MessageRequest::QueryMails {
+                                username: key.0.clone(),
+                                account_id: key.1.clone(),
+                                mailbox: mailbox_id.clone(),
+                                window,
+                            }
+                            .into()
+                        },
+                    ));
+                }
+
+                msgs.extend(self.ensure_right_column_data());
+                msgs
             }
             ColumnStackEntry::Thread(thread_id) => {
                 let key = self.get_account_ctx().as_key(thread_id);
@@ -401,12 +423,29 @@ impl State {
                 self.ensure_right_column_data()
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
-                let key = self.get_account_ctx().as_key(mailbox_id);
+                let key = self.get_account_ctx().as_key(mailbox_id.clone());
                 let Some(column) = self.mailbox_columns.get_mut(&key).unwrap().loaded_mut() else {
                     return vec![];
                 };
                 column.navigate_up(1);
-                self.ensure_right_column_data()
+
+                let mut msgs = Vec::new();
+                if let Some(mailbox_id) = mailbox_id {
+                    let section_size = self.column_area_size.map(|size| size.height as usize);
+                    msgs.extend(column.ensure_loaded_mails(section_size).into_iter().map(
+                        |window| {
+                            MessageRequest::QueryMails {
+                                username: key.0.clone(),
+                                account_id: key.1.clone(),
+                                mailbox: mailbox_id.clone(),
+                                window,
+                            }
+                            .into()
+                        },
+                    ));
+                }
+                msgs.extend(self.ensure_right_column_data());
+                msgs
             }
             ColumnStackEntry::Thread(thread_id) => {
                 let key = self.get_account_ctx().as_key(thread_id);
@@ -452,7 +491,24 @@ impl State {
                 };
 
                 column.navigate_to_top();
-                vec![]
+                let mut msgs = Vec::new();
+                if let Some(mailbox_id) = mailbox_id {
+                    let section_size = self.column_area_size.map(|size| size.height as usize);
+                    msgs.extend(column.ensure_loaded_mails(section_size).into_iter().map(
+                        |window| {
+                            MessageRequest::QueryMails {
+                                username: key.0.clone(),
+                                account_id: key.1.clone(),
+                                mailbox: mailbox_id.clone(),
+                                window,
+                            }
+                            .into()
+                        },
+                    ));
+                }
+
+                msgs.extend(self.ensure_right_column_data());
+                msgs
             }
             ColumnStackEntry::Thread(thread_id) => {
                 let key = self.get_account_ctx().as_key(thread_id.clone());
@@ -496,7 +552,24 @@ impl State {
                     return vec![];
                 };
                 column.navigate_to_bottom();
-                self.ensure_right_column_data()
+                let mut msgs = Vec::new();
+                if let Some(mailbox_id) = mailbox_id {
+                    let section_size = self.column_area_size.map(|size| size.height as usize);
+                    msgs.extend(column.ensure_loaded_mails(section_size).into_iter().map(
+                        |window| {
+                            MessageRequest::QueryMails {
+                                username: key.0.clone(),
+                                account_id: key.1.clone(),
+                                mailbox: mailbox_id.clone(),
+                                window,
+                            }
+                            .into()
+                        },
+                    ));
+                }
+
+                msgs.extend(self.ensure_right_column_data());
+                msgs
             }
             ColumnStackEntry::Thread(thread_id) => {
                 let key = self.get_account_ctx().as_key(thread_id.clone());
@@ -648,7 +721,24 @@ impl State {
                 };
 
                 column.navigate_down(offset);
-                self.ensure_right_column_data()
+                let mut msgs = Vec::new();
+                if let Some(mailbox_id) = mailbox_id {
+                    let section_size = self.column_area_size.map(|size| size.height as usize);
+                    msgs.extend(column.ensure_loaded_mails(section_size).into_iter().map(
+                        |window| {
+                            MessageRequest::QueryMails {
+                                username: key.0.clone(),
+                                account_id: key.1.clone(),
+                                mailbox: mailbox_id.clone(),
+                                window,
+                            }
+                            .into()
+                        },
+                    ));
+                }
+
+                msgs.extend(self.ensure_right_column_data());
+                msgs
             }
             ColumnStackEntry::Thread(thread_id) => {
                 let key = self.get_account_ctx().as_key(thread_id.clone());
@@ -705,7 +795,24 @@ impl State {
                 };
 
                 column.navigate_up(offset);
-                self.ensure_right_column_data()
+                let mut msgs = Vec::new();
+                if let Some(mailbox_id) = mailbox_id {
+                    let section_size = self.column_area_size.map(|size| size.height as usize);
+                    msgs.extend(column.ensure_loaded_mails(section_size).into_iter().map(
+                        |window| {
+                            MessageRequest::QueryMails {
+                                username: key.0.clone(),
+                                account_id: key.1.clone(),
+                                mailbox: mailbox_id.clone(),
+                                window,
+                            }
+                            .into()
+                        },
+                    ));
+                }
+
+                msgs.extend(self.ensure_right_column_data());
+                msgs
             }
             ColumnStackEntry::Thread(thread_id) => {
                 let key = self.get_account_ctx().as_key(thread_id.clone());
@@ -806,7 +913,10 @@ impl State {
                             username: key.0,
                             account_id: key.1,
                             mailbox_id: key.2,
-                            max_init_mails: 0,
+                            max_init_mails: self
+                                .column_area_size
+                                .map(|size| size.height as usize)
+                                .unwrap_or(columns::DEFAULT_SECTION_SIZE),
                         }
                         .into(),
                     ]
@@ -844,10 +954,8 @@ impl State {
                                     mailbox_id: key.2,
                                     max_init_mails: self
                                         .column_area_size
-                                        .map(|size| size.height)
-                                        .unwrap_or(32)
-                                        as usize
-                                        / 2,
+                                        .map(|size| size.height as usize)
+                                        .unwrap_or(columns::DEFAULT_SECTION_SIZE),
                                 }
                                 .into(),
                             ]

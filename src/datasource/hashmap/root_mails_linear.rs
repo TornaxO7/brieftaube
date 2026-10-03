@@ -121,6 +121,8 @@ impl RootMails {
     }
 
     pub fn query(&self, range: Range<usize>) -> cache::QueryResponse<MailId> {
+        debug_assert!(!range.is_empty());
+
         if self.ids.len() <= range.start {
             return cache::QueryResponse {
                 values: vec![],
@@ -133,41 +135,19 @@ impl RootMails {
         let mut sections = Vec::new();
         let mut missing = Vec::new();
 
-        let mut prev_start = range.start;
-        for (idx, value) in self.ids[range.start..end].iter().enumerate().skip(1) {
-            match (&self.ids[idx - 1], value) {
-                (None, None) | (Some(_), Some(_)) => {}
-                (None, Some(_)) => {
-                    missing.push(prev_start..idx);
-                    prev_start = idx;
-                }
-                (Some(_), None) => {
-                    sections.push(cache::QueryResponseSection {
-                        start: prev_start,
-                        values: self.ids[prev_start..idx]
-                            .iter()
-                            .cloned()
-                            .map(|id| id.unwrap())
-                            .collect(),
-                    });
-                    prev_start = idx;
-                }
-            }
-        }
-
-        if prev_start < end {
-            if self.ids[prev_start].is_some() {
+        let mut start = range.start;
+        for chunk in self.ids[range.start..end].chunk_by(|a, b| a.is_some() == b.is_some()) {
+            let is_section = chunk[0].is_some();
+            if is_section {
                 sections.push(cache::QueryResponseSection {
-                    start: prev_start,
-                    values: self.ids[prev_start..end]
-                        .iter()
-                        .cloned()
-                        .map(|id| id.unwrap())
-                        .collect(),
+                    start,
+                    values: chunk.iter().flatten().cloned().collect(),
                 });
             } else {
-                missing.push(prev_start..end);
+                missing.push(start..start + chunk.len());
             }
+
+            start += chunk.len();
         }
 
         if end < range.end {

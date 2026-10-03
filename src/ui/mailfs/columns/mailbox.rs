@@ -1,8 +1,11 @@
 use crate::{
+    datasource::types::QueryWindow,
     types::{MailDataCore, MailboxData},
     ui::{Loadable, mailfs::columns::MailfsColumn},
 };
 use ratatui::widgets::TableState;
+
+pub const DEFAULT_SECTION_SIZE: usize = 32;
 
 #[derive(Debug)]
 pub struct MailboxColumn {
@@ -72,28 +75,75 @@ impl MailboxColumn {
         }
     }
 
-    // pub fn set_mails(
-    //     &mut self,
-    //     window: QueryWindow,
-    //     result: color_eyre::Result<Vec<MailDataCore>>,
-    // ) {
-    //     let window_range = window.as_range();
+    pub fn set_mails(
+        &mut self,
+        window: QueryWindow,
+        result: color_eyre::Result<Vec<MailDataCore>>,
+    ) {
+        let window_range = window.as_range();
 
-    //     match result {
-    //         Ok(mails) => {
-    //             self.mails.splice(
-    //                 window_range,
-    //                 mails.into_iter().map(|mail| Loadable::Loaded(mail)),
-    //             );
-    //         }
-    //         Err(err) => {
-    //             self.mails.splice(
-    //                 window_range,
-    //                 std::iter::repeat(Loadable::Error(err.to_string())),
-    //             );
-    //         }
-    //     };
-    // }
+        match result {
+            Ok(mails) => {
+                self.mails.splice(
+                    window_range,
+                    mails.into_iter().map(|mail| Loadable::Loaded(mail)),
+                );
+            }
+            Err(err) => {
+                self.mails[window_range].fill(Loadable::Error(err.to_string()));
+            }
+        };
+    }
+
+    pub fn ensure_loaded_mails(&mut self, section_size: Option<usize>) -> Vec<QueryWindow> {
+        let section_size = section_size.unwrap_or(DEFAULT_SECTION_SIZE);
+        let mut query_windows = Vec::new();
+
+        // min_start                     max_end
+        // |                             |
+        // |---------|---------|---------|
+        //           |         |
+        //           `selected_idx` somewhere here
+        let selected_idx = self.mail_state.selected().unwrap_or(0);
+        let max_end =
+            (selected_idx.next_multiple_of(section_size) + section_size).min(self.mails.len());
+        let min_start = max_end.saturating_sub(section_size * 3);
+
+        // 1. check above
+        if let Some(start_offset) = self.mails[min_start..selected_idx]
+            .iter()
+            .rev()
+            .position(|mail| mail.loaded().is_none())
+        {
+            let range = min_start..selected_idx - start_offset;
+
+            self.mails[range.clone()].fill(Loadable::Loading);
+
+            query_windows.push(QueryWindow {
+                start: range.start as u32,
+                limit: range.len(),
+            })
+        }
+
+        // 2. check below
+        if let Some(start_offset) = self.mails[selected_idx..max_end]
+            .iter()
+            .position(|mail| mail.loaded().is_none())
+        {
+            let range = selected_idx + start_offset..max_end;
+
+            self.mails[range.clone()].fill(Loadable::Loading);
+
+            query_windows.push(QueryWindow {
+                start: range.start as u32,
+                limit: range.len(),
+            });
+        }
+
+        tracing::debug!("Queries: {:#?}", query_windows);
+
+        query_windows
+    }
 }
 
 impl MailfsColumn for MailboxColumn {
@@ -161,14 +211,15 @@ impl MailfsColumn for MailboxColumn {
 
     fn navigate_to_bottom(&mut self) {
         if !self.mails.is_empty() {
-            self.mail_state.select_last();
+            self.mail_state.select(Some(self.mails.len() - 1));
             self.mailbox_state.select(None);
             return;
         }
 
         if !self.child_mailboxes.is_empty() {
             self.mail_state.select(None);
-            self.mailbox_state.select_last();
+            self.mailbox_state
+                .select(Some(self.child_mailboxes.len() - 1));
         }
 
         debug_assert!(
@@ -179,12 +230,12 @@ impl MailfsColumn for MailboxColumn {
     fn navigate_to_top(&mut self) {
         if !self.child_mailboxes.is_empty() {
             self.mail_state.select(None);
-            self.mailbox_state.select_first();
+            self.mailbox_state.select(Some(0));
             return;
         }
 
         if !self.mails.is_empty() {
-            self.mail_state.select_first();
+            self.mail_state.select(Some(0));
             self.mailbox_state.select(None);
         }
 

@@ -1,6 +1,7 @@
 use crate::{
     config,
-    types::{AccountId, MailId, ParentMailboxId, ThreadId},
+    datasource::types::QueryWindow,
+    types::{AccountId, MailId, MailboxId, ParentMailboxId, ThreadId},
 };
 
 pub enum MessageRequest {
@@ -19,14 +20,13 @@ pub enum MessageRequest {
     //     account_id: AccountId,
     //     parent_id: ParentMailboxId,
     // },
-    // QueryMails {
-    //     username: config::Username,
-    //     account_id: AccountId,
-    //     mailbox: MailboxId,
+    QueryMails {
+        username: config::Username,
+        account_id: AccountId,
+        mailbox: MailboxId,
 
-    //     window: QueryWindow,
-    //     calculate_total: bool,
-    // },
+        window: QueryWindow,
+    },
     GetThreadMails {
         username: config::Username,
         account_id: AccountId,
