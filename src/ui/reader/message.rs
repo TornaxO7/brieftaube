@@ -4,14 +4,11 @@ use crate::{
     ui::reader::ReaderHeaders,
 };
 use crossterm::event::Event;
-use ratatui::layout::Size;
 
 pub enum Message {
     UserAction(super::UserAction),
     Event(Event),
     SelectedPaletteEntry(String),
-
-    SetMailBodySize(Size),
 
     SetHeaders(color_eyre::Result<ReaderHeaders>),
     SetTextBody(color_eyre::Result<MailDataTextBody>),

@@ -1,15 +1,16 @@
 use crate::{
-    ui::reader::{ReaderHeaders, SelectedBodyType, SelectedTab},
+    ui::reader::{ReaderHeaders, SelectedBodyType, SelectedTab, body::BodyReader},
     utils::IntoColor,
 };
 use material_theme_loader::Scheme;
 use ratatui::{
     Frame,
-    layout::{Constraint, HorizontalAlignment, Layout, Rect, Size},
+    layout::{Constraint, HorizontalAlignment, Layout, Rect},
     style::Style,
     text::Text,
     widgets::{
-        Block, Borders, Cell, Paragraph, Row, Scrollbar, ScrollbarOrientation, Table, Tabs, Wrap,
+        Block, Borders, Cell, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState,
+        Table, Tabs,
     },
 };
 use throbber_widgets_tui::Throbber;
@@ -241,8 +242,8 @@ fn render_text_body(
         }
     };
 
-    let text_body = match text_body {
-        Ok(text_body) => text_body,
+    let text_body = match text_body.as_mut() {
+        Ok(text_body) => text_body.as_mut(),
         Err(err) => {
             let msg = format!("Couldn't get `text/body` of mail:\n{}", err.to_string());
             render_msg_centered(msg, Style::new().fg(scheme.error.into_color()), frame, area);
@@ -250,38 +251,27 @@ fn render_text_body(
         }
     };
 
-    match text_body {
-        Some(text_body) => {
-            let content_widget = Paragraph::new(text_body.content.as_str())
-                .wrap(Wrap { trim: false })
-                .style(Style::new().fg(scheme.primary.into_color()));
-
+    match text_body.and_then(|text_body| text_body.scrollable_body()) {
+        Some(body) => {
             let [body_area, scrollbar_area] =
                 Layout::horizontal([Constraint::Fill(1), Constraint::Length(1)]).areas(area);
 
-            text_body.scrollbar = {
-                let amount_lines = content_widget.line_count(body_area.width);
-
-                // for whatever reason there seems to be a off-by-one-error in the calculation. So just to be sure.
-                let body_area_height = body_area.height.saturating_sub(1);
-
-                text_body
-                    .scrollbar
-                    .content_length(amount_lines.saturating_sub(body_area_height as usize))
-            };
+            body.set_content_height(body_area.as_size());
 
             frame.render_widget(
-                content_widget.scroll((text_body.scrollbar.get_position() as u16, 0)),
+                body.default_paragraph()
+                    .style(Style::new().fg(scheme.primary.into_color()))
+                    .scroll((body.scroll_offset as u16, 0)),
                 body_area,
             );
 
             frame.render_stateful_widget(
                 Scrollbar::new(ScrollbarOrientation::VerticalRight),
                 scrollbar_area,
-                &mut text_body.scrollbar,
+                &mut ScrollbarState::new(body.content_height).position(body.scroll_offset),
             );
 
-            vec![super::Message::SetMailBodySize(Size::from(body_area)).into()]
+            vec![]
         }
         None => {
             const MSG: &str = "Mail doesn't have `text/body`.";
@@ -327,7 +317,7 @@ fn render_html_body(
     };
 
     let html_body = match html_body {
-        Ok(html_body) => html_body,
+        Ok(html_body) => html_body.as_mut(),
         Err(err) => {
             let msg = format!("Couldn't get `html/body` of mail:\n{}", err.to_string());
             render_msg_centered(msg, Style::new().fg(scheme.error.into_color()), frame, area);
@@ -335,58 +325,28 @@ fn render_html_body(
         }
     };
 
-    match html_body {
-        Some(html_body) => match &html_body.markdown {
-            Ok(markdown_body) => {
-                // also adjust `content_height` from `HtmlBody` if you're going to change anything
-                // related to the layout!
-                match pulldown_cmark_mdcat::ratatui::text_from_str(markdown_body, area.width) {
-                    Ok(text) => {
-                        let content_widget = Paragraph::new(text)
-                            .wrap(Wrap { trim: false })
-                            .style(Style::new().fg(scheme.primary.into_color()));
+    match html_body.and_then(|html_body| html_body.scrollable_body()) {
+        Some(body) => {
+            let [body_area, scrollbar_area] =
+                Layout::horizontal([Constraint::Fill(1), Constraint::Length(1)]).areas(area);
 
-                        let [body_area, scrollbar_area] =
-                            Layout::horizontal([Constraint::Fill(1), Constraint::Length(1)])
-                                .areas(area);
+            body.set_content_height(body_area.as_size());
 
-                        frame.render_widget(
-                            content_widget.scroll((html_body.scrollbar.get_position() as u16, 0)),
-                            body_area,
-                        );
+            frame.render_widget(
+                body.default_paragraph()
+                    .style(Style::new().fg(scheme.primary.into_color()))
+                    .scroll((body.scroll_offset as u16, 0)),
+                body_area,
+            );
 
-                        frame.render_stateful_widget(
-                            Scrollbar::new(ScrollbarOrientation::VerticalRight),
-                            scrollbar_area,
-                            &mut html_body.scrollbar,
-                        );
+            frame.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight),
+                scrollbar_area,
+                &mut ScrollbarState::new(body.content_height).position(body.scroll_offset),
+            );
 
-                        vec![super::Message::SetMailBodySize(Size::from(body_area)).into()]
-                    }
-                    Err(err) => {
-                        let msg = format!("Couldn't render markdown:\n{}", err.to_string());
-                        render_msg_centered(
-                            msg,
-                            Style::new().fg(scheme.error.into_color()),
-                            frame,
-                            area,
-                        );
-
-                        vec![]
-                    }
-                }
-            }
-            Err(err) => {
-                render_msg_centered(
-                    err.to_string(),
-                    Style::new().fg(scheme.error.into_color()),
-                    frame,
-                    area,
-                );
-
-                vec![]
-            }
-        },
+            vec![]
+        }
         None => {
             const MSG: &str = "Mail doesn't have `html/body`.";
 

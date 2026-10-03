@@ -1,4 +1,5 @@
 mod attachments_tab;
+mod body;
 mod message;
 mod message_request;
 mod user_action;
@@ -13,11 +14,8 @@ use crate::{
         utils::keybindmanager::{HandleEvent, KeybindManager},
     },
 };
+use body::*;
 use crossterm::event::Event;
-use ratatui::{
-    layout::Size,
-    widgets::{Paragraph, ScrollbarState, Wrap},
-};
 use std::{collections::HashMap, str::FromStr};
 use throbber_widgets_tui::ThrobberState;
 use tracing::debug;
@@ -34,13 +32,12 @@ pub struct State {
     selected_tab: SelectedTab,
     selected_body_type: SelectedBodyType,
 
+    // TODO: Use `OnceCell` instead
     ctx: Option<Ctx>,
     headers: Option<color_eyre::Result<ReaderHeaders>>,
     text_body: Option<color_eyre::Result<Option<TextBody>>>,
     html_body: Option<color_eyre::Result<Option<HtmlBody>>>,
     attachments: Option<AttachmentsTab>,
-
-    mailbox_body_area_size: Option<Size>,
 }
 
 impl State {
@@ -68,8 +65,6 @@ impl State {
             text_body: None,
             html_body: None,
             attachments: None,
-
-            mailbox_body_area_size: None,
         }
     }
 }
@@ -92,8 +87,6 @@ impl Layer<Message> for State {
             Message::SetTextBody(body) => self.handle_set_text_body(body),
             Message::SetHtmlBody(body) => self.handle_set_html_body(body),
             Message::SetAttachments(attachments) => self.handle_set_attachments(attachments),
-
-            Message::SetMailBodySize(size) => self.handle_set_body_size(size),
         }
     }
 }
@@ -103,8 +96,7 @@ impl State {
     fn handle_event(&mut self, event: Event) -> Vec<super::Message> {
         match event {
             Event::FocusGained | Event::FocusLost | Event::Mouse(_) | Event::Paste(_) => vec![],
-            Event::Resize(width, height) => {
-                self.handle_set_body_size(Size::from((width, height)));
+            Event::Resize(_, _) => {
                 vec![]
             }
             Event::Key(key_event) => match self.keybindings.handle_event(key_event) {
@@ -194,26 +186,26 @@ impl State {
         vec![]
     }
 
-    fn handle_set_body_size(&mut self, size: Size) -> Vec<super::Message> {
-        if self
-            .mailbox_body_area_size
-            .is_some_and(|current_size| current_size == size)
-        {
-            return vec![];
-        }
+    // fn handle_set_body_size(&mut self, size: Size) -> Vec<super::Message> {
+    //     if self
+    //         .mailbox_body_area_size
+    //         .is_some_and(|current_size| current_size == size)
+    //     {
+    //         return vec![];
+    //     }
 
-        self.mailbox_body_area_size = Some(size);
+    //     self.mailbox_body_area_size = Some(size);
 
-        if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
-            text_body.update_scrollbar_to_new_size(size);
-        }
+    //     if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
+    //         text_body.update_scrollbar_to_new_size(size);
+    //     }
 
-        if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
-            html_body.update_scrollbar_to_new_height(size);
-        }
+    //     if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
+    //         html_body.update_scrollbar_to_new_height(size);
+    //     }
 
-        vec![]
-    }
+    //     vec![]
+    // }
 }
 
 // user-action handlers
@@ -266,12 +258,12 @@ impl State {
             SelectedTab::Mail => match self.selected_body_type {
                 SelectedBodyType::Text => {
                     if let Some(Ok(Some(text_body))) = &mut self.text_body {
-                        text_body.navigate_down();
+                        text_body.navigate_down(1);
                     }
                 }
                 SelectedBodyType::Html => {
                     if let Some(Ok(Some(html_body))) = &mut self.html_body {
-                        html_body.navigate_down();
+                        html_body.navigate_down(1);
                     }
                 }
             },
@@ -289,12 +281,12 @@ impl State {
             SelectedTab::Mail => match self.selected_body_type {
                 SelectedBodyType::Text => {
                     if let Some(Ok(Some(text_body))) = &mut self.text_body {
-                        text_body.navigate_up();
+                        text_body.navigate_up(1);
                     }
                 }
                 SelectedBodyType::Html => {
                     if let Some(Ok(Some(html_body))) = &mut self.html_body {
-                        html_body.navigate_up();
+                        html_body.navigate_up(1);
                     }
                 }
             },
@@ -336,30 +328,15 @@ impl State {
             return vec![];
         }
 
-        let Some(body_size) = self.mailbox_body_area_size else {
-            return vec![];
-        };
-
-        let offset = (body_size.height / 2) as usize;
-
         match self.selected_body_type {
             SelectedBodyType::Text => {
                 if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
-                    let content_height = text_body.content_height(body_size);
-                    let current_position = text_body.scrollbar.get_position();
-                    text_body.scrollbar = text_body
-                        .scrollbar
-                        .position((current_position + offset).min(content_height));
+                    text_body.navigate_half_page_down();
                 }
             }
             SelectedBodyType::Html => {
                 if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
-                    let content_height = html_body.content_height(body_size).unwrap();
-                    let current_position = html_body.scrollbar.get_position();
-
-                    html_body.scrollbar = html_body
-                        .scrollbar
-                        .position((current_position + offset).min(content_height));
+                    html_body.navigate_half_page_down();
                 }
             }
         }
@@ -372,29 +349,15 @@ impl State {
             return vec![];
         }
 
-        let Some(body_size) = self.mailbox_body_area_size else {
-            return vec![];
-        };
-
-        let offset = (body_size.height / 2) as usize;
-
         match self.selected_body_type {
             SelectedBodyType::Text => {
                 if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
-                    let current_position = text_body.scrollbar.get_position();
-
-                    text_body.scrollbar = text_body
-                        .scrollbar
-                        .position(current_position.saturating_sub(offset));
+                    text_body.navigate_half_page_up();
                 }
             }
             SelectedBodyType::Html => {
                 if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
-                    let current_position = html_body.scrollbar.get_position();
-
-                    html_body.scrollbar = html_body
-                        .scrollbar
-                        .position(current_position.saturating_sub(offset));
+                    html_body.navigate_half_page_up();
                 }
             }
         }
@@ -465,123 +428,8 @@ impl ReaderHeaders {
     const LONGEST_HEADER_LENGTH: usize = "Received at:".len();
 }
 
-struct TextBody {
-    pub content: String,
-    pub scrollbar: ScrollbarState,
-}
-
-impl TextBody {
-    fn new(content: String) -> Self {
-        let scrollbar = ScrollbarState::new(content.lines().count());
-
-        Self { content, scrollbar }
-    }
-
-    fn update_scrollbar_to_new_size(&mut self, new_size: Size) {
-        let content_height = self.content_height(new_size);
-        self.scrollbar = self.scrollbar.content_length(content_height);
-    }
-
-    fn content_height(&self, render_area_size: Size) -> usize {
-        let amount_lines = Paragraph::new(self.content.as_str())
-            .wrap(Wrap { trim: false })
-            .line_count(render_area_size.width);
-
-        // for whatever reason there seems to be a off-by-one-error in the calculation.
-        // So just to be sure: Assume that the height is less than one
-        let body_area_height = render_area_size.height.saturating_sub(1);
-
-        amount_lines.saturating_sub(body_area_height as usize)
-    }
-}
-struct HtmlBody {
-    html: String,
-    markdown: std::io::Result<String>,
-    scrollbar: ScrollbarState,
-}
-
-impl HtmlBody {
-    pub fn new(html: MailDataHtmlBody) -> Option<Self> {
-        let content = html.content?;
-        let markdown = htmd::convert(content.as_str());
-
-        let scrollbar = {
-            let amount_lines = markdown
-                .as_ref()
-                .ok()
-                .map(|content| content.lines().count())
-                .unwrap_or(0);
-            ScrollbarState::new(amount_lines)
-        };
-
-        Some(Self {
-            html: content,
-            markdown,
-            scrollbar,
-        })
-    }
-
-    fn update_scrollbar_to_new_height(&mut self, new_size: Size) {
-        let Some(content_height) = self.content_height(new_size) else {
-            return;
-        };
-
-        self.scrollbar = self.scrollbar.content_length(content_height);
-    }
-
-    fn content_height(&self, render_area_size: Size) -> Option<usize> {
-        let raw_markdown = self.markdown.as_ref().ok()?;
-
-        let markdown_text = pulldown_cmark_mdcat::ratatui::text_from_str(
-            raw_markdown.as_str(),
-            // `body_area` is created by split up the bigger area into `Fill` and `Length(1)`.
-            // `+ 1` should be the `Length(1)` for the `scrollbar_area`
-            render_area_size.width + 1,
-        )
-        .ok()?;
-
-        let amount_lines = Paragraph::new(markdown_text)
-            .wrap(Wrap { trim: false })
-            .line_count(render_area_size.width);
-
-        Some(amount_lines.saturating_sub(render_area_size.height as usize))
-    }
-}
-
 struct Ctx {
     username: Username,
     account_id: AccountId,
     mail_id: MailId,
-}
-
-trait Scrollable {
-    fn scrollbar(&mut self) -> &mut ScrollbarState;
-
-    fn navigate_down(&mut self) {
-        self.scrollbar().next();
-    }
-
-    fn navigate_up(&mut self) {
-        self.scrollbar().prev();
-    }
-
-    fn navigate_to_top(&mut self) {
-        self.scrollbar().first();
-    }
-
-    fn navigate_to_bottom(&mut self) {
-        self.scrollbar().last();
-    }
-}
-
-impl Scrollable for TextBody {
-    fn scrollbar(&mut self) -> &mut ScrollbarState {
-        &mut self.scrollbar
-    }
-}
-
-impl Scrollable for HtmlBody {
-    fn scrollbar(&mut self) -> &mut ScrollbarState {
-        &mut self.scrollbar
-    }
 }
