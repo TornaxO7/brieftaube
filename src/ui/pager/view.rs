@@ -1,6 +1,6 @@
 use crate::{
     ui::{
-        pager::{MailHeaders, SelectedBodyType, SelectedTab, body::BodyReader},
+        pager::{MailHeaders, Mode, SelectedBodyType, SelectedTab, body::BodyReader},
         statusbar::StatusbarWidget,
     },
     utils::IntoColor,
@@ -38,11 +38,7 @@ pub fn view(
         SelectedTab::Attachments => render_attachments_tab(scheme, state, frame, content_area),
     };
 
-    frame.render_stateful_widget(
-        StatusbarWidget::new(scheme),
-        statusbar_area,
-        &mut state.statusbar,
-    );
+    render_statusbar(scheme, state, frame, statusbar_area);
 
     msgs
 }
@@ -485,4 +481,20 @@ fn render_msg_centered(msg: String, style: Style, frame: &mut Frame, area: Rect)
     );
 
     frame.render_widget(Paragraph::new(msg).style(style), area);
+}
+
+fn render_statusbar(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
+    let layer_name = format!(
+        "Pager({})",
+        match state.mode {
+            Mode::Reader => "Reader",
+            Mode::Composer => "Composer",
+        }
+    );
+
+    frame.render_stateful_widget(
+        StatusbarWidget::new(scheme).layer_name(layer_name.as_str()),
+        area,
+        &mut state.statusbar,
+    );
 }
