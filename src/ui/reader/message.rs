@@ -13,11 +13,6 @@ pub enum Message {
     SetTextBody(color_eyre::Result<MailDataTextBody>),
     SetHtmlBody(color_eyre::Result<MailDataHtmlBody>),
     SetAttachments(color_eyre::Result<Vec<MailDataAttachment>>),
-    // Reset {
-    //     username: Username,
-    //     account_id: AccountId,
-    //     mail_id: MailId,
-    // },
 }
 
 impl From<Message> for crate::ui::Message {

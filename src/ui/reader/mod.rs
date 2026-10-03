@@ -81,11 +81,6 @@ impl Layer<Message> for State {
             Message::Event(event) => self.handle_event(event),
             Message::UserAction(action) => self.handle_user_action(action),
             Message::SelectedPaletteEntry(entry) => self.handle_selected_palette_entry(entry),
-            // Message::Reset {
-            //     username,
-            //     account_id,
-            //     mail_id,
-            // } => self.handle_reset(username, account_id, mail_id),
             Message::SetHeaders(headers) => self.handle_set_headres(headers),
             Message::SetTextBody(body) => self.handle_set_text_body(body),
             Message::SetHtmlBody(body) => self.handle_set_html_body(body),
