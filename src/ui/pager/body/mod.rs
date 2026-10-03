@@ -14,7 +14,7 @@ pub trait BodyReader {
 
     fn navigate_up(&mut self, amount: usize) {
         if let Some(state) = self.scrollable_body() {
-            state.navigate_down(amount);
+            state.navigate_up(amount);
         }
     }
 
