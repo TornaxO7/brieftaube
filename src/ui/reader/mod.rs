@@ -33,7 +33,7 @@ pub struct State {
     selected_body_type: SelectedBodyType,
 
     // TODO: Use `OnceCell` instead
-    ctx: OnceCell<Ctx>,
+    ctx: Ctx,
     headers: OnceCell<color_eyre::Result<ReaderHeaders>>,
     text_body: OnceCell<color_eyre::Result<Option<TextBody>>>,
     html_body: OnceCell<color_eyre::Result<Option<HtmlBody>>>,
@@ -41,7 +41,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn new() -> Self {
+    pub fn new(username: Username, account_id: AccountId, mail_id: MailId) -> Self {
         Self {
             throbber: ThrobberState::default(),
             keybindings: KeybindManager::new(HashMap::from([
@@ -60,7 +60,11 @@ impl State {
             selected_tab: SelectedTab::Mail,
             selected_body_type: SelectedBodyType::Html,
 
-            ctx: OnceCell::new(),
+            ctx: Ctx {
+                username,
+                account_id,
+                mail_id,
+            },
             headers: OnceCell::new(),
             text_body: OnceCell::new(),
             html_body: OnceCell::new(),
@@ -77,12 +81,11 @@ impl Layer<Message> for State {
             Message::Event(event) => self.handle_event(event),
             Message::UserAction(action) => self.handle_user_action(action),
             Message::SelectedPaletteEntry(entry) => self.handle_selected_palette_entry(entry),
-            Message::Reset {
-                username,
-                account_id,
-                mail_id,
-            } => self.handle_reset(username, account_id, mail_id),
-
+            // Message::Reset {
+            //     username,
+            //     account_id,
+            //     mail_id,
+            // } => self.handle_reset(username, account_id, mail_id),
             Message::SetHeaders(headers) => self.handle_set_headres(headers),
             Message::SetTextBody(body) => self.handle_set_text_body(body),
             Message::SetHtmlBody(body) => self.handle_set_html_body(body),
@@ -131,26 +134,26 @@ impl State {
         vec![super::Message::Reader(Message::UserAction(action))]
     }
 
-    fn handle_reset(
-        &mut self,
-        username: Username,
-        account_id: AccountId,
-        mail_id: MailId,
-    ) -> Vec<super::Message> {
-        self.selected_tab = SelectedTab::Mail;
-        self.selected_body_type = SelectedBodyType::Html;
+    // fn handle_reset(
+    //     &mut self,
+    //     username: Username,
+    //     account_id: AccountId,
+    //     mail_id: MailId,
+    // ) -> Vec<super::Message> {
+    //     self.selected_tab = SelectedTab::Mail;
+    //     self.selected_body_type = SelectedBodyType::Html;
 
-        self.ctx = OnceCell::from(Ctx {
-            username,
-            account_id,
-            mail_id,
-        });
-        self.headers = OnceCell::new();
-        self.text_body = OnceCell::new();
-        self.html_body = OnceCell::new();
-        self.attachments = OnceCell::new();
-        vec![]
-    }
+    //     self.ctx = OnceCell::from(Ctx {
+    //         username,
+    //         account_id,
+    //         mail_id,
+    //     });
+    //     self.headers = OnceCell::new();
+    //     self.text_body = OnceCell::new();
+    //     self.html_body = OnceCell::new();
+    //     self.attachments = OnceCell::new();
+    //     vec![]
+    // }
 
     fn handle_set_headres(
         &mut self,
@@ -202,15 +205,14 @@ impl State {
 
     fn open_text_body(&mut self) -> Vec<super::Message> {
         self.selected_body_type = SelectedBodyType::Text;
-        let ctx = self.ctx.get().unwrap();
 
         match self.text_body.get() {
             Some(_) => vec![],
             None => vec![
                 MessageRequest::GetTextBody {
-                    username: ctx.username.clone(),
-                    account_id: ctx.account_id.clone(),
-                    mail_id: ctx.mail_id.clone(),
+                    username: self.ctx.username.clone(),
+                    account_id: self.ctx.account_id.clone(),
+                    mail_id: self.ctx.mail_id.clone(),
                 }
                 .into(),
             ],
@@ -219,15 +221,14 @@ impl State {
 
     fn open_html_body(&mut self) -> Vec<super::Message> {
         self.selected_body_type = SelectedBodyType::Html;
-        let ctx = self.ctx.get().unwrap();
 
         match self.html_body.get() {
             Some(_) => vec![],
             None => vec![
                 MessageRequest::GetHtmlBody {
-                    username: ctx.username.clone(),
-                    account_id: ctx.account_id.clone(),
-                    mail_id: ctx.mail_id.clone(),
+                    username: self.ctx.username.clone(),
+                    account_id: self.ctx.account_id.clone(),
+                    mail_id: self.ctx.mail_id.clone(),
                 }
                 .into(),
             ],

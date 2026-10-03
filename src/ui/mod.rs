@@ -29,15 +29,6 @@ use std::{collections::HashMap, time::Duration};
 use task_manager::TaskManager;
 use tracing::error;
 
-#[derive(Debug, Clone, Copy)]
-enum ActiveLayer {
-    Mailfs,
-    Reader,
-
-    Palette,
-    Prompt,
-}
-
 pub enum Message {
     Mailfs(mailfs::Message),
     MailfsRequest(mailfs::MessageRequest),
@@ -78,11 +69,6 @@ pub struct Ui {
     scheme: Scheme,
 
     repos: HashMap<Username, watch::Receiver<RepositoryState>>,
-
-    mailfs: mailfs::State,
-    reader: reader::State,
-    palette: palette::State,
-    prompt: prompt::State,
 }
 
 impl Ui {
@@ -90,9 +76,6 @@ impl Ui {
         let task_manager = TaskManager::new();
 
         let (mailfs, initial_user) = mailfs::State::new();
-        let reader = reader::State::new();
-        let palette = palette::State::new();
-        let prompt = prompt::State::new();
 
         task_manager.spawn(init_user(initial_user));
 
@@ -102,15 +85,10 @@ impl Ui {
         };
 
         Self {
-            mailfs,
-            reader,
-            palette,
-            prompt,
-
             repos: HashMap::new(),
 
             is_running: true,
-            layers: vec![ActiveLayer::Mailfs],
+            layers: vec![ActiveLayer::Mailfs(mailfs)],
             needs_full_redraw: false,
             task_manager,
             scheme,
@@ -150,47 +128,44 @@ impl Ui {
     fn draw(&mut self, frame: &mut Frame, msgs: &mut Vec<Message>) {
         let area = frame.area();
 
-        let is_overlay = match self.layers.last().unwrap() {
-            ActiveLayer::Mailfs | ActiveLayer::Reader => false,
-            ActiveLayer::Palette | ActiveLayer::Prompt => true,
-        };
-
-        if is_overlay {
-            msgs.extend(match self.layers.iter().rev().skip(1).next().unwrap() {
-                ActiveLayer::Mailfs => mailfs::view(&self.scheme, &mut self.mailfs, frame, area),
-                ActiveLayer::Reader => reader::view(&self.scheme, &mut self.reader, frame, area),
-                ActiveLayer::Palette => palette::view(&self.scheme, &mut self.palette, frame, area),
-                ActiveLayer::Prompt => prompt::view(&self.scheme, &mut self.prompt, frame, area),
+        if matches!(self.layers.last(), Some(ActiveLayer::Overlay(_))) {
+            msgs.extend(match self.layers.iter_mut().rev().skip(1).next().unwrap() {
+                ActiveLayer::Mailfs(state) => mailfs::view(&self.scheme, state, frame, area),
+                ActiveLayer::Reader(state) => reader::view(&self.scheme, state, frame, area),
+                ActiveLayer::Overlay(_) => unreachable!(),
             });
         }
 
         msgs.extend(match self.layers.last_mut().unwrap() {
-            ActiveLayer::Mailfs => mailfs::view(&self.scheme, &mut self.mailfs, frame, area),
-            ActiveLayer::Reader => reader::view(&self.scheme, &mut self.reader, frame, area),
-            ActiveLayer::Palette => palette::view(&self.scheme, &mut self.palette, frame, area),
-            ActiveLayer::Prompt => prompt::view(&self.scheme, &mut self.prompt, frame, area),
-        })
+            ActiveLayer::Mailfs(state) => mailfs::view(&self.scheme, state, frame, area),
+            ActiveLayer::Reader(state) => reader::view(&self.scheme, state, frame, area),
+            ActiveLayer::Overlay(overlay) => match overlay {
+                OverlayLayer::Palette(state) => palette::view(&self.scheme, state, frame, area),
+                OverlayLayer::Prompt(state) => prompt::view(&self.scheme, state, frame, area),
+            },
+        });
     }
 
     fn handle_message(&mut self, msg: Message) -> Vec<Message> {
         match msg {
             Message::Event(event) => match self.layers.last_mut().unwrap() {
-                ActiveLayer::Mailfs => self.mailfs.update(mailfs::Message::Event(event)),
-                ActiveLayer::Reader => self.reader.update(reader::Message::Event(event)),
-                ActiveLayer::Palette => self.palette.update(palette::Message::Event(event)),
-                ActiveLayer::Prompt => self.prompt.update(prompt::Message::Event(event)),
+                ActiveLayer::Mailfs(state) => state.update(mailfs::Message::Event(event)),
+                ActiveLayer::Reader(state) => state.update(reader::Message::Event(event)),
+                ActiveLayer::Overlay(overlay) => match overlay {
+                    OverlayLayer::Palette(state) => state.update(palette::Message::Event(event)),
+                    OverlayLayer::Prompt(state) => state.update(prompt::Message::Event(event)),
+                },
             },
 
             Message::OpenPrompt { description, map } => {
-                self.prompt
-                    .update(prompt::Message::Reset { description, map });
-                self.layers.push(ActiveLayer::Prompt);
+                self.layers.push(ActiveLayer::Overlay(OverlayLayer::Prompt(
+                    prompt::State::new(description, map),
+                )));
                 vec![]
             }
             Message::OpenPalette { entries, map } => {
-                self.palette
-                    .update(palette::Message::Restart { entries, map });
-                self.layers.push(ActiveLayer::Palette);
+                let overlay = OverlayLayer::Palette(palette::State::new(entries, map));
+                self.layers.push(ActiveLayer::Overlay(overlay));
                 vec![]
             }
             Message::OpenReader {
@@ -198,12 +173,11 @@ impl Ui {
                 account_id,
                 mail_id,
             } => {
-                self.layers.push(ActiveLayer::Reader);
-                self.reader.update(reader::Message::Reset {
-                    username: username.clone(),
-                    account_id: account_id.clone(),
-                    mail_id: mail_id.clone(),
-                });
+                self.layers.push(ActiveLayer::Reader(reader::State::new(
+                    username.clone(),
+                    account_id.clone(),
+                    mail_id.clone(),
+                )));
 
                 vec![
                     Message::ReaderRequest(reader::MessageRequest::GetHeaders {
@@ -238,7 +212,23 @@ impl Ui {
                 self.is_running = false;
                 vec![]
             }
-            Message::Mailfs(message) => self.mailfs.update(message),
+            Message::Mailfs(message) => {
+                let mailfs = self
+                    .layers
+                    .iter_mut()
+                    .rev()
+                    .find_map(|layer| {
+                        if let ActiveLayer::Mailfs(state) = layer {
+                            Some(state)
+                        } else {
+                            None
+                        }
+                    })
+                    .expect("Mailfs is in layer");
+
+                mailfs.update(message);
+                vec![]
+            }
             Message::MailfsRequest(message_request) => {
                 match message_request {
                     mailfs::MessageRequest::GetAccountsOf(user_config) => {
@@ -279,32 +269,6 @@ impl Ui {
                             ]
                         });
                     }
-                    // mailfs::MessageRequest::GetChildMailboxes {
-                    //     username,
-                    //     account_id,
-                    //     parent_id,
-                    // } => {
-                    //     let state = self.repos.get(&username).unwrap().clone();
-
-                    //     self.task_manager.spawn(async move {
-                    //         let handler = match get_handler(state).await {
-                    //             Ok(handler) => handler,
-                    //             Err(()) => return vec![],
-                    //         };
-
-                    //         vec![
-                    //             mailfs::Message::SetChildMailboxes {
-                    //                 username,
-                    //                 account_id: account_id.clone(),
-                    //                 parent_id: parent_id.clone(),
-                    //                 child_mailboxes: handler
-                    //                     .get_child_mailboxes(account_id, parent_id)
-                    //                     .await,
-                    //             }
-                    //             .into(),
-                    //         ]
-                    //     });
-                    // }
                     mailfs::MessageRequest::QueryMails {
                         username,
                         account_id,
@@ -385,7 +349,23 @@ impl Ui {
                 vec![]
             }
 
-            Message::Reader(message) => self.reader.update(message),
+            Message::Reader(message) => {
+                let reader = self
+                    .layers
+                    .iter_mut()
+                    .rev()
+                    .find_map(|layer| {
+                        if let ActiveLayer::Reader(reader) = layer {
+                            Some(reader)
+                        } else {
+                            None
+                        }
+                    })
+                    .expect("Reader is in `layers`");
+
+                reader.update(message);
+                vec![]
+            }
             Message::ReaderRequest(message_request) => {
                 match message_request {
                     reader::MessageRequest::GetHeaders {
@@ -487,8 +467,40 @@ impl Ui {
                 vec![]
             }
 
-            Message::Palette(message) => self.palette.update(message),
-            Message::Prompt(message) => self.prompt.update(message),
+            Message::Palette(message) => {
+                let palette = self
+                    .layers
+                    .iter_mut()
+                    .rev()
+                    .find_map(|layer| {
+                        if let ActiveLayer::Overlay(OverlayLayer::Palette(palette)) = layer {
+                            Some(palette)
+                        } else {
+                            None
+                        }
+                    })
+                    .expect("Palette is in active layers");
+
+                palette.update(message);
+                vec![]
+            }
+            Message::Prompt(message) => {
+                let prompt = self
+                    .layers
+                    .iter_mut()
+                    .rev()
+                    .find_map(|layer| {
+                        if let ActiveLayer::Overlay(OverlayLayer::Prompt(prompt)) = layer {
+                            Some(prompt)
+                        } else {
+                            None
+                        }
+                    })
+                    .expect("prompt is in active layers");
+
+                prompt.update(message);
+                vec![]
+            }
         }
     }
 }
@@ -589,4 +601,16 @@ async fn init_user(user: config::UserConfig) -> Vec<Message> {
     vec![Message::MailfsRequest(
         mailfs::MessageRequest::GetAccountsOf(user),
     )]
+}
+
+enum ActiveLayer {
+    Mailfs(mailfs::State),
+    Reader(reader::State),
+
+    Overlay(OverlayLayer),
+}
+
+enum OverlayLayer {
+    Palette(palette::State),
+    Prompt(prompt::State),
 }

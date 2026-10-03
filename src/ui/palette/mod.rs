@@ -13,10 +13,6 @@ type EntryValue = String;
 type EntryDescription = String;
 
 pub enum Message {
-    Restart {
-        entries: Vec<PaletteEntry>,
-        map: fn(String) -> super::Message,
-    },
     Event(Event),
 }
 
@@ -38,21 +34,28 @@ pub struct State {
 }
 
 impl State {
-    pub fn new() -> Self {
+    pub fn new(entries: Vec<PaletteEntry>, map: fn(String) -> super::Message) -> Self {
         let theme = THEME.get().unwrap();
         let scheme = &theme.schemes.dark;
 
         let nucleo: Nucleo<(EntryValue, EntryDescription)> =
             Nucleo::new(nucleo::Config::DEFAULT, Arc::new(|| {}), None, 3);
 
+        let inj = nucleo.injector();
+        for e in entries.into_iter() {
+            inj.push(
+                (e.name, e.description),
+                |&(ref name, ref description), row| {
+                    row[0] = (*name).clone().into();
+                    row[1] = (*description).clone().into();
+                },
+            );
+        }
+
         let input = {
             let mut input = TextArea::default();
             input.set_cursor_line_style(Style::new().fg(scheme.on_surface.into_color()));
             input
-        };
-
-        let map = |_| {
-            unreachable!("Placeholder");
         };
 
         Self {
@@ -73,7 +76,6 @@ impl Layer<Message, super::Message> for State {
         self.nucleo.tick(10);
 
         match msg {
-            Message::Restart { entries, map } => self.handle_restart(entries, map),
             Message::Event(event) => self.handle_event(event),
         }
     }

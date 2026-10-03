@@ -1,6 +1,5 @@
 use crate::{
-    config::Username,
-    types::{AccountId, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId},
+    types::{MailDataAttachment, MailDataHtmlBody, MailDataTextBody},
     ui::reader::ReaderHeaders,
 };
 use crossterm::event::Event;
@@ -14,12 +13,11 @@ pub enum Message {
     SetTextBody(color_eyre::Result<MailDataTextBody>),
     SetHtmlBody(color_eyre::Result<MailDataHtmlBody>),
     SetAttachments(color_eyre::Result<Vec<MailDataAttachment>>),
-
-    Reset {
-        username: Username,
-        account_id: AccountId,
-        mail_id: MailId,
-    },
+    // Reset {
+    //     username: Username,
+    //     account_id: AccountId,
+    //     mail_id: MailId,
+    // },
 }
 
 impl From<Message> for crate::ui::Message {

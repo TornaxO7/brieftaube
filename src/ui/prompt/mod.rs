@@ -8,31 +8,25 @@ use ratatui_textarea::TextArea;
 pub use view::view;
 
 pub enum Message {
-    Reset {
-        description: String,
-        map: fn(String) -> super::Message,
-    },
     Event(Event),
 }
 
 pub struct State {
     pub input: TextArea<'static>,
-    pub desc: String,
+    pub description: String,
 
     map: fn(String) -> super::Message,
 }
 
 impl State {
-    pub fn new() -> Self {
+    pub fn new(description: String, map: fn(String) -> super::Message) -> Self {
         let mut input = TextArea::default();
         input.set_cursor_line_style(Style::default());
-
-        let map = |_| unreachable!();
 
         Self {
             input,
             map,
-            desc: String::new(),
+            description,
         }
     }
 }
@@ -40,7 +34,6 @@ impl State {
 impl Layer<Message> for State {
     fn update(&mut self, msg: Message) -> Vec<super::Message> {
         match msg {
-            Message::Reset { description, map } => self.handle_reset(description, map),
             Message::Event(event) => self.handle_event(event),
         }
     }
@@ -52,7 +45,7 @@ impl State {
         desc: String,
         map: fn(String) -> super::Message,
     ) -> Vec<super::Message> {
-        self.desc = desc;
+        self.description = desc;
         self.input.clear();
         self.map = map;
         vec![]
