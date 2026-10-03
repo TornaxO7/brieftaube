@@ -484,16 +484,20 @@ fn render_msg_centered(msg: String, style: Style, frame: &mut Frame, area: Rect)
 }
 
 fn render_statusbar(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
-    let layer_name = format!(
-        "Pager({})",
-        match state.mode {
-            Mode::Reader => "Reader",
-            Mode::Composer => "Composer",
-        }
-    );
+    let layer_name = match state.mode {
+        Mode::Reader => "Reader",
+        Mode::Composer => "Composer",
+    };
+
+    let tab_name = match state.selected_tab {
+        SelectedTab::Mail => "Mail",
+        SelectedTab::Attachments => "Attachments",
+    };
+
+    let name = format!("{}({})", layer_name, tab_name);
 
     frame.render_stateful_widget(
-        StatusbarWidget::new(scheme).layer_name(layer_name.as_str()),
+        StatusbarWidget::new(scheme).layer_name(name.as_str()),
         area,
         &mut state.statusbar,
     );
