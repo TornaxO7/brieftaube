@@ -11,6 +11,7 @@ use crate::{
     ui::{
         Layer,
         reader::attachments_tab::AttachmentsTab,
+        statusbar::StatusbarState,
         utils::keybindmanager::{HandleEvent, KeybindManager},
     },
 };
@@ -28,6 +29,7 @@ pub use view::view;
 pub struct State {
     keybindings: KeybindManager<UserAction>,
     throbber: ThrobberState,
+    statusbar: StatusbarState,
 
     selected_tab: SelectedTab,
     selected_body_type: SelectedBodyType,
@@ -43,6 +45,7 @@ pub struct State {
 impl State {
     pub fn new(username: Username, account_id: AccountId, mail_id: MailId) -> Self {
         Self {
+            statusbar: StatusbarState::new(),
             throbber: ThrobberState::default(),
             keybindings: KeybindManager::new(HashMap::from([
                 ("q", UserAction::Quit),
@@ -98,9 +101,18 @@ impl State {
                 vec![]
             }
             Event::Key(key_event) => match self.keybindings.handle_event(key_event) {
-                HandleEvent::Action(action) => self.handle_user_action(action),
-                HandleEvent::Registered => vec![],
-                HandleEvent::Cancel => vec![],
+                HandleEvent::Action(action) => {
+                    self.statusbar.reset_pressed_keys();
+                    self.handle_user_action(action)
+                }
+                HandleEvent::Registered => {
+                    self.statusbar.register_key_event(key_event);
+                    vec![]
+                }
+                HandleEvent::Cancel => {
+                    self.statusbar.reset_pressed_keys();
+                    vec![]
+                }
             },
         }
     }

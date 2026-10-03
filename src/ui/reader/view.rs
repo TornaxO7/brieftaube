@@ -1,5 +1,8 @@
 use crate::{
-    ui::reader::{ReaderHeaders, SelectedBodyType, SelectedTab, body::BodyReader},
+    ui::{
+        reader::{ReaderHeaders, SelectedBodyType, SelectedTab, body::BodyReader},
+        statusbar::StatusbarWidget,
+    },
     utils::IntoColor,
 };
 use material_theme_loader::Scheme;
@@ -21,15 +24,27 @@ pub fn view(
     frame: &mut Frame,
     area: Rect,
 ) -> Vec<crate::ui::Message> {
-    let [tabs_area, content_area] =
-        Layout::vertical([Constraint::Length(2), Constraint::Fill(1)]).areas(area);
+    let [tabs_area, content_area, statusbar_area] = Layout::vertical([
+        Constraint::Length(2),
+        Constraint::Fill(1),
+        Constraint::Length(1),
+    ])
+    .areas(area);
 
     render_tab_widgets(scheme, state, frame, tabs_area);
 
-    match state.selected_tab {
+    let msgs = match state.selected_tab {
         SelectedTab::Mail => render_mail_tab(scheme, state, frame, content_area),
         SelectedTab::Attachments => render_attachments_tab(scheme, state, frame, content_area),
-    }
+    };
+
+    frame.render_stateful_widget(
+        StatusbarWidget::new(scheme),
+        statusbar_area,
+        &mut state.statusbar,
+    );
+
+    msgs
 }
 
 fn render_tab_widgets(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
