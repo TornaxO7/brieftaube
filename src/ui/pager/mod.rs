@@ -363,6 +363,7 @@ impl State {
             SelectedTab::Mail => SelectedTab::Attachments,
             SelectedTab::Attachments => SelectedTab::Mail,
         };
+        tracing::debug!("new tab: {:?}", self.selected_tab);
         vec![]
     }
 
@@ -375,6 +376,7 @@ impl State {
     }
 }
 
+#[derive(Debug)]
 enum SelectedTab {
     Mail,
     Attachments,

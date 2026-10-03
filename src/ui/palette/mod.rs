@@ -12,6 +12,7 @@ pub use view::view;
 type EntryValue = String;
 type EntryDescription = String;
 
+#[derive(Debug)]
 pub enum Message {
     Event(Event),
 }

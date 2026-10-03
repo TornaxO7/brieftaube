@@ -7,6 +7,7 @@ use ratatui_textarea::TextArea;
 
 pub use view::view;
 
+#[derive(Debug)]
 pub enum Message {
     Event(Event),
 }

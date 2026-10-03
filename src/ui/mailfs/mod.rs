@@ -343,7 +343,7 @@ impl State {
         let entries = UserAction::palette_options();
         vec![super::Message::OpenPalette {
             entries,
-            map: |entry| super::Message::Mailfs(Message::SelectedPaletteEntry(entry)),
+            map: |entry| Message::SelectedPaletteEntry(entry).into(),
         }]
     }
 

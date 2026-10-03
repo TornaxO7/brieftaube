@@ -10,6 +10,7 @@ use crate::{
 use crossterm::event::Event;
 use ratatui::layout::Size;
 
+#[derive(Debug)]
 pub enum Message {
     Event(Event),
     UserAction(UserAction),

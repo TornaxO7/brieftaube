@@ -3,6 +3,7 @@ use crate::{
     types::{AccountId, MailId},
 };
 
+#[derive(Debug)]
 pub enum MessageRequest {
     GetHeaders {
         username: Username,

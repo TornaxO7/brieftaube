@@ -26,7 +26,6 @@ pub fn view(
 
     // get snapshot
     let snapshot = state.nucleo.snapshot();
-    tracing::debug!("{}, {}", snapshot.matched_item_count(), options_area.height);
     let max_amount = snapshot
         .matched_item_count()
         .min(options_area.height as u32);

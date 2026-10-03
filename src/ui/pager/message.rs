@@ -4,6 +4,7 @@ use crate::{
 };
 use crossterm::event::Event;
 
+#[derive(Debug)]
 pub enum Message {
     UserAction(super::UserAction),
     Event(Event),

@@ -29,6 +29,7 @@ use std::{collections::HashMap, time::Duration};
 use task_manager::TaskManager;
 use tracing::error;
 
+#[derive(Debug)]
 pub enum Message {
     Mailfs(mailfs::Message),
     MailfsRequest(mailfs::MessageRequest),
@@ -229,8 +230,7 @@ impl Ui {
                     })
                     .expect("Mailfs is in layer");
 
-                mailfs.update(message);
-                vec![]
+                mailfs.update(message)
             }
             Message::MailfsRequest(message_request) => {
                 match message_request {
@@ -366,8 +366,7 @@ impl Ui {
                     })
                     .expect("Pager is in `layers`");
 
-                pager.update(message);
-                vec![]
+                pager.update(message)
             }
             Message::PagerRequest(message_request) => {
                 match message_request {
@@ -484,8 +483,7 @@ impl Ui {
                     })
                     .expect("Palette is in active layers");
 
-                palette.update(message);
-                vec![]
+                palette.update(message)
             }
             Message::Prompt(message) => {
                 let prompt = self
@@ -501,14 +499,14 @@ impl Ui {
                     })
                     .expect("prompt is in active layers");
 
-                prompt.update(message);
-                vec![]
+                prompt.update(message)
             }
         }
     }
 }
 
 pub trait Layer<LayerMsg, ParentLayerMsg = Message> {
+    #[must_use]
     fn update(&mut self, msg: LayerMsg) -> Vec<ParentLayerMsg>;
 }
 

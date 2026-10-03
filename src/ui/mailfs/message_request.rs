@@ -4,6 +4,7 @@ use crate::{
     types::{AccountId, MailId, MailboxId, ParentMailboxId, ThreadId},
 };
 
+#[derive(Debug)]
 pub enum MessageRequest {
     GetAccountsOf(config::UserConfig),
 
