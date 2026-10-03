@@ -141,27 +141,6 @@ impl State {
         vec![super::Message::Pager(Message::UserAction(action))]
     }
 
-    // fn handle_reset(
-    //     &mut self,
-    //     username: Username,
-    //     account_id: AccountId,
-    //     mail_id: MailId,
-    // ) -> Vec<super::Message> {
-    //     self.selected_tab = SelectedTab::Mail;
-    //     self.selected_body_type = SelectedBodyType::Html;
-
-    //     self.ctx = OnceCell::from(Ctx {
-    //         username,
-    //         account_id,
-    //         mail_id,
-    //     });
-    //     self.headers = OnceCell::new();
-    //     self.text_body = OnceCell::new();
-    //     self.html_body = OnceCell::new();
-    //     self.attachments = OnceCell::new();
-    //     vec![]
-    // }
-
     fn handle_set_headres(
         &mut self,
         headers: color_eyre::Result<MailHeaders>,
