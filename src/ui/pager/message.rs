@@ -1,6 +1,6 @@
 use crate::{
     types::{MailDataAttachment, MailDataHtmlBody, MailDataTextBody},
-    ui::reader::ReaderHeaders,
+    ui::pager::MailHeaders,
 };
 use crossterm::event::Event;
 
@@ -9,7 +9,7 @@ pub enum Message {
     Event(Event),
     SelectedPaletteEntry(String),
 
-    SetHeaders(color_eyre::Result<ReaderHeaders>),
+    SetHeaders(color_eyre::Result<MailHeaders>),
     SetTextBody(color_eyre::Result<MailDataTextBody>),
     SetHtmlBody(color_eyre::Result<MailDataHtmlBody>),
     SetAttachments(color_eyre::Result<Vec<MailDataAttachment>>),
@@ -17,6 +17,6 @@ pub enum Message {
 
 impl From<Message> for crate::ui::Message {
     fn from(msg: Message) -> Self {
-        Self::Reader(msg)
+        Self::Pager(msg)
     }
 }

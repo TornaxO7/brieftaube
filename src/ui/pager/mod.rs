@@ -10,7 +10,7 @@ use crate::{
     types::{AccountId, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId},
     ui::{
         Layer,
-        reader::attachments_tab::AttachmentsTab,
+        pager::attachments_tab::AttachmentsTab,
         statusbar::StatusbarState,
         utils::keybindmanager::{HandleEvent, KeybindManager},
     },
@@ -36,7 +36,7 @@ pub struct State {
 
     // TODO: Use `OnceCell` instead
     ctx: Ctx,
-    headers: OnceCell<color_eyre::Result<ReaderHeaders>>,
+    headers: OnceCell<color_eyre::Result<MailHeaders>>,
     text_body: OnceCell<color_eyre::Result<Option<TextBody>>>,
     html_body: OnceCell<color_eyre::Result<Option<HtmlBody>>>,
     attachments: OnceCell<AttachmentsTab>,
@@ -138,7 +138,7 @@ impl State {
 
     fn handle_selected_palette_entry(&mut self, entry: String) -> Vec<super::Message> {
         let action = UserAction::from_str(entry.as_str()).unwrap();
-        vec![super::Message::Reader(Message::UserAction(action))]
+        vec![super::Message::Pager(Message::UserAction(action))]
     }
 
     // fn handle_reset(
@@ -164,7 +164,7 @@ impl State {
 
     fn handle_set_headres(
         &mut self,
-        headers: color_eyre::Result<ReaderHeaders>,
+        headers: color_eyre::Result<MailHeaders>,
     ) -> Vec<super::Message> {
         self.headers.set(headers).unwrap();
         vec![]
@@ -206,7 +206,7 @@ impl State {
 
         vec![super::Message::OpenPalette {
             entries,
-            map: |entry| super::Message::Reader(Message::SelectedPaletteEntry(entry)),
+            map: |entry| super::Message::Pager(Message::SelectedPaletteEntry(entry)),
         }]
     }
 
@@ -405,7 +405,7 @@ enum SelectedBodyType {
 }
 
 #[derive(Debug)]
-pub struct ReaderHeaders {
+pub struct MailHeaders {
     pub from: Option<String>,
     pub to: Option<String>,
     pub cc: Option<String>,
@@ -413,7 +413,7 @@ pub struct ReaderHeaders {
     pub received_at: String,
 }
 
-impl ReaderHeaders {
+impl MailHeaders {
     const MAX_AMOUNT_HEADERS: usize = 5;
     const LONGEST_HEADER_LENGTH: usize = "Received at:".len();
 }

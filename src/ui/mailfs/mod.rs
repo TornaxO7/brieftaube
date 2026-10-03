@@ -670,7 +670,7 @@ impl State {
                     }
                     Loadable::Loaded(column) => {
                         let selected_mail = column.get_selected_entry();
-                        vec![super::Message::OpenReader {
+                        vec![super::Message::OpenPager {
                             username: key.0,
                             account_id: key.1,
                             mail_id: selected_mail.id.clone(),

@@ -1,5 +1,5 @@
 use super::ScrollableBody;
-use crate::{types::MailDataHtmlBody, ui::reader::body::BodyReader};
+use crate::{types::MailDataHtmlBody, ui::pager::body::BodyReader};
 
 #[derive(Debug)]
 pub struct HtmlBody {

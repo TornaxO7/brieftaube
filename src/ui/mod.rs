@@ -4,9 +4,9 @@ mod types;
 mod utils;
 
 pub mod mailfs;
+pub mod pager;
 pub mod palette;
 pub mod prompt;
-pub mod reader;
 pub mod statusbar;
 
 use material_theme_loader::Scheme;
@@ -33,8 +33,8 @@ pub enum Message {
     Mailfs(mailfs::Message),
     MailfsRequest(mailfs::MessageRequest),
 
-    Reader(reader::Message),
-    ReaderRequest(reader::MessageRequest),
+    Pager(pager::Message),
+    PagerRequest(pager::MessageRequest),
 
     Palette(palette::Message),
     Prompt(prompt::Message),
@@ -48,7 +48,7 @@ pub enum Message {
         entries: Vec<PaletteEntry>,
         map: fn(String) -> Message,
     },
-    OpenReader {
+    OpenPager {
         username: Username,
         account_id: AccountId,
         mail_id: MailId,
@@ -98,13 +98,13 @@ impl Ui {
     pub async fn run(mut self, terminal: &mut DefaultTerminal) -> eyre::Result<()> {
         let mut msgs = Vec::with_capacity(8);
         let mut interval = tokio::time::interval(Duration::from_millis(500));
-        let mut reader = crossterm::event::EventStream::new();
+        let mut event_stream = crossterm::event::EventStream::new();
 
         terminal.draw(|frame| self.draw(frame, &mut msgs))?;
 
         while self.is_running {
             tokio::select! {
-                maybe_event = reader.next().fuse() => match maybe_event {
+                maybe_event = event_stream.next().fuse() => match maybe_event {
                     Some(Ok(event)) => msgs.push(Message::Event(event)),
                     Some(Err(e)) => error!("{}", e),
                     None => (),
@@ -131,14 +131,14 @@ impl Ui {
         if matches!(self.layers.last(), Some(ActiveLayer::Overlay(_))) {
             msgs.extend(match self.layers.iter_mut().rev().skip(1).next().unwrap() {
                 ActiveLayer::Mailfs(state) => mailfs::view(&self.scheme, state, frame, area),
-                ActiveLayer::Reader(state) => reader::view(&self.scheme, state, frame, area),
+                ActiveLayer::Pager(state) => pager::view(&self.scheme, state, frame, area),
                 ActiveLayer::Overlay(_) => unreachable!(),
             });
         }
 
         msgs.extend(match self.layers.last_mut().unwrap() {
             ActiveLayer::Mailfs(state) => mailfs::view(&self.scheme, state, frame, area),
-            ActiveLayer::Reader(state) => reader::view(&self.scheme, state, frame, area),
+            ActiveLayer::Pager(state) => pager::view(&self.scheme, state, frame, area),
             ActiveLayer::Overlay(overlay) => match overlay {
                 OverlayLayer::Palette(state) => palette::view(&self.scheme, state, frame, area),
                 OverlayLayer::Prompt(state) => prompt::view(&self.scheme, state, frame, area),
@@ -150,7 +150,7 @@ impl Ui {
         match msg {
             Message::Event(event) => match self.layers.last_mut().unwrap() {
                 ActiveLayer::Mailfs(state) => state.update(mailfs::Message::Event(event)),
-                ActiveLayer::Reader(state) => state.update(reader::Message::Event(event)),
+                ActiveLayer::Pager(state) => state.update(pager::Message::Event(event)),
                 ActiveLayer::Overlay(overlay) => match overlay {
                     OverlayLayer::Palette(state) => state.update(palette::Message::Event(event)),
                     OverlayLayer::Prompt(state) => state.update(prompt::Message::Event(event)),
@@ -168,29 +168,29 @@ impl Ui {
                 self.layers.push(ActiveLayer::Overlay(overlay));
                 vec![]
             }
-            Message::OpenReader {
+            Message::OpenPager {
                 username,
                 account_id,
                 mail_id,
             } => {
-                self.layers.push(ActiveLayer::Reader(reader::State::new(
+                self.layers.push(ActiveLayer::Pager(pager::State::new(
                     username.clone(),
                     account_id.clone(),
                     mail_id.clone(),
                 )));
 
                 vec![
-                    Message::ReaderRequest(reader::MessageRequest::GetHeaders {
+                    Message::PagerRequest(pager::MessageRequest::GetHeaders {
                         username: username.clone(),
                         account_id: account_id.clone(),
                         mail_id: mail_id.clone(),
                     }),
-                    Message::ReaderRequest(reader::MessageRequest::GetHtmlBody {
+                    Message::PagerRequest(pager::MessageRequest::GetHtmlBody {
                         username: username.clone(),
                         account_id: account_id.clone(),
                         mail_id: mail_id.clone(),
                     }),
-                    Message::ReaderRequest(reader::MessageRequest::GetAttachments {
+                    Message::PagerRequest(pager::MessageRequest::GetAttachments {
                         username: username.clone(),
                         account_id: account_id.clone(),
                         mail_id: mail_id.clone(),
@@ -349,26 +349,26 @@ impl Ui {
                 vec![]
             }
 
-            Message::Reader(message) => {
-                let reader = self
+            Message::Pager(message) => {
+                let pager = self
                     .layers
                     .iter_mut()
                     .rev()
                     .find_map(|layer| {
-                        if let ActiveLayer::Reader(reader) = layer {
-                            Some(reader)
+                        if let ActiveLayer::Pager(pager) = layer {
+                            Some(pager)
                         } else {
                             None
                         }
                     })
-                    .expect("Reader is in `layers`");
+                    .expect("Pager is in `layers`");
 
-                reader.update(message);
+                pager.update(message);
                 vec![]
             }
-            Message::ReaderRequest(message_request) => {
+            Message::PagerRequest(message_request) => {
                 match message_request {
-                    reader::MessageRequest::GetHeaders {
+                    pager::MessageRequest::GetHeaders {
                         username,
                         account_id,
                         mail_id,
@@ -382,7 +382,7 @@ impl Ui {
                             };
 
                             let headers = handler.get_mail_preview(account_id, mail_id).await.map(
-                                |preview| reader::ReaderHeaders {
+                                |preview| pager::MailHeaders {
                                     from: preview.from.map(|from| from.to_string()),
                                     to: preview.to.map(|to| to.to_string()),
                                     cc: preview.cc.map(|cc| cc.to_string()),
@@ -394,10 +394,10 @@ impl Ui {
                                 },
                             );
 
-                            vec![Message::Reader(reader::Message::SetHeaders(headers)).into()]
+                            vec![Message::Pager(pager::Message::SetHeaders(headers)).into()]
                         });
                     }
-                    reader::MessageRequest::GetTextBody {
+                    pager::MessageRequest::GetTextBody {
                         username,
                         account_id,
                         mail_id,
@@ -411,14 +411,14 @@ impl Ui {
                             };
 
                             vec![
-                                reader::Message::SetTextBody(
+                                pager::Message::SetTextBody(
                                     handler.get_mail_text_body(account_id, mail_id).await,
                                 )
                                 .into(),
                             ]
                         });
                     }
-                    reader::MessageRequest::GetHtmlBody {
+                    pager::MessageRequest::GetHtmlBody {
                         username,
                         account_id,
                         mail_id,
@@ -432,14 +432,14 @@ impl Ui {
                             };
 
                             vec![
-                                reader::Message::SetHtmlBody(
+                                pager::Message::SetHtmlBody(
                                     handler.get_mail_html_body(account_id, mail_id).await,
                                 )
                                 .into(),
                             ]
                         });
                     }
-                    reader::MessageRequest::GetAttachments {
+                    pager::MessageRequest::GetAttachments {
                         username,
                         account_id,
                         mail_id,
@@ -453,7 +453,7 @@ impl Ui {
                             };
 
                             vec![
-                                reader::Message::SetAttachments(
+                                pager::Message::SetAttachments(
                                     handler
                                         .get_mail_preview(account_id, mail_id)
                                         .await
@@ -605,7 +605,7 @@ async fn init_user(user: config::UserConfig) -> Vec<Message> {
 
 enum ActiveLayer {
     Mailfs(mailfs::State),
-    Reader(reader::State),
+    Pager(pager::State),
 
     Overlay(OverlayLayer),
 }

@@ -28,6 +28,6 @@ pub enum MessageRequest {
 
 impl From<MessageRequest> for crate::ui::Message {
     fn from(msg: MessageRequest) -> Self {
-        Self::ReaderRequest(msg)
+        Self::PagerRequest(msg)
     }
 }

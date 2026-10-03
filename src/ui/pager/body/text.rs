@@ -1,4 +1,4 @@
-use crate::ui::reader::body::{BodyReader, ScrollableBody};
+use crate::ui::pager::body::{BodyReader, ScrollableBody};
 
 #[derive(Debug)]
 pub struct TextBody {

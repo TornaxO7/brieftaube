@@ -1,6 +1,6 @@
 use crate::{
     ui::{
-        reader::{ReaderHeaders, SelectedBodyType, SelectedTab, body::BodyReader},
+        pager::{MailHeaders, SelectedBodyType, SelectedTab, body::BodyReader},
         statusbar::StatusbarWidget,
     },
     utils::IntoColor,
@@ -118,7 +118,7 @@ fn render_mail_headers(
         Some(headers) => match headers {
             Ok(headers) => {
                 let rows: Vec<Row<'_>> = {
-                    let mut rows = Vec::with_capacity(ReaderHeaders::MAX_AMOUNT_HEADERS);
+                    let mut rows = Vec::with_capacity(MailHeaders::MAX_AMOUNT_HEADERS);
 
                     let header_style = Style::new().fg(scheme.primary.into_color()).bold();
                     let value_style = Style::new().fg(scheme.secondary.into_color());
@@ -164,7 +164,7 @@ fn render_mail_headers(
                         .areas(area);
 
                 let widths = [
-                    Constraint::Length(ReaderHeaders::LONGEST_HEADER_LENGTH as u16),
+                    Constraint::Length(MailHeaders::LONGEST_HEADER_LENGTH as u16),
                     Constraint::Fill(1),
                 ];
 
