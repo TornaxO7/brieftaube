@@ -84,31 +84,6 @@ impl Layer<Message, super::Message> for State {
 }
 
 impl State {
-    fn handle_restart(
-        &mut self,
-        entries: Vec<PaletteEntry>,
-        map: fn(String) -> super::Message,
-    ) -> Vec<super::Message> {
-        self.nucleo.restart(true);
-        self.input.clear();
-        self.map = map;
-        self.list_state.select(Some(0));
-
-        let inj = self.nucleo.injector();
-        for e in entries.into_iter() {
-            inj.push(
-                (e.name, e.description),
-                |&(ref name, ref description), row| {
-                    row[0] = (*name).clone().into();
-                    row[1] = (*description).clone().into();
-                },
-            );
-        }
-
-        self.nucleo.tick(10);
-        vec![]
-    }
-
     fn handle_event(&mut self, event: Event) -> Vec<super::Message> {
         match event {
             Event::Key(event) => {
