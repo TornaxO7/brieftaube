@@ -3,7 +3,6 @@ mod task_manager;
 mod types;
 mod utils;
 
-// pub mod composer;
 pub mod mailfs;
 pub mod palette;
 pub mod prompt;
