@@ -177,6 +177,7 @@ impl Ui {
                     username.clone(),
                     account_id.clone(),
                     mail_id.clone(),
+                    pager::Mode::Reader,
                 )));
 
                 vec![

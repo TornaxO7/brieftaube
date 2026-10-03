@@ -30,6 +30,7 @@ pub struct State {
     keybindings: KeybindManager<UserAction>,
     throbber: ThrobberState,
     statusbar: StatusbarState,
+    mode: Mode,
 
     selected_tab: SelectedTab,
     selected_body_type: SelectedBodyType,
@@ -43,8 +44,9 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(username: Username, account_id: AccountId, mail_id: MailId) -> Self {
+    pub fn new(username: Username, account_id: AccountId, mail_id: MailId, mode: Mode) -> Self {
         Self {
+            mode,
             statusbar: StatusbarState::new(),
             throbber: ThrobberState::default(),
             keybindings: KeybindManager::new(HashMap::from([
@@ -181,7 +183,7 @@ impl State {
 // user-action handlers
 impl State {
     fn open_command_palette(&self) -> Vec<super::Message> {
-        let entries = UserAction::palette_options();
+        let entries = UserAction::palette_options(self.mode);
 
         vec![super::Message::OpenPalette {
             entries,
@@ -401,4 +403,10 @@ struct Ctx {
     username: Username,
     account_id: AccountId,
     mail_id: MailId,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Mode {
+    Reader,
+    Composer,
 }

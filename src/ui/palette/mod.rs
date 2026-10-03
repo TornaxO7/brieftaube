@@ -38,7 +38,7 @@ impl State {
         let theme = THEME.get().unwrap();
         let scheme = &theme.schemes.dark;
 
-        let nucleo: Nucleo<(EntryValue, EntryDescription)> =
+        let mut nucleo: Nucleo<(EntryValue, EntryDescription)> =
             Nucleo::new(nucleo::Config::DEFAULT, Arc::new(|| {}), None, 3);
 
         let inj = nucleo.injector();
@@ -51,6 +51,8 @@ impl State {
                 },
             );
         }
+
+        nucleo.tick(10);
 
         let input = {
             let mut input = TextArea::default();
