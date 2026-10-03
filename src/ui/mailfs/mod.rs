@@ -14,6 +14,7 @@ use crate::{
     ui::{
         Layer, Loadable,
         mailfs::columns::*,
+        statusbar::{StatusbarState, StatusbarWidget},
         utils::keybindmanager::{self, KeybindManager},
     },
 };
@@ -30,6 +31,7 @@ pub use view::view;
 
 pub struct State {
     keybindings: KeybindManager<UserAction>,
+    statusbar: StatusbarState,
 
     throbber: ThrobberState,
     mode: Mode,
@@ -62,6 +64,7 @@ impl State {
 
         (
             Self {
+                statusbar: StatusbarState::new(),
                 throbber: ThrobberState::default(),
                 mode: Mode::Normal,
                 column_stack: vec![ColumnStackEntry::Users],

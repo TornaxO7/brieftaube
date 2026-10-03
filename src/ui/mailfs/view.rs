@@ -6,7 +6,7 @@ use crate::{
             ColumnStackEntry,
             columns::{MailboxColumnEntry, MailfsColumn},
         },
-        statusbar::Statusbar,
+        statusbar::StatusbarWidget,
     },
     utils::IntoColor,
 };
@@ -114,7 +114,7 @@ fn render_path(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, are
     );
 }
 
-fn render_statusbar(_scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
+fn render_statusbar(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
     let layer_name = {
         let column_type = match state.column_stack.last().unwrap() {
             ColumnStackEntry::Users => "Users",
@@ -130,7 +130,11 @@ fn render_statusbar(_scheme: &Scheme, state: &mut super::State, frame: &mut Fram
         format!("{}({})", column_type, mode)
     };
 
-    frame.render_widget(Statusbar::default().layer_name(layer_name.as_str()), area);
+    frame.render_stateful_widget(
+        StatusbarWidget::new(scheme).layer_name(layer_name.as_str()),
+        area,
+        &mut state.statusbar,
+    );
 }
 
 fn render_columns(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
