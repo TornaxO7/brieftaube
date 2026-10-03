@@ -1,6 +1,7 @@
 use super::ScrollableBody;
 use crate::{types::MailDataHtmlBody, ui::reader::body::BodyReader};
 
+#[derive(Debug)]
 pub struct HtmlBody {
     html: String,
     state: std::io::Result<ScrollableBody>,

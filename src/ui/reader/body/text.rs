@@ -1,5 +1,6 @@
 use crate::ui::reader::body::{BodyReader, ScrollableBody};
 
+#[derive(Debug)]
 pub struct TextBody {
     pub state: ScrollableBody,
 }

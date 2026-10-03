@@ -49,6 +49,7 @@ pub trait BodyReader {
     }
 }
 
+#[derive(Debug)]
 pub struct ScrollableBody {
     pub content: String,
     pub scroll_offset: usize,

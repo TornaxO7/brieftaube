@@ -16,7 +16,7 @@ use crate::{
 };
 use body::*;
 use crossterm::event::Event;
-use std::{collections::HashMap, str::FromStr};
+use std::{cell::OnceCell, collections::HashMap, str::FromStr};
 use throbber_widgets_tui::ThrobberState;
 use tracing::debug;
 use user_action::UserAction;
@@ -33,11 +33,11 @@ pub struct State {
     selected_body_type: SelectedBodyType,
 
     // TODO: Use `OnceCell` instead
-    ctx: Option<Ctx>,
-    headers: Option<color_eyre::Result<ReaderHeaders>>,
-    text_body: Option<color_eyre::Result<Option<TextBody>>>,
-    html_body: Option<color_eyre::Result<Option<HtmlBody>>>,
-    attachments: Option<AttachmentsTab>,
+    ctx: OnceCell<Ctx>,
+    headers: OnceCell<color_eyre::Result<ReaderHeaders>>,
+    text_body: OnceCell<color_eyre::Result<Option<TextBody>>>,
+    html_body: OnceCell<color_eyre::Result<Option<HtmlBody>>>,
+    attachments: OnceCell<AttachmentsTab>,
 }
 
 impl State {
@@ -60,11 +60,11 @@ impl State {
             selected_tab: SelectedTab::Mail,
             selected_body_type: SelectedBodyType::Html,
 
-            ctx: None,
-            headers: None,
-            text_body: None,
-            html_body: None,
-            attachments: None,
+            ctx: OnceCell::new(),
+            headers: OnceCell::new(),
+            text_body: OnceCell::new(),
+            html_body: OnceCell::new(),
+            attachments: OnceCell::new(),
         }
     }
 }
@@ -142,15 +142,15 @@ impl State {
         self.selected_tab = SelectedTab::Mail;
         self.selected_body_type = SelectedBodyType::Html;
 
-        self.ctx = Some(Ctx {
+        self.ctx = OnceCell::from(Ctx {
             username,
             account_id,
             mail_id,
         });
-        self.headers = None;
-        self.text_body = None;
-        self.html_body = None;
-        self.attachments = None;
+        self.headers = OnceCell::new();
+        self.text_body = OnceCell::new();
+        self.html_body = OnceCell::new();
+        self.attachments = OnceCell::new();
         vec![]
     }
 
@@ -158,7 +158,7 @@ impl State {
         &mut self,
         headers: color_eyre::Result<ReaderHeaders>,
     ) -> Vec<super::Message> {
-        self.headers = Some(headers);
+        self.headers.set(headers).unwrap();
         vec![]
     }
 
@@ -166,7 +166,9 @@ impl State {
         &mut self,
         body: color_eyre::Result<MailDataTextBody>,
     ) -> Vec<super::Message> {
-        self.text_body = Some(body.map(|body| body.content.map(TextBody::new)));
+        self.text_body
+            .set(body.map(|body| body.content.map(TextBody::new)))
+            .unwrap();
         vec![]
     }
 
@@ -174,7 +176,7 @@ impl State {
         &mut self,
         body: color_eyre::Result<MailDataHtmlBody>,
     ) -> Vec<super::Message> {
-        self.html_body = Some(body.map(HtmlBody::new));
+        self.html_body.set(body.map(HtmlBody::new)).unwrap();
         vec![]
     }
 
@@ -182,30 +184,11 @@ impl State {
         &mut self,
         attachments: color_eyre::Result<Vec<MailDataAttachment>>,
     ) -> Vec<super::Message> {
-        self.attachments = Some(AttachmentsTab::new(attachments));
+        self.attachments
+            .set(AttachmentsTab::new(attachments))
+            .unwrap();
         vec![]
     }
-
-    // fn handle_set_body_size(&mut self, size: Size) -> Vec<super::Message> {
-    //     if self
-    //         .mailbox_body_area_size
-    //         .is_some_and(|current_size| current_size == size)
-    //     {
-    //         return vec![];
-    //     }
-
-    //     self.mailbox_body_area_size = Some(size);
-
-    //     if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
-    //         text_body.update_scrollbar_to_new_size(size);
-    //     }
-
-    //     if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
-    //         html_body.update_scrollbar_to_new_height(size);
-    //     }
-
-    //     vec![]
-    // }
 }
 
 // user-action handlers
@@ -221,9 +204,9 @@ impl State {
 
     fn open_text_body(&mut self) -> Vec<super::Message> {
         self.selected_body_type = SelectedBodyType::Text;
-        let ctx = self.ctx.as_ref().unwrap();
+        let ctx = self.ctx.get().unwrap();
 
-        match self.text_body {
+        match self.text_body.get() {
             Some(_) => vec![],
             None => vec![
                 MessageRequest::GetTextBody {
@@ -238,9 +221,9 @@ impl State {
 
     fn open_html_body(&mut self) -> Vec<super::Message> {
         self.selected_body_type = SelectedBodyType::Html;
-        let ctx = self.ctx.as_ref().unwrap();
+        let ctx = self.ctx.get().unwrap();
 
-        match self.html_body {
+        match self.html_body.get() {
             Some(_) => vec![],
             None => vec![
                 MessageRequest::GetHtmlBody {
@@ -257,18 +240,18 @@ impl State {
         match self.selected_tab {
             SelectedTab::Mail => match self.selected_body_type {
                 SelectedBodyType::Text => {
-                    if let Some(Ok(Some(text_body))) = &mut self.text_body {
+                    if let Some(Ok(Some(text_body))) = self.text_body.get_mut() {
                         text_body.navigate_down(1);
                     }
                 }
                 SelectedBodyType::Html => {
-                    if let Some(Ok(Some(html_body))) = &mut self.html_body {
+                    if let Some(Ok(Some(html_body))) = self.html_body.get_mut() {
                         html_body.navigate_down(1);
                     }
                 }
             },
             SelectedTab::Attachments => {
-                if let Some(tab) = &mut self.attachments {
+                if let Some(tab) = self.attachments.get_mut() {
                     tab.navigate_down();
                 }
             }
@@ -280,18 +263,18 @@ impl State {
         match self.selected_tab {
             SelectedTab::Mail => match self.selected_body_type {
                 SelectedBodyType::Text => {
-                    if let Some(Ok(Some(text_body))) = &mut self.text_body {
+                    if let Some(Ok(Some(text_body))) = self.text_body.get_mut() {
                         text_body.navigate_up(1);
                     }
                 }
                 SelectedBodyType::Html => {
-                    if let Some(Ok(Some(html_body))) = &mut self.html_body {
+                    if let Some(Ok(Some(html_body))) = self.html_body.get_mut() {
                         html_body.navigate_up(1);
                     }
                 }
             },
             SelectedTab::Attachments => {
-                if let Some(tab) = &mut self.attachments {
+                if let Some(tab) = self.attachments.get_mut() {
                     tab.navigate_up();
                 }
             }
@@ -303,18 +286,18 @@ impl State {
         match self.selected_tab {
             SelectedTab::Mail => match self.selected_body_type {
                 SelectedBodyType::Text => {
-                    if let Some(Ok(Some(text_body))) = &mut self.text_body {
+                    if let Some(Ok(Some(text_body))) = self.text_body.get_mut() {
                         text_body.navigate_to_top();
                     }
                 }
                 SelectedBodyType::Html => {
-                    if let Some(Ok(Some(html_body))) = &mut self.html_body {
+                    if let Some(Ok(Some(html_body))) = self.html_body.get_mut() {
                         html_body.navigate_to_top();
                     }
                 }
             },
             SelectedTab::Attachments => {
-                if let Some(tab) = &mut self.attachments {
+                if let Some(tab) = self.attachments.get_mut() {
                     tab.navigate_to_top();
                 }
             }
@@ -330,12 +313,12 @@ impl State {
 
         match self.selected_body_type {
             SelectedBodyType::Text => {
-                if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
+                if let Some(Ok(Some(text_body))) = self.text_body.get_mut() {
                     text_body.navigate_half_page_down();
                 }
             }
             SelectedBodyType::Html => {
-                if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
+                if let Some(Ok(Some(html_body))) = self.html_body.get_mut() {
                     html_body.navigate_half_page_down();
                 }
             }
@@ -351,12 +334,12 @@ impl State {
 
         match self.selected_body_type {
             SelectedBodyType::Text => {
-                if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
+                if let Some(Ok(Some(text_body))) = self.text_body.get_mut() {
                     text_body.navigate_half_page_up();
                 }
             }
             SelectedBodyType::Html => {
-                if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
+                if let Some(Ok(Some(html_body))) = self.html_body.get_mut() {
                     html_body.navigate_half_page_up();
                 }
             }
@@ -369,18 +352,18 @@ impl State {
         match self.selected_tab {
             SelectedTab::Mail => match self.selected_body_type {
                 SelectedBodyType::Text => {
-                    if let Some(Ok(Some(text_body))) = &mut self.text_body {
+                    if let Some(Ok(Some(text_body))) = self.text_body.get_mut() {
                         text_body.navigate_to_bottom();
                     }
                 }
                 SelectedBodyType::Html => {
-                    if let Some(Ok(Some(html_body))) = &mut self.html_body {
+                    if let Some(Ok(Some(html_body))) = self.html_body.get_mut() {
                         html_body.navigate_to_bottom();
                     }
                 }
             },
             SelectedTab::Attachments => {
-                if let Some(tab) = &mut self.attachments {
+                if let Some(tab) = self.attachments.get_mut() {
                     tab.navigate_to_bottom();
                 }
             }
@@ -415,6 +398,7 @@ enum SelectedBodyType {
     Html,
 }
 
+#[derive(Debug)]
 pub struct ReaderHeaders {
     pub from: Option<String>,
     pub to: Option<String>,
