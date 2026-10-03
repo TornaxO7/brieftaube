@@ -1,4 +1,5 @@
 use crate::utils::IntoColor;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use material_theme_loader::Scheme;
 use ratatui::{
     buffer::Buffer,
@@ -28,6 +29,46 @@ pub struct StatusbarState {
 impl StatusbarState {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn reset_pressed_keys(&mut self) {
+        self.pressed_keys.clear();
+    }
+
+    pub fn register_key_event(&mut self, event: KeyEvent) {
+        let c = match event.code {
+            KeyCode::Char(c) => c,
+            KeyCode::Tab => {
+                self.pressed_keys.push_str("<Tab>");
+                return;
+            }
+            KeyCode::Backspace => {
+                self.pressed_keys.push_str("<BS>");
+                return;
+            }
+            KeyCode::Esc => {
+                self.pressed_keys.push_str("<Esc>");
+                return;
+            }
+            KeyCode::BackTab => {
+                self.pressed_keys.push_str("<BTab>");
+                return;
+            }
+            _ => {
+                self.pressed_keys.push('?');
+                return;
+            }
+        };
+
+        if event.modifiers.contains(KeyModifiers::CONTROL) {
+            self.pressed_keys.push_str(&format!("<C-{c}>"));
+        } else if event.modifiers.contains(KeyModifiers::ALT) {
+            self.pressed_keys.push_str(&format!("<A-{c}>"));
+        } else if event.modifiers.contains(KeyModifiers::SHIFT) {
+            self.pressed_keys.push_str(&format!("<S-{c}>"));
+        } else {
+            self.pressed_keys.push(c);
+        }
     }
 }
 
@@ -62,10 +103,12 @@ impl<'a> StatefulWidget for StatusbarWidget<'a> {
             .map(|layer_name| format!(" {layer_name} "))
             .unwrap_or_default();
 
+        let pressed_keys = format!(" {} ", state.pressed_keys.as_str());
+
         let [left_area, center_area, right_area] = Layout::horizontal([
             Constraint::Length(layer_name.len() as u16),
             Constraint::Fill(1),
-            Constraint::Length(state.pressed_keys.len() as u16),
+            Constraint::Length(pressed_keys.len() as u16),
         ])
         .areas(area);
 
@@ -108,29 +151,13 @@ impl<'a> StatefulWidget for StatusbarWidget<'a> {
         );
 
         Widget::render(
-            state
-                .status_msg
-                .as_ref()
-                .map(|status_msg| {
-                    let status_style = match status_msg.ty {
-                        StatusMsgType::Error => Style::new()
-                            .fg(self.scheme.on_error_container.into_color())
-                            .bg(self.scheme.error_container.into_color()),
-                        StatusMsgType::Info => Style::new()
-                            .fg(self.scheme.on_secondary_container.into_color())
-                            .bg(self.scheme.secondary_container.into_color()),
-                    };
-                    let msg = format!(" {} ", status_msg.msg);
-
-                    Text::from(msg).right_aligned().style(status_style)
-                })
-                .unwrap_or(
-                    Text::from("").style(
-                        Style::new()
-                            .fg(self.scheme.on_secondary_container.into_color())
-                            .bg(self.scheme.secondary_container.into_color()),
-                    ),
-                ),
+            Text::from(pressed_keys)
+                .style(
+                    Style::new()
+                        .fg(self.scheme.on_primary_container.into_color())
+                        .bg(self.scheme.primary_container.into_color()),
+                )
+                .right_aligned(),
             right_area,
             buf,
         );

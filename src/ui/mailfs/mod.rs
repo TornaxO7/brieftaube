@@ -14,7 +14,7 @@ use crate::{
     ui::{
         Layer, Loadable,
         mailfs::columns::*,
-        statusbar::{StatusbarState, StatusbarWidget},
+        statusbar::StatusbarState,
         utils::keybindmanager::{self, KeybindManager},
     },
 };
@@ -158,9 +158,18 @@ impl State {
                 vec![]
             }
             Event::Key(key_event) => match self.keybindings.handle_event(key_event) {
-                keybindmanager::HandleEvent::Action(action) => self.handle_user_action(action),
-                keybindmanager::HandleEvent::Registered => vec![],
-                keybindmanager::HandleEvent::Cancel => vec![],
+                keybindmanager::HandleEvent::Action(action) => {
+                    self.statusbar.reset_pressed_keys();
+                    self.handle_user_action(action)
+                }
+                keybindmanager::HandleEvent::Registered => {
+                    self.statusbar.register_key_event(key_event);
+                    vec![]
+                }
+                keybindmanager::HandleEvent::Cancel => {
+                    self.statusbar.reset_pressed_keys();
+                    vec![]
+                }
             },
         }
     }
