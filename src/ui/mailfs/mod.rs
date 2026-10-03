@@ -14,6 +14,7 @@ use crate::{
     ui::{
         Layer, Loadable,
         mailfs::columns::*,
+        pager,
         statusbar::StatusbarState,
         utils::keybindmanager::{self, KeybindManager},
     },
@@ -674,6 +675,7 @@ impl State {
                             username: key.0,
                             account_id: key.1,
                             mail_id: selected_mail.id.clone(),
+                            mode: pager::Mode::Reader,
                         }]
                     }
                 }

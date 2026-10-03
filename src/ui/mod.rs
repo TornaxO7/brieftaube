@@ -52,6 +52,7 @@ pub enum Message {
         username: Username,
         account_id: AccountId,
         mail_id: MailId,
+        mode: pager::Mode,
     },
 
     Back,
@@ -172,12 +173,13 @@ impl Ui {
                 username,
                 account_id,
                 mail_id,
+                mode,
             } => {
                 self.layers.push(ActiveLayer::Pager(pager::State::new(
                     username.clone(),
                     account_id.clone(),
                     mail_id.clone(),
-                    pager::Mode::Reader,
+                    mode,
                 )));
 
                 vec![
