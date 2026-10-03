@@ -120,8 +120,6 @@ impl State {
             UserAction::NavigateToBottom => self.navigate_to_bottom(),
             UserAction::NavigateHalfPageDown => self.navigate_half_page_down(),
             UserAction::NavigateHalfPageUp => self.navigate_half_page_up(),
-            UserAction::NavigateRight => todo!(),
-            UserAction::NavigateLeft => todo!(),
             UserAction::FocusNextTab => self.focus_next_tab(),
             UserAction::Quit => self.quit(),
             UserAction::Back => self.back(),

@@ -34,13 +34,7 @@ pub enum UserAction {
     NavigateToBottom,
 
     NavigateHalfPageDown,
-
     NavigateHalfPageUp,
-
-    #[strum(message = "Open the selected mailbox.")]
-    NavigateRight,
-    #[strum(message = "Open the selected mailbox.")]
-    NavigateLeft,
 
     #[strum(message = "")]
     FocusNextTab,
