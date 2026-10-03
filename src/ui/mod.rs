@@ -130,7 +130,7 @@ impl Ui {
     fn draw(&mut self, frame: &mut Frame, msgs: &mut Vec<Message>) {
         let area = frame.area();
 
-        if matches!(self.layers.last(), Some(ActiveLayer::Overlay(_))) {
+        if matches!(self.layers.last().unwrap(), ActiveLayer::Overlay(_)) {
             msgs.extend(match self.layers.iter_mut().rev().skip(1).next().unwrap() {
                 ActiveLayer::Mailfs(state) => mailfs::view(&self.scheme, state, frame, area),
                 ActiveLayer::Pager(state) => pager::view(&self.scheme, state, frame, area),
