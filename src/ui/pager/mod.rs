@@ -137,6 +137,10 @@ impl State {
     fn handle_user_action(&mut self, action: UserAction) -> Vec<super::Message> {
         debug!("{:?}", action);
 
+        if !matches!(action, UserAction::OpenCommandPalette) {
+            self.statusbar.clear_message();
+        }
+
         match action {
             UserAction::OpenCommandPalette => self.open_command_palette(),
             UserAction::OpenTextBody => self.open_text_body(),
