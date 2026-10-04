@@ -41,15 +41,17 @@ pub enum UserAction {
     #[strum(message = "Navigate to the bottom of the list.")]
     NavigateToBottom,
 
+    #[strum(message = "Navigate half page down.")]
     NavigateHalfPageDown,
+    #[strum(message = "Navigate half page up.")]
     NavigateHalfPageUp,
 
-    #[strum(message = "")]
+    #[strum(message = "Focus the next tab.")]
     FocusNextTab,
 
-    #[strum(message = "Go back")]
+    #[strum(message = "Go back.")]
     Back,
-    #[strum(message = "Quit the application")]
+    #[strum(message = "Quit the application.")]
     Quit,
 }
 
