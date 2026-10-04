@@ -489,12 +489,7 @@ fn render_statusbar(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
         Mode::Composer => "Composer",
     };
 
-    let tab_name = match state.selected_tab {
-        SelectedTab::Mail => "Mail",
-        SelectedTab::Attachments => "Attachments",
-    };
-
-    let name = format!("{}({})", layer_name, tab_name);
+    let name = format!("Pager({})", layer_name);
 
     frame.render_stateful_widget(
         StatusbarWidget::new(scheme).layer_name(name.as_str()),
