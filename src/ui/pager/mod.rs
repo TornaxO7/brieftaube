@@ -9,7 +9,7 @@ use crate::{
     config::Username,
     types::{AccountId, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId},
     ui::{
-        Layer,
+        EditorContentType, Layer,
         pager::attachments_tab::AttachmentsTab,
         statusbar::{StatusMsgType, StatusbarState},
         utils::keybindmanager::{HandleEvent, KeybindManager},
@@ -415,6 +415,7 @@ impl State {
                 if let Ok(Some(text_body)) = self.text_body.get().unwrap() {
                     vec![super::Message::OpenInEditor {
                         content: text_body.state.content.clone(),
+                        ty: EditorContentType::Text,
                         on_exit: |result| match result {
                             Ok(_) => vec![],
                             Err(err) => {

@@ -62,6 +62,7 @@ pub enum Message {
 
     OpenInEditor {
         content: String,
+        ty: EditorContentType,
         on_exit: fn(Result<String, OpenEditorError>) -> Vec<Message>,
     },
 
@@ -215,9 +216,13 @@ impl Ui {
                 ]
             }
 
-            Message::OpenInEditor { content, on_exit } => {
+            Message::OpenInEditor {
+                content,
+                ty,
+                on_exit,
+            } => {
                 self.needs_full_redraw = true;
-                on_exit(open_in_editor(content))
+                on_exit(open_in_editor(content, ty))
             }
 
             Message::Back => {
@@ -629,6 +634,13 @@ enum OverlayLayer {
     Prompt(prompt::State),
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum EditorContentType {
+    Text,
+    Markdown,
+    Html,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum OpenEditorError {
     #[error("")]
@@ -637,7 +649,7 @@ pub enum OpenEditorError {
     IO(#[from] std::io::Error),
 }
 
-fn open_in_editor(content: String) -> Result<String, OpenEditorError> {
+fn open_in_editor(content: String, ty: EditorContentType) -> Result<String, OpenEditorError> {
     let editor = CONFIG
         .get()
         .unwrap()
@@ -645,11 +657,18 @@ fn open_in_editor(content: String) -> Result<String, OpenEditorError> {
         .ok_or(OpenEditorError::NoEditorFound)?;
 
     let tmp_file_path = {
+        let ending = match ty {
+            EditorContentType::Text => "txt",
+            EditorContentType::Markdown => "md",
+            EditorContentType::Html => "html",
+        };
+
         let filename = format!(
-            "tmp-{}",
+            "tmp-{}.{}",
             std::iter::repeat_with(fastrand::alphanumeric)
                 .take(10)
-                .collect::<String>()
+                .collect::<String>(),
+            ending
         );
 
         crate::get_runtime_file_path(filename)?
