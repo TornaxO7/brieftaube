@@ -31,6 +31,14 @@ impl StatusbarState {
         Self::default()
     }
 
+    pub fn set_message(&mut self, msg: String, ty: StatusMsgType) {
+        self.status_msg = Some(StatusMsg { msg, ty });
+    }
+
+    pub fn clear_message(&mut self) {
+        self.status_msg = None;
+    }
+
     pub fn reset_pressed_keys(&mut self) {
         self.pressed_keys.clear();
     }

@@ -54,7 +54,7 @@ pub enum UserAction {
 }
 
 impl UserAction {
-    pub fn palette_options(mode: super::Mode) -> Vec<PaletteEntry> {
+    pub fn palette_options() -> Vec<PaletteEntry> {
         Self::iter()
             .filter_map(|action| {
                 if let Some(is_intern) = action.get_bool("intern") {

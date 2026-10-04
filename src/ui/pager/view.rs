@@ -34,7 +34,7 @@ pub fn view(
     render_tab_widgets(scheme, state, frame, tabs_area);
 
     let msgs = match state.selected_tab {
-        SelectedTab::Mail => render_mail_tab(scheme, state, frame, content_area),
+        SelectedTab::Body => render_mail_tab(scheme, state, frame, content_area),
         SelectedTab::Attachments => render_attachments_tab(scheme, state, frame, content_area),
     };
 
@@ -44,7 +44,7 @@ pub fn view(
 }
 
 fn render_tab_widgets(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
-    const TAB1: &str = "Content";
+    const TAB1: &str = "Body";
 
     let tab2 = {
         let prefix = "Attachments";
@@ -59,7 +59,7 @@ fn render_tab_widgets(scheme: &Scheme, state: &mut super::State, frame: &mut Fra
     };
 
     let selected_idx = match state.selected_tab {
-        SelectedTab::Mail => 0,
+        SelectedTab::Body => 0,
         SelectedTab::Attachments => 1,
     };
 

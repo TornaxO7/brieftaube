@@ -11,7 +11,7 @@ use crate::{
     ui::{
         Layer,
         pager::attachments_tab::AttachmentsTab,
-        statusbar::StatusbarState,
+        statusbar::{StatusMsgType, StatusbarState},
         utils::keybindmanager::{HandleEvent, KeybindManager},
     },
 };
@@ -62,7 +62,7 @@ impl State {
                 ("<C-u>", UserAction::NavigateHalfPageUp),
             ])),
 
-            selected_tab: SelectedTab::Mail,
+            selected_tab: SelectedTab::Body,
             selected_body_type: SelectedBodyType::Html,
 
             ctx: Ctx {
@@ -75,6 +75,21 @@ impl State {
             html_body: OnceCell::new(),
             attachments: OnceCell::new(),
         }
+    }
+
+    fn is_in_state(&mut self, mode: Mode, selected_tab: SelectedTab) -> bool {
+        let is_in_state = self.mode == mode && self.selected_tab == selected_tab;
+
+        if !is_in_state {
+            let msg = format!(
+                "Action can be only applied in mode `Pager({})` and tab `{}`",
+                mode, selected_tab
+            );
+
+            self.statusbar.set_message(msg, StatusMsgType::Error);
+        }
+
+        is_in_state
     }
 }
 
@@ -183,7 +198,7 @@ impl State {
 // user-action handlers
 impl State {
     fn open_command_palette(&self) -> Vec<super::Message> {
-        let entries = UserAction::palette_options(self.mode);
+        let entries = UserAction::palette_options();
 
         vec![super::Message::OpenPalette {
             entries,
@@ -192,6 +207,10 @@ impl State {
     }
 
     fn open_text_body(&mut self) -> Vec<super::Message> {
+        if !self.is_in_state(Mode::Reader, SelectedTab::Body) {
+            return vec![];
+        }
+
         self.selected_body_type = SelectedBodyType::Text;
 
         match self.text_body.get() {
@@ -208,6 +227,10 @@ impl State {
     }
 
     fn open_html_body(&mut self) -> Vec<super::Message> {
+        if !self.is_in_state(Mode::Reader, SelectedTab::Body) {
+            return vec![];
+        }
+
         self.selected_body_type = SelectedBodyType::Html;
 
         match self.html_body.get() {
@@ -225,7 +248,7 @@ impl State {
 
     fn navigate_down(&mut self) -> Vec<super::Message> {
         match self.selected_tab {
-            SelectedTab::Mail => match self.selected_body_type {
+            SelectedTab::Body => match self.selected_body_type {
                 SelectedBodyType::Text => {
                     if let Some(Ok(Some(text_body))) = self.text_body.get_mut() {
                         text_body.navigate_down(1);
@@ -248,7 +271,7 @@ impl State {
 
     fn navigate_up(&mut self) -> Vec<super::Message> {
         match self.selected_tab {
-            SelectedTab::Mail => match self.selected_body_type {
+            SelectedTab::Body => match self.selected_body_type {
                 SelectedBodyType::Text => {
                     if let Some(Ok(Some(text_body))) = self.text_body.get_mut() {
                         text_body.navigate_up(1);
@@ -271,7 +294,7 @@ impl State {
 
     fn navigate_to_top(&mut self) -> Vec<super::Message> {
         match self.selected_tab {
-            SelectedTab::Mail => match self.selected_body_type {
+            SelectedTab::Body => match self.selected_body_type {
                 SelectedBodyType::Text => {
                     if let Some(Ok(Some(text_body))) = self.text_body.get_mut() {
                         text_body.navigate_to_top();
@@ -294,7 +317,7 @@ impl State {
     }
 
     fn navigate_half_page_down(&mut self) -> Vec<super::Message> {
-        if !matches!(self.selected_tab, SelectedTab::Mail) {
+        if !matches!(self.selected_tab, SelectedTab::Body) {
             return vec![];
         }
 
@@ -315,7 +338,7 @@ impl State {
     }
 
     fn navigate_half_page_up(&mut self) -> Vec<super::Message> {
-        if !matches!(self.selected_tab, SelectedTab::Mail) {
+        if !matches!(self.selected_tab, SelectedTab::Body) {
             return vec![];
         }
 
@@ -337,7 +360,7 @@ impl State {
 
     fn navigate_to_bottom(&mut self) -> Vec<super::Message> {
         match self.selected_tab {
-            SelectedTab::Mail => match self.selected_body_type {
+            SelectedTab::Body => match self.selected_body_type {
                 SelectedBodyType::Text => {
                     if let Some(Ok(Some(text_body))) = self.text_body.get_mut() {
                         text_body.navigate_to_bottom();
@@ -360,8 +383,8 @@ impl State {
 
     fn focus_next_tab(&mut self) -> Vec<super::Message> {
         self.selected_tab = match self.selected_tab {
-            SelectedTab::Mail => SelectedTab::Attachments,
-            SelectedTab::Attachments => SelectedTab::Mail,
+            SelectedTab::Body => SelectedTab::Attachments,
+            SelectedTab::Attachments => SelectedTab::Body,
         };
         tracing::debug!("new tab: {:?}", self.selected_tab);
         vec![]
@@ -374,12 +397,6 @@ impl State {
     fn back(&self) -> Vec<super::Message> {
         vec![super::Message::Back]
     }
-}
-
-#[derive(Debug)]
-enum SelectedTab {
-    Mail,
-    Attachments,
 }
 
 enum SelectedBodyType {
@@ -407,8 +424,14 @@ struct Ctx {
     mail_id: MailId,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display)]
 pub enum Mode {
     Reader,
     Composer,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display)]
+enum SelectedTab {
+    Body,
+    Attachments,
 }
