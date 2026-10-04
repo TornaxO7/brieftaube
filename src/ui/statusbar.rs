@@ -9,7 +9,7 @@ use ratatui::{
     widgets::{StatefulWidget, Widget},
 };
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum StatusMsgType {
     Error,
     Info,

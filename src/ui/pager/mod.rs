@@ -105,6 +105,7 @@ impl Layer<Message> for State {
             Message::SetTextBody(body) => self.handle_set_text_body(body),
             Message::SetHtmlBody(body) => self.handle_set_html_body(body),
             Message::SetAttachments(attachments) => self.handle_set_attachments(attachments),
+            Message::SetStatusbarMessage { msg, ty } => self.handle_set_statusbar_message(msg, ty),
         }
     }
 }
@@ -152,6 +153,7 @@ impl State {
             UserAction::NavigateHalfPageDown => self.navigate_half_page_down(),
             UserAction::NavigateHalfPageUp => self.navigate_half_page_up(),
             UserAction::FocusNextTab => self.focus_next_tab(),
+            UserAction::OpenBodyInEditor => self.read_body_in_editor(),
             UserAction::Quit => self.quit(),
             UserAction::Back => self.back(),
         }
@@ -195,6 +197,15 @@ impl State {
         self.attachments
             .set(AttachmentsTab::new(attachments))
             .unwrap();
+        vec![]
+    }
+
+    fn handle_set_statusbar_message(
+        &mut self,
+        msg: String,
+        ty: StatusMsgType,
+    ) -> Vec<super::Message> {
+        self.statusbar.set_message(msg, ty);
         vec![]
     }
 }
@@ -392,6 +403,37 @@ impl State {
         };
         tracing::debug!("new tab: {:?}", self.selected_tab);
         vec![]
+    }
+
+    fn read_body_in_editor(&mut self) -> Vec<super::Message> {
+        if !self.is_in_state(Mode::Reader, SelectedTab::Body) {
+            return vec![];
+        }
+
+        match self.selected_body_type {
+            SelectedBodyType::Text => {
+                if let Ok(Some(text_body)) = self.text_body.get().unwrap() {
+                    vec![super::Message::OpenInEditor {
+                        content: text_body.state.content.clone(),
+                        on_exit: |result| match result {
+                            Ok(_) => vec![],
+                            Err(err) => {
+                                vec![
+                                    Message::SetStatusbarMessage {
+                                        msg: err.to_string(),
+                                        ty: StatusMsgType::Error,
+                                    }
+                                    .into(),
+                                ]
+                            }
+                        },
+                    }]
+                } else {
+                    vec![]
+                }
+            }
+            SelectedBodyType::Html => todo!(),
+        }
     }
 
     fn quit(&self) -> Vec<super::Message> {

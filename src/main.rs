@@ -109,6 +109,10 @@ fn get_xdg() -> &'static BaseDirectories {
     XDG.get_or_init(|| BaseDirectories::with_prefix(APP_NAME))
 }
 
+fn get_runtime_file_path<S: AsRef<str>>(filename: S) -> io::Result<PathBuf> {
+    get_xdg().place_runtime_file(filename.as_ref())
+}
+
 fn get_log_file_path() -> io::Result<PathBuf> {
     get_xdg().place_state_file(&format!("{}.log", APP_NAME))
 }

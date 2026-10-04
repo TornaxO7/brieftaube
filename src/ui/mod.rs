@@ -14,7 +14,7 @@ use tokio::sync::{RwLock, watch};
 pub use types::*;
 
 use crate::{
-    THEME,
+    CONFIG, THEME,
     config::{self, Username},
     datasource::{self, Cache, RemoteSession, jmap::JmapDescriptor},
     repository::RepositoryHandler,
@@ -22,7 +22,11 @@ use crate::{
     ui::palette::PaletteEntry,
 };
 use color_eyre::eyre;
-use crossterm::event::Event;
+use crossterm::{
+    ExecutableCommand,
+    event::Event,
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+};
 use futures::{FutureExt, StreamExt};
 use ratatui::{DefaultTerminal, Frame, layout::Rect};
 use std::{collections::HashMap, time::Duration};
@@ -56,8 +60,12 @@ pub enum Message {
         mode: pager::Mode,
     },
 
+    OpenInEditor {
+        content: String,
+        on_exit: fn(Result<String, OpenEditorError>) -> Vec<Message>,
+    },
+
     Back,
-    Redraw,
     Quit,
 }
 
@@ -119,6 +127,11 @@ impl Ui {
 
             while let Some(next_message) = msgs.pop() {
                 msgs.extend(self.handle_message(next_message));
+            }
+
+            if self.needs_full_redraw {
+                terminal.clear()?;
+                self.needs_full_redraw = false;
             }
 
             terminal.draw(|frame| self.draw(frame, &mut msgs))?;
@@ -202,13 +215,13 @@ impl Ui {
                 ]
             }
 
-            Message::Back => {
-                self.layers.pop();
-                vec![]
+            Message::OpenInEditor { content, on_exit } => {
+                self.needs_full_redraw = true;
+                on_exit(open_in_editor(content))
             }
 
-            Message::Redraw => {
-                self.needs_full_redraw = true;
+            Message::Back => {
+                self.layers.pop();
                 vec![]
             }
 
@@ -614,4 +627,46 @@ enum ActiveLayer {
 enum OverlayLayer {
     Palette(palette::State),
     Prompt(prompt::State),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum OpenEditorError {
+    #[error("")]
+    NoEditorFound,
+    #[error(transparent)]
+    IO(#[from] std::io::Error),
+}
+
+fn open_in_editor(content: String) -> Result<String, OpenEditorError> {
+    let editor = CONFIG
+        .get()
+        .unwrap()
+        .editor()
+        .ok_or(OpenEditorError::NoEditorFound)?;
+
+    let tmp_file_path = {
+        let filename = format!(
+            "tmp-{}",
+            std::iter::repeat_with(fastrand::alphanumeric)
+                .take(10)
+                .collect::<String>()
+        );
+
+        crate::get_runtime_file_path(filename)?
+    };
+
+    std::fs::write(&tmp_file_path, content)?;
+    std::io::stdout().execute(LeaveAlternateScreen)?;
+    disable_raw_mode()?;
+    std::process::Command::new(editor)
+        .arg(&tmp_file_path)
+        .status()?;
+    std::io::stdout().execute(EnterAlternateScreen)?;
+    enable_raw_mode()?;
+
+    let editor_content = std::fs::read_to_string(&tmp_file_path)?;
+
+    let _ignore = std::fs::remove_file(tmp_file_path);
+
+    Ok(editor_content)
 }
