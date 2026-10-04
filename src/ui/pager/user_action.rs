@@ -2,6 +2,14 @@ use crate::ui::palette::PaletteEntry;
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, EnumMessage, EnumProperty, EnumString, IntoEnumIterator};
 
+// TODO: We list all of thos actions.
+// Check during runtime if the selected action is
+// valid in this case.
+// If not: Log to statusbar!
+//
+// Why: Users can immediately see what the can do in the pager.
+// They don't need to navigate to the attachments
+// to see actions which can be used to download attachments.
 #[derive(
     Serialize,
     Deserialize,
