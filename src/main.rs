@@ -30,9 +30,7 @@ async fn main() -> eyre::Result<()> {
     init_config()?;
 
     let mut terminal = ratatui::init();
-    Ui::new(terminal.get_frame().area())
-        .run(&mut terminal)
-        .await?;
+    Ui::new().run(&mut terminal).await?;
     ratatui::restore();
     Ok(())
 }

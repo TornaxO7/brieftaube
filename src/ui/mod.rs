@@ -83,7 +83,7 @@ pub struct Ui {
 }
 
 impl Ui {
-    pub fn new(init_rect: Rect) -> Self {
+    pub fn new() -> Self {
         let task_manager = TaskManager::new();
 
         let (mailfs, initial_user) = mailfs::State::new();
