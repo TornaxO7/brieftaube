@@ -5,9 +5,10 @@ use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     style::Style,
-    text::Text,
+    text::{Line, Span, Text},
     widgets::{StatefulWidget, Widget},
 };
+use throbber_widgets_tui::{Throbber, ThrobberState};
 
 #[derive(Debug, Clone, Copy)]
 pub enum StatusMsgType {
@@ -25,6 +26,7 @@ pub struct StatusMsg {
 pub struct StatusbarState {
     status_msg: Option<StatusMsg>,
     pressed_keys: String,
+    throbber: ThrobberState,
 }
 
 impl StatusbarState {
@@ -144,9 +146,26 @@ impl<'a> StatefulWidget for StatusbarWidget<'a> {
                             .fg(self.scheme.on_secondary_container.into_color())
                             .bg(self.scheme.secondary_container.into_color()),
                     };
-                    let msg = format!(" {} ", status_msg.msg);
 
-                    Text::from(msg).style(status_style)
+                    let text = match status_msg.ty {
+                        StatusMsgType::Error | StatusMsgType::Info => {
+                            Text::from(format!(" {} ", status_msg.msg))
+                        }
+                        StatusMsgType::Loading => {
+                            state.throbber.calc_next();
+                            let throbber = Throbber::default().to_symbol_span(&state.throbber);
+                            Text::from(Line::from(
+                                [
+                                    Span::from(" "),
+                                    throbber,
+                                    Span::from(status_msg.msg.as_str()),
+                                ]
+                                .as_slice(),
+                            ))
+                        }
+                    };
+
+                    text.style(status_style)
                 })
                 .unwrap_or(
                     Text::from("").style(
