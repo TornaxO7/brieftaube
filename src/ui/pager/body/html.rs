@@ -3,8 +3,8 @@ use crate::{types::MailDataHtmlBody, ui::pager::body::BodyReader};
 
 #[derive(Debug)]
 pub struct HtmlBody {
-    html: String,
-    state: std::io::Result<ScrollableBody>,
+    pub html: String,
+    pub state: std::io::Result<ScrollableBody>,
 }
 
 impl HtmlBody {

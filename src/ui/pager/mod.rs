@@ -17,7 +17,7 @@ use crate::{
 };
 use body::*;
 use crossterm::event::Event;
-use std::{cell::OnceCell, collections::HashMap, str::FromStr};
+use std::{collections::HashMap, str::FromStr};
 use throbber_widgets_tui::ThrobberState;
 use tracing::debug;
 use user_action::UserAction;
@@ -35,12 +35,11 @@ pub struct State {
     selected_tab: SelectedTab,
     selected_body_type: SelectedBodyType,
 
-    // TODO: Use `OnceCell` instead
     ctx: Ctx,
-    headers: OnceCell<color_eyre::Result<MailHeaders>>,
-    text_body: OnceCell<color_eyre::Result<Option<TextBody>>>,
-    html_body: OnceCell<color_eyre::Result<Option<HtmlBody>>>,
-    attachments: OnceCell<AttachmentsTab>,
+    headers: Option<color_eyre::Result<MailHeaders>>,
+    text_body: Option<color_eyre::Result<Option<TextBody>>>,
+    html_body: Option<color_eyre::Result<Option<HtmlBody>>>,
+    attachments: Option<AttachmentsTab>,
 }
 
 impl State {
@@ -70,10 +69,10 @@ impl State {
                 account_id,
                 mail_id,
             },
-            headers: OnceCell::new(),
-            text_body: OnceCell::new(),
-            html_body: OnceCell::new(),
-            attachments: OnceCell::new(),
+            headers: None,
+            text_body: None,
+            html_body: None,
+            attachments: None,
         }
     }
 
@@ -153,7 +152,12 @@ impl State {
             UserAction::NavigateHalfPageDown => self.navigate_half_page_down(),
             UserAction::NavigateHalfPageUp => self.navigate_half_page_up(),
             UserAction::FocusNextTab => self.focus_next_tab(),
-            UserAction::OpenBodyInEditor => self.read_body_in_editor(),
+
+            UserAction::ReadBodyInEditor => self.read_body_in_editor(),
+            UserAction::ReadTextBodyInEditor => self.read_text_body_in_editor(),
+            UserAction::ReadMarkdownBodyInEditor => self.read_markdown_body_in_editor(),
+            UserAction::ReadHtmlBodyInEditor => self.read_html_body_in_editor(),
+
             UserAction::Quit => self.quit(),
             UserAction::Back => self.back(),
         }
@@ -168,7 +172,7 @@ impl State {
         &mut self,
         headers: color_eyre::Result<MailHeaders>,
     ) -> Vec<super::Message> {
-        self.headers.set(headers).unwrap();
+        self.headers = Some(headers);
         vec![]
     }
 
@@ -176,9 +180,8 @@ impl State {
         &mut self,
         body: color_eyre::Result<MailDataTextBody>,
     ) -> Vec<super::Message> {
-        self.text_body
-            .set(body.map(|body| body.content.map(TextBody::new)))
-            .unwrap();
+        tracing::debug!("Set text body");
+        self.text_body = Some(body.map(|body| body.content.map(TextBody::new)));
         vec![]
     }
 
@@ -186,7 +189,7 @@ impl State {
         &mut self,
         body: color_eyre::Result<MailDataHtmlBody>,
     ) -> Vec<super::Message> {
-        self.html_body.set(body.map(HtmlBody::new)).unwrap();
+        self.html_body = Some(body.map(HtmlBody::new));
         vec![]
     }
 
@@ -194,9 +197,7 @@ impl State {
         &mut self,
         attachments: color_eyre::Result<Vec<MailDataAttachment>>,
     ) -> Vec<super::Message> {
-        self.attachments
-            .set(AttachmentsTab::new(attachments))
-            .unwrap();
+        self.attachments = Some(AttachmentsTab::new(attachments));
         vec![]
     }
 
@@ -228,13 +229,14 @@ impl State {
 
         self.selected_body_type = SelectedBodyType::Text;
 
-        match self.text_body.get() {
+        match &self.text_body {
             Some(_) => vec![],
             None => vec![
                 MessageRequest::GetTextBody {
                     username: self.ctx.username.clone(),
                     account_id: self.ctx.account_id.clone(),
                     mail_id: self.ctx.mail_id.clone(),
+                    after_fetching: vec![],
                 }
                 .into(),
             ],
@@ -248,13 +250,14 @@ impl State {
 
         self.selected_body_type = SelectedBodyType::Html;
 
-        match self.html_body.get() {
+        match self.html_body.as_ref() {
             Some(_) => vec![],
             None => vec![
                 MessageRequest::GetHtmlBody {
                     username: self.ctx.username.clone(),
                     account_id: self.ctx.account_id.clone(),
                     mail_id: self.ctx.mail_id.clone(),
+                    after_fetching: vec![],
                 }
                 .into(),
             ],
@@ -265,18 +268,18 @@ impl State {
         match self.selected_tab {
             SelectedTab::Body => match self.selected_body_type {
                 SelectedBodyType::Text => {
-                    if let Some(Ok(Some(text_body))) = self.text_body.get_mut() {
+                    if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
                         text_body.navigate_down(1);
                     }
                 }
                 SelectedBodyType::Html => {
-                    if let Some(Ok(Some(html_body))) = self.html_body.get_mut() {
+                    if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
                         html_body.navigate_down(1);
                     }
                 }
             },
             SelectedTab::Attachments => {
-                if let Some(tab) = self.attachments.get_mut() {
+                if let Some(tab) = self.attachments.as_mut() {
                     tab.navigate_down();
                 }
             }
@@ -288,18 +291,18 @@ impl State {
         match self.selected_tab {
             SelectedTab::Body => match self.selected_body_type {
                 SelectedBodyType::Text => {
-                    if let Some(Ok(Some(text_body))) = self.text_body.get_mut() {
+                    if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
                         text_body.navigate_up(1);
                     }
                 }
                 SelectedBodyType::Html => {
-                    if let Some(Ok(Some(html_body))) = self.html_body.get_mut() {
+                    if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
                         html_body.navigate_up(1);
                     }
                 }
             },
             SelectedTab::Attachments => {
-                if let Some(tab) = self.attachments.get_mut() {
+                if let Some(tab) = self.attachments.as_mut() {
                     tab.navigate_up();
                 }
             }
@@ -311,18 +314,18 @@ impl State {
         match self.selected_tab {
             SelectedTab::Body => match self.selected_body_type {
                 SelectedBodyType::Text => {
-                    if let Some(Ok(Some(text_body))) = self.text_body.get_mut() {
+                    if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
                         text_body.navigate_to_top();
                     }
                 }
                 SelectedBodyType::Html => {
-                    if let Some(Ok(Some(html_body))) = self.html_body.get_mut() {
+                    if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
                         html_body.navigate_to_top();
                     }
                 }
             },
             SelectedTab::Attachments => {
-                if let Some(tab) = self.attachments.get_mut() {
+                if let Some(tab) = self.attachments.as_mut() {
                     tab.navigate_to_top();
                 }
             }
@@ -338,12 +341,12 @@ impl State {
 
         match self.selected_body_type {
             SelectedBodyType::Text => {
-                if let Some(Ok(Some(text_body))) = self.text_body.get_mut() {
+                if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
                     text_body.navigate_half_page_down();
                 }
             }
             SelectedBodyType::Html => {
-                if let Some(Ok(Some(html_body))) = self.html_body.get_mut() {
+                if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
                     html_body.navigate_half_page_down();
                 }
             }
@@ -359,12 +362,12 @@ impl State {
 
         match self.selected_body_type {
             SelectedBodyType::Text => {
-                if let Some(Ok(Some(text_body))) = self.text_body.get_mut() {
+                if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
                     text_body.navigate_half_page_up();
                 }
             }
             SelectedBodyType::Html => {
-                if let Some(Ok(Some(html_body))) = self.html_body.get_mut() {
+                if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
                     html_body.navigate_half_page_up();
                 }
             }
@@ -377,18 +380,18 @@ impl State {
         match self.selected_tab {
             SelectedTab::Body => match self.selected_body_type {
                 SelectedBodyType::Text => {
-                    if let Some(Ok(Some(text_body))) = self.text_body.get_mut() {
+                    if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
                         text_body.navigate_to_bottom();
                     }
                 }
                 SelectedBodyType::Html => {
-                    if let Some(Ok(Some(html_body))) = self.html_body.get_mut() {
+                    if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
                         html_body.navigate_to_bottom();
                     }
                 }
             },
             SelectedTab::Attachments => {
-                if let Some(tab) = self.attachments.get_mut() {
+                if let Some(tab) = self.attachments.as_mut() {
                     tab.navigate_to_bottom();
                 }
             }
@@ -411,30 +414,141 @@ impl State {
         }
 
         match self.selected_body_type {
-            SelectedBodyType::Text => {
-                if let Ok(Some(text_body)) = self.text_body.get().unwrap() {
-                    vec![super::Message::OpenInEditor {
-                        content: text_body.state.content.clone(),
-                        ty: EditorContentType::Text,
-                        on_exit: |result| match result {
-                            Ok(_) => vec![],
-                            Err(err) => {
-                                vec![
-                                    Message::SetStatusbarMessage {
-                                        msg: err.to_string(),
-                                        ty: StatusMsgType::Error,
-                                    }
-                                    .into(),
-                                ]
-                            }
-                        },
-                    }]
-                } else {
-                    vec![]
-                }
-            }
-            SelectedBodyType::Html => todo!(),
+            SelectedBodyType::Text => self.read_text_body_in_editor(),
+            SelectedBodyType::Html => self.read_markdown_body_in_editor(),
         }
+    }
+
+    fn read_text_body_in_editor(&mut self) -> Vec<super::Message> {
+        if !self.is_in_state(Mode::Reader, SelectedTab::Body) {
+            return vec![];
+        }
+
+        let Some(init_text_body) = self.text_body.as_ref() else {
+            return vec![
+                MessageRequest::GetTextBody {
+                    username: self.ctx.username.clone(),
+                    account_id: self.ctx.account_id.clone(),
+                    mail_id: self.ctx.mail_id.clone(),
+                    after_fetching: vec![
+                        Message::UserAction(UserAction::ReadTextBodyInEditor).into(),
+                    ],
+                }
+                .into(),
+            ];
+        };
+
+        if let Ok(Some(text_body)) = init_text_body {
+            vec![super::Message::OpenInEditor {
+                content: text_body.state.content.clone(),
+                ty: EditorContentType::Text,
+                on_exit: |result| match result {
+                    Ok(_) => vec![],
+                    Err(err) => {
+                        vec![
+                            Message::SetStatusbarMessage {
+                                msg: err.to_string(),
+                                ty: StatusMsgType::Error,
+                            }
+                            .into(),
+                        ]
+                    }
+                },
+            }]
+        } else {
+            vec![]
+        }
+    }
+
+    fn read_markdown_body_in_editor(&mut self) -> Vec<super::Message> {
+        if !self.is_in_state(Mode::Reader, SelectedTab::Body) {
+            return vec![];
+        }
+
+        let Some(init_html_body) = self.html_body.as_ref() else {
+            return vec![
+                MessageRequest::GetHtmlBody {
+                    username: self.ctx.username.clone(),
+                    account_id: self.ctx.account_id.clone(),
+                    mail_id: self.ctx.mail_id.clone(),
+                    after_fetching: vec![
+                        Message::UserAction(UserAction::ReadMarkdownBodyInEditor).into(),
+                    ],
+                }
+                .into(),
+            ];
+        };
+
+        let Ok(Some(html_body)) = init_html_body else {
+            return vec![];
+        };
+
+        match html_body.state.as_ref() {
+            Ok(state) => {
+                vec![super::Message::OpenInEditor {
+                    content: state.content.clone(),
+                    ty: EditorContentType::Markdown,
+                    on_exit: |result| match result {
+                        Ok(_) => vec![],
+                        Err(err) => {
+                            vec![
+                                Message::SetStatusbarMessage {
+                                    msg: err.to_string(),
+                                    ty: StatusMsgType::Error,
+                                }
+                                .into(),
+                            ]
+                        }
+                    },
+                }]
+            }
+            Err(err) => {
+                self.statusbar
+                    .set_message(err.to_string(), StatusMsgType::Error);
+                vec![]
+            }
+        }
+    }
+
+    fn read_html_body_in_editor(&mut self) -> Vec<super::Message> {
+        if !self.is_in_state(Mode::Reader, SelectedTab::Body) {
+            return vec![];
+        }
+
+        let Some(init_html_body) = self.html_body.as_ref() else {
+            return vec![
+                MessageRequest::GetHtmlBody {
+                    username: self.ctx.username.clone(),
+                    account_id: self.ctx.account_id.clone(),
+                    mail_id: self.ctx.mail_id.clone(),
+                    after_fetching: vec![
+                        Message::UserAction(UserAction::ReadHtmlBodyInEditor).into(),
+                    ],
+                }
+                .into(),
+            ];
+        };
+
+        let Ok(Some(html_body)) = init_html_body else {
+            return vec![];
+        };
+
+        vec![super::Message::OpenInEditor {
+            content: html_body.html.clone(),
+            ty: EditorContentType::Html,
+            on_exit: |result| match result {
+                Ok(_) => vec![],
+                Err(err) => {
+                    vec![
+                        Message::SetStatusbarMessage {
+                            msg: err.to_string(),
+                            ty: StatusMsgType::Error,
+                        }
+                        .into(),
+                    ]
+                }
+            },
+        }]
     }
 
     fn quit(&self) -> Vec<super::Message> {

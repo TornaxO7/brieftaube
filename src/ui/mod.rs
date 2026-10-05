@@ -28,7 +28,7 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use futures::{FutureExt, StreamExt};
-use ratatui::{DefaultTerminal, Frame, layout::Rect};
+use ratatui::{DefaultTerminal, Frame};
 use std::{collections::HashMap, time::Duration};
 use task_manager::TaskManager;
 use tracing::error;
@@ -75,7 +75,6 @@ pub enum Message {
 pub struct Ui {
     is_running: bool,
     layers: Vec<ActiveLayer>,
-    needs_full_redraw: bool,
     task_manager: TaskManager,
     scheme: Scheme,
 
@@ -100,7 +99,6 @@ impl Ui {
 
             is_running: true,
             layers: vec![ActiveLayer::Mailfs(mailfs)],
-            needs_full_redraw: false,
             task_manager,
             scheme,
         }
@@ -128,11 +126,6 @@ impl Ui {
 
             while let Some(next_message) = msgs.pop() {
                 msgs.extend(self.handle_message(next_message));
-            }
-
-            if self.needs_full_redraw {
-                terminal.clear()?;
-                self.needs_full_redraw = false;
             }
 
             terminal.draw(|frame| self.draw(frame, &mut msgs))?;
@@ -207,6 +200,7 @@ impl Ui {
                         username: username.clone(),
                         account_id: account_id.clone(),
                         mail_id: mail_id.clone(),
+                        after_fetching: vec![],
                     }),
                     Message::PagerRequest(pager::MessageRequest::GetAttachments {
                         username: username.clone(),
@@ -220,10 +214,7 @@ impl Ui {
                 content,
                 ty,
                 on_exit,
-            } => {
-                self.needs_full_redraw = true;
-                on_exit(open_in_editor(content, ty))
-            }
+            } => on_exit(open_in_editor(content, ty)),
 
             Message::Back => {
                 self.layers.pop();
@@ -421,6 +412,7 @@ impl Ui {
                         username,
                         account_id,
                         mail_id,
+                        after_fetching,
                     } => {
                         let state = self.repos.get(&username).unwrap().clone();
 
@@ -430,18 +422,21 @@ impl Ui {
                                 Err(()) => return vec![],
                             };
 
-                            vec![
+                            let mut msgs = vec![
                                 pager::Message::SetTextBody(
                                     handler.get_mail_text_body(account_id, mail_id).await,
                                 )
                                 .into(),
-                            ]
+                            ];
+                            msgs.extend(after_fetching);
+                            msgs
                         });
                     }
                     pager::MessageRequest::GetHtmlBody {
                         username,
                         account_id,
                         mail_id,
+                        after_fetching,
                     } => {
                         let state = self.repos.get(&username).unwrap().clone();
 
@@ -451,12 +446,14 @@ impl Ui {
                                 Err(()) => return vec![],
                             };
 
-                            vec![
+                            let mut msgs = vec![
                                 pager::Message::SetHtmlBody(
                                     handler.get_mail_html_body(account_id, mail_id).await,
                                 )
                                 .into(),
-                            ]
+                            ];
+                            msgs.extend(after_fetching);
+                            msgs
                         });
                     }
                     pager::MessageRequest::GetAttachments {
@@ -675,11 +672,13 @@ fn open_in_editor(content: String, ty: EditorContentType) -> Result<String, Open
     };
 
     std::fs::write(&tmp_file_path, content)?;
-    std::io::stdout().execute(LeaveAlternateScreen)?;
     disable_raw_mode()?;
+    std::io::stdout().execute(LeaveAlternateScreen)?;
+
     std::process::Command::new(editor)
         .arg(&tmp_file_path)
         .status()?;
+
     std::io::stdout().execute(EnterAlternateScreen)?;
     enable_raw_mode()?;
 

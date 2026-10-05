@@ -14,11 +14,15 @@ pub enum MessageRequest {
         username: Username,
         account_id: AccountId,
         mail_id: MailId,
+
+        after_fetching: Vec<crate::ui::Message>,
     },
     GetHtmlBody {
         username: Username,
         account_id: AccountId,
         mail_id: MailId,
+
+        after_fetching: Vec<crate::ui::Message>,
     },
     GetAttachments {
         username: Username,

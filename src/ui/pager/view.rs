@@ -49,7 +49,7 @@ fn render_tab_widgets(scheme: &Scheme, state: &mut super::State, frame: &mut Fra
     let tab2 = {
         let prefix = "Attachments";
 
-        match state.attachments.get() {
+        match state.attachments.as_ref() {
             Some(attachments_tab) => match &attachments_tab.attachments {
                 Ok(attachments) => format!("{} ({})", prefix, attachments.len()),
                 Err(_) => format!("{} (E)", prefix),
@@ -89,7 +89,7 @@ fn render_mail_headers(
     frame: &mut Frame,
     area: Rect,
 ) -> Rect {
-    match state.headers.get() {
+    match state.headers.as_ref() {
         None => {
             const LABEL: &str = "Loading headers";
 
@@ -231,7 +231,7 @@ fn render_text_body(
     frame: &mut Frame,
     area: Rect,
 ) -> Vec<crate::ui::Message> {
-    let text_body = match state.text_body.get_mut() {
+    let text_body = match state.text_body.as_mut() {
         Some(text_body) => text_body,
         None => {
             const LABEL: &str = "Loading text body";
@@ -304,7 +304,7 @@ fn render_html_body(
     frame: &mut Frame,
     area: Rect,
 ) -> Vec<crate::ui::Message> {
-    let html_body = match state.html_body.get_mut() {
+    let html_body = match state.html_body.as_mut() {
         Some(html_body) => html_body,
         None => {
             // TODO: Maybe merge it with the loading screen of text-body? Like a generic one
@@ -379,7 +379,7 @@ fn render_attachments_tab(
     frame: &mut Frame,
     area: Rect,
 ) -> Vec<crate::ui::Message> {
-    let attachments_tab = match state.attachments.get_mut() {
+    let attachments_tab = match state.attachments.as_mut() {
         Some(attachments) => attachments,
         None => {
             const LABEL: &str = "Loading attachments";

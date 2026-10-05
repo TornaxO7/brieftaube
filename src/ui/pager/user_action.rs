@@ -47,7 +47,10 @@ pub enum UserAction {
     NavigateHalfPageUp,
 
     #[strum(message = "Open the displayed body in your editor.")]
-    OpenBodyInEditor,
+    ReadBodyInEditor,
+    ReadTextBodyInEditor,
+    ReadMarkdownBodyInEditor,
+    ReadHtmlBodyInEditor,
 
     #[strum(message = "Focus the next tab.")]
     FocusNextTab,
