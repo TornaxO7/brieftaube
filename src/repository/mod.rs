@@ -1,3 +1,4 @@
+pub mod blob;
 pub mod mail;
 pub mod mailbox;
 pub mod thread;
@@ -8,7 +9,7 @@ use crate::{
         types::{GetState, QueryState, QueryWindow, cache, remote},
     },
     types::{
-        AccountId, InitMailboxData, MailDataCore, MailDataHtmlBody, MailDataPreview,
+        AccountId, BlobId, InitMailboxData, MailDataCore, MailDataHtmlBody, MailDataPreview,
         MailDataTextBody, MailId, MailboxId, ParentMailboxId, ThreadId,
     },
 };
@@ -20,6 +21,7 @@ enum Command {
     Mail(mail::Command),
     Mailbox(mailbox::Command),
     Thread(thread::Command),
+    Blob(blob::Command),
     Quit,
 }
 
@@ -31,6 +33,7 @@ struct Repository {
     mail_locks: mail::Locks,
     mailbox_locks: mailbox::Locks,
     thread_locks: thread::Locks,
+    blob_locks: blob::Locks,
 }
 
 impl Repository {
@@ -46,6 +49,7 @@ impl Repository {
             mail_locks: mail::Locks::default(),
             mailbox_locks: mailbox::Locks::default(),
             thread_locks: thread::Locks::default(),
+            blob_locks: blob::Locks::default(),
         };
 
         while let Some(command) = repo.rx.recv().await {
@@ -90,6 +94,11 @@ impl Repository {
                 Command::Thread(cmd) => match cmd.kind {
                     thread::CommandKind::GetThread { id, tx } => {
                         let _ = tx.send(repo.get_thread(cmd.account_id, id).await);
+                    }
+                },
+                Command::Blob(cmd) => match cmd.kind {
+                    blob::CommandKind::GetBlob { id, tx } => {
+                        let _ = tx.send(repo.get_blob(cmd.account_id, id).await);
                     }
                 },
                 Command::Quit => repo.quit(),
@@ -416,21 +425,6 @@ impl RepositoryHandler {
         .await
     }
 
-    // pub async fn get_child_mailboxes(
-    //     &self,
-    //     account_id: AccountId,
-    //     parent_id: ParentMailboxId,
-    // ) -> color_eyre::Result<Vec<MailboxData>> {
-    //     self.execute(|tx| {
-    //         mailbox::Command {
-    //             account_id,
-    //             kind: mailbox::CommandKind::GetChildren { id: parent_id, tx },
-    //         }
-    //         .into()
-    //     })
-    //     .await
-    // }
-
     pub async fn get_mail_core(
         &self,
         account_id: AccountId,
@@ -520,6 +514,21 @@ impl RepositoryHandler {
             mail::Command {
                 account_id,
                 kind: mail::CommandKind::GetHtmlBody { id: mail_id, tx },
+            }
+            .into()
+        })
+        .await
+    }
+
+    pub async fn get_blob(
+        &self,
+        account_id: AccountId,
+        blob_id: BlobId,
+    ) -> color_eyre::Result<Vec<u8>> {
+        self.execute(|tx| {
+            blob::Command {
+                account_id,
+                kind: blob::CommandKind::GetBlob { id: blob_id, tx },
             }
             .into()
         })

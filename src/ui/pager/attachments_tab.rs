@@ -26,6 +26,15 @@ impl AttachmentsTab {
         }
     }
 
+    pub fn get_selected_entry<'a>(&'a self) -> Option<&'a MailDataAttachment> {
+        let idx = self.state.selected()?;
+
+        self.attachments
+            .as_ref()
+            .ok()
+            .map(|attachments| &attachments[idx])
+    }
+
     pub fn navigate_down(&mut self) {
         let Ok(attachments) = &self.attachments else {
             return;

@@ -18,7 +18,7 @@ use crate::{
     config::{self, Username},
     datasource::{self, Cache, RemoteSession, jmap::JmapDescriptor},
     repository::RepositoryHandler,
-    types::{AccountId, MailId},
+    types::{AccountId, BlobId, MailId},
     ui::palette::PaletteEntry,
 };
 use color_eyre::eyre;
@@ -33,7 +33,6 @@ use std::{collections::HashMap, time::Duration};
 use task_manager::TaskManager;
 use tracing::error;
 
-#[derive(Debug)]
 pub enum Message {
     Mailfs(mailfs::Message),
     MailfsRequest(mailfs::MessageRequest),
@@ -44,7 +43,7 @@ pub enum Message {
     Event(Event),
     OpenPrompt {
         description: String,
-        map: fn(String) -> Message,
+        map: Box<dyn Fn(String) -> Message + Send>,
     },
     OpenPalette {
         entries: Vec<PaletteEntry>,
@@ -61,6 +60,14 @@ pub enum Message {
         content: String,
         ty: EditorContentType,
         on_exit: fn(Result<String, OpenEditorError>) -> Vec<Message>,
+    },
+
+    GetBlob {
+        username: Username,
+        account_id: AccountId,
+        blob_id: BlobId,
+
+        callback: fn(color_eyre::Result<Vec<u8>>) -> Vec<Message>,
     },
 
     Back,
@@ -503,6 +510,26 @@ impl Ui {
                         });
                     }
                 };
+                vec![]
+            }
+            Message::GetBlob {
+                username,
+                account_id,
+                blob_id,
+
+                callback,
+            } => {
+                let state = self.repos.get(&username).unwrap().clone();
+
+                self.task_manager.spawn(async move {
+                    let handler = match get_handler(state).await {
+                        Ok(handler) => handler,
+                        Err(()) => return vec![],
+                    };
+
+                    callback(handler.get_blob(account_id, blob_id).await)
+                });
+
                 vec![]
             }
         }

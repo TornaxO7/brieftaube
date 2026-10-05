@@ -16,11 +16,11 @@ pub struct State {
     pub input: TextArea<'static>,
     pub description: String,
 
-    map: fn(String) -> super::Message,
+    map: Box<dyn Fn(String) -> super::Message>,
 }
 
 impl State {
-    pub fn new(description: String, map: fn(String) -> super::Message) -> Self {
+    pub fn new(description: String, map: Box<dyn Fn(String) -> super::Message>) -> Self {
         let mut input = TextArea::default();
         input.set_cursor_line_style(Style::default());
 
@@ -41,17 +41,6 @@ impl Layer<Message> for State {
 }
 
 impl State {
-    fn handle_reset(
-        &mut self,
-        desc: String,
-        map: fn(String) -> super::Message,
-    ) -> Vec<super::Message> {
-        self.description = desc;
-        self.input.clear();
-        self.map = map;
-        vec![]
-    }
-
     fn handle_event(&mut self, event: Event) -> Vec<super::Message> {
         match event {
             Event::Key(event) => match event.code {

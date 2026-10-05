@@ -1,3 +1,4 @@
+mod blob;
 mod mail;
 mod mailbox;
 mod root_mails;

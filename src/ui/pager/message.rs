@@ -3,6 +3,7 @@ use crate::{
     ui::{pager::MailHeaders, statusbar::StatusMsgType},
 };
 use crossterm::event::Event;
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub enum Message {
@@ -16,6 +17,14 @@ pub enum Message {
     SetAttachments(color_eyre::Result<Vec<MailDataAttachment>>),
 
     SetStatusbarMessage { msg: String, ty: StatusMsgType },
+
+    SaveAttachment(SaveAttachmentStep),
+}
+
+#[derive(Debug)]
+pub enum SaveAttachmentStep {
+    GetDestinationPath(color_eyre::Result<Vec<u8>>),
+    SaveAttachment { blob: Vec<u8>, path: PathBuf },
 }
 
 impl From<Message> for crate::ui::Message {

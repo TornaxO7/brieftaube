@@ -1,3 +1,4 @@
+mod blob;
 mod mail;
 mod mailbox;
 mod root_mails_linear;
@@ -7,8 +8,8 @@ use super::types::GetState;
 use crate::{
     datasource::{Cache, types::QueryState},
     types::{
-        MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody, MailId, MailboxData,
-        MailboxId, ThreadId,
+        BlobId, MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody, MailId,
+        MailboxData, MailboxId, ThreadId,
     },
 };
 use root_mails_linear::RootMails;
@@ -24,6 +25,7 @@ pub struct HashMapDataSource {
     mailboxes: HashMap<MailboxId, MailboxData>,
     threads: HashMap<ThreadId, Vec<MailId>>,
     root_mails: HashMap<MailboxId, RootMails>,
+    blobs: HashMap<BlobId, Vec<u8>>,
 
     root_mails_state: HashMap<MailboxId, QueryState>,
     mail_get_state: Option<GetState>,

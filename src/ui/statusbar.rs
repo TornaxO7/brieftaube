@@ -13,6 +13,7 @@ use ratatui::{
 pub enum StatusMsgType {
     Error,
     Info,
+    Loading,
 }
 
 pub struct StatusMsg {
@@ -139,7 +140,7 @@ impl<'a> StatefulWidget for StatusbarWidget<'a> {
                         StatusMsgType::Error => Style::new()
                             .fg(self.scheme.on_error_container.into_color())
                             .bg(self.scheme.error_container.into_color()),
-                        StatusMsgType::Info => Style::new()
+                        StatusMsgType::Info | StatusMsgType::Loading => Style::new()
                             .fg(self.scheme.on_secondary_container.into_color())
                             .bg(self.scheme.secondary_container.into_color()),
                     };

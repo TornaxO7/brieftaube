@@ -7,10 +7,10 @@ mod view;
 
 use crate::{
     config::Username,
-    types::{AccountId, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId},
+    types::{AccountId, BlobId, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId},
     ui::{
         EditorContentType, Layer,
-        pager::attachments_tab::AttachmentsTab,
+        pager::{attachments_tab::AttachmentsTab, message::SaveAttachmentStep},
         statusbar::{StatusMsgType, StatusbarState},
         utils::keybindmanager::{HandleEvent, KeybindManager},
     },
@@ -76,14 +76,21 @@ impl State {
         }
     }
 
-    fn is_in_state(&mut self, mode: Mode, selected_tab: SelectedTab) -> bool {
-        let is_in_state = self.mode == mode && self.selected_tab == selected_tab;
+    fn is_in_state(&mut self, expected_mode: Option<Mode>, selected_tab: SelectedTab) -> bool {
+        let is_in_state = expected_mode.map(|mode| self.mode == mode).unwrap_or(true)
+            && self.selected_tab == selected_tab;
 
         if !is_in_state {
-            let msg = format!(
-                "Action can be only applied in mode `Pager({})` and tab `{}`",
-                mode, selected_tab
-            );
+            let msg_suffix = match expected_mode {
+                Some(mode) => {
+                    format!("in mode `Pager({})` and tab `{}`", mode, selected_tab)
+                }
+                None => {
+                    format!("in tab '{}'", selected_tab)
+                }
+            };
+
+            let msg = format!("Action can be only applied {}", msg_suffix);
 
             self.statusbar.set_message(msg, StatusMsgType::Error);
         }
@@ -105,6 +112,7 @@ impl Layer<Message> for State {
             Message::SetHtmlBody(body) => self.handle_set_html_body(body),
             Message::SetAttachments(attachments) => self.handle_set_attachments(attachments),
             Message::SetStatusbarMessage { msg, ty } => self.handle_set_statusbar_message(msg, ty),
+            Message::SaveAttachment(step) => self.handle_save_attachment(step),
         }
     }
 }
@@ -158,6 +166,10 @@ impl State {
             UserAction::ReadMarkdownBodyInEditor => self.read_markdown_body_in_editor(),
             UserAction::ReadHtmlBodyInEditor => self.read_html_body_in_editor(),
 
+            UserAction::DownloadAttachmentAndPasteDestinationPath => {
+                self.download_attachment_and_paste_destination_path()
+            }
+
             UserAction::Quit => self.quit(),
             UserAction::Back => self.back(),
         }
@@ -209,6 +221,52 @@ impl State {
         self.statusbar.set_message(msg, ty);
         vec![]
     }
+
+    fn handle_save_attachment(&mut self, step: SaveAttachmentStep) -> Vec<super::Message> {
+        match step {
+            SaveAttachmentStep::GetDestinationPath(result) => match result {
+                Ok(blob) => {
+                    self.statusbar.set_message(
+                        "[2/2] Saving attachment".to_string(),
+                        StatusMsgType::Loading,
+                    );
+
+                    vec![
+                        super::Message::OpenPrompt {
+                            description: "Destination path".to_string(),
+                            map: Box::new(move |path| {
+                                Message::SaveAttachment(SaveAttachmentStep::SaveAttachment {
+                                    blob: blob.clone(),
+                                    path: path.into(),
+                                })
+                                .into()
+                            }),
+                        }
+                        .into(),
+                    ]
+                }
+
+                Err(err) => {
+                    let msg = format!("Couldn't get attachment: {}", err);
+                    self.statusbar.set_message(msg, StatusMsgType::Error);
+                    vec![]
+                }
+            },
+            SaveAttachmentStep::SaveAttachment { blob, path } => {
+                match std::fs::write(path, blob) {
+                    Ok(()) => {
+                        self.statusbar
+                            .set_message("Attachment saved.".to_string(), StatusMsgType::Info);
+                    }
+                    Err(err) => {
+                        let msg = format!("Couldn't save attachment: {}", err);
+                        self.statusbar.set_message(msg, StatusMsgType::Error);
+                    }
+                };
+                vec![]
+            }
+        }
+    }
 }
 
 // user-action handlers
@@ -223,7 +281,7 @@ impl State {
     }
 
     fn open_text_body(&mut self) -> Vec<super::Message> {
-        if !self.is_in_state(Mode::Reader, SelectedTab::Body) {
+        if !self.is_in_state(Some(Mode::Reader), SelectedTab::Body) {
             return vec![];
         }
 
@@ -244,7 +302,7 @@ impl State {
     }
 
     fn open_html_body(&mut self) -> Vec<super::Message> {
-        if !self.is_in_state(Mode::Reader, SelectedTab::Body) {
+        if !self.is_in_state(Some(Mode::Reader), SelectedTab::Body) {
             return vec![];
         }
 
@@ -409,7 +467,7 @@ impl State {
     }
 
     fn read_body_in_editor(&mut self) -> Vec<super::Message> {
-        if !self.is_in_state(Mode::Reader, SelectedTab::Body) {
+        if !self.is_in_state(Some(Mode::Reader), SelectedTab::Body) {
             return vec![];
         }
 
@@ -420,7 +478,7 @@ impl State {
     }
 
     fn read_text_body_in_editor(&mut self) -> Vec<super::Message> {
-        if !self.is_in_state(Mode::Reader, SelectedTab::Body) {
+        if !self.is_in_state(Some(Mode::Reader), SelectedTab::Body) {
             return vec![];
         }
 
@@ -461,7 +519,7 @@ impl State {
     }
 
     fn read_markdown_body_in_editor(&mut self) -> Vec<super::Message> {
-        if !self.is_in_state(Mode::Reader, SelectedTab::Body) {
+        if !self.is_in_state(Some(Mode::Reader), SelectedTab::Body) {
             return vec![];
         }
 
@@ -511,7 +569,7 @@ impl State {
     }
 
     fn read_html_body_in_editor(&mut self) -> Vec<super::Message> {
-        if !self.is_in_state(Mode::Reader, SelectedTab::Body) {
+        if !self.is_in_state(Some(Mode::Reader), SelectedTab::Body) {
             return vec![];
         }
 
@@ -547,6 +605,38 @@ impl State {
                         .into(),
                     ]
                 }
+            },
+        }]
+    }
+
+    fn download_attachment_and_paste_destination_path(&mut self) -> Vec<super::Message> {
+        if !self.is_in_state(None, SelectedTab::Attachments) {
+            return vec![];
+        }
+
+        let Some(selected_attachment) = self
+            .attachments
+            .as_ref()
+            .and_then(|tab| tab.get_selected_entry())
+        else {
+            return vec![];
+        };
+
+        let blob_id: BlobId = selected_attachment.blob_id.clone().into();
+        let username = self.ctx.username.clone();
+        let account_id = self.ctx.account_id.clone();
+
+        self.statusbar.set_message(
+            "[1/2] Downloading attachment".to_string(),
+            StatusMsgType::Loading,
+        );
+
+        vec![crate::ui::Message::GetBlob {
+            username,
+            account_id,
+            blob_id,
+            callback: |result| {
+                vec![Message::SaveAttachment(SaveAttachmentStep::GetDestinationPath(result)).into()]
             },
         }]
     }

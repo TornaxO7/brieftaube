@@ -52,6 +52,9 @@ pub enum UserAction {
     ReadMarkdownBodyInEditor,
     ReadHtmlBodyInEditor,
 
+    #[strum(message = "")]
+    DownloadAttachmentAndPasteDestinationPath,
+
     #[strum(message = "Focus the next tab.")]
     FocusNextTab,
 
