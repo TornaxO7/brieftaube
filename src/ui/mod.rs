@@ -28,7 +28,7 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use futures::{FutureExt, StreamExt};
-use ratatui::{DefaultTerminal, Frame, widgets::Clear};
+use ratatui::{DefaultTerminal, Frame};
 use std::{collections::HashMap, time::Duration};
 use task_manager::TaskManager;
 use tracing::error;
