@@ -867,10 +867,6 @@ impl State {
 
     fn create_mailbox(&mut self) -> Vec<super::Message> {
         todo!();
-        // Some(super::Message::OpenPrompt {
-        //     description: "Mailbox name:".to_string(),
-        //     map: |entry| super::Message::Mailfs(Message::SelectedPaletteEntry(entry)),
-        // })
     }
 
     fn remove_mailbox(&mut self) -> Vec<super::Message> {
