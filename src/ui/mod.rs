@@ -28,7 +28,7 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use futures::{FutureExt, StreamExt};
-use ratatui::{DefaultTerminal, Frame};
+use ratatui::{DefaultTerminal, Frame, widgets::Clear};
 use std::{collections::HashMap, time::Duration};
 use task_manager::TaskManager;
 use tracing::error;
@@ -77,6 +77,7 @@ pub struct Ui {
     layers: Vec<ActiveLayer>,
     task_manager: TaskManager,
     scheme: Scheme,
+    pending_editor: Option<PendingEditor>,
 
     repos: HashMap<Username, watch::Receiver<RepositoryState>>,
 }
@@ -101,6 +102,7 @@ impl Ui {
             layers: vec![ActiveLayer::Mailfs(mailfs)],
             task_manager,
             scheme,
+            pending_editor: None,
         }
     }
 
@@ -126,6 +128,19 @@ impl Ui {
 
             while let Some(next_message) = msgs.pop() {
                 msgs.extend(self.handle_message(next_message));
+            }
+
+            if let Some(pending_editor) = self.pending_editor.take() {
+                // We need to drop the event stream because `crossterm` starts a backend-thread which listens on `stdin`
+                // and conflicts with the upcoming editor.
+                drop(event_stream);
+                msgs.extend(pending_editor.run());
+                event_stream = crossterm::event::EventStream::new();
+                terminal.clear().unwrap();
+
+                while let Some(next_message) = msgs.pop() {
+                    msgs.extend(self.handle_message(next_message));
+                }
             }
 
             terminal.draw(|frame| self.draw(frame, &mut msgs))?;
@@ -214,7 +229,15 @@ impl Ui {
                 content,
                 ty,
                 on_exit,
-            } => on_exit(open_in_editor(content, ty)),
+            } => {
+                self.pending_editor = Some(PendingEditor {
+                    content,
+                    ty,
+                    on_exit,
+                });
+
+                vec![]
+            }
 
             Message::Back => {
                 self.layers.pop();
@@ -646,45 +669,57 @@ pub enum OpenEditorError {
     IO(#[from] std::io::Error),
 }
 
-fn open_in_editor(content: String, ty: EditorContentType) -> Result<String, OpenEditorError> {
-    let editor = CONFIG
-        .get()
-        .unwrap()
-        .editor()
-        .ok_or(OpenEditorError::NoEditorFound)?;
+struct PendingEditor {
+    content: String,
+    ty: EditorContentType,
+    on_exit: fn(Result<String, OpenEditorError>) -> Vec<Message>,
+}
 
-    let tmp_file_path = {
-        let ending = match ty {
-            EditorContentType::Text => "txt",
-            EditorContentType::Markdown => "md",
-            EditorContentType::Html => "html",
+impl PendingEditor {
+    fn run(self) -> Vec<Message> {
+        (self.on_exit)(self.open_editor())
+    }
+
+    fn open_editor(self) -> Result<String, OpenEditorError> {
+        let editor = CONFIG
+            .get()
+            .unwrap()
+            .editor()
+            .ok_or(OpenEditorError::NoEditorFound)?;
+
+        let tmp_file_path = {
+            let ending = match self.ty {
+                EditorContentType::Text => "txt",
+                EditorContentType::Markdown => "md",
+                EditorContentType::Html => "html",
+            };
+
+            let filename = format!(
+                "tmp-{}.{}",
+                std::iter::repeat_with(fastrand::alphanumeric)
+                    .take(10)
+                    .collect::<String>(),
+                ending
+            );
+
+            crate::get_runtime_file_path(filename)?
         };
 
-        let filename = format!(
-            "tmp-{}.{}",
-            std::iter::repeat_with(fastrand::alphanumeric)
-                .take(10)
-                .collect::<String>(),
-            ending
-        );
+        std::fs::write(&tmp_file_path, self.content)?;
+        disable_raw_mode()?;
+        std::io::stdout().execute(LeaveAlternateScreen)?;
 
-        crate::get_runtime_file_path(filename)?
-    };
+        std::process::Command::new(editor)
+            .arg(&tmp_file_path)
+            .status()?;
 
-    std::fs::write(&tmp_file_path, content)?;
-    disable_raw_mode()?;
-    std::io::stdout().execute(LeaveAlternateScreen)?;
+        std::io::stdout().execute(EnterAlternateScreen)?;
+        enable_raw_mode()?;
 
-    std::process::Command::new(editor)
-        .arg(&tmp_file_path)
-        .status()?;
+        let editor_content = std::fs::read_to_string(&tmp_file_path)?;
 
-    std::io::stdout().execute(EnterAlternateScreen)?;
-    enable_raw_mode()?;
+        let _ignore = std::fs::remove_file(tmp_file_path);
 
-    let editor_content = std::fs::read_to_string(&tmp_file_path)?;
-
-    let _ignore = std::fs::remove_file(tmp_file_path);
-
-    Ok(editor_content)
+        Ok(editor_content)
+    }
 }
