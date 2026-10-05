@@ -53,12 +53,9 @@ fn init_logging() -> eyre::Result<()> {
         .with_line_number(true)
         .pretty();
 
-    tui_logger::init_logger(tui_logger::LevelFilter::Info)?;
-
     tracing_subscriber::registry()
         .with(env_filter)
         .with(fmt_layer)
-        .with(tui_logger::TuiTracingSubscriberLayer)
         .init();
 
     tracing::debug!("Debug logging enabled");
