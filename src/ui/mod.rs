@@ -106,7 +106,7 @@ impl Ui {
         }
     }
 
-    pub async fn run(mut self, terminal: &mut DefaultTerminal) -> eyre::Result<()> {
+    pub async fn run(mut self, mut terminal: DefaultTerminal) -> eyre::Result<()> {
         let mut msgs = Vec::with_capacity(8);
         let mut interval = tokio::time::interval(Duration::from_millis(500));
         let mut event_stream = crossterm::event::EventStream::new();
@@ -136,7 +136,9 @@ impl Ui {
                 drop(event_stream);
                 msgs.extend(pending_editor.run());
                 event_stream = crossterm::event::EventStream::new();
-                terminal.clear().unwrap();
+
+                terminal
+                    .draw(|frame| frame.render_widget(ratatui::widgets::Clear, frame.area()))?;
 
                 while let Some(next_message) = msgs.pop() {
                     msgs.extend(self.handle_message(next_message));

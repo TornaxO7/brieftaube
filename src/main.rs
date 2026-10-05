@@ -29,8 +29,8 @@ async fn main() -> eyre::Result<()> {
     init_theme();
     init_config()?;
 
-    let mut terminal = ratatui::init();
-    Ui::new().run(&mut terminal).await?;
+    let terminal = ratatui::init();
+    Ui::new().run(terminal).await?;
     ratatui::restore();
     Ok(())
 }
