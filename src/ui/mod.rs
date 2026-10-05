@@ -41,9 +41,6 @@ pub enum Message {
     Pager(pager::Message),
     PagerRequest(pager::MessageRequest),
 
-    Palette(palette::Message),
-    Prompt(prompt::Message),
-
     Event(Event),
     OpenPrompt {
         description: String,
@@ -507,39 +504,6 @@ impl Ui {
                     }
                 };
                 vec![]
-            }
-
-            Message::Palette(message) => {
-                let palette = self
-                    .layers
-                    .iter_mut()
-                    .rev()
-                    .find_map(|layer| {
-                        if let ActiveLayer::Overlay(OverlayLayer::Palette(palette)) = layer {
-                            Some(palette)
-                        } else {
-                            None
-                        }
-                    })
-                    .expect("Palette is in active layers");
-
-                palette.update(message)
-            }
-            Message::Prompt(message) => {
-                let prompt = self
-                    .layers
-                    .iter_mut()
-                    .rev()
-                    .find_map(|layer| {
-                        if let ActiveLayer::Overlay(OverlayLayer::Prompt(prompt)) = layer {
-                            Some(prompt)
-                        } else {
-                            None
-                        }
-                    })
-                    .expect("prompt is in active layers");
-
-                prompt.update(message)
             }
         }
     }
