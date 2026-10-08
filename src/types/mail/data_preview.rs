@@ -1,6 +1,6 @@
-use crate::types::{MailAddresses, MailDataAttachment, MailId};
-use chrono::{DateTime, Local, Utc};
-use jmap_client::email::{Email, Property};
+use crate::types::{MailAddresses, MailDataAttachment, MailDto, MailId};
+use chrono::{DateTime, Local};
+use jmap_client::email::Property;
 
 #[derive(Debug, Clone)]
 pub struct MailDataPreview {
@@ -12,7 +12,26 @@ pub struct MailDataPreview {
     pub subject: Option<String>,
     pub preview: Option<String>,
     pub attachments: Option<Vec<MailDataAttachment>>,
-    pub received_at: DateTime<Local>,
+    pub received_at: Option<DateTime<Local>>,
+}
+
+impl MailDataPreview {
+    pub fn new(cached_mail: MailDto) -> Option<Self> {
+        let core = cached_mail.core;
+        let preview = cached_mail.preview?;
+
+        Some(Self {
+            id: core.id,
+            from: preview.from,
+            to: preview.to,
+            cc: preview.cc,
+            bcc: preview.bcc,
+            subject: core.subject,
+            preview: preview.preview,
+            attachments: preview.attachments,
+            received_at: core.received_at,
+        })
+    }
 }
 
 impl MailDataPreview {
@@ -27,22 +46,4 @@ impl MailDataPreview {
         Property::Attachments,
         Property::ReceivedAt,
     ];
-
-    pub fn from_get_request(mut mail: Email) -> Self {
-        Self {
-            id: mail.take_id().into(),
-            from: mail.take_from().map(MailAddresses::from),
-            to: mail.take_to().map(MailAddresses::from),
-            cc: mail.take_cc().map(MailAddresses::from),
-            bcc: mail.take_bcc().map(MailAddresses::from),
-            subject: mail.take_subject(),
-            preview: mail.take_preview(),
-            attachments: mail
-                .attachments()
-                .map(|parts| parts.iter().map(MailDataAttachment::from).collect()),
-            received_at: DateTime::<Utc>::from_timestamp(mail.received_at().unwrap(), 0)
-                .expect("Valid timestamp")
-                .with_timezone(&Local),
-        }
-    }
 }

@@ -10,7 +10,7 @@ use crate::{
     },
     types::{
         AccountId, BlobId, InitMailboxData, MailDataCore, MailDataHtmlBody, MailDataPreview,
-        MailDataTextBody, MailId, MailboxId, ParentMailboxId, ThreadId,
+        MailDataTextBody, MailDto, MailId, MailboxId, ParentMailboxId, ThreadId,
     },
 };
 use std::collections::HashMap;
@@ -147,72 +147,26 @@ impl Repository {
                 .await?;
 
             if !result.updated.is_empty() {
-                // PERFORMANCE: join them all instead awaiting them sequentially
-                let updated_mail_core_ids: Vec<MailId> = {
+                let update_mail_ids: Vec<MailId> = {
                     let cache::GetBatchResult {
                         value: cached_datas,
                         ..
-                    } = cache_lock.get_mails_core(&result.updated).await?;
+                    } = cache_lock.get_mails(&result.updated).await?;
 
-                    cached_datas.into_iter().map(|data| data.id).collect()
-                };
-                let updated_mail_preview_ids: Vec<MailId> = {
-                    let cache::GetBatchResult {
-                        value: cached_datas,
-                        ..
-                    } = cache_lock.get_mails_preview(&result.updated).await?;
-
-                    cached_datas.into_iter().map(|data| data.id).collect()
-                };
-                let updated_mail_text_body_ids: Vec<MailId> = {
-                    let cache::GetBatchResult {
-                        value: cached_text_bodies,
-                        ..
-                    } = cache_lock.get_mails_text_body(&result.updated).await?;
-
-                    cached_text_bodies.into_iter().map(|data| data.id).collect()
-                };
-                let updated_mail_html_body_ids: Vec<MailId> = {
-                    let cache::GetBatchResult {
-                        value: cache_html_bodies,
-                        ..
-                    } = cache_lock.get_mails_html_body(&result.updated).await?;
-
-                    cache_html_bodies.into_iter().map(|data| data.id).collect()
+                    cached_datas.into_iter().map(|data| data.core.id).collect()
                 };
 
                 let remote::GetOneResult {
-                    value:
-                        (
-                            updated_mails_core,
-                            updated_mails_preview,
-                            updated_text_bodies,
-                            updated_html_bodies,
-                        ),
+                    value: updated_mails,
                     // TODO: Maybe check if this state is also the same? Otherwise => do more `/changes` request
                     state: _,
                 } = self
                     .remote
                     .get_remote_account(account_id.clone())
-                    .fetch_mail_updates(
-                        &updated_mail_core_ids,
-                        &updated_mail_preview_ids,
-                        &updated_mail_text_body_ids,
-                        &updated_mail_html_body_ids,
-                    )
+                    .fetch_mail_updates(&update_mail_ids)
                     .await?;
 
-                // PERFORMANCE: put in `join` instead of sequentially
-                cache_lock.upsert_mails_core(updated_mails_core).await?;
-                cache_lock
-                    .upsert_mails_preview(updated_mails_preview)
-                    .await?;
-                cache_lock
-                    .upsert_mails_text_body(&updated_text_bodies)
-                    .await?;
-                cache_lock
-                    .upsert_mails_html_body(&updated_html_bodies)
-                    .await?;
+                cache_lock.upsert_mails(updated_mails).await?;
             };
 
             cache_lock.evict_mails(&result.destroyed).await?;
@@ -349,18 +303,20 @@ impl Repository {
                 let new_thread_mails_ids: Vec<(ThreadId, Vec<MailId>)> = new_thread_mails
                     .iter()
                     .map(|(thread_id, thread_mails)| {
-                        let mail_ids: Vec<MailId> =
-                            thread_mails.iter().map(|mail| mail.id.clone()).collect();
+                        let mail_ids: Vec<MailId> = thread_mails
+                            .iter()
+                            .map(|mail| mail.core.id.clone())
+                            .collect();
 
                         (thread_id.clone(), mail_ids)
                     })
                     .collect();
 
-                let all_fetched_mails: Vec<MailDataCore> =
+                let all_fetched_mails: Vec<MailDto> =
                     new_thread_mails.values().cloned().flatten().collect();
 
                 cache_lock.upsert_threads(&new_thread_mails_ids).await?;
-                cache_lock.upsert_mails_core(all_fetched_mails).await?;
+                cache_lock.upsert_mails(all_fetched_mails).await?;
                 cache_lock.set_thread_state(new_thread_get_state).await?;
             }
 

@@ -4,33 +4,38 @@ use crate::{
         MailRemote,
         types::{GetState, remote},
     },
-    types::{MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody, MailId},
+    types::MailId,
 };
 use async_trait::async_trait;
 use color_eyre::Result;
+use jmap_client::email::Property;
 
 #[async_trait]
 impl MailRemote for JmapAccount {
-    async fn fetch_mails_core(
+    async fn fetch_mails(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetBatchResult<Vec<MailDataCore>, Vec<MailId>>> {
+        properties: Vec<Property>,
+    ) -> Result<remote::GetBatchResult<Vec<jmap_client::email::Email>, Vec<MailId>>> {
         let mut response = {
             let mut request = self.build_request();
 
-            request
-                .get_email()
-                .ids(Some(ids))
-                .properties(MailDataCore::GET_REQUEST_PROPERTIES);
+            let email_request = request.get_email().ids(Some(ids));
+
+            if properties.contains(&Property::HtmlBody) {
+                email_request.arguments().fetch_text_body_values(true);
+            }
+
+            if properties.contains(&Property::TextBody) {
+                email_request.arguments().fetch_html_body_values(true);
+            }
+
+            email_request.properties(properties);
 
             request.send_get_email().await?
         };
 
-        let values = response
-            .take_list()
-            .into_iter()
-            .map(MailDataCore::from_get_request)
-            .collect();
+        let values = response.take_list();
 
         let not_found = response.take_not_found().into_iter().map(MailId).collect();
 
@@ -38,215 +43,6 @@ impl MailRemote for JmapAccount {
             values,
             not_found,
             state: response.take_state().into(),
-        })
-    }
-
-    async fn fetch_mails_preview(
-        &self,
-        ids: &[MailId],
-    ) -> Result<remote::GetBatchResult<Vec<MailDataPreview>, Vec<MailId>>> {
-        let mut response = {
-            let mut request = self.build_request();
-
-            request
-                .get_email()
-                .ids(Some(ids))
-                .properties(MailDataPreview::GET_REQUEST_PROPERTIES);
-
-            request.send_get_email().await?
-        };
-
-        let values = response
-            .take_list()
-            .into_iter()
-            .map(MailDataPreview::from_get_request)
-            .collect();
-
-        let not_found = response.take_not_found().into_iter().map(MailId).collect();
-
-        Ok(remote::GetBatchResult {
-            values,
-            not_found,
-            state: response.take_state().into(),
-        })
-    }
-
-    async fn fetch_mails_text_body(
-        &self,
-        ids: &[MailId],
-    ) -> Result<remote::GetBatchResult<Vec<MailDataTextBody>, Vec<MailId>>> {
-        let mut response = {
-            let mut request = self.build_request();
-
-            request
-                .get_email()
-                .ids(Some(ids))
-                .properties([
-                    jmap_client::email::Property::Id,
-                    jmap_client::email::Property::TextBody,
-                    jmap_client::email::Property::BodyValues,
-                ])
-                .arguments()
-                .fetch_text_body_values(true);
-
-            request.send_get_email().await?
-        };
-
-        let body = response
-            .list()
-            .into_iter()
-            .map(|mail| MailDataTextBody::new(mail).unwrap())
-            .collect();
-
-        let not_found = response.take_not_found().into_iter().map(MailId).collect();
-
-        Ok(remote::GetBatchResult {
-            values: body,
-            not_found,
-            state: response.take_state().into(),
-        })
-    }
-
-    async fn fetch_mails_html_body(
-        &self,
-        ids: &[MailId],
-    ) -> Result<remote::GetBatchResult<Vec<MailDataHtmlBody>, Vec<MailId>>> {
-        let mut response = {
-            let mut request = self.build_request();
-
-            request
-                .get_email()
-                .ids(Some(ids))
-                .properties([
-                    jmap_client::email::Property::Id,
-                    jmap_client::email::Property::HtmlBody,
-                    jmap_client::email::Property::BodyValues,
-                ])
-                .arguments()
-                .fetch_html_body_values(true);
-
-            request.send_get_email().await?
-        };
-
-        let values = response
-            .list()
-            .into_iter()
-            .map(|mail| MailDataHtmlBody::new(mail).unwrap())
-            .collect();
-
-        let not_found = response.take_not_found().into_iter().map(MailId).collect();
-
-        Ok(remote::GetBatchResult {
-            values,
-            not_found,
-            state: response.take_state().into(),
-        })
-    }
-
-    async fn fetch_mail_updates(
-        &self,
-        cores: &[MailId],
-        previews: &[MailId],
-        text: &[MailId],
-        html: &[MailId],
-    ) -> Result<
-        remote::GetOneResult<(
-            Vec<MailDataCore>,
-            Vec<MailDataPreview>,
-            Vec<MailDataTextBody>,
-            Vec<MailDataHtmlBody>,
-        )>,
-    > {
-        let mut response = {
-            let mut request = self.build_request();
-
-            request
-                .get_email()
-                .ids(Some(cores))
-                .properties(MailDataCore::GET_REQUEST_PROPERTIES);
-
-            request
-                .get_email()
-                .ids(Some(previews))
-                .properties(MailDataPreview::GET_REQUEST_PROPERTIES);
-
-            request
-                .get_email()
-                .ids(Some(text))
-                .properties([
-                    jmap_client::email::Property::Id,
-                    jmap_client::email::Property::TextBody,
-                ])
-                .arguments()
-                .fetch_text_body_values(true);
-
-            request
-                .get_email()
-                .ids(Some(html))
-                .properties([
-                    jmap_client::email::Property::Id,
-                    jmap_client::email::Property::HtmlBody,
-                ])
-                .arguments()
-                .fetch_html_body_values(true);
-
-            request.send().await?
-        };
-
-        let (fetched_html, state) = {
-            let mut response = response
-                .pop_method_response()
-                .unwrap()
-                .unwrap_get_email()
-                .unwrap();
-
-            let fetched_html = response
-                .take_list()
-                .into_iter()
-                .map(|mail| MailDataHtmlBody::new(&mail).unwrap())
-                .collect();
-
-            (fetched_html, response.take_state().into())
-        };
-
-        let fetched_text = response
-            .pop_method_response()
-            .unwrap()
-            .unwrap_get_email()
-            .unwrap()
-            .take_list()
-            .into_iter()
-            .map(|mail| MailDataTextBody::new(&mail).unwrap())
-            .collect();
-
-        let fetched_mail_preview = response
-            .pop_method_response()
-            .unwrap()
-            .unwrap_get_email()
-            .unwrap()
-            .take_list()
-            .into_iter()
-            .map(MailDataPreview::from_get_request)
-            .collect();
-
-        let fetched_mail_core = response
-            .pop_method_response()
-            .unwrap()
-            .unwrap_get_email()
-            .unwrap()
-            .take_list()
-            .into_iter()
-            .map(MailDataCore::from_get_request)
-            .collect();
-
-        Ok(remote::GetOneResult {
-            value: (
-                fetched_mail_core,
-                fetched_mail_preview,
-                fetched_text,
-                fetched_html,
-            ),
-            state,
         })
     }
 

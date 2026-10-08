@@ -7,21 +7,14 @@ mod thread;
 use super::types::GetState;
 use crate::{
     datasource::{Cache, types::QueryState},
-    types::{
-        BlobId, MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody, MailId,
-        MailboxData, MailboxId, ThreadId,
-    },
+    types::{BlobId, MailDto, MailId, MailboxData, MailboxId, ThreadId},
 };
 use root_mails_linear::RootMails;
 use std::collections::HashMap;
 
 #[derive(Default)]
 pub struct HashMapDataSource {
-    mails_core: HashMap<MailId, MailDataCore>,
-    mails_preview: HashMap<MailId, MailDataPreview>,
-    mail_text_body: HashMap<MailId, MailDataTextBody>,
-    mail_html_body: HashMap<MailId, MailDataHtmlBody>,
-
+    mails: HashMap<MailId, MailDto>,
     mailboxes: HashMap<MailboxId, MailboxData>,
     threads: HashMap<ThreadId, Vec<MailId>>,
     root_mails: HashMap<MailboxId, RootMails>,

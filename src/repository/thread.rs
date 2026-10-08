@@ -55,31 +55,41 @@ impl Repository {
                     .unwrap()
                     .read()
                     .await
-                    .get_mails_core(&thread_mail_ids)
+                    .get_mails(&thread_mail_ids)
                     .await?;
 
                 if opt_thread_mails.missing.is_empty() {
-                    return Ok(opt_thread_mails.value);
+                    return Ok(opt_thread_mails
+                        .value
+                        .into_iter()
+                        .map(MailDataCore::from)
+                        .collect());
                 } else {
                     let result = self
                         .remote
                         .get_remote_account(account_id.clone())
-                        .fetch_mails_core(&opt_thread_mails.missing)
+                        .fetch_mails(
+                            &opt_thread_mails.missing,
+                            MailDataCore::GET_REQUEST_PROPERTIES.to_vec(),
+                        )
                         .await?;
+                    debug_assert!(result.not_found.is_empty());
 
                     let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
 
                     self.ensure_email_changes(&account_id, &result.state, &mut cache_lock)
                         .await?;
 
-                    cache_lock.upsert_mails_core(result.values).await?;
+                    cache_lock.upsert_mails(result.values).await?;
 
-                    let thread_mail_cores_result =
-                        cache_lock.get_mails_core(&thread_mail_ids).await?;
+                    let cached_thread_mails = cache_lock.get_mails(&thread_mail_ids).await?;
+                    debug_assert!(cached_thread_mails.missing.is_empty());
 
-                    debug_assert!(thread_mail_cores_result.missing.is_empty());
-
-                    return Ok(thread_mail_cores_result.value);
+                    return Ok(cached_thread_mails
+                        .value
+                        .into_iter()
+                        .map(MailDataCore::from)
+                        .collect());
                 }
             }
             None => {
@@ -104,13 +114,15 @@ impl Repository {
                 self.ensure_thread_changes(&account_id, &thread_get_state, &mut cache_lock)
                     .await?;
 
-                let thread_mail_ids: Vec<MailId> =
-                    thread_mails.iter().map(|data| data.id.clone()).collect();
+                let thread_mail_ids: Vec<MailId> = thread_mails
+                    .iter()
+                    .map(|data| data.core.id.clone())
+                    .collect();
 
-                cache_lock.upsert_mails_core(thread_mails.clone()).await?;
+                cache_lock.upsert_mails(thread_mails.clone()).await?;
                 cache_lock.upsert_thread(id, thread_mail_ids).await?;
 
-                Ok(thread_mails)
+                Ok(thread_mails.into_iter().map(MailDataCore::from).collect())
             }
         }
     }

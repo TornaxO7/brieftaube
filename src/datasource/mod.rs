@@ -4,9 +4,8 @@ pub mod jmap;
 pub mod types;
 
 use crate::types::{
-    AccountData, AccountId, BlobId, MailDataCore, MailDataHtmlBody, MailDataPreview,
-    MailDataTextBody, MailId, MailboxData, MailboxId, MailboxNew, MailboxUpdate, ParentMailboxId,
-    ThreadId,
+    AccountData, AccountId, BlobId, MailDto, MailId, MailboxData, MailboxId, MailboxNew,
+    MailboxUpdate, ParentMailboxId, ThreadId,
 };
 use async_trait::async_trait;
 use color_eyre::Result;
@@ -29,23 +28,17 @@ pub trait RemoteAccount:
 {
 }
 
-// TODO: Introduce a `MailDto` or so which contains three stages of data:
-// 1. MailDataCore
-// 2. MailDataPreview
-// 3. Body
-//
-// Which gets incrementally loaded
 #[async_trait]
 pub trait MailCache {
     async fn get_mail_state(&self) -> Option<&GetState>;
 
     async fn set_mail_state(&mut self, new_state: GetState) -> Result<()>;
 
-    async fn get_mail_core(&self, id: &MailId) -> Result<Option<MailDataCore>>
+    async fn get_mail(&self, id: &MailId) -> Result<Option<MailDto>>
     where
         Self: Sync,
     {
-        let result = self.get_mails_core(&[id.clone()]).await?;
+        let result = self.get_mails(&[id.clone()]).await?;
 
         if result.missing.is_empty() {
             Ok(Some(result.value.into_iter().next().unwrap()))
@@ -54,152 +47,36 @@ pub trait MailCache {
         }
     }
 
-    async fn get_mails_core(
+    async fn get_mails(
         &self,
         ids: &[MailId],
-    ) -> Result<cache::GetBatchResult<Vec<MailDataCore>, Vec<MailId>>>;
+    ) -> Result<cache::GetBatchResult<Vec<MailDto>, Vec<MailId>>>;
 
-    async fn get_mail_preview(&self, id: &MailId) -> Result<Option<MailDataPreview>>
-    where
-        Self: Sync,
-    {
-        let result = self.get_mails_preview(&[id.clone()]).await?;
-
-        if result.missing.is_empty() {
-            Ok(Some(result.value.into_iter().next().unwrap()))
-        } else {
-            Ok(None)
-        }
-    }
-
-    async fn get_mails_preview(
-        &self,
-        ids: &[MailId],
-    ) -> Result<cache::GetBatchResult<Vec<MailDataPreview>, Vec<MailId>>>;
-
-    async fn upsert_mails_core(&mut self, mails: Vec<MailDataCore>) -> Result<()>;
-
-    async fn upsert_mails_preview(&mut self, mails: Vec<MailDataPreview>) -> Result<()>;
-
-    async fn get_mail_text_body(&self, id: &MailId) -> Result<Option<MailDataTextBody>>
-    where
-        Self: Sync,
-    {
-        let result = self.get_mails_text_body(&[id.clone()]).await?;
-
-        if !result.value.is_empty() {
-            Ok(Some(result.value.into_iter().next().unwrap()))
-        } else {
-            Ok(None)
-        }
-    }
-
-    async fn get_mails_text_body(
-        &self,
-        ids: &[MailId],
-    ) -> Result<cache::GetBatchResult<Vec<MailDataTextBody>, Vec<MailId>>>;
-
-    async fn upsert_mail_text_body(&mut self, id: &MailId, body: MailDataTextBody) -> Result<()>;
-
-    async fn upsert_mails_text_body(&mut self, text_bodies: &[MailDataTextBody]) -> Result<()>;
-
-    async fn get_mail_html_body(&self, id: &MailId) -> Result<Option<MailDataHtmlBody>>
-    where
-        Self: Sync,
-    {
-        let result = self.get_mails_html_body(&[id.clone()]).await?;
-
-        if !result.value.is_empty() {
-            Ok(Some(result.value.into_iter().next().unwrap()))
-        } else {
-            Ok(None)
-        }
-    }
-
-    async fn get_mails_html_body(
-        &self,
-        ids: &[MailId],
-    ) -> Result<cache::GetBatchResult<Vec<MailDataHtmlBody>, Vec<MailId>>>;
-
-    async fn upsert_mail_html_body(&mut self, id: &MailId, body: MailDataHtmlBody) -> Result<()>;
-
-    async fn upsert_mails_html_body(&mut self, html_bodies: &[MailDataHtmlBody]) -> Result<()>;
+    async fn upsert_mails(&mut self, mails: Vec<MailDto>) -> Result<()>;
 
     async fn evict_mails(&mut self, mails: &[MailId]) -> Result<()>;
 }
 
 #[async_trait]
 pub trait MailRemote {
-    async fn fetch_mail_core(&self, id: MailId) -> Result<remote::GetOneResult<MailDataCore>>
-    where
-        Self: Sync,
-    {
-        let result = self.fetch_mails_core(&[id.clone()]).await?;
+    async fn fetch_mail(
+        &self,
+        id: MailId,
+        properties: Vec<jmap_client::email::Property>,
+    ) -> Result<remote::GetOneResult<jmap_client::email::Email>> {
+        let result = self.fetch_mails(&[id], properties).await?;
 
         Ok(remote::GetOneResult {
-            value: result.values.into_iter().next().expect("Id is valid"),
+            value: result.values.into_iter().next().unwrap(),
             state: result.state,
         })
     }
 
-    async fn fetch_mails_core(
+    async fn fetch_mails(
         &self,
         ids: &[MailId],
-    ) -> Result<remote::GetBatchResult<Vec<MailDataCore>, Vec<MailId>>>;
-
-    async fn fetch_mail_preview(&self, id: MailId) -> Result<remote::GetOneResult<MailDataPreview>>
-    where
-        Self: Sync,
-    {
-        let result = self.fetch_mails_preview(&[id.clone()]).await?;
-
-        Ok(remote::GetOneResult {
-            value: result.values.into_iter().next().expect("Id is valid"),
-            state: result.state,
-        })
-    }
-
-    async fn fetch_mails_preview(
-        &self,
-        ids: &[MailId],
-    ) -> Result<remote::GetBatchResult<Vec<MailDataPreview>, Vec<MailId>>>;
-
-    async fn fetch_mails_text_body(
-        &self,
-        ids: &[MailId],
-    ) -> Result<remote::GetBatchResult<Vec<MailDataTextBody>, Vec<MailId>>>;
-
-    async fn fetch_mails_html_body(
-        &self,
-        ids: &[MailId],
-    ) -> Result<remote::GetBatchResult<Vec<MailDataHtmlBody>, Vec<MailId>>>;
-
-    async fn fetch_mail_updates(
-        &self,
-        cores: &[MailId],
-        previews: &[MailId],
-        text: &[MailId],
-        html: &[MailId],
-    ) -> Result<
-        remote::GetOneResult<(
-            Vec<MailDataCore>,
-            Vec<MailDataPreview>,
-            Vec<MailDataTextBody>,
-            Vec<MailDataHtmlBody>,
-        )>,
-    >;
-
-    // async async fn create_mail(
-    //     &self,
-    //     new: MailNew,
-    //     since: GetState,
-    // ) -> Result<remote::CreateResult<MailData>>;
-
-    // async async fn update_mails(
-    //     &self,
-    //     updates: Vec<(MailData, MailUpdate)>,
-    //     since: GetState,
-    // ) -> Result<remote::UpdateResult<MailId, MailData>>;
+        properties: Vec<jmap_client::email::Property>,
+    ) -> Result<remote::GetBatchResult<Vec<jmap_client::email::Email>, Vec<MailId>>>;
 
     async fn destroy_mails(
         &self,
@@ -209,36 +86,6 @@ pub trait MailRemote {
 
     async fn fetch_mail_changes(&self, since: &GetState)
     -> Result<remote::GetChangeResult<MailId>>;
-
-    async fn fetch_mail_text_body(
-        &self,
-        id: &MailId,
-    ) -> Result<remote::GetOneResult<MailDataTextBody>>
-    where
-        Self: Sync,
-    {
-        let result = self.fetch_mails_text_body(&[id.clone()]).await?;
-
-        Ok(remote::GetOneResult {
-            value: result.values.into_iter().next().expect("Id is valid"),
-            state: result.state,
-        })
-    }
-
-    async fn fetch_mail_html_body(
-        &self,
-        id: &MailId,
-    ) -> Result<remote::GetOneResult<MailDataHtmlBody>>
-    where
-        Self: Sync,
-    {
-        let result = self.fetch_mails_html_body(&[id.clone()]).await?;
-
-        Ok(remote::GetOneResult {
-            value: result.values.into_iter().next().expect("MailId is valid"),
-            state: result.state,
-        })
-    }
 }
 
 #[async_trait]
@@ -274,7 +121,7 @@ pub trait RootMailsRemote: MailRemote {
         &self,
         mailbox: &MailboxId,
         window: &QueryWindow,
-    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<MailDataCore>>>>;
+    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<MailDto>>>>;
 
     async fn fetch_root_mails_changes(
         &self,
@@ -376,14 +223,14 @@ pub trait ThreadRemote {
     async fn fetch_thread(
         &self,
         id: &ThreadId,
-    ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<MailDataCore>>>>;
+    ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<MailDto>>>>;
 
     async fn fetch_threads(
         &self,
         ids: &[ThreadId],
     ) -> Result<
         remote::GetBatchResult<
-            remote::GetOneResult<HashMap<ThreadId, Vec<MailDataCore>>>,
+            remote::GetOneResult<HashMap<ThreadId, Vec<MailDto>>>,
             Vec<ThreadId>,
         >,
     >;
