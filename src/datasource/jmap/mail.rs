@@ -22,11 +22,11 @@ impl MailRemote for JmapAccount {
 
             let email_request = request.get_email().ids(Some(ids));
 
-            if properties.contains(&Property::HtmlBody) {
+            if properties.contains(&Property::TextBody) {
                 email_request.arguments().fetch_text_body_values(true);
             }
 
-            if properties.contains(&Property::TextBody) {
+            if properties.contains(&Property::HtmlBody) {
                 email_request.arguments().fetch_html_body_values(true);
             }
 

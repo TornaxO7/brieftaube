@@ -1,4 +1,7 @@
-use crate::ui::pager::body::{BodyReader, ScrollableBody};
+use crate::{
+    types::MailDataTextBody,
+    ui::pager::body::{BodyReader, ScrollableBody},
+};
 
 #[derive(Debug)]
 pub struct TextBody {
@@ -6,9 +9,9 @@ pub struct TextBody {
 }
 
 impl TextBody {
-    pub fn new(content: String) -> Self {
+    pub fn new(text: MailDataTextBody) -> Self {
         Self {
-            state: ScrollableBody::new(content),
+            state: ScrollableBody::new(text.content),
         }
     }
 }

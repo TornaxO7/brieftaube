@@ -4,7 +4,7 @@ use crate::{
         jmap::JmapAccount,
         types::{GetState, remote},
     },
-    types::{MailDataCore, MailId, ThreadId},
+    types::{MailDtoCore, MailId, ThreadId},
 };
 use async_trait::async_trait;
 use color_eyre::Result;
@@ -15,7 +15,7 @@ impl ThreadRemote for JmapAccount {
     async fn fetch_thread(
         &self,
         id: &ThreadId,
-    ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<MailDataCore>>>> {
+    ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<MailDtoCore>>>> {
         let mut response = {
             let mut request = self.build_request();
 
@@ -26,7 +26,7 @@ impl ThreadRemote for JmapAccount {
             request
                 .get_email()
                 .ids_ref(thread_mail_ids_ref)
-                .properties(MailDataCore::GET_REQUEST_PROPERTIES);
+                .properties(MailDtoCore::GET_REQUEST_PROPERTIES);
 
             request.send().await?
         };
@@ -47,7 +47,7 @@ impl ThreadRemote for JmapAccount {
             value: get_email_response
                 .take_list()
                 .into_iter()
-                .map(MailDataCore::from_get_request)
+                .map(MailDtoCore::from)
                 .collect(),
             state: get_email_response.take_state().into(),
         };
@@ -65,7 +65,7 @@ impl ThreadRemote for JmapAccount {
         ids: &[ThreadId],
     ) -> Result<
         remote::GetBatchResult<
-            remote::GetOneResult<HashMap<ThreadId, Vec<MailDataCore>>>,
+            remote::GetOneResult<HashMap<ThreadId, Vec<MailDtoCore>>>,
             Vec<ThreadId>,
         >,
     > {
@@ -81,7 +81,7 @@ impl ThreadRemote for JmapAccount {
             request
                 .get_email()
                 .ids_ref(thread_mail_ids_result)
-                .properties(MailDataCore::GET_REQUEST_PROPERTIES);
+                .properties(MailDtoCore::GET_REQUEST_PROPERTIES);
 
             request.send().await?
         };
@@ -99,10 +99,10 @@ impl ThreadRemote for JmapAccount {
             .unwrap_get_thread()
             .unwrap();
 
-        let mails_lookup: HashMap<MailId, MailDataCore> = email_get_response
+        let mails_lookup: HashMap<MailId, MailDtoCore> = email_get_response
             .take_list()
             .into_iter()
-            .map(MailDataCore::from_get_request)
+            .map(MailDtoCore::from)
             .map(|mail| (mail.id.clone(), mail))
             .collect();
 

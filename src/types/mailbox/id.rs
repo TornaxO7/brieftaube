@@ -10,6 +10,12 @@ impl MailboxId {
     }
 }
 
+impl From<&str> for MailboxId {
+    fn from(id: &str) -> Self {
+        Self(id.to_string())
+    }
+}
+
 impl From<String> for MailboxId {
     fn from(id: String) -> Self {
         Self(id)

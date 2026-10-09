@@ -37,8 +37,8 @@ pub struct State {
 
     ctx: Ctx,
     headers: Option<color_eyre::Result<MailHeaders>>,
-    text_body: Option<color_eyre::Result<Option<TextBody>>>,
-    html_body: Option<color_eyre::Result<Option<HtmlBody>>>,
+    text_body: Option<color_eyre::Result<TextBody>>,
+    html_body: Option<color_eyre::Result<HtmlBody>>,
     attachments: Option<AttachmentsTab>,
 }
 
@@ -193,7 +193,7 @@ impl State {
         body: color_eyre::Result<MailDataTextBody>,
     ) -> Vec<super::Message> {
         tracing::debug!("Set text body");
-        self.text_body = Some(body.map(|body| body.content.map(TextBody::new)));
+        self.text_body = Some(body.map(TextBody::new));
         vec![]
     }
 
@@ -326,12 +326,12 @@ impl State {
         match self.selected_tab {
             SelectedTab::Body => match self.selected_body_type {
                 SelectedBodyType::Text => {
-                    if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
+                    if let Some(Ok(text_body)) = self.text_body.as_mut() {
                         text_body.navigate_down(1);
                     }
                 }
                 SelectedBodyType::Html => {
-                    if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
+                    if let Some(Ok(html_body)) = self.html_body.as_mut() {
                         html_body.navigate_down(1);
                     }
                 }
@@ -349,12 +349,12 @@ impl State {
         match self.selected_tab {
             SelectedTab::Body => match self.selected_body_type {
                 SelectedBodyType::Text => {
-                    if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
+                    if let Some(Ok(text_body)) = self.text_body.as_mut() {
                         text_body.navigate_up(1);
                     }
                 }
                 SelectedBodyType::Html => {
-                    if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
+                    if let Some(Ok(html_body)) = self.html_body.as_mut() {
                         html_body.navigate_up(1);
                     }
                 }
@@ -372,12 +372,12 @@ impl State {
         match self.selected_tab {
             SelectedTab::Body => match self.selected_body_type {
                 SelectedBodyType::Text => {
-                    if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
+                    if let Some(Ok(text_body)) = self.text_body.as_mut() {
                         text_body.navigate_to_top();
                     }
                 }
                 SelectedBodyType::Html => {
-                    if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
+                    if let Some(Ok(html_body)) = self.html_body.as_mut() {
                         html_body.navigate_to_top();
                     }
                 }
@@ -399,12 +399,12 @@ impl State {
 
         match self.selected_body_type {
             SelectedBodyType::Text => {
-                if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
+                if let Some(Ok(text_body)) = self.text_body.as_mut() {
                     text_body.navigate_half_page_down();
                 }
             }
             SelectedBodyType::Html => {
-                if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
+                if let Some(Ok(html_body)) = self.html_body.as_mut() {
                     html_body.navigate_half_page_down();
                 }
             }
@@ -420,12 +420,12 @@ impl State {
 
         match self.selected_body_type {
             SelectedBodyType::Text => {
-                if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
+                if let Some(Ok(text_body)) = self.text_body.as_mut() {
                     text_body.navigate_half_page_up();
                 }
             }
             SelectedBodyType::Html => {
-                if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
+                if let Some(Ok(html_body)) = self.html_body.as_mut() {
                     html_body.navigate_half_page_up();
                 }
             }
@@ -438,12 +438,12 @@ impl State {
         match self.selected_tab {
             SelectedTab::Body => match self.selected_body_type {
                 SelectedBodyType::Text => {
-                    if let Some(Ok(Some(text_body))) = self.text_body.as_mut() {
+                    if let Some(Ok(text_body)) = self.text_body.as_mut() {
                         text_body.navigate_to_bottom();
                     }
                 }
                 SelectedBodyType::Html => {
-                    if let Some(Ok(Some(html_body))) = self.html_body.as_mut() {
+                    if let Some(Ok(html_body)) = self.html_body.as_mut() {
                         html_body.navigate_to_bottom();
                     }
                 }
@@ -496,7 +496,7 @@ impl State {
             ];
         };
 
-        if let Ok(Some(text_body)) = init_text_body {
+        if let Ok(text_body) = init_text_body {
             vec![super::Message::OpenInEditor {
                 content: text_body.state.content.clone(),
                 ty: EditorContentType::Text,
@@ -537,7 +537,7 @@ impl State {
             ];
         };
 
-        let Ok(Some(html_body)) = init_html_body else {
+        let Ok(html_body) = init_html_body else {
             return vec![];
         };
 
@@ -587,7 +587,7 @@ impl State {
             ];
         };
 
-        let Ok(Some(html_body)) = init_html_body else {
+        let Ok(html_body) = init_html_body else {
             return vec![];
         };
 

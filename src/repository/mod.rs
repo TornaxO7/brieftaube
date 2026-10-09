@@ -10,10 +10,10 @@ use crate::{
     },
     types::{
         AccountId, BlobId, InitMailboxData, MailDataCore, MailDataHtmlBody, MailDataPreview,
-        MailDataTextBody, MailDto, MailId, MailboxId, ParentMailboxId, ThreadId,
+        MailDataTextBody, MailDto, MailId, MailKeyword, MailboxId, ParentMailboxId, ThreadId,
     },
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tokio::sync::{RwLock, RwLockWriteGuard, mpsc, oneshot};
 
 #[derive(Debug)]
@@ -156,17 +156,63 @@ impl Repository {
                     cached_datas.into_iter().map(|data| data.core.id).collect()
                 };
 
-                let remote::GetOneResult {
-                    value: updated_mails,
+                let remote::GetBatchResult {
+                    values: updated_mails,
+                    not_found,
                     // TODO: Maybe check if this state is also the same? Otherwise => do more `/changes` request
                     state: _,
                 } = self
                     .remote
                     .get_remote_account(account_id.clone())
-                    .fetch_mail_updates(&update_mail_ids)
+                    .fetch_mails(
+                        &update_mail_ids,
+                        vec![
+                            jmap_client::email::Property::Id,
+                            jmap_client::email::Property::MailboxIds,
+                            jmap_client::email::Property::Keywords,
+                        ],
+                    )
                     .await?;
+                debug_assert!(not_found.is_empty());
 
-                cache_lock.upsert_mails(updated_mails).await?;
+                let mut updates_mapping: HashMap<MailId, (Vec<MailboxId>, HashSet<MailKeyword>)> =
+                    updated_mails
+                        .into_iter()
+                        .map(|mut jmap_mail| {
+                            let id: MailId = jmap_mail.take_id().into();
+
+                            let mailbox_ids = jmap_mail
+                                .mailbox_ids()
+                                .into_iter()
+                                .map(MailboxId::from)
+                                .collect();
+                            let keywords = jmap_mail
+                                .keywords()
+                                .into_iter()
+                                .map(MailKeyword::from)
+                                .collect();
+
+                            (id, (mailbox_ids, keywords))
+                        })
+                        .collect();
+
+                let mut cached_mails = {
+                    let cached_mails = cache_lock.get_mails(&update_mail_ids).await?;
+                    debug_assert!(cached_mails.missing.is_empty());
+                    cached_mails.value
+                };
+
+                for cached_mail in cached_mails.iter_mut() {
+                    let (new_mailbox_ids, new_keywords) =
+                        updates_mapping.remove(&cached_mail.core.id).unwrap();
+
+                    cached_mail.core.mailbox_ids = new_mailbox_ids;
+                    cached_mail.core.keywords = new_keywords;
+                }
+
+                debug_assert!(updates_mapping.is_empty(), "All updates have been applied");
+
+                cache_lock.upsert_mails(cached_mails).await?;
             };
 
             cache_lock.evict_mails(&result.destroyed).await?;
@@ -303,17 +349,18 @@ impl Repository {
                 let new_thread_mails_ids: Vec<(ThreadId, Vec<MailId>)> = new_thread_mails
                     .iter()
                     .map(|(thread_id, thread_mails)| {
-                        let mail_ids: Vec<MailId> = thread_mails
-                            .iter()
-                            .map(|mail| mail.core.id.clone())
-                            .collect();
+                        let mail_ids: Vec<MailId> =
+                            thread_mails.iter().map(|mail| mail.id.clone()).collect();
 
                         (thread_id.clone(), mail_ids)
                     })
                     .collect();
 
-                let all_fetched_mails: Vec<MailDto> =
-                    new_thread_mails.values().cloned().flatten().collect();
+                let all_fetched_mails: Vec<MailDto> = new_thread_mails
+                    .into_values()
+                    .flatten()
+                    .map(MailDto::new)
+                    .collect();
 
                 cache_lock.upsert_threads(&new_thread_mails_ids).await?;
                 cache_lock.upsert_mails(all_fetched_mails).await?;

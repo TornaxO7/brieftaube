@@ -8,14 +8,14 @@ pub struct HtmlBody {
 }
 
 impl HtmlBody {
-    pub fn new(html: MailDataHtmlBody) -> Option<Self> {
-        let content = html.content?;
+    pub fn new(html: MailDataHtmlBody) -> Self {
+        let content = html.content;
         let ctx = htmd::convert(content.as_str()).map(ScrollableBody::new);
 
-        Some(Self {
+        Self {
             html: content,
             state: ctx,
-        })
+        }
     }
 }
 

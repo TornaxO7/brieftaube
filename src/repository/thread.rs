@@ -1,7 +1,7 @@
 use super::Repository;
 use crate::{
     datasource::types::remote,
-    types::{AccountId, MailDataCore, MailId, ThreadId},
+    types::{AccountId, MailDataCore, MailDto, MailDtoCore, MailId, ThreadId},
 };
 use tokio::sync::{Mutex, oneshot};
 
@@ -70,17 +70,22 @@ impl Repository {
                         .get_remote_account(account_id.clone())
                         .fetch_mails(
                             &opt_thread_mails.missing,
-                            MailDataCore::GET_REQUEST_PROPERTIES.to_vec(),
+                            MailDtoCore::GET_REQUEST_PROPERTIES.to_vec(),
                         )
                         .await?;
                     debug_assert!(result.not_found.is_empty());
 
-                    let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
+                    let missing_mails: Vec<MailDto> = result
+                        .values
+                        .into_iter()
+                        .map(|mail| MailDto::new(MailDtoCore::from(mail)))
+                        .collect();
 
+                    let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
                     self.ensure_email_changes(&account_id, &result.state, &mut cache_lock)
                         .await?;
 
-                    cache_lock.upsert_mails(result.values).await?;
+                    cache_lock.upsert_mails(missing_mails).await?;
 
                     let cached_thread_mails = cache_lock.get_mails(&thread_mail_ids).await?;
                     debug_assert!(cached_thread_mails.missing.is_empty());
@@ -96,7 +101,7 @@ impl Repository {
                 let remote::GetOneResult {
                     value:
                         remote::GetOneResult {
-                            value: thread_mails,
+                            value: thread_mail_cores,
                             state: get_mail_state,
                         },
                     state: thread_get_state,
@@ -105,6 +110,9 @@ impl Repository {
                     .get_remote_account(account_id.clone())
                     .fetch_thread(&id)
                     .await?;
+
+                let thread_mails: Vec<MailDto> =
+                    thread_mail_cores.into_iter().map(MailDto::new).collect();
 
                 let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
 

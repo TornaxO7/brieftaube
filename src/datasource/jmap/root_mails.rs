@@ -4,7 +4,7 @@ use crate::{
         jmap::JmapAccount,
         types::{QueryState, QueryWindow, remote},
     },
-    types::{MailDataCore, MailId, MailboxId},
+    types::{MailDtoCore, MailId, MailboxId},
 };
 use async_trait::async_trait;
 use color_eyre::Result;
@@ -15,7 +15,7 @@ impl RootMailsRemote for JmapAccount {
         &self,
         mailbox: &MailboxId,
         window: &QueryWindow,
-    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<MailDataCore>>>> {
+    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<MailDtoCore>>>> {
         let mut response = {
             let mut request = self.build_request();
 
@@ -35,7 +35,7 @@ impl RootMailsRemote for JmapAccount {
             request
                 .get_email()
                 .ids_ref(query_result)
-                .properties(MailDataCore::GET_REQUEST_PROPERTIES);
+                .properties(MailDtoCore::GET_REQUEST_PROPERTIES);
 
             request.send().await?
         };
@@ -55,7 +55,7 @@ impl RootMailsRemote for JmapAccount {
             value: get_mails_response
                 .take_list()
                 .into_iter()
-                .map(MailDataCore::from_get_request)
+                .map(MailDtoCore::from)
                 .collect(),
             state: get_mails_response.take_state().into(),
         };

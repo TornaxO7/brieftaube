@@ -3,7 +3,7 @@ use crate::{
     repository::Repository,
     types::{
         AccountId, MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody, MailDto,
-        MailDtoCore, MailDtoPreview, MailId, MailboxId,
+        MailDtoCore, MailDtoHtmlPartIds, MailDtoPreview, MailDtoTextPartIds, MailId, MailboxId,
     },
 };
 use tokio::sync::{Mutex, oneshot};
@@ -78,7 +78,7 @@ impl Repository {
                 let result = self
                     .remote
                     .get_remote_account(account_id.clone())
-                    .fetch_mail(id.clone(), MailDataCore::GET_REQUEST_PROPERTIES.to_vec())
+                    .fetch_mail(id.clone(), MailDtoCore::GET_REQUEST_PROPERTIES.to_vec())
                     .await?;
 
                 let mail_dto = MailDto::new(MailDtoCore::from(result.value));
@@ -118,7 +118,7 @@ impl Repository {
                 let result = self
                     .remote
                     .get_remote_account(account_id.clone())
-                    .fetch_mail(id.clone(), MailDataPreview::GET_REQUEST_PROPERTIES.to_vec())
+                    .fetch_mail(id.clone(), MailDtoPreview::GET_REQUEST_PROPERTIES.to_vec())
                     .await?;
 
                 cached_mail.preview = Some(MailDtoPreview::from(result.value));
@@ -156,18 +156,17 @@ impl Repository {
             Some(text_body) => Ok(text_body),
             None => {
                 let remote::GetOneResult {
-                    value: text_body,
+                    value: jmap_mail,
                     state,
                 } = self
                     .remote
                     .get_remote_account(account_id.clone())
-                    .fetch_mail(id, MailDataTextBody::GET_REQUEST_PROPERTIES.to_vec())
+                    .fetch_mail(id, MailDtoTextPartIds::GET_REQUEST_PROPERTIES.to_vec())
                     .await?;
 
-                // TODO: HERE
-
-                cached_mail.text_part_ids = text_body.text_part_ids;
-                cached_mail.body_parts.extend(text_body.body_parts);
+                let (text_part_ids, text_body_parts) = MailDtoTextPartIds::new(jmap_mail);
+                cached_mail.text_part_ids = Some(text_part_ids);
+                cached_mail.body_parts.extend(text_body_parts);
 
                 let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
                 self.ensure_email_changes(&account_id, &state, &mut cache_lock)
@@ -201,16 +200,17 @@ impl Repository {
             Some(html_body) => Ok(html_body),
             None => {
                 let remote::GetOneResult {
-                    value: html_body,
+                    value: jmap_mail,
                     state,
                 } = self
                     .remote
                     .get_remote_account(account_id.clone())
-                    .fetch_mail(id, MailDataHtmlBody::GET_REQUEST_PROPERTIES.to_vec())
+                    .fetch_mail(id, MailDtoHtmlPartIds::GET_REQUEST_PROPERTIES.to_vec())
                     .await?;
 
-                cached_mail.html_part_ids = html_body.html_part_ids;
-                cached_mail.body_parts.extend(html_body.body_parts);
+                let (html_part_ids, html_body_parts) = MailDtoHtmlPartIds::new(jmap_mail);
+                cached_mail.html_part_ids = Some(html_part_ids);
+                cached_mail.body_parts.extend(html_body_parts);
 
                 let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
 
@@ -273,18 +273,24 @@ impl Repository {
                     .get_remote_account(account_id.clone())
                     .fetch_mails(
                         &cached_root_mails.missing,
-                        MailDataCore::GET_REQUEST_PROPERTIES.to_vec(),
+                        MailDtoCore::GET_REQUEST_PROPERTIES.to_vec(),
                     )
                     .await?;
+
+                debug_assert!(missing_mails_data.not_found.is_empty());
+
+                let missing_root_mails: Vec<MailDto> = missing_mails_data
+                    .values
+                    .into_iter()
+                    .map(|mail| MailDto::new(MailDtoCore::from(mail)))
+                    .collect();
 
                 let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
 
                 self.ensure_email_changes(&account_id, &missing_mails_data.state, &mut cache_lock)
                     .await?;
 
-                cache_lock
-                    .upsert_mails(missing_mails_data.values.clone())
-                    .await?;
+                cache_lock.upsert_mails(missing_root_mails).await?;
 
                 let result = cache_lock.get_mails(&root_mails).await?;
 
@@ -317,18 +323,19 @@ impl Repository {
         self.ensure_root_mail_changes(&account_id, &id, &root_mails_query_state, &mut cache_lock)
             .await?;
 
-        let cache_root_mails: Vec<(MailId, usize)> = root_mails
+        let root_mail_ids: Vec<(MailId, usize)> = root_mails
             .iter()
             .enumerate()
-            .map(|(idx, root_mail)| {
-                let position = window.start as usize + idx;
-                (root_mail.core.id.clone(), position)
+            .map(|(offset, root_mail)| {
+                let idx = window.start as usize + offset;
+                (root_mail.id.clone(), idx)
             })
             .collect();
 
-        cache_lock.insert_root_mails(&id, cache_root_mails).await?;
-        cache_lock.upsert_mails(root_mails.clone()).await?;
+        cache_lock.insert_root_mails(&id, root_mail_ids).await?;
 
+        let root_mails: Vec<MailDto> = root_mails.into_iter().map(MailDto::new).collect();
+        cache_lock.upsert_mails(root_mails.clone()).await?;
         Ok(root_mails.into_iter().map(MailDataCore::from).collect())
     }
 }

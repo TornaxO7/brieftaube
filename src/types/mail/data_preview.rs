@@ -1,6 +1,5 @@
 use crate::types::{MailAddresses, MailDataAttachment, MailDto, MailId};
 use chrono::{DateTime, Local};
-use jmap_client::email::Property;
 
 #[derive(Debug, Clone)]
 pub struct MailDataPreview {
@@ -12,7 +11,7 @@ pub struct MailDataPreview {
     pub subject: Option<String>,
     pub preview: Option<String>,
     pub attachments: Option<Vec<MailDataAttachment>>,
-    pub received_at: Option<DateTime<Local>>,
+    pub received_at: DateTime<Local>,
 }
 
 impl MailDataPreview {
@@ -32,18 +31,4 @@ impl MailDataPreview {
             received_at: core.received_at,
         })
     }
-}
-
-impl MailDataPreview {
-    pub const GET_REQUEST_PROPERTIES: [Property; 9] = [
-        Property::Id,
-        Property::From,
-        Property::To,
-        Property::Cc,
-        Property::Bcc,
-        Property::Subject,
-        Property::Preview,
-        Property::Attachments,
-        Property::ReceivedAt,
-    ];
 }

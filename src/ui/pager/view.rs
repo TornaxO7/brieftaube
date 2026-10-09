@@ -254,7 +254,7 @@ fn render_text_body(
     };
 
     let text_body = match text_body.as_mut() {
-        Ok(text_body) => text_body.as_mut(),
+        Ok(text_body) => text_body,
         Err(err) => {
             let msg = format!("Couldn't get `text/body` of mail:\n{}", err.to_string());
             render_msg_centered(msg, Style::new().fg(scheme.error.into_color()), frame, area);
@@ -262,7 +262,7 @@ fn render_text_body(
         }
     };
 
-    match text_body.and_then(|text_body| text_body.scrollable_body()) {
+    match text_body.scrollable_body() {
         Some(body) => {
             let [body_area, scrollbar_area] =
                 Layout::horizontal([Constraint::Fill(1), Constraint::Length(1)]).areas(area);
@@ -328,7 +328,7 @@ fn render_html_body(
     };
 
     let html_body = match html_body {
-        Ok(html_body) => html_body.as_mut(),
+        Ok(html_body) => html_body,
         Err(err) => {
             let msg = format!("Couldn't get `html/body` of mail:\n{}", err.to_string());
             render_msg_centered(msg, Style::new().fg(scheme.error.into_color()), frame, area);
@@ -336,7 +336,7 @@ fn render_html_body(
         }
     };
 
-    match html_body.and_then(|html_body| html_body.scrollable_body()) {
+    match html_body.scrollable_body() {
         Some(body) => {
             let [body_area, scrollbar_area] =
                 Layout::horizontal([Constraint::Fill(1), Constraint::Length(1)]).areas(area);

@@ -1,5 +1,4 @@
 use crate::types::MailDto;
-use jmap_client::email::Property;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MailDataTextBody {
@@ -7,13 +6,12 @@ pub struct MailDataTextBody {
 }
 
 impl MailDataTextBody {
-    pub const GET_REQUEST_PROPERTIES: [Property; 2] = [Property::TextBody, Property::BodyValues];
-
     pub fn new(cached_mail: MailDto) -> Option<Self> {
         let text_part_ids = cached_mail.text_part_ids?;
         let content = text_part_ids
-            .into_iter()
-            .map(|id| cached_mail.body_parts.get(&id).unwrap())
+            .0
+            .iter()
+            .map(|id| cached_mail.body_parts.get(id).unwrap())
             .fold(String::new(), |prev, next| format!("{}{}", prev, next));
 
         Some(Self { content })
@@ -26,13 +24,12 @@ pub struct MailDataHtmlBody {
 }
 
 impl MailDataHtmlBody {
-    pub const GET_REQUEST_PROPERTIES: [Property; 2] = [Property::HtmlBody, Property::BodyValues];
-
     pub fn new(cached_mail: MailDto) -> Option<Self> {
         let html_part_ids = cached_mail.html_part_ids?;
         let content = html_part_ids
-            .into_iter()
-            .map(|id| cached_mail.body_parts.get(&id).unwrap())
+            .0
+            .iter()
+            .map(|id| cached_mail.body_parts.get(id).unwrap())
             .fold(String::new(), |prev, next| format!("{}{}", prev, next));
 
         Some(Self { content })

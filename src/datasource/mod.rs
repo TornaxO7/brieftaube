@@ -4,8 +4,8 @@ pub mod jmap;
 pub mod types;
 
 use crate::types::{
-    AccountData, AccountId, BlobId, MailDto, MailId, MailboxData, MailboxId, MailboxNew,
-    MailboxUpdate, ParentMailboxId, ThreadId,
+    AccountData, AccountId, BlobId, MailDto, MailDtoCore, MailId, MailboxData, MailboxId,
+    MailboxNew, MailboxUpdate, ParentMailboxId, ThreadId,
 };
 use async_trait::async_trait;
 use color_eyre::Result;
@@ -54,7 +54,10 @@ pub trait MailCache {
 
     async fn upsert_mails(&mut self, mails: Vec<MailDto>) -> Result<()>;
 
-    async fn evict_mails(&mut self, mails: &[MailId]) -> Result<()>;
+    async fn evict_mails(
+        &mut self,
+        mails: &[MailId],
+    ) -> Result<cache::GetBatchResult<Vec<MailDto>, Vec<MailId>>>;
 }
 
 #[async_trait]
@@ -121,7 +124,7 @@ pub trait RootMailsRemote: MailRemote {
         &self,
         mailbox: &MailboxId,
         window: &QueryWindow,
-    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<MailDto>>>>;
+    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<MailDtoCore>>>>;
 
     async fn fetch_root_mails_changes(
         &self,
@@ -223,14 +226,14 @@ pub trait ThreadRemote {
     async fn fetch_thread(
         &self,
         id: &ThreadId,
-    ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<MailDto>>>>;
+    ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<MailDtoCore>>>>;
 
     async fn fetch_threads(
         &self,
         ids: &[ThreadId],
     ) -> Result<
         remote::GetBatchResult<
-            remote::GetOneResult<HashMap<ThreadId, Vec<MailDto>>>,
+            remote::GetOneResult<HashMap<ThreadId, Vec<MailDtoCore>>>,
             Vec<ThreadId>,
         >,
     >;
