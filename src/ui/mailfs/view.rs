@@ -72,7 +72,7 @@ fn render_path(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, are
                 ));
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
-                let key = state.get_account_ctx().as_key(mailbox_id);
+                let key = state.get_account_ctx().unwrap().as_key(mailbox_id);
                 let column = state
                     .mailbox_columns
                     .get(&key)
@@ -184,7 +184,7 @@ fn render_right_column(scheme: &Scheme, state: &mut super::State, frame: &mut Fr
             render_mailbox_column(scheme, ROOT_MAILBOX_ID, state, frame, area);
         }
         ColumnStackEntry::Mailbox(mailbox_id) => {
-            let key = state.get_account_ctx().as_key(mailbox_id.clone());
+            let key = state.get_account_ctx().unwrap().as_key(mailbox_id.clone());
             let center_column = state
                 .mailbox_columns
                 .get(&key)
@@ -222,7 +222,7 @@ fn render_right_column(scheme: &Scheme, state: &mut super::State, frame: &mut Fr
             }
         }
         ColumnStackEntry::Thread(thread_id) => {
-            let thread_key = state.get_account_ctx().as_key(thread_id.clone());
+            let thread_key = state.get_account_ctx().unwrap().as_key(thread_id.clone());
 
             match state
                 .thread_columns
@@ -361,7 +361,7 @@ fn render_mailbox_column(
     frame: &mut Frame,
     area: Rect,
 ) {
-    let key = state.get_account_ctx().as_key(mailbox_id);
+    let key = state.get_account_ctx().unwrap().as_key(mailbox_id);
     let mailbox_column = match state.mailbox_columns.get_mut(&key).expect("Column exists") {
         Loadable::NotLoaded => unreachable!(),
         Loadable::Loading => {
@@ -496,7 +496,7 @@ fn render_thread_column(
     frame: &mut Frame,
     area: Rect,
 ) {
-    let key = state.get_account_ctx().as_key(thread_id);
+    let key = state.get_account_ctx().unwrap().as_key(thread_id);
     match state.thread_columns.get_mut(&key).unwrap() {
         Loadable::NotLoaded => unreachable!(),
         Loadable::Loading => {
@@ -575,7 +575,7 @@ fn render_mail_preview(
     frame: &mut Frame,
     area: Rect,
 ) {
-    let key = state.get_account_ctx().as_key(mail_id);
+    let key = state.get_account_ctx().unwrap().as_key(mail_id);
     match state.mail_previews.get(&key).expect("State is there") {
         Loadable::NotLoaded => {
             frame.render_widget(
