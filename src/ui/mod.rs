@@ -74,7 +74,6 @@ pub enum Message {
 }
 
 /// Stores the app state
-// IDEA: Use mpsc::Receiver or so and a sender to each ui module => Just send them instead of allocating `vec![]` all the time to send messages
 pub struct Ui {
     is_running: bool,
     layers: Vec<ActiveLayer>,
