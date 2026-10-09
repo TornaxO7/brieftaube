@@ -254,20 +254,16 @@ impl Ui {
                 vec![]
             }
             Message::Mailfs(message) => {
-                let mailfs = self
-                    .layers
-                    .iter_mut()
-                    .rev()
-                    .find_map(|layer| {
-                        if let ActiveLayer::Mailfs(state) = layer {
-                            Some(state)
-                        } else {
-                            None
-                        }
-                    })
-                    .expect("Mailfs is in layer");
-
-                mailfs.update(message)
+                match self.layers.iter_mut().rev().find_map(|layer| {
+                    if let ActiveLayer::Mailfs(state) = layer {
+                        Some(state)
+                    } else {
+                        None
+                    }
+                }) {
+                    Some(mailfs) => mailfs.update(message),
+                    None => vec![],
+                }
             }
             Message::MailfsRequest(message_request) => {
                 match message_request {
@@ -390,20 +386,16 @@ impl Ui {
             }
 
             Message::Pager(message) => {
-                let pager = self
-                    .layers
-                    .iter_mut()
-                    .rev()
-                    .find_map(|layer| {
-                        if let ActiveLayer::Pager(pager) = layer {
-                            Some(pager)
-                        } else {
-                            None
-                        }
-                    })
-                    .expect("Pager is in `layers`");
-
-                pager.update(message)
+                match self.layers.iter_mut().rev().find_map(|layer| {
+                    if let ActiveLayer::Pager(pager) = layer {
+                        Some(pager)
+                    } else {
+                        None
+                    }
+                }) {
+                    Some(pager) => pager.update(message),
+                    None => vec![],
+                }
             }
             Message::PagerRequest(message_request) => {
                 match message_request {
