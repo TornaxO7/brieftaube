@@ -197,6 +197,8 @@ impl State {
             UserAction::MoveMailboxUp => self.move_mailbox_up(),
             UserAction::MoveMailboxDown => self.move_mailbox_down(),
 
+            UserAction::ComposeMarkdownMail => self.compose_markdown_mail(),
+
             UserAction::CreateMailbox => self.create_mailbox(),
             UserAction::RemoveMailbox => self.remove_mailbox(),
             // UserAction::MarkMailAsUnseen => self.mail_patch_keywords(&[(MailKeyword::Seen, false)]),
@@ -863,6 +865,10 @@ impl State {
 
     fn move_mailbox_down(&mut self) -> Vec<super::Message> {
         todo!();
+    }
+
+    fn compose_markdown_mail(&mut self) -> Vec<super::Message> {
+        todo!()
     }
 
     fn create_mailbox(&mut self) -> Vec<super::Message> {
