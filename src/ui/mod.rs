@@ -702,6 +702,7 @@ impl PendingEditor {
 
         let editor_content = std::fs::read_to_string(&tmp_file_path)?;
 
+        // oh no, we couldn't remove the temporary file... anyways
         let _ignore = std::fs::remove_file(tmp_file_path);
 
         Ok(editor_content)
