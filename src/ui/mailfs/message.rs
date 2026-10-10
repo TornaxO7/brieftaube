@@ -2,10 +2,10 @@ use crate::{
     config::Username,
     datasource::types::QueryWindow,
     types::{
-        AccountData, AccountId, InitMailboxData, MailDataCore, MailDataPreview, MailId, MailboxId,
-        ParentMailboxId, ThreadId,
+        AccountData, AccountId, CachedMail, InitMailboxData, MailId, MailboxId, ParentMailboxId,
+        ThreadId,
     },
-    ui::mailfs::user_action::UserAction,
+    ui::mailfs::{types::MailPreview, user_action::UserAction},
 };
 use crossterm::event::Event;
 use ratatui::layout::Size;
@@ -34,28 +34,28 @@ pub enum Message {
     //     parent_id: ParentMailboxId,
     //     child_mailboxes: color_eyre::Result<Vec<MailboxData>>,
     // },
-    SetMails {
+    SetRootMails {
         username: Username,
         account_id: AccountId,
         mailbox: MailboxId,
 
         window: QueryWindow,
 
-        result: color_eyre::Result<Vec<MailDataCore>>,
+        result: color_eyre::Result<Vec<CachedMail>>,
     },
     SetThreadMails {
         username: Username,
         account_id: AccountId,
         thread_id: ThreadId,
 
-        thread_mails: color_eyre::Result<Vec<MailDataCore>>,
+        thread_mails: color_eyre::Result<Vec<CachedMail>>,
     },
     SetMailPreview {
         username: Username,
         account_id: AccountId,
         mail_id: MailId,
 
-        preview: color_eyre::Result<MailDataPreview>,
+        preview: color_eyre::Result<MailPreview>,
     },
 
     SelectedPaletteEntry(String),

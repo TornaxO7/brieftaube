@@ -1,4 +1,4 @@
-use crate::types::MailDto;
+use crate::types::CachedMail;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MailDataTextBody {
@@ -6,13 +6,16 @@ pub struct MailDataTextBody {
 }
 
 impl MailDataTextBody {
-    pub fn new(cached_mail: MailDto) -> Option<Self> {
-        let text_part_ids = cached_mail.text_part_ids?;
-        let content = text_part_ids
-            .0
-            .iter()
-            .map(|id| cached_mail.body_parts.get(id).unwrap())
-            .fold(String::new(), |prev, next| format!("{}{}", prev, next));
+    pub fn new(cached_mail: CachedMail) -> Option<Self> {
+        let body_parts = cached_mail.body_parts.into_inner().unwrap();
+        let part_ids = cached_mail.text_part_ids.into_inner().unwrap();
+
+        let content = part_ids
+            .into_iter()
+            .fold(String::new(), |prev, next_part_id| {
+                let next_part = body_parts.get(&next_part_id).unwrap();
+                format!("{}{}", prev, next_part)
+            });
 
         Some(Self { content })
     }
@@ -24,30 +27,17 @@ pub struct MailDataHtmlBody {
 }
 
 impl MailDataHtmlBody {
-    pub fn new(cached_mail: MailDto) -> Option<Self> {
-        let html_part_ids = cached_mail.html_part_ids?;
-        let content = html_part_ids
-            .0
-            .iter()
-            .map(|id| cached_mail.body_parts.get(id).unwrap())
-            .fold(String::new(), |prev, next| format!("{}{}", prev, next));
+    pub fn new(cached_mail: CachedMail) -> Option<Self> {
+        let body_parts = cached_mail.body_parts.into_inner().unwrap();
+        let part_ids = cached_mail.html_part_ids.into_inner().unwrap();
+
+        let content = part_ids
+            .into_iter()
+            .fold(String::new(), |prev, next_part_id| {
+                let next_part = body_parts.get(&next_part_id).unwrap();
+                format!("{}{}", prev, next_part)
+            });
 
         Some(Self { content })
     }
 }
-
-// fn join_body_values(mail: &Email, parts: &[EmailBodyPart]) -> Option<String> {
-//     let mut body = String::new();
-
-//     for part in parts {
-//         let Some(part_id) = part.part_id() else {
-//             continue;
-//         };
-
-//         if let Some(value) = mail.body_value(part_id) {
-//             body.push_str(value.value());
-//         }
-//     }
-
-//     if body.is_empty() { None } else { Some(body) }
-// }

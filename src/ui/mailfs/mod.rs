@@ -1,6 +1,7 @@
 mod columns;
 mod message;
 mod message_request;
+mod types;
 mod user_action;
 mod view;
 
@@ -8,13 +9,15 @@ use crate::{
     config::{self, UserConfig, Username},
     datasource::types::QueryWindow,
     types::{
-        AccountData, AccountId, InitMailboxData, MailDataCore, MailDataPreview, MailId, MailboxId,
-        ParentMailboxId, ROOT_MAILBOX_ID, ThreadId,
+        AccountData, AccountId, CachedMail, InitMailboxData, MailId, MailboxId, ParentMailboxId,
+        ROOT_MAILBOX_ID, ThreadId,
     },
     ui::{
         Layer, Loadable,
-        mailfs::columns::*,
-        pager,
+        mailfs::{
+            columns::*,
+            types::{MailColumnEntry, MailPreview},
+        },
         statusbar::StatusbarState,
         utils::keybindmanager::{self, KeybindManager},
     },
@@ -44,7 +47,7 @@ pub struct State {
     mailbox_columns:
         HashMap<(Username, AccountId, ParentMailboxId), Loadable<columns::MailboxColumn>>,
     thread_columns: HashMap<(Username, AccountId, ThreadId), Loadable<columns::ThreadColumn>>,
-    mail_previews: HashMap<(Username, AccountId, MailId), Loadable<MailDataPreview>>,
+    mail_previews: HashMap<(Username, AccountId, MailId), Loadable<MailPreview>>,
 
     column_area_size: Option<Size>,
 }
@@ -121,13 +124,13 @@ impl Layer<Message> for State {
             //     parent_id,
             //     child_mailboxes,
             // } => self.handle_set_child_mailboxes(username, account_id, parent_id, child_mailboxes),
-            Message::SetMails {
+            Message::SetRootMails {
                 username,
                 account_id,
                 mailbox,
                 window,
                 result,
-            } => self.handle_set_mails(username, account_id, mailbox, window, result),
+            } => self.handle_set_root_mails(username, account_id, mailbox, window, result),
             Message::SetThreadMails {
                 username,
                 account_id,
@@ -253,6 +256,9 @@ impl State {
                     debug_assert!(first_mails.is_empty());
                 }
 
+                let first_mails: Vec<MailColumnEntry> =
+                    first_mails.into_iter().map(MailColumnEntry::from).collect();
+
                 Loadable::Loaded(MailboxColumn::new(
                     child_mailboxes,
                     total_threads,
@@ -265,13 +271,13 @@ impl State {
         vec![]
     }
 
-    fn handle_set_mails(
+    fn handle_set_root_mails(
         &mut self,
         username: Username,
         account_id: AccountId,
         mailbox_id: MailboxId,
         window: QueryWindow,
-        result: color_eyre::Result<Vec<MailDataCore>>,
+        result: color_eyre::Result<Vec<CachedMail>>,
     ) -> Vec<super::Message> {
         let key = (username, account_id, Some(mailbox_id.clone()));
 
@@ -282,7 +288,7 @@ impl State {
             .loaded_mut()
             .expect("Request must've come from a loaded mailbox");
 
-        column.set_mails(window, result);
+        column.set_mailbox_mails(window, result);
         vec![]
     }
 
@@ -291,15 +297,18 @@ impl State {
         username: Username,
         account_id: AccountId,
         thread_id: ThreadId,
-        thread_mails: color_eyre::Result<Vec<MailDataCore>>,
+        thread_mails: color_eyre::Result<Vec<CachedMail>>,
     ) -> Vec<super::Message> {
         let key = (username, account_id, thread_id);
 
         match thread_mails {
             Ok(mails) => {
+                let mail_entries = mails.into_iter().map(MailColumnEntry::from).collect();
+
                 let res = self
                     .thread_columns
-                    .insert(key, Loadable::Loaded(ThreadColumn::new(mails)));
+                    .insert(key, Loadable::Loaded(ThreadColumn::new(mail_entries)));
+
                 debug_assert!(res.is_some());
             }
             Err(err) => {
@@ -315,7 +324,7 @@ impl State {
         username: Username,
         account_id: AccountId,
         mail_id: MailId,
-        mail_preview: color_eyre::Result<MailDataPreview>,
+        mail_preview: color_eyre::Result<MailPreview>,
     ) -> Vec<super::Message> {
         let key = (username, account_id, mail_id);
 
@@ -390,6 +399,7 @@ impl State {
                                 username: key.0.clone(),
                                 account_id: key.1.clone(),
                                 mailbox: mailbox_id.clone(),
+                                mail_properties: MailColumnEntry::MAIL_PROPERTIES.to_vec(),
                                 window,
                             }
                             .into()
@@ -453,6 +463,7 @@ impl State {
                                 username: key.0.clone(),
                                 account_id: key.1.clone(),
                                 mailbox: mailbox_id.clone(),
+                                mail_properties: MailColumnEntry::MAIL_PROPERTIES.to_vec(),
                                 window,
                             }
                             .into()
@@ -515,6 +526,7 @@ impl State {
                                 username: key.0.clone(),
                                 account_id: key.1.clone(),
                                 mailbox: mailbox_id.clone(),
+                                mail_properties: MailColumnEntry::MAIL_PROPERTIES.to_vec(),
                                 window,
                             }
                             .into()
@@ -576,6 +588,7 @@ impl State {
                                 username: key.0.clone(),
                                 account_id: key.1.clone(),
                                 mailbox: mailbox_id.clone(),
+                                mail_properties: MailColumnEntry::MAIL_PROPERTIES.to_vec(),
                                 window,
                             }
                             .into()
@@ -676,8 +689,7 @@ impl State {
                         vec![super::Message::OpenPager {
                             username: key.0,
                             account_id: key.1,
-                            mail_id: selected_mail.id.clone(),
-                            mode: pager::Mode::Reader,
+                            mode: crate::ui::OpenPagerMode::Reader(selected_mail.id.clone()),
                         }]
                     }
                 }
@@ -746,6 +758,7 @@ impl State {
                                 username: key.0.clone(),
                                 account_id: key.1.clone(),
                                 mailbox: mailbox_id.clone(),
+                                mail_properties: MailColumnEntry::MAIL_PROPERTIES.to_vec(),
                                 window,
                             }
                             .into()
@@ -820,6 +833,7 @@ impl State {
                                 username: key.0.clone(),
                                 account_id: key.1.clone(),
                                 mailbox: mailbox_id.clone(),
+                                mail_properties: MailColumnEntry::MAIL_PROPERTIES.to_vec(),
                                 window,
                             }
                             .into()
@@ -868,7 +882,13 @@ impl State {
     }
 
     fn compose_markdown_mail(&mut self) -> Vec<super::Message> {
-        todo!()
+        let account_ctx = self.get_account_ctx();
+
+        vec![super::Message::OpenPager {
+            username: account_ctx.username,
+            account_id: account_ctx.account_id,
+            mode: crate::ui::OpenPagerMode::Composer(None),
+        }]
     }
 
     fn create_mailbox(&mut self) -> Vec<super::Message> {
@@ -929,6 +949,7 @@ impl State {
                             username: key.0,
                             account_id: key.1,
                             mailbox_id: key.2,
+                            mail_properties: MailColumnEntry::MAIL_PROPERTIES.to_vec(),
                             max_init_mails: self
                                 .column_area_size
                                 .map(|size| size.height as usize)
@@ -968,6 +989,7 @@ impl State {
                                     username: key.0,
                                     account_id: key.1,
                                     mailbox_id: key.2,
+                                    mail_properties: MailColumnEntry::MAIL_PROPERTIES.to_vec(),
                                     max_init_mails: self
                                         .column_area_size
                                         .map(|size| size.height as usize)
@@ -994,6 +1016,7 @@ impl State {
                                         username: key.0,
                                         account_id: key.1,
                                         thread_id: key.2,
+                                        mail_properties: MailColumnEntry::MAIL_PROPERTIES.to_vec(),
                                     }
                                     .into(),
                                 ]
@@ -1016,11 +1039,27 @@ impl State {
                     self.mail_previews
                         .insert(preview_key.clone(), Loadable::Loading);
 
+                    let username = preview_key.0;
+                    let account_id = preview_key.1;
+                    let mail_id = preview_key.2;
+
                     vec![
-                        MessageRequest::GetMailPreview {
-                            username: preview_key.0,
-                            account_id: preview_key.1,
-                            mail_id: preview_key.2,
+                        MessageRequest::GetMail {
+                            username: username.clone(),
+                            account_id: account_id.clone(),
+                            mail_id: mail_id.clone(),
+                            properties: MailPreview::MAIL_PROPERTIES.to_vec(),
+                            callback: Box::new(
+                                move |cached_mail: color_eyre::Result<CachedMail>| {
+                                    Message::SetMailPreview {
+                                        username: username.clone(),
+                                        account_id: account_id.clone(),
+                                        mail_id: mail_id.clone(),
+                                        preview: cached_mail.map(MailPreview::from),
+                                    }
+                                    .into()
+                                },
+                            ),
                         }
                         .into(),
                     ]

@@ -661,7 +661,7 @@ pub struct MailHeaders {
     pub to: Option<String>,
     pub cc: Option<String>,
     pub subject: Option<String>,
-    pub received_at: String,
+    pub received_at: Option<String>,
 }
 
 impl MailHeaders {

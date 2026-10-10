@@ -4,7 +4,7 @@ use crate::{
         hashmap::HashMapDataSource,
         types::{GetState, cache},
     },
-    types::{MailDto, MailId},
+    types::{CachedMail, MailId},
 };
 use async_trait::async_trait;
 use color_eyre::Result;
@@ -23,7 +23,7 @@ impl MailCache for HashMapDataSource {
     async fn get_mails(
         &self,
         ids: &[MailId],
-    ) -> Result<cache::GetBatchResult<Vec<MailDto>, Vec<MailId>>> {
+    ) -> Result<cache::GetBatchResult<Vec<CachedMail>, Vec<MailId>>> {
         let mut datas = Vec::with_capacity(ids.len());
         let mut missing = Vec::new();
 
@@ -45,21 +45,24 @@ impl MailCache for HashMapDataSource {
     async fn evict_mails(
         &mut self,
         mails: &[MailId],
-    ) -> Result<cache::GetBatchResult<Vec<MailDto>, Vec<MailId>>> {
+    ) -> Result<cache::GetBatchResult<Vec<CachedMail>, Vec<MailId>>> {
         let mut missing = Vec::new();
         let mut removed_mails = Vec::new();
 
         for id in mails {
             match self.mails.remove(id) {
                 Some(removed_mail) => {
-                    for mailbox in &removed_mail.core.mailbox_ids {
-                        // removing leads to position changes, mail changes (in a thread) etc.
-                        // => Just clear it.
-                        // TODO: Maybe... try first to use the data from the cache (thread check etc.)
-                        if let Some(root_mails) = self.root_mails.get_mut(&mailbox) {
-                            root_mails.flush();
+                    if let Some(mailbox_ids) = removed_mail.mailbox_ids.get() {
+                        for mailbox in mailbox_ids {
+                            // removing leads to position changes, mail changes (in a thread) etc.
+                            // => Just clear it.
+                            // TODO: Maybe... try first to use the data from the cache (thread check etc.)
+                            if let Some(root_mails) = self.root_mails.get_mut(&mailbox) {
+                                root_mails.flush();
+                            }
                         }
                     }
+
                     removed_mails.push(removed_mail);
                 }
                 None => missing.push(id.clone()),
@@ -72,9 +75,9 @@ impl MailCache for HashMapDataSource {
         })
     }
 
-    async fn upsert_mails(&mut self, mails: Vec<MailDto>) -> Result<()> {
+    async fn upsert_mails(&mut self, mails: Vec<CachedMail>) -> Result<()> {
         for mail in mails {
-            self.mails.insert(mail.core.id.clone(), mail);
+            self.mails.insert(mail.id.clone(), mail);
         }
 
         Ok(())

@@ -1,8 +1,8 @@
-use crate::types::{MailDataCore, MailboxData};
+use crate::types::{CachedMail, CachedMailbox};
 
 #[derive(Debug)]
 pub struct InitMailboxData {
     pub total_threads: usize,
-    pub child_mailboxes: Vec<MailboxData>,
-    pub first_mails: Vec<MailDataCore>,
+    pub child_mailboxes: Vec<CachedMailbox>,
+    pub first_mails: Vec<CachedMail>,
 }

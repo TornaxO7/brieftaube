@@ -4,8 +4,8 @@ pub mod jmap;
 pub mod types;
 
 use crate::types::{
-    AccountData, AccountId, BlobId, MailDto, MailDtoCore, MailId, MailboxData, MailboxId,
-    MailboxNew, MailboxUpdate, ParentMailboxId, ThreadId,
+    AccountData, AccountId, BlobId, CachedMail, CachedMailbox, MailId, MailProperty, MailboxId,
+    MailboxUpdate, ParentMailboxId, ThreadId,
 };
 use async_trait::async_trait;
 use color_eyre::Result;
@@ -34,7 +34,7 @@ pub trait MailCache {
 
     async fn set_mail_state(&mut self, new_state: GetState) -> Result<()>;
 
-    async fn get_mail(&self, id: &MailId) -> Result<Option<MailDto>>
+    async fn get_mail(&self, id: &MailId) -> Result<Option<CachedMail>>
     where
         Self: Sync,
     {
@@ -50,14 +50,14 @@ pub trait MailCache {
     async fn get_mails(
         &self,
         ids: &[MailId],
-    ) -> Result<cache::GetBatchResult<Vec<MailDto>, Vec<MailId>>>;
+    ) -> Result<cache::GetBatchResult<Vec<CachedMail>, Vec<MailId>>>;
 
-    async fn upsert_mails(&mut self, mails: Vec<MailDto>) -> Result<()>;
+    async fn upsert_mails(&mut self, mails: Vec<CachedMail>) -> Result<()>;
 
     async fn evict_mails(
         &mut self,
         mails: &[MailId],
-    ) -> Result<cache::GetBatchResult<Vec<MailDto>, Vec<MailId>>>;
+    ) -> Result<cache::GetBatchResult<Vec<CachedMail>, Vec<MailId>>>;
 }
 
 #[async_trait]
@@ -65,9 +65,10 @@ pub trait MailRemote {
     async fn fetch_mail(
         &self,
         id: MailId,
-        properties: Vec<jmap_client::email::Property>,
-    ) -> Result<remote::GetOneResult<jmap_client::email::Email>> {
+        properties: Vec<MailProperty>,
+    ) -> Result<remote::GetOneResult<CachedMail>> {
         let result = self.fetch_mails(&[id], properties).await?;
+        debug_assert!(result.not_found.is_empty());
 
         Ok(remote::GetOneResult {
             value: result.values.into_iter().next().unwrap(),
@@ -78,8 +79,8 @@ pub trait MailRemote {
     async fn fetch_mails(
         &self,
         ids: &[MailId],
-        properties: Vec<jmap_client::email::Property>,
-    ) -> Result<remote::GetBatchResult<Vec<jmap_client::email::Email>, Vec<MailId>>>;
+        properties: Vec<MailProperty>,
+    ) -> Result<remote::GetBatchResult<Vec<CachedMail>, Vec<MailId>>>;
 
     async fn destroy_mails(
         &self,
@@ -89,6 +90,8 @@ pub trait MailRemote {
 
     async fn fetch_mail_changes(&self, since: &GetState)
     -> Result<remote::GetChangeResult<MailId>>;
+
+    async fn create_mail(&self);
 }
 
 #[async_trait]
@@ -124,7 +127,8 @@ pub trait RootMailsRemote: MailRemote {
         &self,
         mailbox: &MailboxId,
         window: &QueryWindow,
-    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<MailDtoCore>>>>;
+        properties: Vec<MailProperty>,
+    ) -> Result<remote::QueryResponse<remote::GetOneResult<Vec<CachedMail>>>>;
 
     async fn fetch_root_mails_changes(
         &self,
@@ -138,7 +142,7 @@ pub trait RootMailsRemote: MailRemote {
 pub trait MailboxCache {
     async fn get_mailbox_state(&self) -> Option<&GetState>;
 
-    async fn get_mailbox(&self, id: MailboxId) -> Result<Option<MailboxData>>
+    async fn get_mailbox(&self, id: MailboxId) -> Result<Option<CachedMailbox>>
     where
         Self: Sync,
     {
@@ -146,21 +150,21 @@ pub trait MailboxCache {
         Ok(result.value.into_iter().next())
     }
 
-    async fn get_all_mailboxes(&self) -> Result<Option<Vec<MailboxData>>>;
+    async fn get_all_mailboxes(&self) -> Result<Option<Vec<CachedMailbox>>>;
 
     async fn get_mailboxes(
         &self,
         ids: &[MailboxId],
-    ) -> Result<cache::GetBatchResult<Vec<MailboxData>, Vec<MailboxId>>>;
+    ) -> Result<cache::GetBatchResult<Vec<CachedMailbox>, Vec<MailboxId>>>;
 
     async fn get_mailbox_children(
         &self,
         parent: &ParentMailboxId,
-    ) -> Result<Option<Vec<MailboxData>>>;
+    ) -> Result<Option<Vec<CachedMailbox>>>;
 
     async fn upsert_mailboxes(
         &mut self,
-        mailboxes: Vec<MailboxData>,
+        mailboxes: Vec<CachedMailbox>,
         state: GetState,
     ) -> Result<()>;
 
@@ -169,20 +173,23 @@ pub trait MailboxCache {
 
 #[async_trait]
 pub trait MailboxRemote {
-    async fn fetch_mailboxes_all(&self) -> Result<remote::GetOneResult<Vec<MailboxData>>>;
+    async fn fetch_mailboxes_all(&self) -> Result<remote::GetOneResult<Vec<CachedMailbox>>>;
 
     async fn fetch_mailbox_changes(
         &self,
         since: &GetState,
     ) -> Result<remote::GetChangeResult<MailboxId>>;
 
-    async fn create_mailbox(&self, new: MailboxNew) -> Result<remote::CreateResult<MailboxData>>;
+    // async fn create_mailbox(
+    //     &self,
+    //     new: MailboxNew,
+    // ) -> Result<remote::CreateResult<jmap_client::mailbox::Mailbox>>;
 
     async fn update_mailboxes(
         &self,
-        updates: Vec<(MailboxData, MailboxUpdate)>,
+        updates: Vec<(CachedMailbox, MailboxUpdate)>,
         since: &GetState,
-    ) -> Result<remote::UpdateResult<MailboxId, MailboxData>>;
+    ) -> Result<remote::UpdateResult<MailboxId, CachedMailbox>>;
 
     async fn destroy_mailboxes(
         &self,
@@ -213,27 +220,58 @@ pub trait ThreadCache {
     ) -> Result<cache::GetBatchResult<HashMap<ThreadId, Vec<MailId>>, Vec<ThreadId>>>;
 
     async fn upsert_thread(&mut self, id: ThreadId, mails: Vec<MailId>) -> Result<()> {
-        self.upsert_threads(&[(id, mails)]).await
+        self.upsert_threads(vec![(id, mails)]).await
     }
 
-    async fn upsert_threads(&mut self, threads: &[(ThreadId, Vec<MailId>)]) -> Result<()>;
+    async fn upsert_threads(&mut self, threads: Vec<(ThreadId, Vec<MailId>)>) -> Result<()>;
 
     async fn evict_threads(&mut self, ids: &[ThreadId]) -> Result<()>;
 }
 
 #[async_trait]
 pub trait ThreadRemote {
-    async fn fetch_thread(
-        &self,
-        id: &ThreadId,
-    ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<MailDtoCore>>>>;
+    async fn fetch_thread(&self, id: &ThreadId) -> Result<remote::GetOneResult<Vec<MailId>>> {
+        let result = self.fetch_threads(&[id.clone()]).await?;
+        debug_assert!(result.not_found.is_empty());
+
+        Ok(remote::GetOneResult {
+            value: result.values.into_values().next().unwrap(),
+            state: result.state,
+        })
+    }
 
     async fn fetch_threads(
         &self,
         ids: &[ThreadId],
+    ) -> Result<remote::GetBatchResult<HashMap<ThreadId, Vec<MailId>>, Vec<ThreadId>>>;
+
+    async fn fetch_thread_with_mails(
+        &self,
+        id: &ThreadId,
+        properties: Vec<MailProperty>,
+    ) -> Result<remote::GetOneResult<remote::GetOneResult<Vec<CachedMail>>>> {
+        let result = self
+            .fetch_threads_with_mails(&[id.clone()], properties)
+            .await?;
+
+        debug_assert!(result.not_found.is_empty());
+
+        Ok(remote::GetOneResult {
+            value: remote::GetOneResult {
+                value: result.values.value.into_values().next().unwrap(),
+                state: result.values.state,
+            },
+            state: result.state,
+        })
+    }
+
+    async fn fetch_threads_with_mails(
+        &self,
+        ids: &[ThreadId],
+        properties: Vec<MailProperty>,
     ) -> Result<
         remote::GetBatchResult<
-            remote::GetOneResult<HashMap<ThreadId, Vec<MailDtoCore>>>,
+            remote::GetOneResult<HashMap<ThreadId, Vec<CachedMail>>>,
             Vec<ThreadId>,
         >,
     >;

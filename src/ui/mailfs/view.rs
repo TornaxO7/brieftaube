@@ -672,18 +672,16 @@ fn render_mail_preview(
             );
 
             // preview
-            let rest_area = if let Some(preview_content) = &mail.preview
-                && !preview_content.trim().is_empty()
-            {
+            let rest_area = if !mail.preview.trim().is_empty() {
                 let [preview_area, rest] = Layout::vertical([
-                    Constraint::Length(preview_content.lines().count() as u16 + 1),
+                    Constraint::Length(mail.preview.lines().count() as u16 + 1),
                     Constraint::Fill(1),
                 ])
                 .spacing(1)
                 .areas(rest);
 
                 frame.render_widget(
-                    Paragraph::new(preview_content.as_str())
+                    Paragraph::new(mail.preview.as_str())
                         .style(Style::new().fg(scheme.secondary.into_color()))
                         .block(
                             Block::new()
@@ -702,16 +700,15 @@ fn render_mail_preview(
             };
 
             // attachments
-            if let Some(attachments) = &mail.attachments
-                && !attachments.is_empty()
-            {
+            if !mail.attachments.is_empty() {
                 let widths = [
                     Constraint::Length(2),
                     Constraint::Fill(1),
                     Constraint::Length("123,1 KB".len() as u16),
                 ];
 
-                let rows: Vec<Row<'_>> = attachments
+                let rows: Vec<Row<'_>> = mail
+                    .attachments
                     .iter()
                     .map(|attachment| {
                         let paperclip = Cell::from(PAPERCLIP)

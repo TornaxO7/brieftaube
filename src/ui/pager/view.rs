@@ -147,10 +147,12 @@ fn render_mail_headers(
                         ]));
                     }
 
-                    rows.push(Row::new(vec![
-                        Cell::from("Received at:").style(header_style),
-                        Cell::from(headers.received_at.as_str()).style(value_style),
-                    ]));
+                    if let Some(received_at) = &headers.received_at {
+                        rows.push(Row::new(vec![
+                            Cell::from("Received at:").style(header_style),
+                            Cell::from(received_at.as_str()).style(value_style),
+                        ]));
+                    }
 
                     rows
                 };

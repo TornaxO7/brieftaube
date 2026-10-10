@@ -4,7 +4,7 @@ use crate::{
         hashmap::HashMapDataSource,
         types::{GetState, cache},
     },
-    types::{MailboxData, MailboxId, ParentMailboxId},
+    types::{CachedMailbox, MailboxId, ParentMailboxId},
 };
 use async_trait::async_trait;
 use color_eyre::Result;
@@ -18,7 +18,7 @@ impl MailboxCache for HashMapDataSource {
     async fn get_mailboxes(
         &self,
         ids: &[MailboxId],
-    ) -> Result<cache::GetBatchResult<Vec<MailboxData>, Vec<MailboxId>>> {
+    ) -> Result<cache::GetBatchResult<Vec<CachedMailbox>, Vec<MailboxId>>> {
         let mut cached_mailboxes = Vec::new();
         let mut missing = Vec::new();
 
@@ -35,7 +35,7 @@ impl MailboxCache for HashMapDataSource {
         })
     }
 
-    async fn get_all_mailboxes(&self) -> Result<Option<Vec<MailboxData>>> {
+    async fn get_all_mailboxes(&self) -> Result<Option<Vec<CachedMailbox>>> {
         if self.mailboxes_get_state.is_some() {
             let mailboxes = self.mailboxes.values().cloned().collect();
             Ok(Some(mailboxes))
@@ -46,7 +46,7 @@ impl MailboxCache for HashMapDataSource {
 
     async fn upsert_mailboxes(
         &mut self,
-        mailboxes: Vec<MailboxData>,
+        mailboxes: Vec<CachedMailbox>,
         new_state: GetState,
     ) -> Result<()> {
         for mailbox in mailboxes {
@@ -71,7 +71,7 @@ impl MailboxCache for HashMapDataSource {
     async fn get_mailbox_children(
         &self,
         parent: &ParentMailboxId,
-    ) -> Result<Option<Vec<MailboxData>>> {
+    ) -> Result<Option<Vec<CachedMailbox>>> {
         let children = self.mailboxes_get_state.is_some().then_some(
             self.mailboxes
                 .values()

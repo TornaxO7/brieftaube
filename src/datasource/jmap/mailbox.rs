@@ -4,20 +4,19 @@ use crate::{
         jmap::JmapAccount,
         types::{GetState, remote},
     },
-    types::{MailboxData, MailboxId, MailboxNew, MailboxUpdate},
+    types::{CachedMailbox, MailboxId, MailboxUpdate},
 };
 use async_trait::async_trait;
 use color_eyre::Result;
-use jmap_client::core::set::SetObject;
 use tracing::instrument;
 
 #[async_trait]
 impl MailboxRemote for JmapAccount {
     #[instrument(skip(self))]
-    async fn fetch_mailboxes_all(&self) -> Result<remote::GetOneResult<Vec<MailboxData>>> {
+    async fn fetch_mailboxes_all(&self) -> Result<remote::GetOneResult<Vec<CachedMailbox>>> {
         let mut response = {
             let mut request = self.build_request();
-            request.get_mailbox().properties(MailboxData::PROPERTIES);
+            request.get_mailbox().properties(CachedMailbox::PROPERTIES);
             request.send_get_mailbox().await?
         };
 
@@ -25,7 +24,7 @@ impl MailboxRemote for JmapAccount {
             value: response
                 .take_list()
                 .into_iter()
-                .map(MailboxData::from_get_request)
+                .map(CachedMailbox::from)
                 .collect(),
             state: response.take_state().into(),
         })
@@ -56,43 +55,43 @@ impl MailboxRemote for JmapAccount {
         })
     }
 
-    async fn create_mailbox(&self, new: MailboxNew) -> Result<remote::CreateResult<MailboxData>> {
-        let (mut response, tmp_id) = {
-            let mut request = self.build_request();
-            let tmp_id = request
-                .set_mailbox()
-                .create()
-                .name(new.name.as_str())
-                .parent_id(new.parent_id.clone())
-                .sort_order(new.sort_order)
-                .create_id()
-                .unwrap();
+    // async fn create_mailbox(&self, new: MailboxNew) -> Result<remote::CreateResult<CachedMailbox>> {
+    //     let (mut response, tmp_id) = {
+    //         let mut request = self.build_request();
+    //         let tmp_id = request
+    //             .set_mailbox()
+    //             .create()
+    //             .name(new.name.as_str())
+    //             .parent_id(new.parent_id.clone())
+    //             .sort_order(new.sort_order)
+    //             .create_id()
+    //             .unwrap();
 
-            (request.send_set_mailbox().await?, tmp_id)
-        };
+    //         (request.send_set_mailbox().await?, tmp_id)
+    //     };
 
-        let value = match response.created(&tmp_id) {
-            Ok(server_mailbox) => Ok(MailboxData::from_new(new, server_mailbox)),
-            Err(err) => {
-                let jmap_client::Error::Set(error) = err else {
-                    unreachable!("Weird");
-                };
+    //     let value = match response.created(&tmp_id) {
+    //         Ok(server_mailbox) => Ok(CachedMailbox::from_new(new, server_mailbox)),
+    //         Err(err) => {
+    //             let jmap_client::Error::Set(error) = err else {
+    //                 unreachable!("Weird");
+    //             };
 
-                Err(error)
-            }
-        };
+    //             Err(error)
+    //         }
+    //     };
 
-        Ok(remote::CreateResult {
-            value,
-            state: response.take_new_state().into(),
-        })
-    }
+    //     Ok(remote::CreateResult {
+    //         value,
+    //         state: response.take_new_state().into(),
+    //     })
+    // }
 
     async fn update_mailboxes(
         &self,
-        updates: Vec<(MailboxData, MailboxUpdate)>,
+        updates: Vec<(CachedMailbox, MailboxUpdate)>,
         since: &GetState,
-    ) -> Result<remote::UpdateResult<MailboxId, MailboxData>> {
+    ) -> Result<remote::UpdateResult<MailboxId, CachedMailbox>> {
         let mut response = {
             let mut request = self.build_request();
             let set = request.set_mailbox().if_in_state(since.as_ref());

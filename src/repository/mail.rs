@@ -1,10 +1,7 @@
 use crate::{
-    datasource::types::{QueryWindow, remote},
+    datasource::types::{QueryWindow, cache, remote},
     repository::Repository,
-    types::{
-        AccountId, MailDataCore, MailDataHtmlBody, MailDataPreview, MailDataTextBody, MailDto,
-        MailDtoCore, MailDtoHtmlPartIds, MailDtoPreview, MailDtoTextPartIds, MailId, MailboxId,
-    },
+    types::{AccountId, CachedMail, MailId, MailProperty, MailboxId},
 };
 use tokio::sync::{Mutex, oneshot};
 
@@ -16,27 +13,21 @@ pub struct Command {
 
 #[derive(Debug)]
 pub enum CommandKind {
-    GetCore {
+    GetMail {
         id: MailId,
-        tx: oneshot::Sender<color_eyre::Result<MailDataCore>>,
-    },
-    GetPreview {
-        id: MailId,
-        tx: oneshot::Sender<color_eyre::Result<MailDataPreview>>,
-    },
-    GetTextBody {
-        id: MailId,
-        tx: oneshot::Sender<color_eyre::Result<MailDataTextBody>>,
-    },
-    GetHtmlBody {
-        id: MailId,
-        tx: oneshot::Sender<color_eyre::Result<MailDataHtmlBody>>,
+        properties: Vec<MailProperty>,
+        tx: oneshot::Sender<color_eyre::Result<CachedMail>>,
     },
     QueryRootMails {
         mailbox: MailboxId,
         window: QueryWindow,
+        properties: Vec<MailProperty>,
 
-        tx: oneshot::Sender<color_eyre::Result<Vec<MailDataCore>>>,
+        tx: oneshot::Sender<color_eyre::Result<Vec<CachedMail>>>,
+    },
+    ComposeNewHtmlMail {
+        id: MailId,
+        tx: oneshot::Sender<color_eyre::Result<()>>,
     },
 }
 
@@ -48,6 +39,7 @@ impl From<Command> for super::Command {
 
 #[derive(Default)]
 pub struct Locks {
+    get_mail: Mutex<()>,
     get_mail_core: Mutex<()>,
     get_mail_preview: Mutex<()>,
     get_mail_text_body: Mutex<()>,
@@ -56,14 +48,15 @@ pub struct Locks {
 }
 
 impl Repository {
-    pub async fn get_mail_core(
+    pub async fn get_mail(
         &self,
         account_id: AccountId,
         id: MailId,
-    ) -> color_eyre::Result<MailDataCore> {
-        let _entry = self.mail_locks.get_mail_core.lock().await;
+        properties: Vec<MailProperty>,
+    ) -> color_eyre::Result<CachedMail> {
+        let _entry = self.mail_locks.get_mail.lock().await;
 
-        let opt_mail = self
+        let opt_cached_mail = self
             .caches
             .get(&account_id)
             .unwrap()
@@ -72,154 +65,46 @@ impl Repository {
             .get_mail(&id)
             .await?;
 
-        match opt_mail {
-            Some(data) => Ok(data.into()),
+        match opt_cached_mail {
+            Some(mut cached_mail) => {
+                if cached_mail.has_properties(&properties) {
+                    return Ok(cached_mail);
+                }
+
+                let result = self
+                    .remote
+                    .get_remote_account(account_id.clone())
+                    .fetch_mail(id, properties)
+                    .await?;
+
+                cached_mail.merge(result.value);
+
+                let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
+
+                self.ensure_mail_changes(&account_id, &result.state, &mut cache_lock)
+                    .await?;
+
+                cache_lock.upsert_mails(vec![cached_mail.clone()]).await?;
+
+                Ok(cached_mail)
+            }
             None => {
                 let result = self
                     .remote
                     .get_remote_account(account_id.clone())
-                    .fetch_mail(id.clone(), MailDtoCore::GET_REQUEST_PROPERTIES.to_vec())
+                    .fetch_mail(id, properties)
                     .await?;
 
-                let mail_dto = MailDto::new(MailDtoCore::from(result.value));
+                let cached_mail = result.value;
 
                 let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
 
-                self.ensure_email_changes(&account_id, &result.state, &mut cache_lock)
-                    .await?;
-
-                cache_lock.upsert_mails(vec![mail_dto.clone()]).await?;
-
-                Ok(mail_dto.into())
-            }
-        }
-    }
-
-    pub async fn get_mail_preview(
-        &self,
-        account_id: AccountId,
-        id: MailId,
-    ) -> color_eyre::Result<MailDataPreview> {
-        let _enter = self.mail_locks.get_mail_preview.lock().await;
-
-        let mut cached_mail = self
-            .caches
-            .get(&account_id)
-            .unwrap()
-            .read()
-            .await
-            .get_mail(&id)
-            .await?
-            .expect("Core has been loaded before");
-
-        match MailDataPreview::new(cached_mail.clone()) {
-            Some(preview) => Ok(preview),
-            None => {
-                let result = self
-                    .remote
-                    .get_remote_account(account_id.clone())
-                    .fetch_mail(id.clone(), MailDtoPreview::GET_REQUEST_PROPERTIES.to_vec())
-                    .await?;
-
-                cached_mail.preview = Some(MailDtoPreview::from(result.value));
-
-                let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
-
-                self.ensure_email_changes(&account_id, &result.state, &mut cache_lock)
+                self.ensure_mail_changes(&account_id, &result.state, &mut cache_lock)
                     .await?;
 
                 cache_lock.upsert_mails(vec![cached_mail.clone()]).await?;
 
-                Ok(MailDataPreview::new(cached_mail).expect("Just set `preview`"))
-            }
-        }
-    }
-
-    pub async fn get_mail_text_body(
-        &self,
-        account_id: AccountId,
-        id: MailId,
-    ) -> color_eyre::Result<MailDataTextBody> {
-        let _enter = self.mail_locks.get_mail_text_body.lock().await;
-
-        let mut cached_mail = self
-            .caches
-            .get(&account_id)
-            .unwrap()
-            .read()
-            .await
-            .get_mail(&id)
-            .await?
-            .expect("Core fetched");
-
-        match MailDataTextBody::new(cached_mail.clone()) {
-            Some(text_body) => Ok(text_body),
-            None => {
-                let remote::GetOneResult {
-                    value: jmap_mail,
-                    state,
-                } = self
-                    .remote
-                    .get_remote_account(account_id.clone())
-                    .fetch_mail(id, MailDtoTextPartIds::GET_REQUEST_PROPERTIES.to_vec())
-                    .await?;
-
-                let (text_part_ids, text_body_parts) = MailDtoTextPartIds::new(jmap_mail);
-                cached_mail.text_part_ids = Some(text_part_ids);
-                cached_mail.body_parts.extend(text_body_parts);
-
-                let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
-                self.ensure_email_changes(&account_id, &state, &mut cache_lock)
-                    .await?;
-
-                cache_lock.upsert_mails(vec![cached_mail.clone()]).await?;
-
-                Ok(MailDataTextBody::new(cached_mail).expect("Just added"))
-            }
-        }
-    }
-
-    pub async fn get_mail_html_body(
-        &self,
-        account_id: AccountId,
-        id: MailId,
-    ) -> color_eyre::Result<MailDataHtmlBody> {
-        let _enter = self.mail_locks.get_mail_html_body.lock().await;
-
-        let mut cached_mail = self
-            .caches
-            .get(&account_id)
-            .unwrap()
-            .read()
-            .await
-            .get_mail(&id)
-            .await?
-            .expect("Already fetched");
-
-        match MailDataHtmlBody::new(cached_mail.clone()) {
-            Some(html_body) => Ok(html_body),
-            None => {
-                let remote::GetOneResult {
-                    value: jmap_mail,
-                    state,
-                } = self
-                    .remote
-                    .get_remote_account(account_id.clone())
-                    .fetch_mail(id, MailDtoHtmlPartIds::GET_REQUEST_PROPERTIES.to_vec())
-                    .await?;
-
-                let (html_part_ids, html_body_parts) = MailDtoHtmlPartIds::new(jmap_mail);
-                cached_mail.html_part_ids = Some(html_part_ids);
-                cached_mail.body_parts.extend(html_body_parts);
-
-                let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
-
-                self.ensure_email_changes(&account_id, &state, &mut cache_lock)
-                    .await?;
-
-                cache_lock.upsert_mails(vec![cached_mail.clone()]).await?;
-
-                Ok(MailDataHtmlBody::new(cached_mail).expect("Just added"))
+                Ok(cached_mail)
             }
         }
     }
@@ -229,7 +114,8 @@ impl Repository {
         account_id: AccountId,
         id: MailboxId,
         window: QueryWindow,
-    ) -> color_eyre::Result<Vec<MailDataCore>> {
+        properties: Vec<MailProperty>,
+    ) -> color_eyre::Result<Vec<CachedMail>> {
         let _enter = self.mail_locks.query_root_mails.lock().await;
 
         let opt_root_mail_ids = self
@@ -252,7 +138,10 @@ impl Repository {
             );
             let root_mails = root_mails.values.into_iter().next().unwrap().values;
 
-            let cached_root_mails = self
+            let cache::GetBatchResult {
+                value: mut cached_root_mails,
+                missing: missing_cached_root_mails,
+            } = self
                 .caches
                 .get(&account_id)
                 .unwrap()
@@ -261,42 +150,69 @@ impl Repository {
                 .get_mails(&root_mails)
                 .await?;
 
-            if cached_root_mails.missing.is_empty() {
-                return Ok(cached_root_mails
-                    .value
-                    .into_iter()
-                    .map(MailDataCore::from)
-                    .collect());
-            } else {
-                let missing_mails_data = self
+            if missing_cached_root_mails.is_empty() {
+                if cached_root_mails
+                    .iter()
+                    .all(|cached_mail| cached_mail.has_properties(&properties))
+                {
+                    return Ok(cached_root_mails);
+                }
+
+                let cached_root_mail_ids_with_missing_properties: Vec<MailId> = cached_root_mails
+                    .iter()
+                    .filter_map(|cached_root_mail| {
+                        if cached_root_mail.has_properties(&properties) {
+                            None
+                        } else {
+                            Some(cached_root_mail.id.clone())
+                        }
+                    })
+                    .collect();
+
+                let fetched_root_mails = self
                     .remote
                     .get_remote_account(account_id.clone())
-                    .fetch_mails(
-                        &cached_root_mails.missing,
-                        MailDtoCore::GET_REQUEST_PROPERTIES.to_vec(),
-                    )
+                    .fetch_mails(&cached_root_mail_ids_with_missing_properties, properties)
                     .await?;
-
-                debug_assert!(missing_mails_data.not_found.is_empty());
-
-                let missing_root_mails: Vec<MailDto> = missing_mails_data
-                    .values
-                    .into_iter()
-                    .map(|mail| MailDto::new(MailDtoCore::from(mail)))
-                    .collect();
 
                 let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
 
-                self.ensure_email_changes(&account_id, &missing_mails_data.state, &mut cache_lock)
+                self.ensure_mail_changes(&account_id, &fetched_root_mails.state, &mut cache_lock)
                     .await?;
 
-                cache_lock.upsert_mails(missing_root_mails).await?;
+                for fetched_root_mail in fetched_root_mails.values {
+                    let cached_root_mail = cached_root_mails
+                        .iter_mut()
+                        .find(|cached_root_mail| cached_root_mail.id == fetched_root_mail.id)
+                        .unwrap();
+                    cached_root_mail.merge(fetched_root_mail);
+                }
 
-                let result = cache_lock.get_mails(&root_mails).await?;
+                cache_lock.upsert_mails(cached_root_mails.clone()).await?;
+                return Ok(cached_root_mails);
+            } else {
+                // TODO: Well, but what happens, if the cached mails are missing some properties?
+                let fetched_root_mails = self
+                    .remote
+                    .get_remote_account(account_id.clone())
+                    .fetch_mails(&missing_cached_root_mails, properties)
+                    .await?;
 
-                debug_assert!(result.missing.is_empty());
+                debug_assert!(fetched_root_mails.not_found.is_empty());
 
-                return Ok(result.value.into_iter().map(MailDataCore::from).collect());
+                let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
+
+                self.ensure_mail_changes(&account_id, &fetched_root_mails.state, &mut cache_lock)
+                    .await?;
+
+                cache_lock
+                    .upsert_mails(fetched_root_mails.values.clone())
+                    .await?;
+
+                let cached_root_mails = cache_lock.get_mails(&root_mails).await?;
+                debug_assert!(cached_root_mails.missing.is_empty(), "We just fetched them");
+
+                return Ok(cached_root_mails.value);
             }
         }
 
@@ -312,12 +228,12 @@ impl Repository {
         } = self
             .remote
             .get_remote_account(account_id.clone())
-            .fetch_root_mails(&id, &window)
+            .fetch_root_mails(&id, &window, properties)
             .await?;
 
         let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
 
-        self.ensure_email_changes(&account_id, &email_get_state, &mut cache_lock)
+        self.ensure_mail_changes(&account_id, &email_get_state, &mut cache_lock)
             .await?;
 
         self.ensure_root_mail_changes(&account_id, &id, &root_mails_query_state, &mut cache_lock)
@@ -334,8 +250,16 @@ impl Repository {
 
         cache_lock.insert_root_mails(&id, root_mail_ids).await?;
 
-        let root_mails: Vec<MailDto> = root_mails.into_iter().map(MailDto::new).collect();
+        let root_mails: Vec<CachedMail> = root_mails.into_iter().map(CachedMail::from).collect();
         cache_lock.upsert_mails(root_mails.clone()).await?;
-        Ok(root_mails.into_iter().map(MailDataCore::from).collect())
+        Ok(root_mails)
+    }
+
+    pub async fn compose_new_html_mail(
+        &self,
+        _account_id: AccountId,
+        _mail_id: MailId,
+    ) -> color_eyre::Result<()> {
+        todo!()
     }
 }

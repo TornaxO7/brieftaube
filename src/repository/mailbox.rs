@@ -1,7 +1,7 @@
 use crate::{
     datasource::types::{QueryWindow, remote},
     repository::Repository,
-    types::{AccountId, InitMailboxData, MailboxData, MailboxId, ParentMailboxId},
+    types::{AccountId, CachedMailbox, InitMailboxData, MailProperty, MailboxId, ParentMailboxId},
 };
 use tokio::sync::{Mutex, oneshot};
 
@@ -16,6 +16,7 @@ pub enum CommandKind {
     Init {
         id: ParentMailboxId,
         amount_init_mails: usize,
+        mail_properties: Vec<MailProperty>,
 
         tx: oneshot::Sender<color_eyre::Result<InitMailboxData>>,
     },
@@ -79,7 +80,7 @@ impl Repository {
         &self,
         account_id: AccountId,
         id: MailboxId,
-    ) -> color_eyre::Result<MailboxData> {
+    ) -> color_eyre::Result<CachedMailbox> {
         self.ensure_mailboxes_are_cached(account_id.clone()).await?;
 
         let mailbox_data = self
@@ -99,7 +100,7 @@ impl Repository {
         &self,
         account_id: AccountId,
         id: ParentMailboxId,
-    ) -> color_eyre::Result<Vec<MailboxData>> {
+    ) -> color_eyre::Result<Vec<CachedMailbox>> {
         self.ensure_mailboxes_are_cached(account_id.clone()).await?;
 
         let children = self
@@ -120,6 +121,7 @@ impl Repository {
         account_id: AccountId,
         id: ParentMailboxId,
         amount_first_mails: usize,
+        mail_properties: Vec<MailProperty>,
     ) -> color_eyre::Result<InitMailboxData> {
         let child_mailboxes = self
             .get_mailbox_children(account_id.clone(), id.clone())
@@ -137,6 +139,7 @@ impl Repository {
                             start: 0,
                             limit: amount_first_mails,
                         },
+                        mail_properties,
                     )
                     .await?;
 

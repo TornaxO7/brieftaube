@@ -20,6 +20,15 @@ impl std::fmt::Display for MailAddresses {
     }
 }
 
+impl IntoIterator for MailAddresses {
+    type Item = MailAddress;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 impl From<Vec<EmailAddress>> for MailAddresses {
     fn from(addresses: Vec<EmailAddress>) -> Self {
         Self::from(addresses.as_slice())

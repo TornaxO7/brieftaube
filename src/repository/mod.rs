@@ -9,11 +9,11 @@ use crate::{
         types::{GetState, QueryState, QueryWindow, cache, remote},
     },
     types::{
-        AccountId, BlobId, InitMailboxData, MailDataCore, MailDataHtmlBody, MailDataPreview,
-        MailDataTextBody, MailDto, MailId, MailKeyword, MailboxId, ParentMailboxId, ThreadId,
+        AccountId, BlobId, CachedMail, InitMailboxData, MailId, MailProperty, MailboxId,
+        ParentMailboxId, ThreadId,
     },
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use tokio::sync::{RwLock, RwLockWriteGuard, mpsc, oneshot};
 
 #[derive(Debug)]
@@ -55,25 +55,34 @@ impl Repository {
         while let Some(command) = repo.rx.recv().await {
             match command {
                 Command::Mail(cmd) => match cmd.kind {
-                    mail::CommandKind::GetCore { id, tx } => {
-                        let _ = tx.send(repo.get_mail_core(cmd.account_id, id).await);
-                    }
-                    mail::CommandKind::GetPreview { id, tx } => {
-                        let _ = tx.send(repo.get_mail_preview(cmd.account_id, id).await);
-                    }
-                    mail::CommandKind::GetTextBody { id, tx } => {
-                        let _ = tx.send(repo.get_mail_text_body(cmd.account_id, id).await);
-                    }
-                    mail::CommandKind::GetHtmlBody { id, tx } => {
-                        let _ = tx.send(repo.get_mail_html_body(cmd.account_id, id).await);
+                    // mail::CommandKind::GetCore { id, tx } => {
+                    //     let _ = tx.send(repo.get_mail_core(cmd.account_id, id).await);
+                    // }
+                    // mail::CommandKind::GetPreview { id, tx } => {
+                    //     let _ = tx.send(repo.get_mail_preview(cmd.account_id, id).await);
+                    // }
+                    // mail::CommandKind::GetTextBody { id, tx } => {
+                    //     let _ = tx.send(repo.get_mail_text_body(cmd.account_id, id).await);
+                    // }
+                    // mail::CommandKind::GetHtmlBody { id, tx } => {
+                    //     let _ = tx.send(repo.get_mail_html_body(cmd.account_id, id).await);
+                    // }
+                    mail::CommandKind::GetMail { id, properties, tx } => {
+                        let _ = tx.send(repo.get_mail(cmd.account_id, id, properties).await);
                     }
                     mail::CommandKind::QueryRootMails {
                         mailbox,
                         window,
+                        properties,
                         tx,
                     } => {
-                        let _ =
-                            tx.send(repo.query_root_mails(cmd.account_id, mailbox, window).await);
+                        let _ = tx.send(
+                            repo.query_root_mails(cmd.account_id, mailbox, window, properties)
+                                .await,
+                        );
+                    }
+                    mail::CommandKind::ComposeNewHtmlMail { id, tx } => {
+                        let _ = tx.send(repo.compose_new_html_mail(cmd.account_id, id).await);
                     }
                 },
                 Command::Mailbox(cmd) => match cmd.kind {
@@ -83,17 +92,23 @@ impl Repository {
                     mailbox::CommandKind::Init {
                         id,
                         amount_init_mails,
+                        mail_properties,
                         tx,
                     } => {
                         let _ = tx.send(
-                            repo.get_init_mailbox_data(cmd.account_id, id, amount_init_mails)
-                                .await,
+                            repo.get_init_mailbox_data(
+                                cmd.account_id,
+                                id,
+                                amount_init_mails,
+                                mail_properties,
+                            )
+                            .await,
                         );
                     }
                 },
                 Command::Thread(cmd) => match cmd.kind {
-                    thread::CommandKind::GetThread { id, tx } => {
-                        let _ = tx.send(repo.get_thread(cmd.account_id, id).await);
+                    thread::CommandKind::GetThread { id, properties, tx } => {
+                        let _ = tx.send(repo.get_thread(cmd.account_id, id, properties).await);
                     }
                 },
                 Command::Blob(cmd) => match cmd.kind {
@@ -110,7 +125,7 @@ impl Repository {
         self.rx.close();
     }
 
-    async fn ensure_email_changes(
+    async fn ensure_mail_changes(
         &self,
         account_id: &AccountId,
         new_state: &GetState,
@@ -147,70 +162,35 @@ impl Repository {
                 .await?;
 
             if !result.updated.is_empty() {
-                let update_mail_ids: Vec<MailId> = {
-                    let cache::GetBatchResult {
-                        value: cached_datas,
-                        ..
-                    } = cache_lock.get_mails(&result.updated).await?;
+                let mut cached_mails = cache_lock.get_mails(&result.updated).await?.value;
 
-                    cached_datas.into_iter().map(|data| data.core.id).collect()
-                };
+                let updated_mail_ids: Vec<MailId> = cached_mails
+                    .iter()
+                    .map(|cached_mail| cached_mail.id.clone())
+                    .collect();
 
                 let remote::GetBatchResult {
                     values: updated_mails,
                     not_found,
-                    // TODO: Maybe check if this state is also the same? Otherwise => do more `/changes` request
                     state: _,
                 } = self
                     .remote
                     .get_remote_account(account_id.clone())
                     .fetch_mails(
-                        &update_mail_ids,
-                        vec![
-                            jmap_client::email::Property::Id,
-                            jmap_client::email::Property::MailboxIds,
-                            jmap_client::email::Property::Keywords,
-                        ],
+                        &updated_mail_ids,
+                        vec![MailProperty::MailboxIds, MailProperty::Keywords],
                     )
                     .await?;
                 debug_assert!(not_found.is_empty());
 
-                let mut updates_mapping: HashMap<MailId, (Vec<MailboxId>, HashSet<MailKeyword>)> =
-                    updated_mails
-                        .into_iter()
-                        .map(|mut jmap_mail| {
-                            let id: MailId = jmap_mail.take_id().into();
+                for updated_mail in updated_mails {
+                    let cached_mail = cached_mails
+                        .iter_mut()
+                        .find(|cached_mail| cached_mail.id == updated_mail.id)
+                        .unwrap();
 
-                            let mailbox_ids = jmap_mail
-                                .mailbox_ids()
-                                .into_iter()
-                                .map(MailboxId::from)
-                                .collect();
-                            let keywords = jmap_mail
-                                .keywords()
-                                .into_iter()
-                                .map(MailKeyword::from)
-                                .collect();
-
-                            (id, (mailbox_ids, keywords))
-                        })
-                        .collect();
-
-                let mut cached_mails = {
-                    let cached_mails = cache_lock.get_mails(&update_mail_ids).await?;
-                    debug_assert!(cached_mails.missing.is_empty());
-                    cached_mails.value
-                };
-
-                for cached_mail in cached_mails.iter_mut() {
-                    let (new_mailbox_ids, new_keywords) =
-                        updates_mapping.remove(&cached_mail.core.id).unwrap();
-
-                    cached_mail.core.mailbox_ids = new_mailbox_ids;
-                    cached_mail.core.keywords = new_keywords;
+                    cached_mail.merge(updated_mail);
                 }
-
-                debug_assert!(updates_mapping.is_empty(), "All updates have been applied");
 
                 cache_lock.upsert_mails(cached_mails).await?;
             };
@@ -334,36 +314,15 @@ impl Repository {
                 let cached_thread_ids: Vec<ThreadId> = cached_thread_ids.into_keys().collect();
 
                 let remote::GetBatchResult {
-                    values:
-                        remote::GetOneResult {
-                            value: new_thread_mails,
-                            state: new_mail_get_state,
-                        },
+                    values: threads_with_mail_ids,
                     state: new_thread_get_state,
                     ..
                 } = remote.fetch_threads(&cached_thread_ids).await?;
 
-                self.ensure_email_changes(account_id, &new_mail_get_state, cache_lock)
+                cache_lock
+                    .upsert_threads(threads_with_mail_ids.into_iter().collect())
                     .await?;
 
-                let new_thread_mails_ids: Vec<(ThreadId, Vec<MailId>)> = new_thread_mails
-                    .iter()
-                    .map(|(thread_id, thread_mails)| {
-                        let mail_ids: Vec<MailId> =
-                            thread_mails.iter().map(|mail| mail.id.clone()).collect();
-
-                        (thread_id.clone(), mail_ids)
-                    })
-                    .collect();
-
-                let all_fetched_mails: Vec<MailDto> = new_thread_mails
-                    .into_values()
-                    .flatten()
-                    .map(MailDto::new)
-                    .collect();
-
-                cache_lock.upsert_threads(&new_thread_mails_ids).await?;
-                cache_lock.upsert_mails(all_fetched_mails).await?;
                 cache_lock.set_thread_state(new_thread_get_state).await?;
             }
 
@@ -413,6 +372,7 @@ impl RepositoryHandler {
         account_id: AccountId,
         id: ParentMailboxId,
         amount_init_mails: usize,
+        mail_properties: Vec<MailProperty>,
     ) -> color_eyre::Result<InitMailboxData> {
         self.execute(|tx| {
             mailbox::Command {
@@ -420,6 +380,7 @@ impl RepositoryHandler {
                 kind: mailbox::CommandKind::Init {
                     id,
                     amount_init_mails,
+                    mail_properties,
                     tx,
                 },
             }
@@ -428,33 +389,51 @@ impl RepositoryHandler {
         .await
     }
 
-    pub async fn get_mail_core(
+    pub async fn get_mail(
         &self,
         account_id: AccountId,
-        mail_id: MailId,
-    ) -> color_eyre::Result<MailDataCore> {
+        id: MailId,
+        properties: Vec<MailProperty>,
+    ) -> color_eyre::Result<CachedMail> {
         self.execute(|tx| {
             mail::Command {
                 account_id,
-                kind: mail::CommandKind::GetCore { id: mail_id, tx },
+                kind: mail::CommandKind::GetMail { id, properties, tx },
             }
             .into()
         })
         .await
     }
 
+    // pub async fn get_mail_core(
+    //     &self,
+    //     account_id: AccountId,
+    //     mail_id: MailId,
+    // ) -> color_eyre::Result<MailDataCore> {
+    //     self.execute(|tx| {
+    //         mail::Command {
+    //             account_id,
+    //             kind: mail::CommandKind::GetCore { id: mail_id, tx },
+    //         }
+    //         .into()
+    //     })
+    //     .await
+    // }
+
     pub async fn query_mails(
         &self,
         account_id: AccountId,
         mailbox: MailboxId,
         window: QueryWindow,
-    ) -> color_eyre::Result<Vec<MailDataCore>> {
+        properties: Vec<MailProperty>,
+    ) -> color_eyre::Result<Vec<CachedMail>> {
         self.execute(|tx| {
             mail::Command {
                 account_id,
                 kind: mail::CommandKind::QueryRootMails {
                     mailbox,
                     window,
+                    properties,
                     tx,
                 },
             }
@@ -467,61 +446,66 @@ impl RepositoryHandler {
         &self,
         account_id: AccountId,
         thread_id: ThreadId,
-    ) -> color_eyre::Result<Vec<MailDataCore>> {
+        properties: Vec<MailProperty>,
+    ) -> color_eyre::Result<Vec<CachedMail>> {
         self.execute(|tx| {
             thread::Command {
                 account_id,
-                kind: thread::CommandKind::GetThread { id: thread_id, tx },
+                kind: thread::CommandKind::GetThread {
+                    id: thread_id,
+                    tx,
+                    properties,
+                },
             }
             .into()
         })
         .await
     }
 
-    pub async fn get_mail_preview(
-        &self,
-        account_id: AccountId,
-        mail_id: MailId,
-    ) -> color_eyre::Result<MailDataPreview> {
-        self.execute(|tx| {
-            mail::Command {
-                account_id,
-                kind: mail::CommandKind::GetPreview { id: mail_id, tx },
-            }
-            .into()
-        })
-        .await
-    }
+    // pub async fn get_mail_preview(
+    //     &self,
+    //     account_id: AccountId,
+    //     mail_id: MailId,
+    // ) -> color_eyre::Result<MailDataPreview> {
+    //     self.execute(|tx| {
+    //         mail::Command {
+    //             account_id,
+    //             kind: mail::CommandKind::GetPreview { id: mail_id, tx },
+    //         }
+    //         .into()
+    //     })
+    //     .await
+    // }
 
-    pub async fn get_mail_text_body(
-        &self,
-        account_id: AccountId,
-        mail_id: MailId,
-    ) -> color_eyre::Result<MailDataTextBody> {
-        self.execute(|tx| {
-            mail::Command {
-                account_id,
-                kind: mail::CommandKind::GetTextBody { id: mail_id, tx },
-            }
-            .into()
-        })
-        .await
-    }
+    // pub async fn get_mail_text_body(
+    //     &self,
+    //     account_id: AccountId,
+    //     mail_id: MailId,
+    // ) -> color_eyre::Result<MailDataTextBody> {
+    //     self.execute(|tx| {
+    //         mail::Command {
+    //             account_id,
+    //             kind: mail::CommandKind::GetTextBody { id: mail_id, tx },
+    //         }
+    //         .into()
+    //     })
+    //     .await
+    // }
 
-    pub async fn get_mail_html_body(
-        &self,
-        account_id: AccountId,
-        mail_id: MailId,
-    ) -> color_eyre::Result<MailDataHtmlBody> {
-        self.execute(|tx| {
-            mail::Command {
-                account_id,
-                kind: mail::CommandKind::GetHtmlBody { id: mail_id, tx },
-            }
-            .into()
-        })
-        .await
-    }
+    // pub async fn get_mail_html_body(
+    //     &self,
+    //     account_id: AccountId,
+    //     mail_id: MailId,
+    // ) -> color_eyre::Result<MailDataHtmlBody> {
+    //     self.execute(|tx| {
+    //         mail::Command {
+    //             account_id,
+    //             kind: mail::CommandKind::GetHtmlBody { id: mail_id, tx },
+    //         }
+    //         .into()
+    //     })
+    //     .await
+    // }
 
     pub async fn get_blob(
         &self,
@@ -532,6 +516,21 @@ impl RepositoryHandler {
             blob::Command {
                 account_id,
                 kind: blob::CommandKind::GetBlob { id: blob_id, tx },
+            }
+            .into()
+        })
+        .await
+    }
+
+    pub async fn compose_new_html_mail(
+        &self,
+        account_id: AccountId,
+        mail_id: MailId,
+    ) -> color_eyre::Result<()> {
+        self.execute(|tx| {
+            mail::Command {
+                account_id,
+                kind: mail::CommandKind::ComposeNewHtmlMail { id: mail_id, tx },
             }
             .into()
         })

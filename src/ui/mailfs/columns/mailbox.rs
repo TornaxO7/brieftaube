@@ -1,7 +1,10 @@
 use crate::{
     datasource::types::QueryWindow,
-    types::{MailDataCore, MailboxData},
-    ui::{Loadable, mailfs::columns::MailfsColumn},
+    types::{CachedMail, CachedMailbox},
+    ui::{
+        Loadable,
+        mailfs::{columns::MailfsColumn, types::MailColumnEntry},
+    },
 };
 use ratatui::widgets::TableState;
 
@@ -9,8 +12,8 @@ pub const DEFAULT_SECTION_SIZE: usize = 32;
 
 #[derive(Debug)]
 pub struct MailboxColumn {
-    pub child_mailboxes: Vec<MailboxData>,
-    pub mails: Vec<Loadable<MailDataCore>>,
+    pub child_mailboxes: Vec<CachedMailbox>,
+    pub mails: Vec<Loadable<MailColumnEntry>>,
 
     pub mailbox_state: TableState,
     pub mail_state: TableState,
@@ -18,9 +21,9 @@ pub struct MailboxColumn {
 
 impl MailboxColumn {
     pub fn new(
-        mut child_mailboxes: Vec<MailboxData>,
+        mut child_mailboxes: Vec<CachedMailbox>,
         total_threads: usize,
-        init_mails: Vec<MailDataCore>,
+        init_mails: Vec<MailColumnEntry>,
     ) -> Self {
         debug_assert!(init_mails.len() <= total_threads);
 
@@ -75,19 +78,21 @@ impl MailboxColumn {
         }
     }
 
-    pub fn set_mails(
+    pub fn set_mailbox_mails(
         &mut self,
         window: QueryWindow,
-        result: color_eyre::Result<Vec<MailDataCore>>,
+        result: color_eyre::Result<Vec<CachedMail>>,
     ) {
         let window_range = window.as_range();
 
         match result {
             Ok(mails) => {
-                self.mails.splice(
-                    window_range,
-                    mails.into_iter().map(|mail| Loadable::Loaded(mail)),
-                );
+                let mail_entries: Vec<Loadable<MailColumnEntry>> = mails
+                    .into_iter()
+                    .map(|cached_mail| Loadable::Loaded(MailColumnEntry::from(cached_mail)))
+                    .collect();
+
+                self.mails.splice(window_range, mail_entries);
             }
             Err(err) => {
                 self.mails[window_range].fill(Loadable::Error(err.to_string()));
@@ -251,6 +256,6 @@ impl MailfsColumn for MailboxColumn {
 
 #[derive(Debug)]
 pub enum MailboxColumnEntry<'a> {
-    Mailbox(&'a MailboxData),
-    RootMail(&'a Loadable<MailDataCore>),
+    Mailbox(&'a CachedMailbox),
+    RootMail(&'a Loadable<MailColumnEntry>),
 }

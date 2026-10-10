@@ -51,8 +51,7 @@ pub enum Message {
     OpenPager {
         username: Username,
         account_id: AccountId,
-        mail_id: MailId,
-        mode: pager::Mode,
+        mode: OpenPagerMode,
     },
 
     OpenInEditor {
@@ -199,35 +198,62 @@ impl Ui {
             Message::OpenPager {
                 username,
                 account_id,
-                mail_id,
                 mode,
-            } => {
-                self.layers.push(ActiveLayer::Pager(pager::State::new(
-                    username.clone(),
-                    account_id.clone(),
-                    mail_id.clone(),
-                    mode,
-                )));
+            } => match mode {
+                OpenPagerMode::Reader(mail_id) => {
+                    self.layers.push(ActiveLayer::Pager(pager::State::new(
+                        username.clone(),
+                        account_id.clone(),
+                        mail_id.clone(),
+                        pager::Mode::Reader,
+                    )));
 
-                vec![
-                    Message::PagerRequest(pager::MessageRequest::GetHeaders {
-                        username: username.clone(),
-                        account_id: account_id.clone(),
-                        mail_id: mail_id.clone(),
-                    }),
-                    Message::PagerRequest(pager::MessageRequest::GetHtmlBody {
-                        username: username.clone(),
-                        account_id: account_id.clone(),
-                        mail_id: mail_id.clone(),
-                        after_fetching: vec![],
-                    }),
-                    Message::PagerRequest(pager::MessageRequest::GetAttachments {
-                        username: username.clone(),
-                        account_id: account_id.clone(),
-                        mail_id: mail_id.clone(),
-                    }),
-                ]
-            }
+                    vec![
+                        Message::PagerRequest(pager::MessageRequest::GetHeaders {
+                            username: username.clone(),
+                            account_id: account_id.clone(),
+                            mail_id: mail_id.clone(),
+                        }),
+                        Message::PagerRequest(pager::MessageRequest::GetHtmlBody {
+                            username: username.clone(),
+                            account_id: account_id.clone(),
+                            mail_id: mail_id.clone(),
+                            after_fetching: vec![],
+                        }),
+                        Message::PagerRequest(pager::MessageRequest::GetAttachments {
+                            username: username.clone(),
+                            account_id: account_id.clone(),
+                            mail_id: mail_id.clone(),
+                        }),
+                    ]
+                }
+                OpenPagerMode::Composer(mail_id) => match mail_id {
+                    Some(_) => todo!("Open already existing mailid"),
+                    None => {
+                        let mail_id = MailId::new_intern();
+
+                        self.layers.push(ActiveLayer::Pager(pager::State::new(
+                            username.clone(),
+                            account_id.clone(),
+                            mail_id.clone(),
+                            pager::Mode::Composer,
+                        )));
+
+                        let state = self.repos.get(&username).unwrap().clone();
+
+                        self.task_manager.spawn(async move {
+                            let handler = match get_handler(state).await {
+                                Ok(handler) => handler,
+                                Err(()) => return vec![],
+                            };
+
+                            vec![]
+                        });
+
+                        vec![]
+                    }
+                },
+            },
 
             Message::OpenInEditor {
                 content,
@@ -277,6 +303,7 @@ impl Ui {
                         account_id,
                         mailbox_id,
                         max_init_mails: amount_initial_mails,
+                        mail_properties,
                     } => {
                         let state = self.repos.get(&username).unwrap().clone();
 
@@ -297,6 +324,7 @@ impl Ui {
                                             account_id,
                                             mailbox_id,
                                             amount_initial_mails,
+                                            mail_properties,
                                         )
                                         .await,
                                 }
@@ -304,11 +332,12 @@ impl Ui {
                             ]
                         });
                     }
-                    mailfs::MessageRequest::QueryMails {
+                    mailfs::MessageRequest::GetMail {
                         username,
                         account_id,
-                        mailbox,
-                        window,
+                        mail_id,
+                        properties,
+                        callback,
                     } => {
                         let state = self.repos.get(&username).unwrap().clone();
 
@@ -319,12 +348,35 @@ impl Ui {
                             };
 
                             vec![
-                                mailfs::Message::SetMails {
+                                callback(handler.get_mail(account_id, mail_id, properties).await)
+                                    .into(),
+                            ]
+                        });
+                    }
+                    mailfs::MessageRequest::QueryMails {
+                        username,
+                        account_id,
+                        mailbox,
+                        window,
+                        mail_properties,
+                    } => {
+                        let state = self.repos.get(&username).unwrap().clone();
+
+                        self.task_manager.spawn(async move {
+                            let handler = match get_handler(state).await {
+                                Ok(handler) => handler,
+                                Err(()) => return vec![],
+                            };
+
+                            vec![
+                                mailfs::Message::SetRootMails {
                                     username,
                                     account_id: account_id.clone(),
                                     mailbox: mailbox.clone(),
                                     window: window.clone(),
-                                    result: handler.query_mails(account_id, mailbox, window).await,
+                                    result: handler
+                                        .query_mails(account_id, mailbox, window, mail_properties)
+                                        .await,
                                 }
                                 .into(),
                             ]
@@ -334,6 +386,7 @@ impl Ui {
                         username,
                         account_id,
                         thread_id,
+                        mail_properties,
                     } => {
                         let state = self.repos.get(&username).unwrap().clone();
 
@@ -349,32 +402,8 @@ impl Ui {
                                     account_id: account_id.clone(),
                                     thread_id: thread_id.clone(),
                                     thread_mails: handler
-                                        .get_thread_mails(account_id, thread_id)
+                                        .get_thread_mails(account_id, thread_id, mail_properties)
                                         .await,
-                                }
-                                .into(),
-                            ]
-                        });
-                    }
-                    mailfs::MessageRequest::GetMailPreview {
-                        username,
-                        account_id,
-                        mail_id,
-                    } => {
-                        let state = self.repos.get(&username).unwrap().clone();
-
-                        self.task_manager.spawn(async move {
-                            let handler = match get_handler(state).await {
-                                Ok(handler) => handler,
-                                Err(()) => return vec![],
-                            };
-
-                            vec![
-                                mailfs::Message::SetMailPreview {
-                                    username,
-                                    account_id: account_id.clone(),
-                                    mail_id: mail_id.clone(),
-                                    preview: handler.get_mail_preview(account_id, mail_id).await,
                                 }
                                 .into(),
                             ]
@@ -403,29 +432,29 @@ impl Ui {
                         account_id,
                         mail_id,
                     } => {
-                        let state = self.repos.get(&username).unwrap().clone();
+                        todo!()
+                        // let state = self.repos.get(&username).unwrap().clone();
 
-                        self.task_manager.spawn(async move {
-                            let handler = match get_handler(state).await {
-                                Ok(handler) => handler,
-                                Err(()) => return vec![],
-                            };
+                        // self.task_manager.spawn(async move {
+                        //     let handler = match get_handler(state).await {
+                        //         Ok(handler) => handler,
+                        //         Err(()) => return vec![],
+                        //     };
 
-                            let headers = handler.get_mail_preview(account_id, mail_id).await.map(
-                                |preview| pager::MailHeaders {
-                                    from: preview.from.map(|from| from.to_string()),
-                                    to: preview.to.map(|to| to.to_string()),
-                                    cc: preview.cc.map(|cc| cc.to_string()),
-                                    subject: preview.subject,
-                                    received_at: preview
-                                        .received_at
-                                        .format("%b %e, %Y")
-                                        .to_string(),
-                                },
-                            );
+                        //     let headers = handler.get_mail_preview(account_id, mail_id).await.map(
+                        //         |preview| pager::MailHeaders {
+                        //             from: preview.from.map(|from| from.to_string()),
+                        //             to: preview.to.map(|to| to.to_string()),
+                        //             cc: preview.cc.map(|cc| cc.to_string()),
+                        //             subject: preview.subject,
+                        //             received_at: preview.received_at.map(|received_at| {
+                        //                 received_at.format("%b %e, %Y").to_string()
+                        //             }),
+                        //         },
+                        //     );
 
-                            vec![Message::Pager(pager::Message::SetHeaders(headers)).into()]
-                        });
+                        //     vec![Message::Pager(pager::Message::SetHeaders(headers)).into()]
+                        // });
                     }
                     pager::MessageRequest::GetTextBody {
                         username,
@@ -433,23 +462,24 @@ impl Ui {
                         mail_id,
                         after_fetching,
                     } => {
-                        let state = self.repos.get(&username).unwrap().clone();
+                        todo!();
+                        // let state = self.repos.get(&username).unwrap().clone();
 
-                        self.task_manager.spawn(async move {
-                            let handler = match get_handler(state).await {
-                                Ok(handler) => handler,
-                                Err(()) => return vec![],
-                            };
+                        // self.task_manager.spawn(async move {
+                        //     let handler = match get_handler(state).await {
+                        //         Ok(handler) => handler,
+                        //         Err(()) => return vec![],
+                        //     };
 
-                            let mut msgs = vec![
-                                pager::Message::SetTextBody(
-                                    handler.get_mail_text_body(account_id, mail_id).await,
-                                )
-                                .into(),
-                            ];
-                            msgs.extend(after_fetching);
-                            msgs
-                        });
+                        //     let mut msgs = vec![
+                        //         pager::Message::SetTextBody(
+                        //             handler.get_mail_text_body(account_id, mail_id).await,
+                        //         )
+                        //         .into(),
+                        //     ];
+                        //     msgs.extend(after_fetching);
+                        //     msgs
+                        // });
                     }
                     pager::MessageRequest::GetHtmlBody {
                         username,
@@ -457,47 +487,49 @@ impl Ui {
                         mail_id,
                         after_fetching,
                     } => {
-                        let state = self.repos.get(&username).unwrap().clone();
+                        todo!();
+                        // let state = self.repos.get(&username).unwrap().clone();
 
-                        self.task_manager.spawn(async move {
-                            let handler = match get_handler(state).await {
-                                Ok(handler) => handler,
-                                Err(()) => return vec![],
-                            };
+                        // self.task_manager.spawn(async move {
+                        //     let handler = match get_handler(state).await {
+                        //         Ok(handler) => handler,
+                        //         Err(()) => return vec![],
+                        //     };
 
-                            let mut msgs = vec![
-                                pager::Message::SetHtmlBody(
-                                    handler.get_mail_html_body(account_id, mail_id).await,
-                                )
-                                .into(),
-                            ];
-                            msgs.extend(after_fetching);
-                            msgs
-                        });
+                        //     let mut msgs = vec![
+                        //         pager::Message::SetHtmlBody(
+                        //             handler.get_mail_html_body(account_id, mail_id).await,
+                        //         )
+                        //         .into(),
+                        //     ];
+                        //     msgs.extend(after_fetching);
+                        //     msgs
+                        // });
                     }
                     pager::MessageRequest::GetAttachments {
                         username,
                         account_id,
                         mail_id,
                     } => {
-                        let state = self.repos.get(&username).unwrap().clone();
+                        todo!()
+                        // let state = self.repos.get(&username).unwrap().clone();
 
-                        self.task_manager.spawn(async move {
-                            let handler = match get_handler(state).await {
-                                Ok(handler) => handler,
-                                Err(()) => return vec![],
-                            };
+                        // self.task_manager.spawn(async move {
+                        //     let handler = match get_handler(state).await {
+                        //         Ok(handler) => handler,
+                        //         Err(()) => return vec![],
+                        //     };
 
-                            vec![
-                                pager::Message::SetAttachments(
-                                    handler
-                                        .get_mail_preview(account_id, mail_id)
-                                        .await
-                                        .map(|preview| preview.attachments.unwrap_or(vec![])),
-                                )
-                                .into(),
-                            ]
-                        });
+                        //     vec![
+                        //         pager::Message::SetAttachments(
+                        //             handler
+                        //                 .get_mail_preview(account_id, mail_id)
+                        //                 .await
+                        //                 .map(|preview| preview.attachments.unwrap_or(vec![])),
+                        //         )
+                        //         .into(),
+                        //     ]
+                        // });
                     }
                 };
                 vec![]
@@ -706,4 +738,9 @@ impl PendingEditor {
 
         Ok(editor_content)
     }
+}
+
+enum OpenPagerMode {
+    Reader(MailId),
+    Composer(Option<MailId>),
 }

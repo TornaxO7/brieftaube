@@ -13,7 +13,7 @@ impl From<&EmailBodyPart> for MailDataAttachment {
         Self {
             name: part.name().unwrap().to_owned(),
             content_type: part.content_type().unwrap().to_owned(),
-            size: part.size(),
+            size: part.size().unwrap(),
             blob_id: part.blob_id().unwrap().to_owned(),
         }
     }
