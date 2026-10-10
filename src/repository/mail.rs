@@ -40,10 +40,6 @@ impl From<Command> for super::Command {
 #[derive(Default)]
 pub struct Locks {
     get_mail: Mutex<()>,
-    get_mail_core: Mutex<()>,
-    get_mail_preview: Mutex<()>,
-    get_mail_text_body: Mutex<()>,
-    get_mail_html_body: Mutex<()>,
     query_root_mails: Mutex<()>,
 }
 
