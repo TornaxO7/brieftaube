@@ -55,18 +55,6 @@ impl Repository {
         while let Some(command) = repo.rx.recv().await {
             match command {
                 Command::Mail(cmd) => match cmd.kind {
-                    // mail::CommandKind::GetCore { id, tx } => {
-                    //     let _ = tx.send(repo.get_mail_core(cmd.account_id, id).await);
-                    // }
-                    // mail::CommandKind::GetPreview { id, tx } => {
-                    //     let _ = tx.send(repo.get_mail_preview(cmd.account_id, id).await);
-                    // }
-                    // mail::CommandKind::GetTextBody { id, tx } => {
-                    //     let _ = tx.send(repo.get_mail_text_body(cmd.account_id, id).await);
-                    // }
-                    // mail::CommandKind::GetHtmlBody { id, tx } => {
-                    //     let _ = tx.send(repo.get_mail_html_body(cmd.account_id, id).await);
-                    // }
                     mail::CommandKind::GetMail { id, properties, tx } => {
                         let _ = tx.send(repo.get_mail(cmd.account_id, id, properties).await);
                     }
@@ -86,9 +74,6 @@ impl Repository {
                     }
                 },
                 Command::Mailbox(cmd) => match cmd.kind {
-                    // mailbox::CommandKind::GetChildren { id, tx } => {
-                    //     let _ = tx.send(repo.get_mailbox_children(cmd.account_id, id).await);
-                    // }
                     mailbox::CommandKind::Init {
                         id,
                         amount_init_mails,
@@ -461,51 +446,6 @@ impl RepositoryHandler {
         })
         .await
     }
-
-    // pub async fn get_mail_preview(
-    //     &self,
-    //     account_id: AccountId,
-    //     mail_id: MailId,
-    // ) -> color_eyre::Result<MailDataPreview> {
-    //     self.execute(|tx| {
-    //         mail::Command {
-    //             account_id,
-    //             kind: mail::CommandKind::GetPreview { id: mail_id, tx },
-    //         }
-    //         .into()
-    //     })
-    //     .await
-    // }
-
-    // pub async fn get_mail_text_body(
-    //     &self,
-    //     account_id: AccountId,
-    //     mail_id: MailId,
-    // ) -> color_eyre::Result<MailDataTextBody> {
-    //     self.execute(|tx| {
-    //         mail::Command {
-    //             account_id,
-    //             kind: mail::CommandKind::GetTextBody { id: mail_id, tx },
-    //         }
-    //         .into()
-    //     })
-    //     .await
-    // }
-
-    // pub async fn get_mail_html_body(
-    //     &self,
-    //     account_id: AccountId,
-    //     mail_id: MailId,
-    // ) -> color_eyre::Result<MailDataHtmlBody> {
-    //     self.execute(|tx| {
-    //         mail::Command {
-    //             account_id,
-    //             kind: mail::CommandKind::GetHtmlBody { id: mail_id, tx },
-    //         }
-    //         .into()
-    //     })
-    //     .await
-    // }
 
     pub async fn get_blob(
         &self,
