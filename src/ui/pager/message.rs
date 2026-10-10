@@ -1,5 +1,5 @@
 use crate::{
-    types::{MailDataAttachment, MailDataHtmlBody, MailDataTextBody},
+    types::{CachedAttachment, MailDataHtmlBody, MailDataTextBody},
     ui::{pager::MailHeaders, statusbar::StatusMsgType},
 };
 use crossterm::event::Event;
@@ -14,7 +14,7 @@ pub enum Message {
     SetHeaders(color_eyre::Result<MailHeaders>),
     SetTextBody(color_eyre::Result<MailDataTextBody>),
     SetHtmlBody(color_eyre::Result<MailDataHtmlBody>),
-    SetAttachments(color_eyre::Result<Vec<MailDataAttachment>>),
+    SetAttachments(color_eyre::Result<Vec<CachedAttachment>>),
 
     SetStatusbarMessage { msg: String, ty: StatusMsgType },
 

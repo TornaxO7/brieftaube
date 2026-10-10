@@ -2,12 +2,16 @@ mod attachments_tab;
 mod body;
 mod message;
 mod message_request;
+mod types;
 mod user_action;
 mod view;
 
 use crate::{
     config::Username,
-    types::{AccountId, BlobId, MailDataAttachment, MailDataHtmlBody, MailDataTextBody, MailId},
+    types::{
+        AccountId, BlobId, CachedAttachment, MailDataHtmlBody, MailDataTextBody, MailId,
+        MailProperty,
+    },
     ui::{
         EditorContentType, Layer,
         pager::{attachments_tab::AttachmentsTab, message::SaveAttachmentStep},
@@ -24,6 +28,7 @@ use user_action::UserAction;
 
 pub use message::Message;
 pub use message_request::MessageRequest;
+pub use types::*;
 pub use view::view;
 
 pub struct State {
@@ -107,7 +112,7 @@ impl Layer<Message> for State {
             Message::Event(event) => self.handle_event(event),
             Message::UserAction(action) => self.handle_user_action(action),
             Message::SelectedPaletteEntry(entry) => self.handle_selected_palette_entry(entry),
-            Message::SetHeaders(headers) => self.handle_set_headres(headers),
+            Message::SetHeaders(headers) => self.handle_set_headers(headers),
             Message::SetTextBody(body) => self.handle_set_text_body(body),
             Message::SetHtmlBody(body) => self.handle_set_html_body(body),
             Message::SetAttachments(attachments) => self.handle_set_attachments(attachments),
@@ -180,7 +185,7 @@ impl State {
         vec![super::Message::Pager(Message::UserAction(action))]
     }
 
-    fn handle_set_headres(
+    fn handle_set_headers(
         &mut self,
         headers: color_eyre::Result<MailHeaders>,
     ) -> Vec<super::Message> {
@@ -207,7 +212,7 @@ impl State {
 
     fn handle_set_attachments(
         &mut self,
-        attachments: color_eyre::Result<Vec<MailDataAttachment>>,
+        attachments: color_eyre::Result<Vec<CachedAttachment>>,
     ) -> Vec<super::Message> {
         self.attachments = Some(AttachmentsTab::new(attachments));
         vec![]
@@ -290,11 +295,14 @@ impl State {
         match &self.text_body {
             Some(_) => vec![],
             None => vec![
-                MessageRequest::GetTextBody {
+                MessageRequest::GetMail {
                     username: self.ctx.username.clone(),
                     account_id: self.ctx.account_id.clone(),
                     mail_id: self.ctx.mail_id.clone(),
-                    after_fetching: vec![],
+                    properties: vec![MailProperty::TextBody],
+                    callback: Box::new(move |cached_mail| {
+                        vec![Message::SetTextBody(cached_mail.map(MailDataTextBody::from)).into()]
+                    }),
                 }
                 .into(),
             ],
@@ -311,11 +319,14 @@ impl State {
         match self.html_body.as_ref() {
             Some(_) => vec![],
             None => vec![
-                MessageRequest::GetHtmlBody {
+                MessageRequest::GetMail {
                     username: self.ctx.username.clone(),
                     account_id: self.ctx.account_id.clone(),
                     mail_id: self.ctx.mail_id.clone(),
-                    after_fetching: vec![],
+                    properties: vec![MailProperty::HtmlBody],
+                    callback: Box::new(move |cached_mail| {
+                        vec![Message::SetHtmlBody(cached_mail.map(MailDataHtmlBody::from)).into()]
+                    }),
                 }
                 .into(),
             ],
@@ -484,13 +495,23 @@ impl State {
 
         let Some(init_text_body) = self.text_body.as_ref() else {
             return vec![
-                MessageRequest::GetTextBody {
+                MessageRequest::GetMail {
                     username: self.ctx.username.clone(),
                     account_id: self.ctx.account_id.clone(),
                     mail_id: self.ctx.mail_id.clone(),
-                    after_fetching: vec![
-                        Message::UserAction(UserAction::ReadTextBodyInEditor).into(),
-                    ],
+                    properties: vec![MailProperty::TextBody],
+                    callback: Box::new(|cached_mail| match cached_mail {
+                        Ok(_cache_mail) => {
+                            vec![Message::UserAction(UserAction::ReadTextBodyInEditor).into()]
+                        }
+                        Err(err) => vec![
+                            Message::SetStatusbarMessage {
+                                msg: format!("Couldn't fetch text body: {}", err),
+                                ty: StatusMsgType::Error,
+                            }
+                            .into(),
+                        ],
+                    }),
                 }
                 .into(),
             ];
@@ -525,13 +546,23 @@ impl State {
 
         let Some(init_html_body) = self.html_body.as_ref() else {
             return vec![
-                MessageRequest::GetHtmlBody {
+                MessageRequest::GetMail {
                     username: self.ctx.username.clone(),
                     account_id: self.ctx.account_id.clone(),
                     mail_id: self.ctx.mail_id.clone(),
-                    after_fetching: vec![
-                        Message::UserAction(UserAction::ReadMarkdownBodyInEditor).into(),
-                    ],
+                    properties: vec![MailProperty::HtmlBody],
+                    callback: Box::new(|cached_mail| match cached_mail {
+                        Ok(_cached_mail) => {
+                            vec![Message::UserAction(UserAction::ReadMarkdownBodyInEditor).into()]
+                        }
+                        Err(err) => vec![
+                            Message::SetStatusbarMessage {
+                                msg: format!("Couldn't fetch html body: {}", err),
+                                ty: StatusMsgType::Error,
+                            }
+                            .into(),
+                        ],
+                    }),
                 }
                 .into(),
             ];
@@ -575,13 +606,23 @@ impl State {
 
         let Some(init_html_body) = self.html_body.as_ref() else {
             return vec![
-                MessageRequest::GetHtmlBody {
+                MessageRequest::GetMail {
                     username: self.ctx.username.clone(),
                     account_id: self.ctx.account_id.clone(),
                     mail_id: self.ctx.mail_id.clone(),
-                    after_fetching: vec![
-                        Message::UserAction(UserAction::ReadHtmlBodyInEditor).into(),
-                    ],
+                    properties: vec![MailProperty::HtmlBody],
+                    callback: Box::new(|cached_mail| match cached_mail {
+                        Ok(_cached_mail) => {
+                            vec![Message::UserAction(UserAction::ReadMarkdownBodyInEditor).into()]
+                        }
+                        Err(err) => vec![
+                            Message::SetStatusbarMessage {
+                                msg: format!("Couldn't fetch html body: {}", err),
+                                ty: StatusMsgType::Error,
+                            }
+                            .into(),
+                        ],
+                    }),
                 }
                 .into(),
             ];
@@ -653,20 +694,6 @@ impl State {
 enum SelectedBodyType {
     Text,
     Html,
-}
-
-#[derive(Debug)]
-pub struct MailHeaders {
-    pub from: Option<String>,
-    pub to: Option<String>,
-    pub cc: Option<String>,
-    pub subject: Option<String>,
-    pub received_at: Option<String>,
-}
-
-impl MailHeaders {
-    const MAX_AMOUNT_HEADERS: usize = 5;
-    const LONGEST_HEADER_LENGTH: usize = "Received at:".len();
 }
 
 struct Ctx {

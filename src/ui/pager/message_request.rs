@@ -1,32 +1,15 @@
 use crate::{
     config::Username,
-    types::{AccountId, MailId},
+    types::{AccountId, CachedMail, MailId, MailProperty},
 };
 
 pub enum MessageRequest {
-    GetHeaders {
+    GetMail {
         username: Username,
         account_id: AccountId,
         mail_id: MailId,
-    },
-    GetTextBody {
-        username: Username,
-        account_id: AccountId,
-        mail_id: MailId,
-
-        after_fetching: Vec<crate::ui::Message>,
-    },
-    GetHtmlBody {
-        username: Username,
-        account_id: AccountId,
-        mail_id: MailId,
-
-        after_fetching: Vec<crate::ui::Message>,
-    },
-    GetAttachments {
-        username: Username,
-        account_id: AccountId,
-        mail_id: MailId,
+        properties: Vec<MailProperty>,
+        callback: Box<dyn FnOnce(color_eyre::Result<CachedMail>) -> Vec<crate::ui::Message> + Send>,
     },
 }
 

@@ -1,14 +1,14 @@
-use crate::types::MailDataAttachment;
+use crate::types::CachedAttachment;
 use ratatui::widgets::TableState;
 
 #[derive(Debug)]
 pub struct AttachmentsTab {
-    pub attachments: color_eyre::Result<Vec<MailDataAttachment>>,
+    pub attachments: color_eyre::Result<Vec<CachedAttachment>>,
     pub state: TableState,
 }
 
 impl AttachmentsTab {
-    pub fn new(attachments: color_eyre::Result<Vec<MailDataAttachment>>) -> Self {
+    pub fn new(attachments: color_eyre::Result<Vec<CachedAttachment>>) -> Self {
         let initial_idx = match &attachments {
             Ok(attachments) => {
                 if attachments.is_empty() {
@@ -26,7 +26,7 @@ impl AttachmentsTab {
         }
     }
 
-    pub fn get_selected_entry<'a>(&'a self) -> Option<&'a MailDataAttachment> {
+    pub fn get_selected_entry<'a>(&'a self) -> Option<&'a CachedAttachment> {
         let idx = self.state.selected()?;
 
         self.attachments

@@ -1,14 +1,14 @@
 use jmap_client::email::EmailBodyPart;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct MailDataAttachment {
+pub struct CachedAttachment {
     pub name: String,
     pub content_type: String,
     pub size: usize,
     pub blob_id: String,
 }
 
-impl From<&EmailBodyPart> for MailDataAttachment {
+impl From<&EmailBodyPart> for CachedAttachment {
     fn from(part: &EmailBodyPart) -> Self {
         Self {
             name: part.name().unwrap().to_owned(),

@@ -1,4 +1,4 @@
-use crate::types::{CachedMail, MailAddresses, MailDataAttachment, MailProperty};
+use crate::types::{CachedAttachment, CachedMail, MailAddresses, MailProperty};
 use chrono::{DateTime, Local};
 
 #[derive(Debug, Clone)]
@@ -9,7 +9,7 @@ pub struct MailPreview {
     pub bcc: Option<MailAddresses>,
     pub subject: Option<String>,
     pub preview: String,
-    pub attachments: Vec<MailDataAttachment>,
+    pub attachments: Vec<CachedAttachment>,
     pub received_at: DateTime<Local>,
 }
 

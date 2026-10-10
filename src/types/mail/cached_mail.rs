@@ -1,5 +1,5 @@
 use crate::types::{
-    MailAddresses, MailDataAttachment, MailId, MailKeyword, MailProperty, MailboxId, ThreadId,
+    CachedAttachment, MailAddresses, MailId, MailKeyword, MailProperty, MailboxId, ThreadId,
 };
 use chrono::{DateTime, Local, Utc};
 use std::{
@@ -22,7 +22,7 @@ pub struct CachedMail {
     pub cc: OnceLock<MailAddresses>,
     pub bcc: OnceLock<MailAddresses>,
     pub preview: OnceLock<String>,
-    pub attachments: OnceLock<Vec<MailDataAttachment>>,
+    pub attachments: OnceLock<Vec<CachedAttachment>>,
 
     pub text_part_ids: OnceLock<Vec<String>>,
     pub html_part_ids: OnceLock<Vec<String>>,
@@ -215,8 +215,8 @@ impl From<jmap_client::email::Email> for CachedMail {
             },
             preview: jmap_mail.take_preview().map_or_default(OnceLock::from),
             attachments: jmap_mail.attachments().map_or_default(|attachments| {
-                let attachments: Vec<MailDataAttachment> =
-                    attachments.iter().map(MailDataAttachment::from).collect();
+                let attachments: Vec<CachedAttachment> =
+                    attachments.iter().map(CachedAttachment::from).collect();
                 OnceLock::from(attachments)
             }),
             text_part_ids: jmap_mail.text_body().map_or_default(|parts| {

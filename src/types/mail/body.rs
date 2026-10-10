@@ -5,8 +5,8 @@ pub struct MailDataTextBody {
     pub content: String,
 }
 
-impl MailDataTextBody {
-    pub fn new(cached_mail: CachedMail) -> Option<Self> {
+impl From<CachedMail> for MailDataTextBody {
+    fn from(cached_mail: CachedMail) -> Self {
         let body_parts = cached_mail.body_parts.into_inner().unwrap();
         let part_ids = cached_mail.text_part_ids.into_inner().unwrap();
 
@@ -17,7 +17,7 @@ impl MailDataTextBody {
                 format!("{}{}", prev, next_part)
             });
 
-        Some(Self { content })
+        Self { content }
     }
 }
 
@@ -26,8 +26,8 @@ pub struct MailDataHtmlBody {
     pub content: String,
 }
 
-impl MailDataHtmlBody {
-    pub fn new(cached_mail: CachedMail) -> Option<Self> {
+impl From<CachedMail> for MailDataHtmlBody {
+    fn from(cached_mail: CachedMail) -> Self {
         let body_parts = cached_mail.body_parts.into_inner().unwrap();
         let part_ids = cached_mail.html_part_ids.into_inner().unwrap();
 
@@ -38,6 +38,6 @@ impl MailDataHtmlBody {
                 format!("{}{}", prev, next_part)
             });
 
-        Some(Self { content })
+        Self { content }
     }
 }
