@@ -1,4 +1,3 @@
-#![feature(once_lock_new_init)]
 mod config;
 mod datasource;
 mod repository;
