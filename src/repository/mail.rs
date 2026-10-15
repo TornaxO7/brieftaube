@@ -3,7 +3,10 @@ use crate::{
     repository::Repository,
     types::{AccountId, CachedMail, MailId, MailProperty, MailboxId},
 };
+use color_eyre::eyre::Context;
+use jmap_client::mailbox::Role;
 use tokio::sync::{Mutex, oneshot};
+use tracing::{error, warn};
 
 #[derive(Debug)]
 pub struct Command {
@@ -25,9 +28,9 @@ pub enum CommandKind {
 
         tx: oneshot::Sender<color_eyre::Result<Vec<CachedMail>>>,
     },
-    ComposeNewHtmlMail {
+    CreateNewMail {
         id: MailId,
-        tx: oneshot::Sender<color_eyre::Result<()>>,
+        tx: oneshot::Sender<color_eyre::Result<CachedMail>>,
     },
 }
 
@@ -251,11 +254,55 @@ impl Repository {
         Ok(root_mails)
     }
 
-    pub async fn compose_new_html_mail(
+    pub async fn create_new_mail(
         &self,
-        _account_id: AccountId,
-        _mail_id: MailId,
-    ) -> color_eyre::Result<()> {
-        todo!()
+        account_id: AccountId,
+        mail_id: MailId,
+    ) -> color_eyre::Result<CachedMail> {
+        let draft_mailbox_id = self
+            .get_all_mailboxes(account_id.clone())
+            .await?
+            .into_iter()
+            .find_map(|mailbox| (mailbox.role == Role::Drafts).then_some(mailbox.id))
+            .expect("`Draft` mailbox exists");
+
+        let mut new_mail = CachedMail::new_draft(mail_id, vec![draft_mailbox_id]);
+
+        match self
+            .remote
+            .get_remote_account(account_id.clone())
+            .create_mail(new_mail.clone())
+            .await
+        {
+            Ok(result) => {
+                let server_mail = result
+                    .value
+                    .wrap_err("The created mail is invalid. Aborting creation")?;
+
+                new_mail.merge(server_mail);
+
+                let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
+
+                if let Some(old_state) = result.old_state {
+                    self.ensure_mail_changes(&account_id, &old_state, &mut cache_lock)
+                        .await?;
+                }
+
+                cache_lock.set_mail_state(result.new_state).await?;
+            }
+            Err(err) => {
+                warn!(
+                    "Couldn't send new mail to server:\n{}\nSaving it locally.",
+                    err
+                );
+            }
+        }
+
+        let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
+        if let Err(err) = cache_lock.upsert_mails(vec![new_mail.clone()]).await {
+            error!("Couldn't save new mail in cache:\n{}", err);
+        }
+
+        Ok(new_mail)
     }
 }

@@ -28,8 +28,9 @@ impl<T, M> GetBatchResult<T, M> {
 }
 
 pub struct CreateResult<T> {
-    pub value: Result<T, SetError<String>>,
-    pub state: GetState,
+    pub value: Result<T, jmap_client::Error>,
+    pub old_state: Option<GetState>,
+    pub new_state: GetState,
 }
 
 pub struct UpdateResult<Id, UpdatedData> {

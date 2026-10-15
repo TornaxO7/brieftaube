@@ -125,5 +125,55 @@ impl MailRemote for JmapAccount {
         })
     }
 
-    async fn create_mail(&self) {}
+    async fn create_mail(&self, mail: CachedMail) -> Result<remote::CreateResult<CachedMail>> {
+        let mut response = {
+            let mut request = self.build_request();
+
+            let create = request.set_email().create_with_id(&mail.id);
+
+            create.mailbox_ids(
+                mail.mailbox_ids
+                    .get()
+                    .expect("Mail is assigned to at least one mailbox"),
+            );
+
+            if let Some(keywords) = mail.keywords.get().cloned() {
+                create.keywords(keywords);
+            }
+
+            if let Some(subject) = mail.subject.get() {
+                create.subject(subject);
+            }
+
+            if let Some(from) = mail.from.get().cloned() {
+                create.from(from);
+            }
+
+            if let Some(to) = mail.to.get().cloned() {
+                create.to(to);
+            }
+
+            if let Some(cc) = mail.cc.get().cloned() {
+                create.to(cc);
+            }
+
+            if let Some(bcc) = mail.bcc.get().cloned() {
+                create.to(bcc);
+            }
+
+            request.send_set_email().await?
+        };
+
+        if let Err(err) = response.unwrap_create_errors() {
+            tracing::error!("{}", err);
+        }
+
+        Ok(remote::CreateResult {
+            value: response.created(mail.id.as_str()).map(CachedMail::from),
+            old_state: response
+                .old_state()
+                .map(|state| GetState::from(state.to_string())),
+            new_state: response.take_new_state().into(),
+        })
+    }
 }

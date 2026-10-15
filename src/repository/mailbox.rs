@@ -76,6 +76,25 @@ impl Repository {
         Ok(())
     }
 
+    pub async fn get_all_mailboxes(
+        &self,
+        account_id: AccountId,
+    ) -> color_eyre::Result<Vec<CachedMailbox>> {
+        self.ensure_mailboxes_are_cached(account_id.clone()).await?;
+
+        let mailboxes = self
+            .caches
+            .get(&account_id)
+            .unwrap()
+            .read()
+            .await
+            .get_all_mailboxes()
+            .await?
+            .expect("All mailboxes fetched");
+
+        Ok(mailboxes)
+    }
+
     pub async fn get_mailbox(
         &self,
         account_id: AccountId,

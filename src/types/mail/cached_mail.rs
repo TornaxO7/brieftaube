@@ -30,6 +30,29 @@ pub struct CachedMail {
 }
 
 impl CachedMail {
+    pub fn new_draft(id: MailId, mailbox_ids: Vec<MailboxId>) -> Self {
+        debug_assert!(id.is_intern());
+
+        Self {
+            id,
+            keywords: OnceLock::from(HashSet::new()),
+            mailbox_ids: OnceLock::from(mailbox_ids),
+            subject: OnceLock::from(String::new()),
+            received_at: OnceLock::new(),
+            has_attachment: OnceLock::from(false),
+            thread_id: OnceLock::new(),
+            from: OnceLock::new(),
+            to: OnceLock::new(),
+            cc: OnceLock::new(),
+            bcc: OnceLock::new(),
+            preview: OnceLock::new(),
+            attachments: OnceLock::from(vec![]),
+            text_part_ids: OnceLock::from(vec![]),
+            html_part_ids: OnceLock::from(vec![]),
+            body_parts: OnceLock::from(HashMap::new()),
+        }
+    }
+
     pub fn has_properties(&self, properties: &[MailProperty]) -> bool {
         properties.iter().all(|property| match property {
             MailProperty::Id => true,

@@ -69,8 +69,8 @@ impl Repository {
                                 .await,
                         );
                     }
-                    mail::CommandKind::ComposeNewHtmlMail { id, tx } => {
-                        let _ = tx.send(repo.compose_new_html_mail(cmd.account_id, id).await);
+                    mail::CommandKind::CreateNewMail { id, tx } => {
+                        let _ = tx.send(repo.create_new_mail(cmd.account_id, id).await);
                     }
                 },
                 Command::Mailbox(cmd) => match cmd.kind {
@@ -390,21 +390,6 @@ impl RepositoryHandler {
         .await
     }
 
-    // pub async fn get_mail_core(
-    //     &self,
-    //     account_id: AccountId,
-    //     mail_id: MailId,
-    // ) -> color_eyre::Result<MailDataCore> {
-    //     self.execute(|tx| {
-    //         mail::Command {
-    //             account_id,
-    //             kind: mail::CommandKind::GetCore { id: mail_id, tx },
-    //         }
-    //         .into()
-    //     })
-    //     .await
-    // }
-
     pub async fn query_mails(
         &self,
         account_id: AccountId,
@@ -462,15 +447,15 @@ impl RepositoryHandler {
         .await
     }
 
-    pub async fn compose_new_html_mail(
+    pub async fn create_new_mail(
         &self,
         account_id: AccountId,
         mail_id: MailId,
-    ) -> color_eyre::Result<()> {
+    ) -> color_eyre::Result<CachedMail> {
         self.execute(|tx| {
             mail::Command {
                 account_id,
-                kind: mail::CommandKind::ComposeNewHtmlMail { id: mail_id, tx },
+                kind: mail::CommandKind::CreateNewMail { id: mail_id, tx },
             }
             .into()
         })

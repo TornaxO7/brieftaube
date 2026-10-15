@@ -108,7 +108,7 @@ impl State {
                             let item = matches.nth(idx).unwrap();
 
                             let value = item.data.0.clone();
-                            return vec![super::Message::Back, (self.map)(value)];
+                            return vec![(self.map)(value), super::Message::Back];
                         }
 
                         return vec![super::Message::Back];
