@@ -35,7 +35,10 @@ pub fn view(
 
     let msgs = match state.selected_tab {
         SelectedTab::Body => render_mail_tab(scheme, state, frame, content_area),
-        SelectedTab::Attachments => render_attachments_tab(scheme, state, frame, content_area),
+        SelectedTab::Attachments => {
+            render_attachments_tab(scheme, state, frame, content_area);
+            vec![]
+        }
     };
 
     render_statusbar(scheme, state, frame, statusbar_area);
@@ -344,7 +347,7 @@ fn render_html_body(
                 Layout::horizontal([Constraint::Fill(1), Constraint::Length(1)]).areas(area);
 
             if body.content.is_empty() {
-                const EMPTY_BODY_MSG: &str = "Body is empty";
+                const EMPTY_BODY_MSG: &str = "<Body is empty>";
 
                 let body_area = body_area.centered(
                     Constraint::Length(EMPTY_BODY_MSG.len() as u16),
@@ -394,7 +397,7 @@ fn render_attachments_tab(
     state: &mut super::State,
     frame: &mut Frame,
     area: Rect,
-) -> Vec<crate::ui::Message> {
+) {
     let attachments_tab = match state.attachments.as_mut() {
         Some(attachments) => attachments,
         None => {
@@ -413,12 +416,34 @@ fn render_attachments_tab(
                 area,
                 &mut state.throbber,
             );
-            return vec![];
+            return;
         }
     };
 
+    let block = Block::new()
+        .borders(Borders::TOP)
+        .style(Style::new().fg(scheme.outline.into_color()));
+
     match &attachments_tab.attachments {
         Ok(attachments) => {
+            if attachments.is_empty() {
+                const NO_ATTACHMENTS_TEXT: &str = "<No attachments>";
+
+                frame.render_widget(block, area);
+
+                let area = area.centered(
+                    Constraint::Length(NO_ATTACHMENTS_TEXT.len() as u16),
+                    Constraint::Length(1),
+                );
+
+                frame.render_widget(
+                    Paragraph::new(NO_ATTACHMENTS_TEXT).style(Style::new().italic()),
+                    area,
+                );
+
+                return;
+            }
+
             let mut longest_content_type_name = 0;
             let mut longest_size_name = 0;
 
@@ -457,11 +482,7 @@ fn render_attachments_tab(
                             .bg(scheme.primary_container.into_color()),
                     )
                     .column_spacing(2)
-                    .block(
-                        Block::new()
-                            .borders(Borders::TOP)
-                            .style(Style::new().fg(scheme.outline.into_color())),
-                    ),
+                    .block(block),
                 area,
                 &mut attachments_tab.state,
             );
@@ -471,8 +492,6 @@ fn render_attachments_tab(
             render_msg_centered(msg, Style::new().fg(scheme.error.into_color()), frame, area);
         }
     };
-
-    vec![]
 }
 
 fn format_size(size: usize) -> String {
