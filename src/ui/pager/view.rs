@@ -343,14 +343,28 @@ fn render_html_body(
             let [body_area, scrollbar_area] =
                 Layout::horizontal([Constraint::Fill(1), Constraint::Length(1)]).areas(area);
 
-            body.set_content_height(body_area.as_size());
+            if body.content.is_empty() {
+                const EMPTY_BODY_MSG: &str = "Body is empty";
 
-            frame.render_widget(
-                body.default_paragraph()
-                    .style(Style::new().fg(scheme.primary.into_color()))
-                    .scroll((body.scroll_offset as u16, 0)),
-                body_area,
-            );
+                let body_area = body_area.centered(
+                    Constraint::Length(EMPTY_BODY_MSG.len() as u16),
+                    Constraint::Length(1),
+                );
+
+                frame.render_widget(
+                    Paragraph::new(EMPTY_BODY_MSG).style(Style::new().italic()),
+                    body_area,
+                );
+            } else {
+                body.set_content_height(body_area.as_size());
+
+                frame.render_widget(
+                    body.default_paragraph()
+                        .style(Style::new().fg(scheme.primary.into_color()))
+                        .scroll((body.scroll_offset as u16, 0)),
+                    body_area,
+                );
+            }
 
             frame.render_stateful_widget(
                 Scrollbar::new(ScrollbarOrientation::VerticalRight),
