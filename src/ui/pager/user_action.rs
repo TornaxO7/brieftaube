@@ -32,6 +32,8 @@ pub enum UserAction {
     #[strum(message = "Open text body")]
     OpenTextBody,
 
+    EditBody,
+
     #[strum(message = "Navigate to the next (below) mailbox.")]
     NavigateDown,
     #[strum(message = "Navigate to the previous (above) mailbox.")]

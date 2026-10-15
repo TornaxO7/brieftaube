@@ -166,6 +166,8 @@ impl State {
             UserAction::NavigateHalfPageUp => self.navigate_half_page_up(),
             UserAction::FocusNextTab => self.focus_next_tab(),
 
+            UserAction::EditBody => self.edit_body(),
+
             UserAction::ReadBodyInEditor => self.read_body_in_editor(),
             UserAction::ReadTextBodyInEditor => self.read_text_body_in_editor(),
             UserAction::ReadMarkdownBodyInEditor => self.read_markdown_body_in_editor(),
@@ -197,7 +199,6 @@ impl State {
         &mut self,
         body: color_eyre::Result<MailDataTextBody>,
     ) -> Vec<super::Message> {
-        tracing::debug!("Set text body");
         self.text_body = Some(body.map(TextBody::new));
         vec![]
     }
@@ -477,6 +478,50 @@ impl State {
         vec![]
     }
 
+    fn edit_body(&mut self) -> Vec<super::Message> {
+        let (content, ty): (String, super::EditorContentType) = match self.selected_body_type {
+            SelectedBodyType::Text => {
+                let ty = super::EditorContentType::Text;
+                let content = self
+                    .text_body
+                    .as_mut()
+                    .and_then(|body| body.as_mut().ok())
+                    .map(|body| body.scrollable_body().unwrap().content.clone())
+                    .unwrap_or(String::new());
+
+                (content, ty)
+            }
+            SelectedBodyType::Html => {
+                let ty = super::EditorContentType::Markdown;
+                let content = self
+                    .html_body
+                    .as_mut()
+                    .and_then(|body| body.as_mut().ok())
+                    .map(|body| body.scrollable_body().unwrap().content.clone())
+                    .unwrap_or(String::new());
+
+                (content, ty)
+            }
+        };
+
+        let body_type = self.selected_body_type.clone();
+
+        vec![super::Message::OpenInEditor {
+            content,
+            ty,
+            on_exit: Box::new(move |result| {
+                match body_type {
+                    SelectedBodyType::Text => todo!(),
+                    SelectedBodyType::Html => todo!(),
+                }
+
+                todo!(
+                    "1. Check for correct markdown syntax (if using markdown). Otherwise just set the body..."
+                );
+            }),
+        }]
+    }
+
     fn read_body_in_editor(&mut self) -> Vec<super::Message> {
         if !self.is_in_state(Some(Mode::Reader), SelectedTab::Body) {
             return vec![];
@@ -521,7 +566,7 @@ impl State {
             vec![super::Message::OpenInEditor {
                 content: text_body.state.content.clone(),
                 ty: EditorContentType::Text,
-                on_exit: |result| match result {
+                on_exit: Box::new(|result| match result {
                     Ok(_) => vec![],
                     Err(err) => {
                         vec![
@@ -532,7 +577,7 @@ impl State {
                             .into(),
                         ]
                     }
-                },
+                }),
             }]
         } else {
             vec![]
@@ -577,7 +622,7 @@ impl State {
                 vec![super::Message::OpenInEditor {
                     content: state.content.clone(),
                     ty: EditorContentType::Markdown,
-                    on_exit: |result| match result {
+                    on_exit: Box::new(|result| match result {
                         Ok(_) => vec![],
                         Err(err) => {
                             vec![
@@ -588,7 +633,7 @@ impl State {
                                 .into(),
                             ]
                         }
-                    },
+                    }),
                 }]
             }
             Err(err) => {
@@ -635,7 +680,7 @@ impl State {
         vec![super::Message::OpenInEditor {
             content: html_body.html.clone(),
             ty: EditorContentType::Html,
-            on_exit: |result| match result {
+            on_exit: Box::new(|result| match result {
                 Ok(_) => vec![],
                 Err(err) => {
                     vec![
@@ -646,7 +691,7 @@ impl State {
                         .into(),
                     ]
                 }
-            },
+            }),
         }]
     }
 
@@ -691,6 +736,7 @@ impl State {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 enum SelectedBodyType {
     Text,
     Html,

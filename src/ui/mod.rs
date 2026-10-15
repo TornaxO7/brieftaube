@@ -57,7 +57,7 @@ pub enum Message {
     OpenInEditor {
         content: String,
         ty: EditorContentType,
-        on_exit: fn(Result<String, OpenEditorError>) -> Vec<Message>,
+        on_exit: Box<dyn Fn(Result<String, OpenEditorError>) -> Vec<Message> + Send>,
     },
 
     GetBlob {
@@ -676,15 +676,15 @@ pub enum OpenEditorError {
 struct PendingEditor {
     content: String,
     ty: EditorContentType,
-    on_exit: fn(Result<String, OpenEditorError>) -> Vec<Message>,
+    on_exit: Box<dyn Fn(Result<String, OpenEditorError>) -> Vec<Message> + Send>,
 }
 
 impl PendingEditor {
     fn run(self) -> Vec<Message> {
-        (self.on_exit)(self.open_editor())
+        (self.on_exit)(Self::open_editor(self.content, self.ty))
     }
 
-    fn open_editor(self) -> Result<String, OpenEditorError> {
+    fn open_editor(content: String, ty: EditorContentType) -> Result<String, OpenEditorError> {
         let editor = CONFIG
             .get()
             .unwrap()
@@ -692,7 +692,7 @@ impl PendingEditor {
             .ok_or(OpenEditorError::NoEditorFound)?;
 
         let tmp_file_path = {
-            let ending = match self.ty {
+            let ending = match ty {
                 EditorContentType::Text => "txt",
                 EditorContentType::Markdown => "md",
                 EditorContentType::Html => "html",
@@ -709,7 +709,7 @@ impl PendingEditor {
             crate::get_runtime_file_path(filename)?
         };
 
-        std::fs::write(&tmp_file_path, self.content)?;
+        std::fs::write(&tmp_file_path, content)?;
         disable_raw_mode()?;
         std::io::stdout().execute(LeaveAlternateScreen)?;
 
