@@ -23,7 +23,7 @@ use body::*;
 use crossterm::event::Event;
 use std::{collections::HashMap, str::FromStr};
 use throbber_widgets_tui::ThrobberState;
-use tracing::debug;
+use tracing::{debug, error};
 use user_action::UserAction;
 
 pub use message::Message;
@@ -40,7 +40,7 @@ pub struct State {
     selected_tab: SelectedTab,
     selected_body_type: SelectedBodyType,
 
-    ctx: Ctx,
+    ctx: MailCtx,
     headers: Option<color_eyre::Result<MailHeaders>>,
     text_body: Option<color_eyre::Result<TextBody>>,
     html_body: Option<color_eyre::Result<HtmlBody>>,
@@ -69,7 +69,7 @@ impl State {
             selected_tab: SelectedTab::Body,
             selected_body_type: SelectedBodyType::Html,
 
-            ctx: Ctx {
+            ctx: MailCtx {
                 username,
                 account_id,
                 mail_id,
@@ -509,15 +509,40 @@ impl State {
         vec![super::Message::OpenInEditor {
             content,
             ty,
-            on_exit: Box::new(move |result| {
-                match body_type {
-                    SelectedBodyType::Text => todo!(),
-                    SelectedBodyType::Html => todo!(),
-                }
+            on_exit: Box::new(move |result| match result {
+                Ok(new_content) => {
+                    match body_type {
+                        SelectedBodyType::Text => {
+                            vec![crate::ui::Message::Pager(Message::SetTextBody(Ok(
+                                MailDataTextBody {
+                                    content: new_content,
+                                },
+                            )))]
+                        }
+                        SelectedBodyType::Html => {
+                            vec![crate::ui::Message::Pager(Message::SetHtmlBody(Ok(
+                                MailDataHtmlBody {
+                                    content: new_content,
+                                },
+                            )))]
+                        }
+                    };
 
-                todo!(
-                    "1. Check for correct markdown syntax (if using markdown). Otherwise just set the body..."
-                );
+                    // TODO: NEXT
+                    todo!("1. Recreate a cached mail => 2. Sync to repository");
+                }
+                Err(err) => {
+                    let msg = format!("Can't save new body: {}", err);
+                    error!("{}", msg);
+
+                    vec![
+                        Message::SetStatusbarMessage {
+                            msg,
+                            ty: StatusMsgType::Error,
+                        }
+                        .into(),
+                    ]
+                }
             }),
         }]
     }
@@ -742,7 +767,7 @@ enum SelectedBodyType {
     Html,
 }
 
-struct Ctx {
+struct MailCtx {
     username: Username,
     account_id: AccountId,
     mail_id: MailId,

@@ -68,6 +68,13 @@ pub enum Message {
         callback: fn(color_eyre::Result<Vec<u8>>) -> Vec<Message>,
     },
 
+    EditMail {
+        username: Username,
+        account_id: AccountId,
+
+        new_mail: CachedMail,
+    },
+
     Back,
     Quit,
 }
@@ -539,6 +546,48 @@ impl Ui {
                     };
 
                     callback(handler.get_blob(account_id, blob_id).await)
+                });
+
+                vec![]
+            }
+            Message::EditMail {
+                username,
+                account_id,
+                new_mail,
+            } => {
+                let state = self.repos.get(&username).unwrap().clone();
+
+                self.task_manager.spawn(async move {
+                    let handler = match get_handler(state).await {
+                        Ok(handler) => handler,
+                        Err(()) => return vec![],
+                    };
+
+                    match handler.edit_mail(account_id, new_mail).await {
+                        Ok(cached_mail) => {
+                            // TODO: Don't know how at the moment, but remove the mail from `mailfs`(?)
+                            vec![
+                                pager::Message::SetHeaders(Ok(pager::MailHeaders::from(
+                                    cached_mail.clone(),
+                                )))
+                                .into(),
+                                pager::Message::SetHtmlBody(Ok(MailDataHtmlBody::from(
+                                    cached_mail.clone(),
+                                )))
+                                .into(),
+                                pager::Message::SetAttachments(Ok(cached_mail
+                                    .attachments
+                                    .get()
+                                    .cloned()
+                                    .unwrap()))
+                                .into(),
+                            ]
+                        }
+                        Err(err) => {
+                            error!("Couldn't update the mail in the cache: {}", err);
+                            vec![]
+                        }
+                    }
                 });
 
                 vec![]

@@ -91,7 +91,9 @@ pub trait MailRemote {
     async fn fetch_mail_changes(&self, since: &GetState)
     -> Result<remote::GetChangeResult<MailId>>;
 
-    async fn create_mail(&self, mail: CachedMail) -> Result<remote::CreateResult<CachedMail>>;
+    async fn create_mail(&self, mail: CachedMail) -> Result<remote::SetResult<CachedMail>>;
+
+    async fn edit_mail(&self, mail: CachedMail) -> Result<remote::SetResult<CachedMail>>;
 }
 
 #[async_trait]

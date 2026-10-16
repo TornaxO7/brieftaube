@@ -25,11 +25,14 @@ pub enum CommandKind {
         mailbox: MailboxId,
         window: QueryWindow,
         properties: Vec<MailProperty>,
-
         tx: oneshot::Sender<color_eyre::Result<Vec<CachedMail>>>,
     },
     CreateNewMail {
         id: MailId,
+        tx: oneshot::Sender<color_eyre::Result<CachedMail>>,
+    },
+    EditMail {
+        new_mail: CachedMail,
         tx: oneshot::Sender<color_eyre::Result<CachedMail>>,
     },
 }
@@ -304,5 +307,45 @@ impl Repository {
         }
 
         Ok(new_mail)
+    }
+
+    pub async fn edit_mail(
+        &self,
+        account_id: AccountId,
+        mail: CachedMail,
+    ) -> color_eyre::Result<CachedMail> {
+        let _enter = self.mail_locks.get_mail.lock().await;
+
+        let prev_id = mail.id.clone();
+
+        let response = self
+            .remote
+            .get_remote_account(account_id.clone())
+            .edit_mail(mail.clone())
+            .await;
+
+        let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
+
+        match response {
+            Ok(result) => {
+                if let Some(old_state) = result.old_state {
+                    self.ensure_mail_changes(&account_id, &old_state, &mut cache_lock)
+                        .await?;
+                }
+
+                let new_mail = result.value?;
+
+                cache_lock.set_mail_state(result.new_state).await?;
+                cache_lock.evict_mails(&[prev_id]).await?;
+                cache_lock.upsert_mails(vec![new_mail.clone()]).await?;
+
+                Ok(new_mail)
+            }
+            Err(err) => {
+                error!("Couldn't send edit to server: {}", err);
+                cache_lock.upsert_mails(vec![mail.clone()]).await?;
+                Ok(mail)
+            }
+        }
     }
 }

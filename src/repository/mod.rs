@@ -72,6 +72,9 @@ impl Repository {
                     mail::CommandKind::CreateNewMail { id, tx } => {
                         let _ = tx.send(repo.create_new_mail(cmd.account_id, id).await);
                     }
+                    mail::CommandKind::EditMail { new_mail: mail, tx } => {
+                        let _ = tx.send(repo.edit_mail(cmd.account_id, mail).await);
+                    }
                 },
                 Command::Mailbox(cmd) => match cmd.kind {
                     mailbox::CommandKind::Init {
@@ -456,6 +459,21 @@ impl RepositoryHandler {
             mail::Command {
                 account_id,
                 kind: mail::CommandKind::CreateNewMail { id: mail_id, tx },
+            }
+            .into()
+        })
+        .await
+    }
+
+    pub async fn edit_mail(
+        &self,
+        account_id: AccountId,
+        new_mail: CachedMail,
+    ) -> color_eyre::Result<CachedMail> {
+        self.execute(|tx| {
+            mail::Command {
+                account_id,
+                kind: mail::CommandKind::EditMail { new_mail, tx },
             }
             .into()
         })

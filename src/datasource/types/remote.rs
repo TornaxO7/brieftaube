@@ -27,7 +27,7 @@ impl<T, M> GetBatchResult<T, M> {
     }
 }
 
-pub struct CreateResult<T> {
+pub struct SetResult<T> {
     pub value: Result<T, jmap_client::Error>,
     pub old_state: Option<GetState>,
     pub new_state: GetState,

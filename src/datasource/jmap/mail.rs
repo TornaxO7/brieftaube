@@ -8,6 +8,12 @@ use crate::{
 };
 use async_trait::async_trait;
 use color_eyre::Result;
+use jmap_client::{
+    Set,
+    core::set::{SetObject, SetRequest},
+    email::Email,
+};
+use tracing::warn;
 
 #[async_trait]
 impl MailRemote for JmapAccount {
@@ -125,55 +131,107 @@ impl MailRemote for JmapAccount {
         })
     }
 
-    async fn create_mail(&self, mail: CachedMail) -> Result<remote::CreateResult<CachedMail>> {
-        let mut response = {
+    async fn create_mail(&self, mail: CachedMail) -> Result<remote::SetResult<CachedMail>> {
+        let (mut response, tmp_id) = {
             let mut request = self.build_request();
 
-            let create = request.set_email().create_with_id(&mail.id);
+            let tmp_id = setup_create(request.set_email(), Some(mail.id.clone()), mail.clone());
 
-            create.mailbox_ids(
-                mail.mailbox_ids
-                    .get()
-                    .expect("Mail is assigned to at least one mailbox"),
-            );
-
-            if let Some(keywords) = mail.keywords.get().cloned() {
-                create.keywords(keywords);
-            }
-
-            if let Some(subject) = mail.subject.get() {
-                create.subject(subject);
-            }
-
-            if let Some(from) = mail.from.get().cloned() {
-                create.from(from);
-            }
-
-            if let Some(to) = mail.to.get().cloned() {
-                create.to(to);
-            }
-
-            if let Some(cc) = mail.cc.get().cloned() {
-                create.to(cc);
-            }
-
-            if let Some(bcc) = mail.bcc.get().cloned() {
-                create.to(bcc);
-            }
-
-            request.send_set_email().await?
+            (request.send_set_email().await?, tmp_id)
         };
+
+        debug_assert_eq!(tmp_id, mail.id.clone());
 
         if let Err(err) = response.unwrap_create_errors() {
             tracing::error!("{}", err);
         }
 
-        Ok(remote::CreateResult {
-            value: response.created(mail.id.as_str()).map(CachedMail::from),
+        Ok(remote::SetResult {
+            value: response.created(tmp_id.as_str()).map(CachedMail::from),
             old_state: response
                 .old_state()
                 .map(|state| GetState::from(state.to_string())),
             new_state: response.take_new_state().into(),
         })
     }
+
+    async fn edit_mail(&self, mail: CachedMail) -> Result<remote::SetResult<CachedMail>> {
+        let (mut response, tmp_id) = {
+            let mut request = self.build_request();
+
+            let set = request.set_email();
+
+            set.destroy([&mail.id]);
+            let tmp_id = setup_create(set, None, mail.clone());
+
+            (request.send_set_email().await?, tmp_id)
+        };
+
+        if let Err(err) = response.destroyed(mail.id.as_str()) {
+            warn!("Server didn't remove previous mail: {}", err);
+        }
+
+        Ok(remote::SetResult {
+            value: response.created(tmp_id.as_str()).map(|server_mail| {
+                let mut new_mail = mail;
+                let server_mail = CachedMail::from(server_mail);
+                new_mail.merge(server_mail);
+                new_mail
+            }),
+            old_state: response
+                .old_state()
+                .map(|state| GetState::from(state.to_string())),
+            new_state: response.take_new_state().into(),
+        })
+    }
+}
+
+fn setup_create(
+    set_mail: &mut SetRequest<Email<Set>>,
+    creation_id: Option<MailId>,
+    mail: CachedMail,
+) -> MailId {
+    let (create, tmp_id) = match creation_id {
+        Some(id) => {
+            let create = set_mail.create_with_id(&id);
+            (create, id)
+        }
+        None => {
+            let create = set_mail.create();
+            let id = create.create_id().unwrap().into();
+            (create, id)
+        }
+    };
+
+    create.mailbox_ids(
+        mail.mailbox_ids
+            .get()
+            .expect("Mail is assigned to at least one mailbox"),
+    );
+
+    if let Some(keywords) = mail.keywords.get().cloned() {
+        create.keywords(keywords);
+    }
+
+    if let Some(subject) = mail.subject.get() {
+        create.subject(subject);
+    }
+
+    if let Some(from) = mail.from.get().cloned() {
+        create.from(from);
+    }
+
+    if let Some(to) = mail.to.get().cloned() {
+        create.to(to);
+    }
+
+    if let Some(cc) = mail.cc.get().cloned() {
+        create.to(cc);
+    }
+
+    if let Some(bcc) = mail.bcc.get().cloned() {
+        create.to(bcc);
+    }
+
+    tmp_id
 }
