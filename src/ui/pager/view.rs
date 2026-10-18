@@ -166,6 +166,13 @@ fn render_mail_headers(
         let header_style = Style::new().fg(scheme.primary.into_color()).bold();
         let value_style = Style::new().fg(scheme.secondary.into_color());
 
+        if let Some(received_at) = &headers.received_at {
+            rows.push(Row::new(vec![
+                Cell::from("Received at:").style(header_style),
+                Cell::from(received_at.as_str()).style(value_style),
+            ]));
+        }
+
         if let Some(from) = &headers.from {
             rows.push(Row::new(vec![
                 Cell::from("From:").style(header_style),
@@ -180,13 +187,6 @@ fn render_mail_headers(
             ]));
         }
 
-        if let Some(cc) = &headers.cc {
-            rows.push(Row::new(vec![
-                Cell::from("Cc:").style(header_style),
-                Cell::from(cc.to_string()).style(value_style),
-            ]));
-        }
-
         if let Some(subject) = &headers.subject {
             rows.push(Row::new(vec![
                 Cell::from("Subject:").style(header_style),
@@ -194,10 +194,17 @@ fn render_mail_headers(
             ]));
         }
 
-        if let Some(received_at) = &headers.received_at {
+        if let Some(cc) = &headers.cc {
             rows.push(Row::new(vec![
-                Cell::from("Received at:").style(header_style),
-                Cell::from(received_at.as_str()).style(value_style),
+                Cell::from("Cc:").style(header_style),
+                Cell::from(cc.to_string()).style(value_style),
+            ]));
+        }
+
+        if let Some(bcc) = &headers.bcc {
+            rows.push(Row::new(vec![
+                Cell::from("Bcc:").style(header_style),
+                Cell::from(bcc.to_string()).style(value_style),
             ]));
         }
 

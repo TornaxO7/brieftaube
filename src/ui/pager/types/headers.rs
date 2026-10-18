@@ -5,6 +5,7 @@ pub struct MailHeaders {
     pub from: Option<String>,
     pub to: Option<String>,
     pub cc: Option<String>,
+    pub bcc: Option<String>,
     pub subject: Option<String>,
     pub received_at: Option<String>,
 }
@@ -31,6 +32,7 @@ impl From<&CachedMail> for MailHeaders {
                 .map(|addresses| addresses.to_string()),
             to: cached_mail.to.get().map(|addresses| addresses.to_string()),
             cc: cached_mail.cc.get().map(|addresses| addresses.to_string()),
+            bcc: cached_mail.bcc.get().map(|addresses| addresses.to_string()),
             subject: cached_mail.subject.get().cloned(),
             received_at: cached_mail
                 .received_at
