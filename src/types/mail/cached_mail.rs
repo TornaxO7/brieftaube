@@ -35,14 +35,14 @@ impl CachedMail {
 
         Self {
             id,
-            keywords: OnceLock::from(HashSet::new()),
+            keywords: OnceLock::from(HashSet::from([MailKeyword::Draft, MailKeyword::Seen])),
             mailbox_ids: OnceLock::from(mailbox_ids),
             subject: OnceLock::from(String::new()),
             received_at: OnceLock::new(),
             has_attachment: OnceLock::from(false),
             thread_id: OnceLock::new(),
-            from: OnceLock::new(),
-            to: OnceLock::new(),
+            from: OnceLock::from(MailAddresses::default()),
+            to: OnceLock::from(MailAddresses::default()),
             cc: OnceLock::new(),
             bcc: OnceLock::new(),
             preview: OnceLock::new(),
