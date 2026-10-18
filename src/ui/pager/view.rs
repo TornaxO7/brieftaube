@@ -203,8 +203,11 @@ fn render_mail_headers(
         rows
     };
 
-    let [headers_area, body_area] =
-        Layout::vertical([Constraint::Length(rows.len() as u16), Constraint::Fill(1)]).areas(area);
+    let [headers_area, body_area] = Layout::vertical([
+        Constraint::Length(rows.len() as u16 + 1), // `+ 1` because `Borders::TOP`
+        Constraint::Fill(1),
+    ])
+    .areas(area);
 
     let widths = [
         Constraint::Length(MailHeaders::LONGEST_HEADER_LENGTH as u16),

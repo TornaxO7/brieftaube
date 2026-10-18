@@ -565,8 +565,6 @@ impl State {
                         }
                     };
 
-                    tracing::debug!("Edited: {:?}", new_mail.body_parts);
-
                     vec![crate::ui::Message::EditMail {
                         username: ctx.username.clone(),
                         account_id: ctx.account_id.clone(),
