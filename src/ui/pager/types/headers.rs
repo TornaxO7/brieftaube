@@ -22,25 +22,19 @@ impl MailHeaders {
     ];
 }
 
-impl From<CachedMail> for MailHeaders {
-    fn from(cached_mail: CachedMail) -> Self {
+impl From<&CachedMail> for MailHeaders {
+    fn from(cached_mail: &CachedMail) -> Self {
         Self {
             from: cached_mail
                 .from
-                .into_inner()
+                .get()
                 .map(|addresses| addresses.to_string()),
-            to: cached_mail
-                .to
-                .into_inner()
-                .map(|addresses| addresses.to_string()),
-            cc: cached_mail
-                .cc
-                .into_inner()
-                .map(|addresses| addresses.to_string()),
-            subject: cached_mail.subject.into_inner(),
+            to: cached_mail.to.get().map(|addresses| addresses.to_string()),
+            cc: cached_mail.cc.get().map(|addresses| addresses.to_string()),
+            subject: cached_mail.subject.get().cloned(),
             received_at: cached_mail
                 .received_at
-                .into_inner()
+                .get()
                 .map(|date| date.format("%c").to_string()),
         }
     }

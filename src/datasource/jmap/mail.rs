@@ -7,13 +7,13 @@ use crate::{
     types::{CachedMail, MailId, MailProperty},
 };
 use async_trait::async_trait;
-use color_eyre::Result;
+use color_eyre::{Result, eyre::Context};
 use jmap_client::{
     Set,
     core::set::{SetObject, SetRequest},
     email::Email,
 };
-use tracing::warn;
+use tracing::{error, warn};
 
 #[async_trait]
 impl MailRemote for JmapAccount {
@@ -34,19 +34,27 @@ impl MailRemote for JmapAccount {
 
             let email_request = request.get_email().ids(ids);
 
-            if properties.contains(&MailProperty::TextBody) {
-                request_properties.push(jmap_client::email::Property::BodyValues);
+            let wants_text_body = properties.contains(&MailProperty::TextBody);
+            let wants_html_body = properties.contains(&MailProperty::HtmlBody);
+
+            if wants_text_body {
                 email_request.arguments().fetch_text_body_values(true);
             }
 
-            if properties.contains(&MailProperty::HtmlBody) {
-                request_properties.push(jmap_client::email::Property::BodyValues);
+            if wants_html_body {
                 email_request.arguments().fetch_html_body_values(true);
+            }
+
+            if wants_html_body || wants_text_body {
+                request_properties.push(jmap_client::email::Property::BodyValues);
             }
 
             email_request.properties(request_properties);
 
-            request.send_get_email().await?
+            request
+                .send_get_email()
+                .await
+                .wrap_err("Request Email/get")?
         };
 
         let values = response
@@ -76,7 +84,7 @@ impl MailRemote for JmapAccount {
         let mut response = {
             let mut request = self.build_request();
             request.set_email().if_in_state(since).destroy(&ids);
-            request.send_set_email().await?
+            request.send_set_email().await.wrap_err("Send Email/get")?
         };
 
         let mut destroyed = Vec::new();
@@ -108,7 +116,10 @@ impl MailRemote for JmapAccount {
         let mut response = {
             let mut request = self.build_request();
             request.changes_email(since.as_ref());
-            request.send_changes_email().await?
+            request
+                .send_changes_email()
+                .await
+                .wrap_err("Request Email/changes")?
         };
 
         debug_assert_eq!(
@@ -137,13 +148,19 @@ impl MailRemote for JmapAccount {
 
             let tmp_id = setup_create(request.set_email(), Some(mail.id.clone()), mail.clone());
 
-            (request.send_set_email().await?, tmp_id)
+            (
+                request
+                    .send_set_email()
+                    .await
+                    .wrap_err("Request Email/Set (create new draft)")?,
+                tmp_id,
+            )
         };
 
         debug_assert_eq!(tmp_id, mail.id.clone());
 
         if let Err(err) = response.unwrap_create_errors() {
-            tracing::error!("{}", err);
+            error!("{}", err);
         }
 
         Ok(remote::SetResult {
@@ -164,7 +181,13 @@ impl MailRemote for JmapAccount {
             set.destroy([&mail.id]);
             let tmp_id = setup_create(set, None, mail.clone());
 
-            (request.send_set_email().await?, tmp_id)
+            (
+                request
+                    .send_set_email()
+                    .await
+                    .wrap_err("Request Email/Set(destroy + create)")?,
+                tmp_id,
+            )
         };
 
         if let Err(err) = response.destroyed(mail.id.as_str()) {

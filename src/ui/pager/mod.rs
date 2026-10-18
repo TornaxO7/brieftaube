@@ -8,12 +8,9 @@ mod view;
 
 use crate::{
     config::Username,
-    types::{
-        AccountId, BlobId, CachedAttachment, MailDataHtmlBody, MailDataTextBody, MailId,
-        MailProperty,
-    },
+    types::{AccountId, BlobId, CachedMail},
     ui::{
-        EditorContentType, Layer,
+        EditorContentType, Layer, Loadable,
         pager::{attachments_tab::AttachmentsTab, message::SaveAttachmentStep},
         statusbar::{StatusMsgType, StatusbarState},
         utils::keybindmanager::{HandleEvent, KeybindManager},
@@ -40,15 +37,12 @@ pub struct State {
     selected_tab: SelectedTab,
     selected_body_type: SelectedBodyType,
 
-    ctx: MailCtx,
-    headers: Option<color_eyre::Result<MailHeaders>>,
-    text_body: Option<color_eyre::Result<TextBody>>,
-    html_body: Option<color_eyre::Result<HtmlBody>>,
-    attachments: Option<AttachmentsTab>,
+    ctx: UserCtx,
+    content: Loadable<Content>,
 }
 
 impl State {
-    pub fn new(username: Username, account_id: AccountId, mail_id: MailId, mode: Mode) -> Self {
+    pub fn new(username: Username, account_id: AccountId, mode: Mode) -> Self {
         Self {
             mode,
             statusbar: StatusbarState::new(),
@@ -69,15 +63,11 @@ impl State {
             selected_tab: SelectedTab::Body,
             selected_body_type: SelectedBodyType::Html,
 
-            ctx: MailCtx {
+            ctx: UserCtx {
                 username,
                 account_id,
-                mail_id,
             },
-            headers: None,
-            text_body: None,
-            html_body: None,
-            attachments: None,
+            content: Loadable::Loading,
         }
     }
 
@@ -112,10 +102,7 @@ impl Layer<Message> for State {
             Message::Event(event) => self.handle_event(event),
             Message::UserAction(action) => self.handle_user_action(action),
             Message::SelectedPaletteEntry(entry) => self.handle_selected_palette_entry(entry),
-            Message::SetHeaders(headers) => self.handle_set_headers(headers),
-            Message::SetTextBody(body) => self.handle_set_text_body(body),
-            Message::SetHtmlBody(body) => self.handle_set_html_body(body),
-            Message::SetAttachments(attachments) => self.handle_set_attachments(attachments),
+            Message::SetMail(result) => self.handle_set_mail(result),
             Message::SetStatusbarMessage { msg, ty } => self.handle_set_statusbar_message(msg, ty),
             Message::SaveAttachment(step) => self.handle_save_attachment(step),
         }
@@ -187,35 +174,32 @@ impl State {
         vec![super::Message::Pager(Message::UserAction(action))]
     }
 
-    fn handle_set_headers(
-        &mut self,
-        headers: color_eyre::Result<MailHeaders>,
-    ) -> Vec<super::Message> {
-        self.headers = Some(headers);
-        vec![]
-    }
+    fn handle_set_mail(&mut self, result: color_eyre::Result<CachedMail>) -> Vec<super::Message> {
+        match result {
+            Ok(mail) => {
+                let headers = MailHeaders::from(&mail);
+                let text_body = TextBody::from(&mail);
+                let html_body = HtmlBody::from(&mail);
+                let attachments_tab = AttachmentsTab::from(&mail);
 
-    fn handle_set_text_body(
-        &mut self,
-        body: color_eyre::Result<MailDataTextBody>,
-    ) -> Vec<super::Message> {
-        self.text_body = Some(body.map(TextBody::new));
-        vec![]
-    }
+                self.content = Loadable::Loaded(Content {
+                    mail,
 
-    fn handle_set_html_body(
-        &mut self,
-        body: color_eyre::Result<MailDataHtmlBody>,
-    ) -> Vec<super::Message> {
-        self.html_body = Some(body.map(HtmlBody::new));
-        vec![]
-    }
+                    headers,
+                    text_body,
+                    html_body,
+                    attachments_tab,
+                });
+            }
+            Err(err) => {
+                error!("{:?}", err);
 
-    fn handle_set_attachments(
-        &mut self,
-        attachments: color_eyre::Result<Vec<CachedAttachment>>,
-    ) -> Vec<super::Message> {
-        self.attachments = Some(AttachmentsTab::new(attachments));
+                self.content = Loadable::Error(
+                    "Couldn't fetch mail. Please see the logs for more information".to_string(),
+                );
+            }
+        };
+
         vec![]
     }
 
@@ -292,22 +276,7 @@ impl State {
         }
 
         self.selected_body_type = SelectedBodyType::Text;
-
-        match &self.text_body {
-            Some(_) => vec![],
-            None => vec![
-                MessageRequest::GetMail {
-                    username: self.ctx.username.clone(),
-                    account_id: self.ctx.account_id.clone(),
-                    mail_id: self.ctx.mail_id.clone(),
-                    properties: vec![MailProperty::TextBody],
-                    callback: Box::new(move |cached_mail| {
-                        vec![Message::SetTextBody(cached_mail.map(MailDataTextBody::from)).into()]
-                    }),
-                }
-                .into(),
-            ],
-        }
+        vec![]
     }
 
     fn open_html_body(&mut self) -> Vec<super::Message> {
@@ -316,88 +285,67 @@ impl State {
         }
 
         self.selected_body_type = SelectedBodyType::Html;
-
-        match self.html_body.as_ref() {
-            Some(_) => vec![],
-            None => vec![
-                MessageRequest::GetMail {
-                    username: self.ctx.username.clone(),
-                    account_id: self.ctx.account_id.clone(),
-                    mail_id: self.ctx.mail_id.clone(),
-                    properties: vec![MailProperty::HtmlBody],
-                    callback: Box::new(move |cached_mail| {
-                        vec![Message::SetHtmlBody(cached_mail.map(MailDataHtmlBody::from)).into()]
-                    }),
-                }
-                .into(),
-            ],
-        }
+        vec![]
     }
 
     fn navigate_down(&mut self) -> Vec<super::Message> {
+        let Some(content) = self.content.loaded_mut() else {
+            return vec![];
+        };
+
         match self.selected_tab {
             SelectedTab::Body => match self.selected_body_type {
                 SelectedBodyType::Text => {
-                    if let Some(Ok(text_body)) = self.text_body.as_mut() {
-                        text_body.navigate_down(1);
-                    }
+                    content.text_body.navigate_down(1);
                 }
                 SelectedBodyType::Html => {
-                    if let Some(Ok(html_body)) = self.html_body.as_mut() {
-                        html_body.navigate_down(1);
-                    }
+                    content.html_body.navigate_down(1);
                 }
             },
             SelectedTab::Attachments => {
-                if let Some(tab) = self.attachments.as_mut() {
-                    tab.navigate_down();
-                }
+                content.attachments_tab.navigate_down();
             }
         };
         vec![]
     }
 
     fn navigate_up(&mut self) -> Vec<super::Message> {
+        let Some(content) = self.content.loaded_mut() else {
+            return vec![];
+        };
+
         match self.selected_tab {
             SelectedTab::Body => match self.selected_body_type {
                 SelectedBodyType::Text => {
-                    if let Some(Ok(text_body)) = self.text_body.as_mut() {
-                        text_body.navigate_up(1);
-                    }
+                    content.text_body.navigate_up(1);
                 }
                 SelectedBodyType::Html => {
-                    if let Some(Ok(html_body)) = self.html_body.as_mut() {
-                        html_body.navigate_up(1);
-                    }
+                    content.html_body.navigate_up(1);
                 }
             },
             SelectedTab::Attachments => {
-                if let Some(tab) = self.attachments.as_mut() {
-                    tab.navigate_up();
-                }
+                content.attachments_tab.navigate_up();
             }
         };
         vec![]
     }
 
     fn navigate_to_top(&mut self) -> Vec<super::Message> {
+        let Some(content) = self.content.loaded_mut() else {
+            return vec![];
+        };
+
         match self.selected_tab {
             SelectedTab::Body => match self.selected_body_type {
                 SelectedBodyType::Text => {
-                    if let Some(Ok(text_body)) = self.text_body.as_mut() {
-                        text_body.navigate_to_top();
-                    }
+                    content.text_body.navigate_to_top();
                 }
                 SelectedBodyType::Html => {
-                    if let Some(Ok(html_body)) = self.html_body.as_mut() {
-                        html_body.navigate_to_top();
-                    }
+                    content.html_body.navigate_to_top();
                 }
             },
             SelectedTab::Attachments => {
-                if let Some(tab) = self.attachments.as_mut() {
-                    tab.navigate_to_top();
-                }
+                content.attachments_tab.navigate_to_top();
             }
         };
 
@@ -409,16 +357,16 @@ impl State {
             return vec![];
         }
 
+        let Some(content) = self.content.loaded_mut() else {
+            return vec![];
+        };
+
         match self.selected_body_type {
             SelectedBodyType::Text => {
-                if let Some(Ok(text_body)) = self.text_body.as_mut() {
-                    text_body.navigate_half_page_down();
-                }
+                content.text_body.navigate_half_page_down();
             }
             SelectedBodyType::Html => {
-                if let Some(Ok(html_body)) = self.html_body.as_mut() {
-                    html_body.navigate_half_page_down();
-                }
+                content.html_body.navigate_half_page_down();
             }
         }
 
@@ -430,16 +378,16 @@ impl State {
             return vec![];
         }
 
+        let Some(content) = self.content.loaded_mut() else {
+            return vec![];
+        };
+
         match self.selected_body_type {
             SelectedBodyType::Text => {
-                if let Some(Ok(text_body)) = self.text_body.as_mut() {
-                    text_body.navigate_half_page_up();
-                }
+                content.text_body.navigate_half_page_up();
             }
             SelectedBodyType::Html => {
-                if let Some(Ok(html_body)) = self.html_body.as_mut() {
-                    html_body.navigate_half_page_up();
-                }
+                content.html_body.navigate_half_page_up();
             }
         }
 
@@ -447,23 +395,21 @@ impl State {
     }
 
     fn navigate_to_bottom(&mut self) -> Vec<super::Message> {
+        let Some(content) = self.content.loaded_mut() else {
+            return vec![];
+        };
+
         match self.selected_tab {
             SelectedTab::Body => match self.selected_body_type {
                 SelectedBodyType::Text => {
-                    if let Some(Ok(text_body)) = self.text_body.as_mut() {
-                        text_body.navigate_to_bottom();
-                    }
+                    content.text_body.navigate_to_bottom();
                 }
                 SelectedBodyType::Html => {
-                    if let Some(Ok(html_body)) = self.html_body.as_mut() {
-                        html_body.navigate_to_bottom();
-                    }
+                    content.html_body.navigate_to_bottom();
                 }
             },
             SelectedTab::Attachments => {
-                if let Some(tab) = self.attachments.as_mut() {
-                    tab.navigate_to_bottom();
-                }
+                content.attachments_tab.navigate_to_bottom();
             }
         };
         vec![]
@@ -479,27 +425,27 @@ impl State {
     }
 
     fn edit_body(&mut self) -> Vec<super::Message> {
+        if !self.is_in_state(Some(Mode::Composer), SelectedTab::Body) {
+            return vec![];
+        }
+
+        let Some(content) = self.content.loaded_mut() else {
+            return vec![];
+        };
+
+        todo!();
+
+        let mail = content.mail.clone();
+
         let (content, ty): (String, super::EditorContentType) = match self.selected_body_type {
             SelectedBodyType::Text => {
-                let ty = super::EditorContentType::Text;
-                let content = self
-                    .text_body
-                    .as_mut()
-                    .and_then(|body| body.as_mut().ok())
-                    .map(|body| body.scrollable_body().unwrap().content.clone())
-                    .unwrap_or(String::new());
-
+                let ty = super::EditorContentType::MailText;
+                let content = content.text_body.scrollable_body().unwrap().content.clone();
                 (content, ty)
             }
             SelectedBodyType::Html => {
                 let ty = super::EditorContentType::Markdown;
-                let content = self
-                    .html_body
-                    .as_mut()
-                    .and_then(|body| body.as_mut().ok())
-                    .map(|body| body.scrollable_body().unwrap().content.clone())
-                    .unwrap_or(String::new());
-
+                let content = content.html_body.scrollable_body().unwrap().content.clone();
                 (content, ty)
             }
         };
@@ -511,25 +457,7 @@ impl State {
             ty,
             on_exit: Box::new(move |result| match result {
                 Ok(new_content) => {
-                    match body_type {
-                        SelectedBodyType::Text => {
-                            vec![crate::ui::Message::Pager(Message::SetTextBody(Ok(
-                                MailDataTextBody {
-                                    content: new_content,
-                                },
-                            )))]
-                        }
-                        SelectedBodyType::Html => {
-                            vec![crate::ui::Message::Pager(Message::SetHtmlBody(Ok(
-                                MailDataHtmlBody {
-                                    content: new_content,
-                                },
-                            )))]
-                        }
-                    };
-
-                    // TODO: NEXT
-                    todo!("1. Recreate a cached mail => 2. Sync to repository");
+                    todo!();
                 }
                 Err(err) => {
                     let msg = format!("Can't save new body: {}", err);
@@ -563,50 +491,22 @@ impl State {
             return vec![];
         }
 
-        let Some(init_text_body) = self.text_body.as_ref() else {
-            return vec![
-                MessageRequest::GetMail {
-                    username: self.ctx.username.clone(),
-                    account_id: self.ctx.account_id.clone(),
-                    mail_id: self.ctx.mail_id.clone(),
-                    properties: vec![MailProperty::TextBody],
-                    callback: Box::new(|cached_mail| match cached_mail {
-                        Ok(_cache_mail) => {
-                            vec![Message::UserAction(UserAction::ReadTextBodyInEditor).into()]
-                        }
-                        Err(err) => vec![
-                            Message::SetStatusbarMessage {
-                                msg: format!("Couldn't fetch text body: {}", err),
-                                ty: StatusMsgType::Error,
-                            }
-                            .into(),
-                        ],
-                    }),
-                }
-                .into(),
-            ];
+        let Some(content) = self.content.loaded_mut() else {
+            return vec![];
         };
 
-        if let Ok(text_body) = init_text_body {
-            vec![super::Message::OpenInEditor {
-                content: text_body.state.content.clone(),
-                ty: EditorContentType::Text,
-                on_exit: Box::new(|result| match result {
-                    Ok(_) => vec![],
-                    Err(err) => {
-                        vec![
-                            Message::SetStatusbarMessage {
-                                msg: err.to_string(),
-                                ty: StatusMsgType::Error,
-                            }
-                            .into(),
-                        ]
-                    }
-                }),
-            }]
-        } else {
-            vec![]
-        }
+        let headers = content.mail.headers_as_string();
+        let content = format!(
+            "{}\n{}",
+            headers,
+            &content.text_body.scrollable_body().unwrap().content
+        );
+
+        vec![super::Message::OpenInEditor {
+            content,
+            ty: EditorContentType::MailText,
+            on_exit: Box::new(|_| vec![]),
+        }]
     }
 
     fn read_markdown_body_in_editor(&mut self) -> Vec<super::Message> {
@@ -614,59 +514,22 @@ impl State {
             return vec![];
         }
 
-        let Some(init_html_body) = self.html_body.as_ref() else {
-            return vec![
-                MessageRequest::GetMail {
-                    username: self.ctx.username.clone(),
-                    account_id: self.ctx.account_id.clone(),
-                    mail_id: self.ctx.mail_id.clone(),
-                    properties: vec![MailProperty::HtmlBody],
-                    callback: Box::new(|cached_mail| match cached_mail {
-                        Ok(_cached_mail) => {
-                            vec![Message::UserAction(UserAction::ReadMarkdownBodyInEditor).into()]
-                        }
-                        Err(err) => vec![
-                            Message::SetStatusbarMessage {
-                                msg: format!("Couldn't fetch html body: {}", err),
-                                ty: StatusMsgType::Error,
-                            }
-                            .into(),
-                        ],
-                    }),
-                }
-                .into(),
-            ];
-        };
-
-        let Ok(html_body) = init_html_body else {
+        let Some(content) = self.content.loaded_mut() else {
             return vec![];
         };
 
-        match html_body.state.as_ref() {
-            Ok(state) => {
-                vec![super::Message::OpenInEditor {
-                    content: state.content.clone(),
-                    ty: EditorContentType::Markdown,
-                    on_exit: Box::new(|result| match result {
-                        Ok(_) => vec![],
-                        Err(err) => {
-                            vec![
-                                Message::SetStatusbarMessage {
-                                    msg: err.to_string(),
-                                    ty: StatusMsgType::Error,
-                                }
-                                .into(),
-                            ]
-                        }
-                    }),
-                }]
-            }
-            Err(err) => {
-                self.statusbar
-                    .set_message(err.to_string(), StatusMsgType::Error);
-                vec![]
-            }
-        }
+        let headers = content.mail.headers_as_string();
+        let content = format!(
+            "{}\n{}",
+            headers,
+            &content.html_body.scrollable_body().unwrap().content
+        );
+
+        vec![super::Message::OpenInEditor {
+            content,
+            ty: EditorContentType::Markdown,
+            on_exit: Box::new(|_| vec![]),
+        }]
     }
 
     fn read_html_body_in_editor(&mut self) -> Vec<super::Message> {
@@ -674,36 +537,15 @@ impl State {
             return vec![];
         }
 
-        let Some(init_html_body) = self.html_body.as_ref() else {
-            return vec![
-                MessageRequest::GetMail {
-                    username: self.ctx.username.clone(),
-                    account_id: self.ctx.account_id.clone(),
-                    mail_id: self.ctx.mail_id.clone(),
-                    properties: vec![MailProperty::HtmlBody],
-                    callback: Box::new(|cached_mail| match cached_mail {
-                        Ok(_cached_mail) => {
-                            vec![Message::UserAction(UserAction::ReadMarkdownBodyInEditor).into()]
-                        }
-                        Err(err) => vec![
-                            Message::SetStatusbarMessage {
-                                msg: format!("Couldn't fetch html body: {}", err),
-                                ty: StatusMsgType::Error,
-                            }
-                            .into(),
-                        ],
-                    }),
-                }
-                .into(),
-            ];
-        };
-
-        let Ok(html_body) = init_html_body else {
+        let Some(content) = self.content.loaded() else {
             return vec![];
         };
 
+        let headers = content.mail.headers_as_string();
+        let content = format!("{}\n{}", headers, &content.html_body.html);
+
         vec![super::Message::OpenInEditor {
-            content: html_body.html.clone(),
+            content,
             ty: EditorContentType::Html,
             on_exit: Box::new(|result| match result {
                 Ok(_) => vec![],
@@ -725,11 +567,11 @@ impl State {
             return vec![];
         }
 
-        let Some(selected_attachment) = self
-            .attachments
-            .as_ref()
-            .and_then(|tab| tab.get_selected_entry())
-        else {
+        let Some(content) = self.content.loaded() else {
+            return vec![];
+        };
+
+        let Some(selected_attachment) = content.attachments_tab.get_selected_entry() else {
             return vec![];
         };
 
@@ -767,10 +609,9 @@ enum SelectedBodyType {
     Html,
 }
 
-struct MailCtx {
+struct UserCtx {
     username: Username,
     account_id: AccountId,
-    mail_id: MailId,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display)]
@@ -783,4 +624,13 @@ pub enum Mode {
 enum SelectedTab {
     Body,
     Attachments,
+}
+
+struct Content {
+    mail: CachedMail,
+
+    headers: MailHeaders,
+    text_body: TextBody,
+    html_body: HtmlBody,
+    attachments_tab: AttachmentsTab,
 }

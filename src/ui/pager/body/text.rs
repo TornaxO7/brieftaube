@@ -1,5 +1,5 @@
 use crate::{
-    types::MailDataTextBody,
+    types::CachedMail,
     ui::pager::body::{BodyReader, ScrollableBody},
 };
 
@@ -8,10 +8,12 @@ pub struct TextBody {
     pub state: ScrollableBody,
 }
 
-impl TextBody {
-    pub fn new(text: MailDataTextBody) -> Self {
+impl From<&CachedMail> for TextBody {
+    fn from(mail: &CachedMail) -> Self {
+        let content = mail.text_body_as_string().unwrap();
+
         Self {
-            state: ScrollableBody::new(text.content),
+            state: ScrollableBody::new(content),
         }
     }
 }

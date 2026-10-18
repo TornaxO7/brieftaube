@@ -1,5 +1,5 @@
 use super::ScrollableBody;
-use crate::{types::MailDataHtmlBody, ui::pager::body::BodyReader};
+use crate::{types::CachedMail, ui::pager::body::BodyReader};
 
 #[derive(Debug)]
 pub struct HtmlBody {
@@ -7,15 +7,12 @@ pub struct HtmlBody {
     pub state: std::io::Result<ScrollableBody>,
 }
 
-impl HtmlBody {
-    pub fn new(html: MailDataHtmlBody) -> Self {
-        let content = html.content;
-        let ctx = htmd::convert(content.as_str()).map(ScrollableBody::new);
+impl From<&CachedMail> for HtmlBody {
+    fn from(mail: &CachedMail) -> Self {
+        let html = mail.html_body_as_string().unwrap();
+        let state = htmd::convert(html.as_str()).map(ScrollableBody::new);
 
-        Self {
-            html: content,
-            state: ctx,
-        }
+        Self { html, state }
     }
 }
 

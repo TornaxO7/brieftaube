@@ -13,10 +13,9 @@ use crate::{
     config::{self, Username},
     datasource::{self, Cache, RemoteSession, jmap::JmapDescriptor},
     repository::RepositoryHandler,
-    types::{AccountId, BlobId, CachedMail, MailDataHtmlBody, MailId, MailProperty},
-    ui::{palette::PaletteEntry, statusbar::StatusMsgType},
+    types::{AccountId, BlobId, CachedMail, MailId, MailProperty},
+    ui::palette::PaletteEntry,
 };
-use color_eyre::eyre::eyre;
 use crossterm::{
     ExecutableCommand,
     event::Event,
@@ -211,13 +210,16 @@ impl Ui {
                     self.layers.push(ActiveLayer::Pager(pager::State::new(
                         username.clone(),
                         account_id.clone(),
-                        mail_id.clone(),
                         pager::Mode::Reader,
                     )));
 
                     let properties = {
                         let mut properties = pager::MailHeaders::MAIL_PROPERTIES.to_vec();
-                        properties.extend([MailProperty::HtmlBody, MailProperty::Attachments]);
+                        properties.extend([
+                            MailProperty::HtmlBody,
+                            MailProperty::TextBody,
+                            MailProperty::Attachments,
+                        ]);
                         properties
                     };
 
@@ -228,45 +230,8 @@ impl Ui {
                             mail_id,
                             properties,
                             callback: Box::new(
-                                move |cached_mail: color_eyre::Result<CachedMail>| match cached_mail
-                                {
-                                    Ok(cached_mail) => {
-                                        vec![
-                                            pager::Message::SetHeaders(Ok(
-                                                pager::MailHeaders::from(cached_mail.clone()),
-                                            ))
-                                            .into(),
-                                            pager::Message::SetHtmlBody(Ok(
-                                                MailDataHtmlBody::from(cached_mail.clone()),
-                                            ))
-                                            .into(),
-                                            pager::Message::SetAttachments(Ok(cached_mail
-                                                .attachments
-                                                .get()
-                                                .cloned()
-                                                .unwrap()))
-                                            .into(),
-                                        ]
-                                    }
-                                    Err(err) => {
-                                        vec![
-                                            pager::Message::SetHeaders(Err(eyre!(
-                                                "Couldn't fetch mail headers:\n{}",
-                                                err
-                                            )))
-                                            .into(),
-                                            pager::Message::SetHtmlBody(Err(eyre!(
-                                                "Couldn't fetch mail data:\n{}",
-                                                err
-                                            )))
-                                            .into(),
-                                            pager::Message::SetAttachments(Err(eyre!(
-                                                "Couldn't fetch mail attachments:\n{}",
-                                                err
-                                            )))
-                                            .into(),
-                                        ]
-                                    }
+                                move |cached_mail: color_eyre::Result<CachedMail>| {
+                                    vec![pager::Message::SetMail(cached_mail).into()]
                                 },
                             ),
                         }
@@ -281,7 +246,6 @@ impl Ui {
                         self.layers.push(ActiveLayer::Pager(pager::State::new(
                             username.clone(),
                             account_id.clone(),
-                            mail_id.clone(),
                             pager::Mode::Composer,
                         )));
 
@@ -293,44 +257,12 @@ impl Ui {
                                 Err(()) => return vec![],
                             };
 
-                            match handler.create_new_mail(account_id, mail_id).await {
-                                Ok(mail) => {
-                                    vec![
-                                        pager::Message::SetHeaders(Ok(pager::MailHeaders::from(
-                                            mail.clone(),
-                                        )))
-                                        .into(),
-                                        pager::Message::SetHtmlBody(Ok(MailDataHtmlBody::from(
-                                            mail.clone(),
-                                        )))
-                                        .into(),
-                                        pager::Message::SetAttachments(Ok(mail
-                                            .attachments
-                                            .get()
-                                            .cloned()
-                                            .unwrap()))
-                                        .into(),
-                                    ]
-                                }
-                                Err(err) => {
-                                    error!("Couldn't create new mail: {}", err.to_string());
-
-                                    vec![
-                                        pager::Message::SetHeaders(Err(eyre!(""))).into(),
-                                        pager::Message::SetTextBody(Err(eyre!(""))).into(),
-                                        pager::Message::SetHtmlBody(Err(eyre!(""))).into(),
-                                        pager::Message::SetAttachments(Err(eyre!(""))).into(),
-                                        pager::Message::SetStatusbarMessage {
-                                            msg: format!(
-                                                "Couldn't save draft on disk and/or server: {}",
-                                                err
-                                            ),
-                                            ty: StatusMsgType::Error,
-                                        }
-                                        .into(),
-                                    ]
-                                }
-                            }
+                            vec![
+                                pager::Message::SetMail(
+                                    handler.create_new_mail(account_id, mail_id).await,
+                                )
+                                .into(),
+                            ]
                         });
 
                         vec![]
@@ -563,31 +495,10 @@ impl Ui {
                         Err(()) => return vec![],
                     };
 
-                    match handler.edit_mail(account_id, new_mail).await {
-                        Ok(cached_mail) => {
-                            // TODO: Don't know how at the moment, but remove the mail from `mailfs`(?)
-                            vec![
-                                pager::Message::SetHeaders(Ok(pager::MailHeaders::from(
-                                    cached_mail.clone(),
-                                )))
-                                .into(),
-                                pager::Message::SetHtmlBody(Ok(MailDataHtmlBody::from(
-                                    cached_mail.clone(),
-                                )))
-                                .into(),
-                                pager::Message::SetAttachments(Ok(cached_mail
-                                    .attachments
-                                    .get()
-                                    .cloned()
-                                    .unwrap()))
-                                .into(),
-                            ]
-                        }
-                        Err(err) => {
-                            error!("Couldn't update the mail in the cache: {}", err);
-                            vec![]
-                        }
-                    }
+                    vec![
+                        pager::Message::SetMail(handler.edit_mail(account_id, new_mail).await)
+                            .into(),
+                    ]
                 });
 
                 vec![]
@@ -709,7 +620,7 @@ enum OverlayLayer {
 
 #[derive(Debug, Clone, Copy)]
 pub enum EditorContentType {
-    Text,
+    MailText,
     Markdown,
     Html,
 }
@@ -742,7 +653,7 @@ impl PendingEditor {
 
         let tmp_file_path = {
             let ending = match ty {
-                EditorContentType::Text => "txt",
+                EditorContentType::MailText => "eml",
                 EditorContentType::Markdown => "md",
                 EditorContentType::Html => "html",
             };

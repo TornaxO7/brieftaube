@@ -136,6 +136,51 @@ impl CachedMail {
             self.body_parts = OnceLock::from(body_parts);
         }
     }
+
+    pub fn headers_as_string(&self) -> String {
+        let mut string = String::new();
+
+        if let Some(from) = self.from.get() {
+            string.push_str(&format!("From: {}", from.to_string()));
+            string.push('\n');
+        }
+
+        if let Some(to) = self.to.get() {
+            string.push_str(&format!("To: {}", to.to_string()));
+            string.push('\n');
+        }
+
+        if let Some(subject) = self.subject.get() {
+            string.push_str(&format!("Subject: {}", subject));
+            string.push('\n');
+        }
+
+        if let Some(cc) = self.cc.get() {
+            string.push_str(&format!("Cc: {}", cc.to_string()));
+            string.push('\n');
+        }
+
+        if let Some(bcc) = self.bcc.get() {
+            string.push_str(&format!("Bcc: {}", bcc.to_string()));
+            string.push('\n');
+        }
+
+        string
+    }
+
+    pub fn text_body_as_string(&self) -> Option<String> {
+        let body_parts = self.body_parts.get()?;
+        let part_ids = self.text_part_ids.get()?;
+
+        Some(get_body(part_ids, body_parts))
+    }
+
+    pub fn html_body_as_string(&self) -> Option<String> {
+        let body_parts = self.body_parts.get()?;
+        let part_ids = self.html_part_ids.get()?;
+
+        Some(get_body(part_ids, body_parts))
+    }
 }
 
 impl From<jmap_client::email::Email> for CachedMail {
@@ -261,4 +306,13 @@ impl From<jmap_client::email::Email> for CachedMail {
             body_parts,
         }
     }
+}
+
+fn get_body(part_ids: &[String], body_parts: &HashMap<String, String>) -> String {
+    part_ids
+        .into_iter()
+        .fold(String::new(), |prev, next_part_id| {
+            let next_part = body_parts.get(next_part_id).unwrap();
+            format!("{}{}", prev, next_part)
+        })
 }

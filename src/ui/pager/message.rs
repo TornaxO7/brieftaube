@@ -1,7 +1,4 @@
-use crate::{
-    types::{CachedAttachment, MailDataHtmlBody, MailDataTextBody},
-    ui::{pager::MailHeaders, statusbar::StatusMsgType},
-};
+use crate::{types::CachedMail, ui::statusbar::StatusMsgType};
 use crossterm::event::Event;
 use std::path::PathBuf;
 
@@ -11,11 +8,7 @@ pub enum Message {
     Event(Event),
     SelectedPaletteEntry(String),
 
-    SetHeaders(color_eyre::Result<MailHeaders>),
-    SetTextBody(color_eyre::Result<MailDataTextBody>),
-    SetHtmlBody(color_eyre::Result<MailDataHtmlBody>),
-    SetAttachments(color_eyre::Result<Vec<CachedAttachment>>),
-
+    SetMail(color_eyre::Result<CachedMail>),
     SetStatusbarMessage { msg: String, ty: StatusMsgType },
 
     SaveAttachment(SaveAttachmentStep),

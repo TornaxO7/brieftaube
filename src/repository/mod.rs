@@ -15,6 +15,7 @@ use crate::{
 };
 use std::collections::HashMap;
 use tokio::sync::{RwLock, RwLockWriteGuard, mpsc, oneshot};
+use tracing::error;
 
 #[derive(Debug)]
 enum Command {
