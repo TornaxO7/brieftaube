@@ -11,7 +11,7 @@ use color_eyre::{Result, eyre::Context};
 use jmap_client::{
     Set,
     core::set::{SetObject, SetRequest},
-    email::Email,
+    email::{Email, EmailBodyPart},
 };
 use tracing::{error, warn};
 
@@ -254,6 +254,30 @@ fn setup_create(
 
     if let Some(bcc) = mail.bcc.get().cloned() {
         create.to(bcc);
+    }
+
+    if let Some(body_parts) = mail.body_parts.get().cloned() {
+        for (id, body_part) in body_parts {
+            create.body_value(id, body_part);
+        }
+    }
+
+    if let Some(text_part_ids) = mail.text_part_ids.get().cloned() {
+        for text_part_id in text_part_ids {
+            let part = EmailBodyPart::new()
+                .part_id(text_part_id)
+                .content_type("text/plain");
+            create.text_body(part);
+        }
+    }
+
+    if let Some(html_part_ids) = mail.html_part_ids.get().cloned() {
+        for html_part_id in html_part_ids {
+            let part = EmailBodyPart::new()
+                .part_id(html_part_id)
+                .content_type("text/html");
+            create.html_body(part);
+        }
     }
 
     tmp_id
