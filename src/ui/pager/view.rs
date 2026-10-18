@@ -15,7 +15,7 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{
         Block, Borders, Cell, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState,
-        Table, Tabs,
+        Table, Tabs, Wrap,
     },
 };
 use throbber_widgets_tui::Throbber;
@@ -252,11 +252,31 @@ fn render_text_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
     );
 }
 
-fn render_html_body(_scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
+fn render_html_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
     let html_body = &mut state.content.loaded_mut().unwrap().html_body;
 
-    // TODO: Handle `Result`
-    let ctx = html_body.ctx.as_mut().unwrap();
+    let ctx = match html_body.ctx.as_mut() {
+        Ok(ctx) => ctx,
+        Err(err) => {
+            let msg = format!("Error: {}", err);
+            let amount_lines = msg.lines().map(|line| line.len()).max().unwrap_or(0);
+
+            let paragraph = Paragraph::new(msg)
+                .style(Style::new().fg(scheme.error.into_color()))
+                .wrap(Wrap { trim: false });
+
+            let area = area.centered_horizontally(Constraint::Length(amount_lines as u16));
+
+            let area = area
+                .centered_vertically(Constraint::Length(paragraph.line_count(area.width) as u16));
+
+            frame.render_widget(
+                Paragraph::new(err.to_string()).style(Style::new().fg(scheme.error.into_color())),
+                area,
+            );
+            return;
+        }
+    };
 
     let [body_area, scrollbar_area] =
         Layout::horizontal([Constraint::Fill(1), Constraint::Length(1)]).areas(area);
@@ -391,15 +411,6 @@ fn format_size(size: usize) -> String {
     }
 
     format!("{size} B")
-}
-
-fn render_msg_centered(msg: String, style: Style, frame: &mut Frame, area: Rect) {
-    let area = area.centered(
-        Constraint::Length(msg.lines().map(|line| line.len()).max().unwrap_or(0) as u16),
-        Constraint::Length(msg.lines().count() as u16),
-    );
-
-    frame.render_widget(Paragraph::new(msg).style(style), area);
 }
 
 fn render_statusbar(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
