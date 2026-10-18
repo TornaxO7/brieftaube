@@ -478,7 +478,10 @@ impl State {
                                     keywords.into_iter().map(MailKeyword::from).collect();
                                 OnceLock::from(keywords)
                             }
-                            None => OnceLock::from(HashSet::new()),
+                            None => OnceLock::from(HashSet::from([
+                                MailKeyword::Draft,
+                                MailKeyword::Seen,
+                            ])),
                         },
                         subject: match parsed_mail.subject() {
                             Some(subject) => OnceLock::from(subject.to_string()),
