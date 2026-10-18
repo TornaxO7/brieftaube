@@ -4,8 +4,8 @@ pub mod jmap;
 pub mod types;
 
 use crate::types::{
-    AccountData, AccountId, BlobId, CachedMail, CachedMailbox, MailId, MailProperty, MailboxId,
-    MailboxUpdate, ParentMailboxId, ThreadId,
+    AccountData, AccountId, BlobId, CachedIdentity, CachedMail, CachedMailbox, MailId,
+    MailProperty, MailboxId, MailboxUpdate, ParentMailboxId, ThreadId,
 };
 use async_trait::async_trait;
 use color_eyre::Result;
@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 use types::{GetState, QueryState, QueryWindow, cache, remote};
 
 pub trait Cache:
-    MailCache + RootMailsCache + MailboxCache + ThreadCache + BlobCache + Send + Sync
+    MailCache + RootMailsCache + MailboxCache + ThreadCache + BlobCache + IdentityCache + Send + Sync
 {
 }
 
@@ -24,7 +24,14 @@ pub trait RemoteSession: Send + Sync {
 }
 
 pub trait RemoteAccount:
-    MailRemote + RootMailsRemote + MailboxRemote + ThreadRemote + BlobRemote + Send + Sync
+    MailRemote
+    + RootMailsRemote
+    + MailboxRemote
+    + ThreadRemote
+    + BlobRemote
+    + IdentityRemote
+    + Send
+    + Sync
 {
 }
 
@@ -282,6 +289,22 @@ pub trait ThreadRemote {
         &self,
         since: &GetState,
     ) -> Result<remote::GetChangeResult<ThreadId>>;
+}
+
+#[async_trait]
+pub trait IdentityCache {
+    async fn get_identity_state(&self) -> Option<&GetState>;
+
+    async fn set_identity_staten(&mut self, new_state: GetState) -> Result<()>;
+
+    async fn get_all_identities(&self) -> Result<Option<Vec<CachedIdentity>>>;
+
+    async fn upsert_identities(&mut self, identities: Vec<CachedIdentity>) -> Result<()>;
+}
+
+#[async_trait]
+pub trait IdentityRemote {
+    async fn fetch_identities_all(&self) -> Result<remote::GetOneResult<Vec<CachedIdentity>>>;
 }
 
 #[async_trait]
