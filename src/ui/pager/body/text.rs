@@ -19,7 +19,27 @@ impl From<&CachedMail> for TextBody {
 }
 
 impl BodyReader for TextBody {
-    fn scrollable_body(&mut self) -> Option<&mut ScrollableBody> {
-        Some(&mut self.state)
+    fn navigate_up(&mut self, amount: usize) {
+        self.state.navigate_up(amount);
+    }
+
+    fn navigate_down(&mut self, amount: usize) {
+        self.state.navigate_down(amount);
+    }
+
+    fn navigate_to_top(&mut self) {
+        self.state.navigate_to_top();
+    }
+
+    fn navigate_to_bottom(&mut self) {
+        self.state.navigate_to_bottom();
+    }
+
+    fn navigate_half_page_up(&mut self) {
+        self.state.navigate_up(self.state.content_height / 2);
+    }
+
+    fn navigate_half_page_down(&mut self) {
+        self.state.navigate_down(self.state.content_height / 2);
     }
 }

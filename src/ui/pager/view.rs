@@ -1,12 +1,13 @@
 use crate::{
     ui::{
         Loadable,
-        pager::{MailHeaders, Mode, SelectedBodyType, SelectedTab, body::BodyReader},
+        pager::{MailHeaders, Mode, SelectedBodyType, SelectedTab},
         statusbar::StatusbarWidget,
     },
     utils::IntoColor,
 };
 use material_theme_loader::Scheme;
+use pulldown_cmark_mdcat::ratatui::MdcatWidget;
 use ratatui::{
     Frame,
     layout::{Constraint, HorizontalAlignment, Layout, Rect},
@@ -229,86 +230,62 @@ fn render_mail_headers(
 fn render_text_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
     let text_body = &mut state.content.loaded_mut().unwrap().text_body;
 
-    match text_body.scrollable_body() {
-        Some(body) => {
-            let [body_area, scrollbar_area] =
-                Layout::horizontal([Constraint::Fill(1), Constraint::Length(1)]).areas(area);
+    let [body_area, scrollbar_area] =
+        Layout::horizontal([Constraint::Fill(1), Constraint::Length(1)]).areas(area);
 
-            body.set_content_height(body_area.as_size());
+    text_body.state.set_content_height(body_area.as_size());
 
-            frame.render_widget(
-                body.default_paragraph()
-                    .style(Style::new().fg(scheme.primary.into_color()))
-                    .scroll((body.scroll_offset as u16, 0)),
-                body_area,
-            );
+    frame.render_widget(
+        text_body
+            .state
+            .default_paragraph()
+            .style(Style::new().fg(scheme.primary.into_color()))
+            .scroll((text_body.state.scroll_offset as u16, 0)),
+        body_area,
+    );
 
-            frame.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight),
-                scrollbar_area,
-                &mut ScrollbarState::new(body.content_height).position(body.scroll_offset),
-            );
-        }
-        None => {
-            const MSG: &str = "Mail doesn't have `text/body`.";
-            render_msg_centered(
-                MSG.to_string(),
-                Style::new().fg(scheme.primary.into_color()),
-                frame,
-                area,
-            );
-        }
-    }
+    frame.render_stateful_widget(
+        Scrollbar::new(ScrollbarOrientation::VerticalRight),
+        scrollbar_area,
+        &mut ScrollbarState::new(text_body.state.content_height)
+            .position(text_body.state.scroll_offset),
+    );
 }
 
-fn render_html_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
+fn render_html_body(_scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
     let html_body = &mut state.content.loaded_mut().unwrap().html_body;
 
-    match html_body.scrollable_body() {
-        Some(body) => {
-            let [body_area, scrollbar_area] =
-                Layout::horizontal([Constraint::Fill(1), Constraint::Length(1)]).areas(area);
+    // TODO: Handle `Result`
+    let ctx = html_body.ctx.as_mut().unwrap();
 
-            if body.content.is_empty() {
-                const EMPTY_BODY_MSG: &str = "<Body is empty>";
+    let [body_area, scrollbar_area] =
+        Layout::horizontal([Constraint::Fill(1), Constraint::Length(1)]).areas(area);
 
-                let body_area = body_area.centered(
-                    Constraint::Length(EMPTY_BODY_MSG.len() as u16),
-                    Constraint::Length(1),
-                );
+    if ctx.markdown.is_empty() {
+        const EMPTY_BODY_MSG: &str = "<Body is empty>";
 
-                frame.render_widget(
-                    Paragraph::new(EMPTY_BODY_MSG).style(Style::new().italic()),
-                    body_area,
-                );
-            } else {
-                body.set_content_height(body_area.as_size());
+        let body_area = body_area.centered(
+            Constraint::Length(EMPTY_BODY_MSG.len() as u16),
+            Constraint::Length(1),
+        );
 
-                frame.render_widget(
-                    body.default_paragraph()
-                        .style(Style::new().fg(scheme.primary.into_color()))
-                        .scroll((body.scroll_offset as u16, 0)),
-                    body_area,
-                );
-            }
-
-            frame.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight),
-                scrollbar_area,
-                &mut ScrollbarState::new(body.content_height).position(body.scroll_offset),
-            );
-        }
-        None => {
-            const MSG: &str = "Mail doesn't have `html/body`.";
-
-            render_msg_centered(
-                MSG.to_string(),
-                Style::new().fg(scheme.primary.into_color()),
-                frame,
-                area,
-            );
-        }
+        frame.render_widget(
+            Paragraph::new(EMPTY_BODY_MSG).style(Style::new().italic()),
+            body_area,
+        );
+    } else {
+        frame.render_stateful_widget(
+            MdcatWidget::new(ctx.markdown.as_str()),
+            body_area,
+            &mut ctx.state,
+        );
     }
+
+    frame.render_stateful_widget(
+        Scrollbar::new(ScrollbarOrientation::VerticalRight),
+        scrollbar_area,
+        &mut ScrollbarState::new(ctx.state.total_lines()).position(ctx.state.scroll() as usize),
+    );
 }
 
 fn render_attachments_tab(

@@ -447,7 +447,7 @@ impl State {
                 let content = format!(
                     "{}\n{}",
                     headers_string,
-                    content.text_body.scrollable_body().unwrap().content.clone()
+                    content.text_body.state.content.clone(),
                 );
                 (content, ty)
             }
@@ -456,7 +456,7 @@ impl State {
                 let content = format!(
                     "{}\n{}",
                     headers_string,
-                    content.html_body.scrollable_body().unwrap().content.clone()
+                    content.html_body.ctx.as_ref().unwrap().markdown.clone()
                 );
                 (content, ty)
             }
@@ -549,7 +549,10 @@ impl State {
 
                                     pulldown_cmark::html::push_html(
                                         &mut html_output,
-                                        pulldown_cmark::Parser::new(&text_body_content),
+                                        pulldown_cmark::Parser::new_ext(
+                                            &text_body_content,
+                                            pulldown_cmark::Options::all(),
+                                        ),
                                     );
 
                                     html_output
@@ -609,11 +612,7 @@ impl State {
         };
 
         let headers = content.mail.headers_as_string();
-        let content = format!(
-            "{}\n{}",
-            headers,
-            &content.text_body.scrollable_body().unwrap().content
-        );
+        let content = format!("{}\n{}", headers, &content.text_body.state.content);
 
         vec![super::Message::OpenInEditor {
             content,
@@ -635,7 +634,7 @@ impl State {
         let content = format!(
             "{}\n{}",
             headers,
-            &content.html_body.scrollable_body().unwrap().content
+            &content.html_body.ctx.as_ref().unwrap().markdown
         );
 
         vec![super::Message::OpenInEditor {

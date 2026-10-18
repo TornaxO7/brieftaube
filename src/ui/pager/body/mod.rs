@@ -10,43 +10,17 @@ pub use html::*;
 pub use text::*;
 
 pub trait BodyReader {
-    fn scrollable_body(&mut self) -> Option<&mut ScrollableBody>;
+    fn navigate_up(&mut self, amount: usize);
 
-    fn navigate_up(&mut self, amount: usize) {
-        if let Some(state) = self.scrollable_body() {
-            state.navigate_up(amount);
-        }
-    }
+    fn navigate_down(&mut self, amount: usize);
 
-    fn navigate_down(&mut self, amount: usize) {
-        if let Some(state) = self.scrollable_body() {
-            state.navigate_down(amount);
-        }
-    }
+    fn navigate_to_top(&mut self);
 
-    fn navigate_to_top(&mut self) {
-        if let Some(state) = self.scrollable_body() {
-            state.navigate_to_top();
-        }
-    }
+    fn navigate_to_bottom(&mut self);
 
-    fn navigate_to_bottom(&mut self) {
-        if let Some(state) = self.scrollable_body() {
-            state.navigate_to_bottom();
-        }
-    }
+    fn navigate_half_page_up(&mut self);
 
-    fn navigate_half_page_up(&mut self) {
-        if let Some(state) = self.scrollable_body() {
-            state.navigate_half_page_up();
-        }
-    }
-
-    fn navigate_half_page_down(&mut self) {
-        if let Some(state) = self.scrollable_body() {
-            state.navigate_half_page_down();
-        }
-    }
+    fn navigate_half_page_down(&mut self);
 }
 
 #[derive(Debug)]
@@ -98,13 +72,5 @@ impl ScrollableBody {
 
     fn navigate_to_bottom(&mut self) {
         self.scroll_offset = self.content_height;
-    }
-
-    fn navigate_half_page_down(&mut self) {
-        self.navigate_down(self.content_height / 2);
-    }
-
-    fn navigate_half_page_up(&mut self) {
-        self.navigate_up(self.content_height / 2);
     }
 }
