@@ -17,16 +17,6 @@ pub struct GetBatchResult<T, M> {
     pub state: GetState,
 }
 
-impl<T, M> GetBatchResult<T, M> {
-    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> GetBatchResult<U, M> {
-        GetBatchResult {
-            values: f(self.values),
-            not_found: self.not_found,
-            state: self.state,
-        }
-    }
-}
-
 pub struct SetResult<T> {
     pub value: Result<T, jmap_client::Error>,
     pub old_state: Option<GetState>,
