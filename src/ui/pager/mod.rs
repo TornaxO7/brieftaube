@@ -8,7 +8,7 @@ mod view;
 
 use crate::{
     config::Username,
-    types::{AccountId, BlobId, CachedMail},
+    types::{AccountId, BlobId, CachedMail, MailAddresses, MailKeyword},
     ui::{
         EditorContentType, Layer, Loadable,
         pager::{attachments_tab::AttachmentsTab, message::SaveAttachmentStep},
@@ -18,7 +18,12 @@ use crate::{
 };
 use body::*;
 use crossterm::event::Event;
-use std::{collections::HashMap, str::FromStr};
+use mail_parser::MessageParser;
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+    sync::OnceLock,
+};
 use throbber_widgets_tui::ThrobberState;
 use tracing::{debug, error};
 use user_action::UserAction;
@@ -433,31 +438,140 @@ impl State {
             return vec![];
         };
 
-        todo!();
-
-        let mail = content.mail.clone();
+        let current_mail = content.mail.clone();
+        let headers_string = content.mail.headers_as_string();
 
         let (content, ty): (String, super::EditorContentType) = match self.selected_body_type {
             SelectedBodyType::Text => {
                 let ty = super::EditorContentType::MailText;
-                let content = content.text_body.scrollable_body().unwrap().content.clone();
+                let content = format!(
+                    "{}\n{}",
+                    headers_string,
+                    content.text_body.scrollable_body().unwrap().content.clone()
+                );
                 (content, ty)
             }
             SelectedBodyType::Html => {
                 let ty = super::EditorContentType::Markdown;
-                let content = content.html_body.scrollable_body().unwrap().content.clone();
+                let content = format!(
+                    "{}\n{}",
+                    headers_string,
+                    content.html_body.scrollable_body().unwrap().content.clone()
+                );
                 (content, ty)
             }
         };
 
+        let ctx = self.ctx.clone();
         let body_type = self.selected_body_type.clone();
-
         vec![super::Message::OpenInEditor {
             content,
             ty,
             on_exit: Box::new(move |result| match result {
                 Ok(new_content) => {
-                    todo!();
+                    let parsed_mail = MessageParser::new().parse(&new_content).unwrap();
+
+                    let new_mail = CachedMail {
+                        keywords: match parsed_mail.keywords().as_text_list() {
+                            Some(keywords) => {
+                                let keywords: HashSet<MailKeyword> =
+                                    keywords.into_iter().map(MailKeyword::from).collect();
+                                OnceLock::from(keywords)
+                            }
+                            None => OnceLock::from(HashSet::new()),
+                        },
+                        subject: match parsed_mail.subject() {
+                            Some(subject) => OnceLock::from(subject.to_string()),
+                            None => OnceLock::from(String::new()),
+                        },
+                        from: parsed_mail.from().map_or_default(|from| match from {
+                            mail_parser::Address::List(addrs) => {
+                                let addresses = MailAddresses::from(addrs);
+                                OnceLock::from(addresses)
+                            }
+                            mail_parser::Address::Group(_groups) => todo!(),
+                        }),
+                        to: parsed_mail.to().map_or_default(|to| match to {
+                            mail_parser::Address::List(addrs) => {
+                                let addresses = MailAddresses::from(addrs);
+                                OnceLock::from(addresses)
+                            }
+                            mail_parser::Address::Group(_groups) => todo!(),
+                        }),
+                        cc: parsed_mail.cc().map_or_default(|cc| match cc {
+                            mail_parser::Address::List(addrs) => {
+                                let addresses = MailAddresses::from(addrs);
+                                OnceLock::from(addresses)
+                            }
+                            mail_parser::Address::Group(_groups) => todo!(),
+                        }),
+                        bcc: parsed_mail.bcc().map_or_default(|bcc| match bcc {
+                            mail_parser::Address::List(addrs) => {
+                                let addresses = MailAddresses::from(addrs);
+                                OnceLock::from(addresses)
+                            }
+                            mail_parser::Address::Group(_groups) => todo!(),
+                        }),
+                        ..current_mail.clone()
+                    };
+
+                    // overwrite body
+                    let new_mail = {
+                        debug_assert_eq!(parsed_mail.text_body_count(), 1);
+
+                        let mail_parser::PartType::Text(text_body_content) =
+                            &parsed_mail.text_part(0).unwrap().body
+                        else {
+                            unreachable!();
+                        };
+
+                        let text_body_content = text_body_content.to_string();
+
+                        let part_id = std::iter::repeat_with(fastrand::alphanumeric)
+                            .take(10)
+                            .collect::<String>();
+
+                        match body_type {
+                            SelectedBodyType::Text => {
+                                let body_parts =
+                                    HashMap::from([(part_id.clone(), text_body_content)]);
+
+                                CachedMail {
+                                    text_part_ids: OnceLock::from(vec![part_id]),
+                                    body_parts: OnceLock::from(body_parts),
+                                    ..new_mail
+                                }
+                            }
+                            SelectedBodyType::Html => {
+                                let html = {
+                                    let mut html_output = String::new();
+
+                                    pulldown_cmark::html::push_html(
+                                        &mut html_output,
+                                        pulldown_cmark::Parser::new(&text_body_content),
+                                    );
+
+                                    html_output
+                                };
+
+                                let body_parts = HashMap::from([(part_id.clone(), html)]);
+
+                                CachedMail {
+                                    html_part_ids: OnceLock::from(vec![part_id]),
+                                    body_parts: OnceLock::from(body_parts),
+                                    ..new_mail
+                                }
+                            }
+                        }
+                    };
+
+                    tracing::debug!("Edited: {:?}", new_mail.body_parts);
+
+                    vec![crate::ui::Message::EditMail {
+                        username: ctx.username.clone(),
+                        account_id: ctx.account_id.clone(),
+                        new_mail,
+                    }]
                 }
                 Err(err) => {
                     let msg = format!("Can't save new body: {}", err);
@@ -609,6 +723,7 @@ enum SelectedBodyType {
     Html,
 }
 
+#[derive(Debug, Clone)]
 struct UserCtx {
     username: Username,
     account_id: AccountId,

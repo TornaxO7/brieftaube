@@ -1,7 +1,7 @@
 use super::MailAddress;
 use jmap_client::email::EmailAddress;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MailAddresses(pub Vec<MailAddress>);
 
 impl std::fmt::Display for MailAddresses {
@@ -44,5 +44,11 @@ impl From<&[EmailAddress]> for MailAddresses {
 impl AsRef<[MailAddress]> for MailAddresses {
     fn as_ref(&self) -> &[MailAddress] {
         &self.0
+    }
+}
+
+impl From<&Vec<mail_parser::Addr<'_>>> for MailAddresses {
+    fn from(addresses: &Vec<mail_parser::Addr<'_>>) -> Self {
+        Self(addresses.into_iter().map(MailAddress::from).collect())
     }
 }

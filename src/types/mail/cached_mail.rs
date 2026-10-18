@@ -216,7 +216,11 @@ impl From<jmap_client::email::Email> for CachedMail {
                 }
             }
 
-            OnceLock::from(body_parts)
+            if !body_parts.is_empty() {
+                OnceLock::from(body_parts)
+            } else {
+                OnceLock::new()
+            }
         };
 
         Self {

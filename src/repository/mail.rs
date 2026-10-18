@@ -312,7 +312,7 @@ impl Repository {
     pub async fn edit_mail(
         &self,
         account_id: AccountId,
-        mail: CachedMail,
+        mut mail: CachedMail,
     ) -> color_eyre::Result<CachedMail> {
         let _enter = self.mail_locks.get_mail.lock().await;
 
@@ -333,19 +333,19 @@ impl Repository {
                         .await?;
                 }
 
-                let new_mail = result.value?;
+                let server_mail = result.value?;
+                mail.merge(server_mail);
 
                 cache_lock.set_mail_state(result.new_state).await?;
                 cache_lock.evict_mails(&[prev_id]).await?;
-                cache_lock.upsert_mails(vec![new_mail.clone()]).await?;
-
-                Ok(new_mail)
+                cache_lock.upsert_mails(vec![mail.clone()]).await?;
             }
             Err(err) => {
                 error!("Couldn't send edit to server: {}", err);
                 cache_lock.upsert_mails(vec![mail.clone()]).await?;
-                Ok(mail)
             }
-        }
+        };
+
+        Ok(mail)
     }
 }

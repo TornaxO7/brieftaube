@@ -49,3 +49,12 @@ impl From<MailAddress> for EmailAddress {
         }
     }
 }
+
+impl From<&mail_parser::Addr<'_>> for MailAddress {
+    fn from(address: &mail_parser::Addr<'_>) -> Self {
+        Self {
+            name: address.name().map(|a| a.to_string()),
+            address: address.address().unwrap().to_string(),
+        }
+    }
+}

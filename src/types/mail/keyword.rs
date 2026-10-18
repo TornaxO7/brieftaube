@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 const DRAFT: &str = "$draft";
 const SEEN: &str = "$seen";
 const FLAGGED: &str = "$flagged";
@@ -61,5 +63,11 @@ impl From<&str> for MailKeyword {
             NOTJUNK => Self::Notjunk,
             other => Self::Other(other.to_string()),
         }
+    }
+}
+
+impl<'a> From<&Cow<'a, str>> for MailKeyword {
+    fn from(s: &Cow<'a, str>) -> Self {
+        Self::from(s.to_string().as_str())
     }
 }
