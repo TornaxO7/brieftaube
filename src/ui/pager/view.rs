@@ -274,6 +274,15 @@ fn render_html_body(_scheme: &Scheme, state: &mut super::State, frame: &mut Fram
             body_area,
         );
     } else {
+        let max_scroll = ctx
+            .state
+            .total_lines()
+            .saturating_sub(body_area.height as usize) as u16;
+
+        if ctx.state.scroll() > max_scroll {
+            ctx.state.set_scroll(max_scroll);
+        }
+
         frame.render_stateful_widget(
             MdcatWidget::new(ctx.markdown.as_str()),
             body_area,
@@ -281,10 +290,16 @@ fn render_html_body(_scheme: &Scheme, state: &mut super::State, frame: &mut Fram
         );
     }
 
+    // `ctx.state.total_lines` is computed in the first rendering
+    let max_scroll = ctx
+        .state
+        .total_lines()
+        .saturating_sub(body_area.height as usize) as u16;
+
     frame.render_stateful_widget(
         Scrollbar::new(ScrollbarOrientation::VerticalRight),
         scrollbar_area,
-        &mut ScrollbarState::new(ctx.state.total_lines()).position(ctx.state.scroll() as usize),
+        &mut ScrollbarState::new(max_scroll as usize).position(ctx.state.scroll() as usize),
     );
 }
 
