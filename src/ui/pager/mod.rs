@@ -516,9 +516,10 @@ impl State {
                     };
 
                     // overwrite body
-                    let new_mail = {
-                        debug_assert_eq!(parsed_mail.text_body_count(), 1);
-
+                    let has_empty_body = parsed_mail.text_body_count() == 0;
+                    let new_mail = if has_empty_body {
+                        new_mail
+                    } else {
                         let mail_parser::PartType::Text(text_body_content) =
                             &parsed_mail.text_part(0).unwrap().body
                         else {
