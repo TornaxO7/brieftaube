@@ -291,6 +291,7 @@ impl Ui {
 
             Message::Quit => {
                 self.is_running = false;
+                // TODO: Cleanup quiting (exit screen?)
                 vec![]
             }
             Message::Mailfs(message) => {

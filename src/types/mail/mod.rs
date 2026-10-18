@@ -1,6 +1,5 @@
 mod address;
 mod addresses;
-mod body;
 mod cached_attachment;
 mod cached_mail;
 mod id;
@@ -12,7 +11,6 @@ mod update;
 
 pub use address::*;
 pub use addresses::*;
-pub use body::*;
 pub use cached_attachment::*;
 pub use cached_mail::*;
 pub use id::*;
