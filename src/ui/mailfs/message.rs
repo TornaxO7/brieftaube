@@ -63,6 +63,12 @@ pub enum Message {
     SetColumnAreaSize(Size),
 }
 
+// TODO: HERE
+#[derive(Debug)]
+pub enum ComposingStep {
+    GetAl,
+}
+
 impl From<Message> for crate::ui::Message {
     fn from(msg: Message) -> Self {
         Self::Mailfs(msg)

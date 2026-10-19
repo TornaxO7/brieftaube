@@ -884,6 +884,10 @@ impl State {
     fn compose_markdown_mail(&mut self) -> Vec<super::Message> {
         let account_ctx = self.get_account_ctx();
 
+        // TODO: HERE
+        // 1. Get all identities
+        // 2. Use palette to let user select identity
+        // 3. _Then_ start composer
         vec![super::Message::OpenPager {
             username: account_ctx.username,
             account_id: account_ctx.account_id,

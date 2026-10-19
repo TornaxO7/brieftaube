@@ -238,36 +238,33 @@ impl Ui {
                         .into(),
                     ]
                 }
-                OpenPagerMode::Composer(mail_id) => match mail_id {
-                    Some(_) => todo!("Open already existing mailid"),
-                    None => {
-                        let mail_id = MailId::new_intern();
+                OpenPagerMode::Composer(mail_id) => {
+                    let mail_id = mail_id.unwrap_or(MailId::new_intern());
 
-                        self.layers.push(ActiveLayer::Pager(pager::State::new(
-                            username.clone(),
-                            account_id.clone(),
-                            pager::Mode::Composer,
-                        )));
+                    self.layers.push(ActiveLayer::Pager(pager::State::new(
+                        username.clone(),
+                        account_id.clone(),
+                        pager::Mode::Composer,
+                    )));
 
-                        let state = self.repos.get(&username).unwrap().clone();
+                    let state = self.repos.get(&username).unwrap().clone();
 
-                        self.task_manager.spawn(async move {
-                            let handler = match get_handler(state).await {
-                                Ok(handler) => handler,
-                                Err(()) => return vec![],
-                            };
+                    self.task_manager.spawn(async move {
+                        let handler = match get_handler(state).await {
+                            Ok(handler) => handler,
+                            Err(()) => return vec![],
+                        };
 
-                            vec![
-                                pager::Message::SetMail(
-                                    handler.create_new_mail(account_id, mail_id).await,
-                                )
-                                .into(),
-                            ]
-                        });
+                        vec![
+                            pager::Message::SetMail(
+                                handler.create_new_mail(account_id, mail_id).await,
+                            )
+                            .into(),
+                        ]
+                    });
 
-                        vec![]
-                    }
-                },
+                    vec![]
+                }
             },
 
             Message::OpenInEditor {
