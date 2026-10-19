@@ -67,11 +67,11 @@ pub enum Message {
         callback: fn(color_eyre::Result<Vec<u8>>) -> Vec<Message>,
     },
 
-    EditMail {
+    EditDraftMail {
         username: Username,
         account_id: AccountId,
 
-        new_mail: CachedMail,
+        new_draft: CachedMail,
     },
 
     Back,
@@ -483,10 +483,10 @@ impl Ui {
 
                 vec![]
             }
-            Message::EditMail {
+            Message::EditDraftMail {
                 username,
                 account_id,
-                new_mail,
+                new_draft,
             } => {
                 let state = self.repos.get(&username).unwrap().clone();
 
@@ -497,8 +497,10 @@ impl Ui {
                     };
 
                     vec![
-                        pager::Message::SetMail(handler.edit_mail(account_id, new_mail).await)
-                            .into(),
+                        pager::Message::SetMail(
+                            handler.edit_draft_mail(account_id, new_draft).await,
+                        )
+                        .into(),
                     ]
                 });
 

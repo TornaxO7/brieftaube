@@ -31,8 +31,8 @@ pub enum CommandKind {
         id: MailId,
         tx: oneshot::Sender<color_eyre::Result<CachedMail>>,
     },
-    EditMail {
-        new_mail: CachedMail,
+    EditDraftMail {
+        new_draft: CachedMail,
         tx: oneshot::Sender<color_eyre::Result<CachedMail>>,
     },
 }
@@ -309,19 +309,19 @@ impl Repository {
         Ok(new_mail)
     }
 
-    pub async fn edit_mail(
+    pub async fn edit_draft(
         &self,
         account_id: AccountId,
-        mut mail: CachedMail,
+        mut new_draft: CachedMail,
     ) -> color_eyre::Result<CachedMail> {
         let _enter = self.mail_locks.get_mail.lock().await;
 
-        let prev_id = mail.id.clone();
+        let prev_id = new_draft.id.clone();
 
         let response = self
             .remote
             .get_remote_account(account_id.clone())
-            .edit_mail(mail.clone())
+            .edit_draft(new_draft.clone())
             .await;
 
         let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
@@ -334,18 +334,18 @@ impl Repository {
                 }
 
                 let server_mail = result.value?;
-                mail.merge(server_mail);
+                new_draft.merge(server_mail);
 
                 cache_lock.set_mail_state(result.new_state).await?;
                 cache_lock.evict_mails(&[prev_id]).await?;
-                cache_lock.upsert_mails(vec![mail.clone()]).await?;
+                cache_lock.upsert_mails(vec![new_draft.clone()]).await?;
             }
             Err(err) => {
                 error!("Couldn't send edit to server: {}", err);
-                cache_lock.upsert_mails(vec![mail.clone()]).await?;
+                cache_lock.upsert_mails(vec![new_draft.clone()]).await?;
             }
         };
 
-        Ok(mail)
+        Ok(new_draft)
     }
 }

@@ -100,7 +100,7 @@ pub trait MailRemote {
 
     async fn create_mail(&self, mail: CachedMail) -> Result<remote::SetResult<CachedMail>>;
 
-    async fn edit_mail(&self, mail: CachedMail) -> Result<remote::SetResult<CachedMail>>;
+    async fn edit_draft(&self, mail: CachedMail) -> Result<remote::SetResult<CachedMail>>;
 }
 
 #[async_trait]

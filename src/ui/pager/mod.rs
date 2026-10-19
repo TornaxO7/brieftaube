@@ -572,10 +572,10 @@ impl State {
                         }
                     };
 
-                    vec![crate::ui::Message::EditMail {
+                    vec![crate::ui::Message::EditDraftMail {
                         username: ctx.username.clone(),
                         account_id: ctx.account_id.clone(),
-                        new_mail,
+                        new_draft,
                     }]
                 }
                 Err(err) => {

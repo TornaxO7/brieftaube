@@ -172,7 +172,7 @@ impl MailRemote for JmapAccount {
         })
     }
 
-    async fn edit_mail(&self, mail: CachedMail) -> Result<remote::SetResult<CachedMail>> {
+    async fn edit_draft(&self, mail: CachedMail) -> Result<remote::SetResult<CachedMail>> {
         let (mut response, tmp_id) = {
             let mut request = self.build_request();
 
