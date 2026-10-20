@@ -73,3 +73,9 @@ impl From<Range<usize>> for QueryWindow {
         Self { start, limit }
     }
 }
+
+#[derive(Debug, Clone)]
+pub enum MutateAttribute<T> {
+    Set(Vec<T>),
+    Mutate(Vec<(T, bool)>),
+}

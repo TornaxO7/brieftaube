@@ -2,9 +2,9 @@ use super::JmapAccount;
 use crate::{
     datasource::{
         MailRemote,
-        types::{GetState, remote},
+        types::{GetState, MutateAttribute, remote},
     },
-    types::{CachedMail, MailId, MailProperty},
+    types::{CachedMail, MailId, MailKeyword, MailProperty, MailboxId},
 };
 use async_trait::async_trait;
 use color_eyre::{Result, eyre::Context};
@@ -204,6 +204,59 @@ impl MailRemote for JmapAccount {
             old_state: response
                 .old_state()
                 .map(|state| GetState::from(state.to_string())),
+            new_state: response.take_new_state().into(),
+        })
+    }
+
+    async fn mutate_mails(
+        &self,
+        ids: &[MailId],
+        mailbox_ids: Option<MutateAttribute<MailboxId>>,
+        keywords: Option<MutateAttribute<MailKeyword>>,
+    ) -> Result<remote::SetResult<()>> {
+        let mut response = {
+            let mut request = self.build_request();
+
+            let set_email = request.set_email();
+
+            for id in ids {
+                let update = set_email.update(id);
+
+                if let Some(mailbox_ids) = mailbox_ids.clone() {
+                    match mailbox_ids {
+                        MutateAttribute::Set(ids) => {
+                            update.mailbox_ids(ids);
+                        }
+                        MutateAttribute::Mutate(changes) => {
+                            for (mailbox_id, set) in changes {
+                                update.mailbox_id(mailbox_id.as_str(), set);
+                            }
+                        }
+                    };
+                }
+
+                if let Some(keywords) = keywords.clone() {
+                    match keywords {
+                        MutateAttribute::Set(keywords) => {
+                            update.keywords(keywords);
+                        }
+                        MutateAttribute::Mutate(changes) => {
+                            for (keyword, set) in changes {
+                                update.keyword(keyword.as_str(), set);
+                            }
+                        }
+                    }
+                }
+            }
+
+            request.send_set_email().await?
+        };
+
+        response.unwrap_update_errors().unwrap();
+
+        Ok(remote::SetResult {
+            value: Ok(()),
+            old_state: response.old_state().map(|state| state.to_string().into()),
             new_state: response.take_new_state().into(),
         })
     }

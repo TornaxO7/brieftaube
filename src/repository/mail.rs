@@ -1,7 +1,9 @@
+use std::{collections::HashSet, sync::OnceLock};
+
 use crate::{
-    datasource::types::{QueryWindow, cache, remote},
+    datasource::types::{MutateAttribute, QueryWindow, cache, remote},
     repository::Repository,
-    types::{AccountId, CachedMail, MailId, MailProperty, MailboxId},
+    types::{AccountId, CachedMail, MailId, MailKeyword, MailProperty, MailboxId},
 };
 use color_eyre::eyre::Context;
 use jmap_client::mailbox::Role;
@@ -34,6 +36,13 @@ pub enum CommandKind {
     EditDraftMail {
         new_draft: CachedMail,
         tx: oneshot::Sender<color_eyre::Result<CachedMail>>,
+    },
+    MutateMail {
+        ids: Vec<MailId>,
+        mailbox_ids: Option<MutateAttribute<MailboxId>>,
+        keywords: Option<MutateAttribute<MailKeyword>>,
+
+        tx: oneshot::Sender<color_eyre::Result<()>>,
     },
 }
 
@@ -347,5 +356,99 @@ impl Repository {
         };
 
         Ok(new_draft)
+    }
+
+    pub async fn mutate_mail(
+        &self,
+        account_id: AccountId,
+        ids: Vec<MailId>,
+        mailbox_ids: Option<MutateAttribute<MailboxId>>,
+        keywords: Option<MutateAttribute<MailKeyword>>,
+    ) -> color_eyre::Result<()> {
+        let _enter = self.mail_locks.get_mail.lock().await;
+
+        match self
+            .remote
+            .get_remote_account(account_id.clone())
+            .mutate_mails(&ids, mailbox_ids.clone(), keywords.clone())
+            .await
+        {
+            Ok(result) => {
+                let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
+
+                self.ensure_mail_changes(&account_id, &result.new_state, &mut cache_lock)
+                    .await?;
+
+                let mut impacted_mails = cache_lock.get_mails(&ids).await?.value;
+
+                for mail in impacted_mails.iter_mut() {
+                    if let Some(mailbox_ids) = mailbox_ids.clone() {
+                        match mailbox_ids {
+                            MutateAttribute::Set(mailbox_ids) => {
+                                mail.mailbox_ids = OnceLock::from(mailbox_ids);
+                            }
+                            MutateAttribute::Mutate(changes) => match mail.mailbox_ids.get_mut() {
+                                Some(current_mailbox_ids) => {
+                                    for (mailbox_id, set) in changes {
+                                        if set {
+                                            current_mailbox_ids.push(mailbox_id);
+                                        } else {
+                                            if let Some(idx) = current_mailbox_ids
+                                                .iter()
+                                                .position(|id| *id == mailbox_id)
+                                            {
+                                                current_mailbox_ids.remove(idx);
+                                            }
+                                        }
+                                    }
+                                }
+                                None => {
+                                    let new_mailbox_ids: Vec<MailboxId> = changes
+                                        .into_iter()
+                                        .filter_map(|(mailbox_id, set)| set.then_some(mailbox_id))
+                                        .collect();
+                                    mail.mailbox_ids = OnceLock::from(new_mailbox_ids);
+                                }
+                            },
+                        }
+                    }
+
+                    if let Some(keywords) = keywords.clone() {
+                        match keywords {
+                            MutateAttribute::Set(keywords) => {
+                                mail.keywords = OnceLock::from(
+                                    keywords.into_iter().collect::<HashSet<MailKeyword>>(),
+                                );
+                            }
+                            MutateAttribute::Mutate(changes) => match mail.keywords.get_mut() {
+                                Some(current_keywords) => {
+                                    for (keyword, set) in changes {
+                                        if set {
+                                            current_keywords.insert(keyword);
+                                        } else {
+                                            current_keywords.remove(&keyword);
+                                        }
+                                    }
+                                }
+                                None => {
+                                    let new_keywords: HashSet<MailKeyword> = changes
+                                        .into_iter()
+                                        .filter_map(|(keyword, set)| set.then_some(keyword))
+                                        .collect();
+                                    mail.keywords = OnceLock::from(new_keywords);
+                                }
+                            },
+                        }
+                    }
+                }
+
+                cache_lock.upsert_mails(impacted_mails).await?;
+                Ok(())
+            }
+            Err(err) => {
+                error!("Couldn't update mails: {}", err);
+                Err(err)
+            }
+        }
     }
 }

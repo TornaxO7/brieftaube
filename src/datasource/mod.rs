@@ -3,9 +3,12 @@ pub mod hashmap;
 pub mod jmap;
 pub mod types;
 
-use crate::types::{
-    AccountData, AccountId, BlobId, CachedIdentity, CachedMail, CachedMailbox, MailId,
-    MailProperty, MailboxId, MailboxUpdate, ParentMailboxId, ThreadId,
+use crate::{
+    datasource::types::MutateAttribute,
+    types::{
+        AccountData, AccountId, BlobId, CachedIdentity, CachedMail, CachedMailbox, MailId,
+        MailKeyword, MailProperty, MailboxId, MailboxUpdate, ParentMailboxId, ThreadId,
+    },
 };
 use async_trait::async_trait;
 use color_eyre::Result;
@@ -99,6 +102,13 @@ pub trait MailRemote {
     -> Result<remote::GetChangeResult<MailId>>;
 
     async fn create_mail(&self, mail: CachedMail) -> Result<remote::SetResult<CachedMail>>;
+
+    async fn mutate_mails(
+        &self,
+        ids: &[MailId],
+        mailbox_ids: Option<MutateAttribute<MailboxId>>,
+        keywords: Option<MutateAttribute<MailKeyword>>,
+    ) -> Result<remote::SetResult<()>>;
 
     async fn edit_draft(&self, mail: CachedMail) -> Result<remote::SetResult<CachedMail>>;
 }

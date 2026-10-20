@@ -6,11 +6,11 @@ pub mod thread;
 use crate::{
     datasource::{
         Cache, RemoteSession,
-        types::{GetState, QueryState, QueryWindow, cache, remote},
+        types::{GetState, MutateAttribute, QueryState, QueryWindow, cache, remote},
     },
     types::{
-        AccountId, BlobId, CachedMail, InitMailboxData, MailId, MailProperty, MailboxId,
-        ParentMailboxId, ThreadId,
+        AccountId, BlobId, CachedMail, InitMailboxData, MailId, MailKeyword, MailProperty,
+        MailboxId, ParentMailboxId, ThreadId,
     },
 };
 use std::collections::HashMap;
@@ -74,6 +74,17 @@ impl Repository {
                     }
                     mail::CommandKind::EditDraftMail { new_draft, tx } => {
                         let _ = tx.send(repo.edit_draft(cmd.account_id, new_draft).await);
+                    }
+                    mail::CommandKind::MutateMail {
+                        ids,
+                        mailbox_ids,
+                        keywords,
+                        tx,
+                    } => {
+                        let _ = tx.send(
+                            repo.mutate_mail(cmd.account_id, ids, mailbox_ids, keywords)
+                                .await,
+                        );
                     }
                 },
                 Command::Mailbox(cmd) => match cmd.kind {
@@ -474,6 +485,30 @@ impl RepositoryHandler {
             mail::Command {
                 account_id,
                 kind: mail::CommandKind::EditDraftMail { new_draft, tx },
+            }
+            .into()
+        })
+        .await
+    }
+
+    // TODO: HERE
+    // Use it!
+    pub async fn mutate_mails(
+        &self,
+        account_id: AccountId,
+        ids: Vec<MailId>,
+        mailbox_ids: Option<MutateAttribute<MailboxId>>,
+        keywords: Option<MutateAttribute<MailKeyword>>,
+    ) -> color_eyre::Result<()> {
+        self.execute(|tx| {
+            mail::Command {
+                account_id,
+                kind: mail::CommandKind::MutateMail {
+                    ids,
+                    mailbox_ids,
+                    keywords,
+                    tx,
+                },
             }
             .into()
         })

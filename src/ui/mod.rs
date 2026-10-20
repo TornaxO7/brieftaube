@@ -74,6 +74,10 @@ pub enum Message {
         new_draft: CachedMail,
     },
 
+    // MutateMail {
+    //     username: Username,
+    //     account_id: AccountId,
+    // },
     Back,
     Quit,
 }

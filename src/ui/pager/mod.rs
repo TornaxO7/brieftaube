@@ -471,7 +471,7 @@ impl State {
                 Ok(new_content) => {
                     let parsed_mail = MessageParser::new().parse(&new_content).unwrap();
 
-                    let new_mail = CachedMail {
+                    let new_draft = CachedMail {
                         keywords: match parsed_mail.keywords().as_text_list() {
                             Some(keywords) => {
                                 let keywords: HashSet<MailKeyword> =
@@ -520,8 +520,8 @@ impl State {
 
                     // overwrite body
                     let has_empty_body = parsed_mail.text_body_count() == 0;
-                    let new_mail = if has_empty_body {
-                        new_mail
+                    let new_draft = if has_empty_body {
+                        new_draft
                     } else {
                         let mail_parser::PartType::Text(text_body_content) =
                             &parsed_mail.text_part(0).unwrap().body
@@ -543,7 +543,7 @@ impl State {
                                 CachedMail {
                                     text_part_ids: OnceLock::from(vec![part_id]),
                                     body_parts: OnceLock::from(body_parts),
-                                    ..new_mail
+                                    ..new_draft
                                 }
                             }
                             SelectedBodyType::Html => {
@@ -566,7 +566,7 @@ impl State {
                                 CachedMail {
                                     html_part_ids: OnceLock::from(vec![part_id]),
                                     body_parts: OnceLock::from(body_parts),
-                                    ..new_mail
+                                    ..new_draft
                                 }
                             }
                         }
