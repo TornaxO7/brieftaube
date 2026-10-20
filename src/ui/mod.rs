@@ -74,10 +74,6 @@ pub enum Message {
         new_draft: CachedMail,
     },
 
-    // MutateMail {
-    //     username: Username,
-    //     account_id: AccountId,
-    // },
     Back,
     Quit,
 }
@@ -427,6 +423,31 @@ impl Ui {
                                 }
                                 .into(),
                             ]
+                        });
+                    }
+
+                    mailfs::MessageRequest::MutateMail {
+                        username,
+                        account_id,
+                        ids,
+                        mailbox_ids,
+                        keywords,
+                    } => {
+                        let state = self.repos.get(&username).unwrap().clone();
+
+                        self.task_manager.spawn(async move {
+                            let handler = match get_handler(state).await {
+                                Ok(handler) => handler,
+                                Err(()) => return vec![],
+                            };
+
+                            match handler
+                                .mutate_mails(account_id, ids, mailbox_ids, keywords)
+                                .await
+                            {
+                                Ok(()) => vec![mailfs::Message::ReloadColumnEntries.into()],
+                                Err(_err) => vec![],
+                            }
                         });
                     }
                 };

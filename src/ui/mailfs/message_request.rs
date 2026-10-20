@@ -1,14 +1,17 @@
 use crate::{
-    config,
-    datasource::types::QueryWindow,
-    types::{AccountId, CachedMail, MailId, MailProperty, MailboxId, ParentMailboxId, ThreadId},
+    config::{UserConfig, Username},
+    datasource::types::{MutateAttribute, QueryWindow},
+    types::{
+        AccountId, CachedMail, MailId, MailKeyword, MailProperty, MailboxId, ParentMailboxId,
+        ThreadId,
+    },
 };
 
 pub enum MessageRequest {
-    GetAccountsOf(config::UserConfig),
+    GetAccountsOf(UserConfig),
 
     GetMail {
-        username: config::Username,
+        username: Username,
         account_id: AccountId,
         mail_id: MailId,
         properties: Vec<MailProperty>,
@@ -17,7 +20,7 @@ pub enum MessageRequest {
     },
 
     InitMailbox {
-        username: config::Username,
+        username: Username,
         account_id: AccountId,
         mailbox_id: ParentMailboxId,
         /// How many mails should be requested at the same time when getting the mailbox data
@@ -25,13 +28,8 @@ pub enum MessageRequest {
         mail_properties: Vec<MailProperty>,
     },
 
-    // GetChildMailboxes {
-    //     username: config::Username,
-    //     account_id: AccountId,
-    //     parent_id: ParentMailboxId,
-    // },
     QueryMails {
-        username: config::Username,
+        username: Username,
         account_id: AccountId,
         mailbox: MailboxId,
 
@@ -39,16 +37,19 @@ pub enum MessageRequest {
         mail_properties: Vec<MailProperty>,
     },
     GetThreadMails {
-        username: config::Username,
+        username: Username,
         account_id: AccountId,
         thread_id: ThreadId,
         mail_properties: Vec<MailProperty>,
     },
-    // GetMailPreview {
-    //     username: config::Username,
-    //     account_id: AccountId,
-    //     mail_id: MailId,
-    // },
+    MutateMail {
+        username: Username,
+        account_id: AccountId,
+
+        ids: Vec<MailId>,
+        mailbox_ids: Option<MutateAttribute<MailboxId>>,
+        keywords: Option<MutateAttribute<MailKeyword>>,
+    },
 }
 
 impl From<MessageRequest> for crate::ui::Message {

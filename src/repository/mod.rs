@@ -491,8 +491,6 @@ impl RepositoryHandler {
         .await
     }
 
-    // TODO: HERE
-    // Use it!
     pub async fn mutate_mails(
         &self,
         account_id: AccountId,

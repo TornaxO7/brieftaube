@@ -28,12 +28,6 @@ pub enum Message {
         data: color_eyre::Result<InitMailboxData>,
     },
 
-    // SetChildMailboxes {
-    //     username: Username,
-    //     account_id: AccountId,
-    //     parent_id: ParentMailboxId,
-    //     child_mailboxes: color_eyre::Result<Vec<MailboxData>>,
-    // },
     SetRootMails {
         username: Username,
         account_id: AccountId,
@@ -57,6 +51,8 @@ pub enum Message {
 
         preview: color_eyre::Result<MailPreview>,
     },
+
+    ReloadColumnEntries,
 
     SelectedPaletteEntry(String),
 

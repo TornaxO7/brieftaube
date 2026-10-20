@@ -118,12 +118,6 @@ impl Layer<Message> for State {
 
                 data,
             } => self.handle_init_mailbox(username, account_id, mailbox_id, data),
-            // Message::SetChildMailboxes {
-            //     username,
-            //     account_id,
-            //     parent_id,
-            //     child_mailboxes,
-            // } => self.handle_set_child_mailboxes(username, account_id, parent_id, child_mailboxes),
             Message::SetRootMails {
                 username,
                 account_id,
@@ -144,6 +138,7 @@ impl Layer<Message> for State {
                 preview,
             } => self.handle_set_mail_preview(username, account_id, mail_id, preview),
             Message::SetColumnAreaSize(size) => self.handle_set_column_area_size(size),
+            Message::ReloadColumnEntries => self.handle_reload_column_entries(),
         };
 
         response_msgs.extend(self.ensure_right_column_data());
@@ -341,6 +336,11 @@ impl State {
     fn handle_set_column_area_size(&mut self, new_size: Size) -> Vec<super::Message> {
         self.column_area_size = Some(new_size);
         vec![]
+    }
+
+    fn handle_reload_column_entries(&mut self) -> Vec<super::Message> {
+        // TODO: HERE
+        todo!("Some entries changed => Unload every column")
     }
 }
 
