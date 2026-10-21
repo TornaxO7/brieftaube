@@ -38,7 +38,6 @@ pub enum Message {
     Pager(pager::Message),
     PagerRequest(pager::MessageRequest),
 
-    Event(Event),
     OpenPrompt {
         description: String,
         map: Box<dyn Fn(String) -> Message + Send>,
@@ -56,7 +55,8 @@ pub enum Message {
     OpenInEditor {
         content: String,
         ty: EditorContentType,
-        on_exit: Box<dyn Fn(Result<String, OpenEditorError>) -> Vec<Message> + Send>,
+
+        callback: Box<dyn Fn(Result<String, OpenEditorError>) -> Vec<Message> + Send>,
     },
 
     GetBlob {
@@ -74,6 +74,7 @@ pub enum Message {
         new_draft: CachedMail,
     },
 
+    Event(Event),
     Back,
     Quit,
 }
@@ -273,7 +274,7 @@ impl Ui {
             Message::OpenInEditor {
                 content,
                 ty,
-                on_exit,
+                callback: on_exit,
             } => {
                 self.pending_editor = Some(PendingEditor {
                     content,

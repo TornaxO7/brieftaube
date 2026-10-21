@@ -467,7 +467,7 @@ impl State {
         vec![super::Message::OpenInEditor {
             content,
             ty,
-            on_exit: Box::new(move |result| match result {
+            callback: Box::new(move |result| match result {
                 Ok(new_content) => {
                     let parsed_mail = MessageParser::new().parse(&new_content).unwrap();
 
@@ -620,7 +620,7 @@ impl State {
         vec![super::Message::OpenInEditor {
             content,
             ty: EditorContentType::MailText,
-            on_exit: Box::new(|_| vec![]),
+            callback: Box::new(|_| vec![]),
         }]
     }
 
@@ -643,7 +643,7 @@ impl State {
         vec![super::Message::OpenInEditor {
             content,
             ty: EditorContentType::Markdown,
-            on_exit: Box::new(|_| vec![]),
+            callback: Box::new(|_| vec![]),
         }]
     }
 
@@ -662,7 +662,7 @@ impl State {
         vec![super::Message::OpenInEditor {
             content,
             ty: EditorContentType::Html,
-            on_exit: Box::new(|result| match result {
+            callback: Box::new(|result| match result {
                 Ok(_) => vec![],
                 Err(err) => {
                     vec![
