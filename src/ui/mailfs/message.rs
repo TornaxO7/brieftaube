@@ -5,7 +5,7 @@ use crate::{
         AccountData, AccountId, CachedMail, InitMailboxData, MailId, MailboxId, ParentMailboxId,
         ThreadId,
     },
-    ui::mailfs::{types::MailPreview, user_action::UserAction},
+    ui::mailfs::types::MailPreview,
 };
 use crossterm::event::Event;
 use ratatui::layout::Size;
@@ -13,7 +13,6 @@ use ratatui::layout::Size;
 #[derive(Debug)]
 pub enum Message {
     Event(Event),
-    UserAction(UserAction),
 
     SetUserAccounts {
         username: Username,

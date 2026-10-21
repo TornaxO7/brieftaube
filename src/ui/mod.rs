@@ -338,7 +338,6 @@ pub trait Layer<LayerMsg, ParentMsg = Message> {
 enum ActiveLayer {
     Mailfs(mailfs::State),
     Pager(pager::State),
-
     Overlay(OverlayLayer),
 }
 

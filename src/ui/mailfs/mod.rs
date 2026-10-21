@@ -105,7 +105,6 @@ impl Layer<Message, crate::ui::Message> for State {
         self.throbber.calc_next();
         let mut response_msgs = match msg {
             Message::Event(event) => self.handle_event(event),
-            Message::UserAction(action) => self.handle_user_action(action),
             Message::SelectedPaletteEntry(entry) => self.handle_selected_palette_entry(entry),
             Message::SetUserAccounts {
                 username: to,
