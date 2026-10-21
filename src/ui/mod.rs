@@ -1,3 +1,4 @@
+mod repository_manager;
 mod task_manager;
 mod types;
 mod utils;
@@ -10,11 +11,9 @@ pub mod statusbar;
 
 use crate::{
     CONFIG, THEME,
-    config::{self, Username},
-    datasource::{self, Cache, RemoteSession, jmap::JmapDescriptor},
-    repository::RepositoryHandler,
-    types::{AccountId, BlobId, CachedMail, MailId, MailProperty},
-    ui::palette::PaletteEntry,
+    config::Username,
+    types::{AccountId, CachedMail, MailId, MailProperty},
+    ui::{palette::PaletteEntry, repository_manager::RepositoryManager},
 };
 use crossterm::{
     ExecutableCommand,
@@ -24,79 +23,37 @@ use crossterm::{
 use futures::{FutureExt, StreamExt};
 use material_theme_loader::Scheme;
 use ratatui::{DefaultTerminal, Frame};
-use std::{collections::HashMap, time::Duration};
-use task_manager::TaskManager;
-use tokio::sync::{RwLock, watch};
+use std::time::Duration;
 use tracing::error;
 
 pub use types::*;
 
 pub enum Message {
+    Event(Event),
+    Navigation(Navigation),
+
     Mailfs(mailfs::Message),
     MailfsRequest(mailfs::MessageRequest),
 
     Pager(pager::Message),
     PagerRequest(pager::MessageRequest),
-
-    OpenPrompt {
-        description: String,
-        map: Box<dyn Fn(String) -> Message + Send>,
-    },
-    OpenPalette {
-        entries: Vec<PaletteEntry>,
-        map: fn(String) -> Message,
-    },
-    OpenPager {
-        username: Username,
-        account_id: AccountId,
-        mode: OpenPagerMode,
-    },
-
-    OpenInEditor {
-        content: String,
-        ty: EditorContentType,
-
-        callback: Box<dyn Fn(Result<String, OpenEditorError>) -> Vec<Message> + Send>,
-    },
-
-    GetBlob {
-        username: Username,
-        account_id: AccountId,
-        blob_id: BlobId,
-
-        callback: fn(color_eyre::Result<Vec<u8>>) -> Vec<Message>,
-    },
-
-    EditDraftMail {
-        username: Username,
-        account_id: AccountId,
-
-        new_draft: CachedMail,
-    },
-
-    Event(Event),
-    Back,
-    Quit,
 }
 
 /// Stores the app state
 pub struct Ui {
     is_running: bool,
     layers: Vec<ActiveLayer>,
-    task_manager: TaskManager,
     scheme: Scheme,
     pending_editor: Option<PendingEditor>,
-
-    repos: HashMap<Username, watch::Receiver<RepositoryState>>,
+    manager: RepositoryManager,
 }
 
 impl Ui {
     pub fn new() -> Self {
-        let task_manager = TaskManager::new();
+        let mut manager = RepositoryManager::new();
 
         let (mailfs, initial_user) = mailfs::State::new();
-
-        task_manager.spawn(init_user(initial_user));
+        manager.load_user(initial_user);
 
         let scheme = {
             let theme = THEME.get().unwrap();
@@ -104,13 +61,12 @@ impl Ui {
         };
 
         Self {
-            repos: HashMap::new(),
-
             is_running: true,
             layers: vec![ActiveLayer::Mailfs(mailfs)],
-            task_manager,
             scheme,
             pending_editor: None,
+
+            manager,
         }
     }
 
@@ -128,10 +84,10 @@ impl Ui {
                     Some(Err(e)) => error!("{}", e),
                     None => (),
                 },
-                next_message = self.task_manager.finish_next_task(), if self.task_manager.has_tasks_running() => {
+                next_message = self.manager.finish_next_task(), if self.manager.has_tasks_running() => {
                     msgs.extend(next_message);
                 },
-                _timeout = interval.tick(), if self.task_manager.has_tasks_running() => {}
+                _timeout = interval.tick(), if self.manager.has_tasks_running() => {}
             };
 
             while let Some(next_message) = msgs.pop() {
@@ -191,448 +147,186 @@ impl Ui {
                 },
             },
 
-            Message::OpenPrompt { description, map } => {
-                self.layers.push(ActiveLayer::Overlay(OverlayLayer::Prompt(
-                    prompt::State::new(description, map),
-                )));
-                vec![]
-            }
-            Message::OpenPalette { entries, map } => {
-                let overlay = OverlayLayer::Palette(palette::State::new(entries, map));
-                self.layers.push(ActiveLayer::Overlay(overlay));
-                vec![]
-            }
-            Message::OpenPager {
-                username,
-                account_id,
-                mode,
-            } => match mode {
-                OpenPagerMode::Reader(mail_id) => {
-                    self.layers.push(ActiveLayer::Pager(pager::State::new(
-                        username.clone(),
-                        account_id.clone(),
-                        pager::Mode::Reader,
-                    )));
-
-                    let properties = {
-                        let mut properties = pager::MailHeaders::MAIL_PROPERTIES.to_vec();
-                        properties.extend([
-                            MailProperty::HtmlBody,
-                            MailProperty::TextBody,
-                            MailProperty::Attachments,
-                        ]);
-                        properties
-                    };
-
-                    vec![
-                        pager::MessageRequest::GetMail {
-                            username,
-                            account_id,
-                            mail_id,
-                            properties,
-                            callback: Box::new(
-                                move |cached_mail: color_eyre::Result<CachedMail>| {
-                                    vec![pager::Message::SetMail(cached_mail).into()]
-                                },
-                            ),
-                        }
-                        .into(),
-                    ]
+            Message::Navigation(navigation) => match navigation {
+                Navigation::Back => self.navigate_back(),
+                Navigation::Quit => self.navigate_quit(),
+                Navigation::OpenPrompt { description, map } => {
+                    self.navigate_open_prompt(description, map)
                 }
-                OpenPagerMode::Composer(mail_id) => match mail_id {
-                    Some(_) => todo!("Open already existing mailid"),
-                    None => {
-                        let mail_id = MailId::new_intern();
-
-                        self.layers.push(ActiveLayer::Pager(pager::State::new(
-                            username.clone(),
-                            account_id.clone(),
-                            pager::Mode::Composer,
-                        )));
-
-                        let state = self.repos.get(&username).unwrap().clone();
-
-                        self.task_manager.spawn(async move {
-                            let handler = match get_handler(state).await {
-                                Ok(handler) => handler,
-                                Err(()) => return vec![],
-                            };
-
-                            vec![
-                                pager::Message::SetMail(
-                                    handler.create_new_mail(account_id, mail_id).await,
-                                )
-                                .into(),
-                            ]
-                        });
-
-                        vec![]
-                    }
-                },
-            },
-
-            Message::OpenInEditor {
-                content,
-                ty,
-                callback: on_exit,
-            } => {
-                self.pending_editor = Some(PendingEditor {
+                Navigation::OpenPalette { entries, map } => {
+                    self.navigate_open_palette(entries, map)
+                }
+                // TODO: Split up into `reader` and `composer`
+                Navigation::OpenPager {
+                    username,
+                    account_id,
+                    mode,
+                } => self.navigate_open_pager(username, account_id, mode),
+                Navigation::OpenEditor {
                     content,
                     ty,
-                    on_exit,
-                });
+                    callback,
+                } => self.navigate_open_editor(content, ty, callback),
+            },
 
-                vec![]
-            }
+            Message::Mailfs(msg) => self.handle_mailfs(msg),
+            Message::MailfsRequest(msg) => mailfs::handle_request(msg, &mut self.manager),
 
-            Message::Back => {
-                self.layers.pop();
-                vec![]
-            }
+            Message::Pager(msg) => self.handle_pager(msg),
+            Message::PagerRequest(msg) => pager::handle_request(msg, &mut self.manager),
+        }
+    }
+}
 
-            Message::Quit => {
-                self.is_running = false;
-                // TODO: Cleanup quiting (exit screen?)
-                vec![]
-            }
-            Message::Mailfs(message) => {
-                match self.layers.iter_mut().rev().find_map(|layer| {
-                    if let ActiveLayer::Mailfs(state) = layer {
-                        Some(state)
-                    } else {
-                        None
-                    }
-                }) {
-                    Some(mailfs) => mailfs.update(message),
-                    None => vec![],
-                }
-            }
-            Message::MailfsRequest(message_request) => {
-                match message_request {
-                    mailfs::MessageRequest::GetAccountsOf(user_config) => {
-                        let (tx, rx) = watch::channel(RepositoryState::Loading);
-                        self.repos.insert(user_config.username.clone(), rx);
-                        self.task_manager
-                            .spawn(mailfs_repository_create(user_config, tx));
-                    }
-                    mailfs::MessageRequest::InitMailbox {
-                        username,
-                        account_id,
-                        mailbox_id,
-                        max_init_mails: amount_initial_mails,
-                        mail_properties,
-                    } => {
-                        let state = self.repos.get(&username).unwrap().clone();
+// Navigation
+impl Ui {
+    fn navigate_back(&mut self) -> Vec<Message> {
+        self.layers.pop();
+        vec![]
+    }
 
-                        self.task_manager.spawn(async move {
-                            let handler = match get_handler(state).await {
-                                Ok(handler) => handler,
-                                Err(()) => return vec![],
-                            };
+    fn navigate_quit(&mut self) -> Vec<Message> {
+        self.is_running = false;
+        vec![]
+    }
 
-                            vec![
-                                mailfs::Message::InitMailbox {
-                                    username,
-                                    account_id: account_id.clone(),
-                                    mailbox_id: mailbox_id.clone(),
+    fn navigate_open_prompt(
+        &mut self,
+        description: String,
+        map: Box<dyn Fn(String) -> Message + Send>,
+    ) -> Vec<Message> {
+        let layer =
+            ActiveLayer::Overlay(OverlayLayer::Prompt(prompt::State::new(description, map)));
 
-                                    data: handler
-                                        .get_init_mailbox(
-                                            account_id,
-                                            mailbox_id,
-                                            amount_initial_mails,
-                                            mail_properties,
-                                        )
-                                        .await,
-                                }
-                                .into(),
-                            ]
-                        });
-                    }
-                    mailfs::MessageRequest::GetMail {
+        self.layers.push(layer);
+        vec![]
+    }
+
+    fn navigate_open_palette(
+        &mut self,
+        entries: Vec<PaletteEntry>,
+        map: fn(String) -> Message,
+    ) -> Vec<Message> {
+        let overlay = OverlayLayer::Palette(palette::State::new(entries, map));
+        self.layers.push(ActiveLayer::Overlay(overlay));
+        vec![]
+    }
+
+    fn navigate_open_pager(
+        &mut self,
+        username: Username,
+        account_id: AccountId,
+        mode: OpenPagerMode,
+    ) -> Vec<Message> {
+        match mode {
+            OpenPagerMode::Reader(mail_id) => {
+                self.layers.push(ActiveLayer::Pager(pager::State::new(
+                    username.clone(),
+                    account_id.clone(),
+                    pager::Mode::Reader,
+                )));
+
+                let properties = {
+                    let mut properties = pager::MailHeaders::MAIL_PROPERTIES.to_vec();
+                    properties.extend([
+                        MailProperty::HtmlBody,
+                        MailProperty::TextBody,
+                        MailProperty::Attachments,
+                    ]);
+                    properties
+                };
+
+                vec![
+                    pager::MessageRequest::GetMail {
                         username,
                         account_id,
                         mail_id,
                         properties,
-                        callback,
-                    } => {
-                        let state = self.repos.get(&username).unwrap().clone();
-
-                        self.task_manager.spawn(async move {
-                            let handler = match get_handler(state).await {
-                                Ok(handler) => handler,
-                                Err(()) => return vec![],
-                            };
-
-                            vec![
-                                callback(handler.get_mail(account_id, mail_id, properties).await)
-                                    .into(),
-                            ]
-                        });
+                        callback: Box::new(move |cached_mail: color_eyre::Result<CachedMail>| {
+                            vec![pager::Message::SetMail(cached_mail).into()]
+                        }),
                     }
-                    mailfs::MessageRequest::QueryMails {
-                        username,
-                        account_id,
-                        mailbox,
-                        window,
-                        mail_properties,
-                    } => {
-                        let state = self.repos.get(&username).unwrap().clone();
-
-                        self.task_manager.spawn(async move {
-                            let handler = match get_handler(state).await {
-                                Ok(handler) => handler,
-                                Err(()) => return vec![],
-                            };
-
-                            vec![
-                                mailfs::Message::SetRootMails {
-                                    username,
-                                    account_id: account_id.clone(),
-                                    mailbox: mailbox.clone(),
-                                    window: window.clone(),
-                                    result: handler
-                                        .query_mails(account_id, mailbox, window, mail_properties)
-                                        .await,
-                                }
-                                .into(),
-                            ]
-                        });
-                    }
-                    mailfs::MessageRequest::GetThreadMails {
-                        username,
-                        account_id,
-                        thread_id,
-                        mail_properties,
-                    } => {
-                        let state = self.repos.get(&username).unwrap().clone();
-
-                        self.task_manager.spawn(async move {
-                            let handler = match get_handler(state).await {
-                                Ok(handler) => handler,
-                                Err(()) => return vec![],
-                            };
-
-                            vec![
-                                mailfs::Message::SetThreadMails {
-                                    username,
-                                    account_id: account_id.clone(),
-                                    thread_id: thread_id.clone(),
-                                    thread_mails: handler
-                                        .get_thread_mails(account_id, thread_id, mail_properties)
-                                        .await,
-                                }
-                                .into(),
-                            ]
-                        });
-                    }
-
-                    mailfs::MessageRequest::MutateMail {
-                        username,
-                        account_id,
-                        ids,
-                        mailbox_ids,
-                        keywords,
-                    } => {
-                        let state = self.repos.get(&username).unwrap().clone();
-
-                        self.task_manager.spawn(async move {
-                            let handler = match get_handler(state).await {
-                                Ok(handler) => handler,
-                                Err(()) => return vec![],
-                            };
-
-                            match handler
-                                .mutate_mails(account_id, ids, mailbox_ids, keywords)
-                                .await
-                            {
-                                Ok(()) => vec![mailfs::Message::ReloadColumnEntries.into()],
-                                Err(_err) => vec![],
-                            }
-                        });
-                    }
-                };
-                vec![]
+                    .into(),
+                ]
             }
+            OpenPagerMode::Composer(mail_id) => match mail_id {
+                Some(_) => todo!("Open already existing mailid"),
+                None => {
+                    let mail_id = MailId::new_intern();
 
-            Message::Pager(message) => {
-                match self.layers.iter_mut().rev().find_map(|layer| {
-                    if let ActiveLayer::Pager(pager) = layer {
-                        Some(pager)
-                    } else {
-                        None
-                    }
-                }) {
-                    Some(pager) => pager.update(message),
-                    None => vec![],
-                }
-            }
-            Message::PagerRequest(message_request) => match message_request {
-                pager::MessageRequest::GetMail {
-                    username,
-                    account_id,
-                    mail_id,
-                    properties,
-                    callback,
-                } => {
-                    let state = self.repos.get(&username).unwrap().clone();
+                    self.layers.push(ActiveLayer::Pager(pager::State::new(
+                        username.clone(),
+                        account_id.clone(),
+                        pager::Mode::Composer,
+                    )));
 
-                    self.task_manager.spawn(async move {
-                        let handler = match get_handler(state).await {
-                            Ok(handler) => handler,
-                            Err(()) => return vec![],
-                        };
-
-                        callback(handler.get_mail(account_id, mail_id, properties).await)
+                    self.manager.with_handler(&username, async move |handler| {
+                        vec![
+                            pager::Message::SetMail(
+                                handler.create_new_mail(account_id, mail_id).await,
+                            )
+                            .into(),
+                        ]
                     });
 
                     vec![]
                 }
             },
-            Message::GetBlob {
-                username,
-                account_id,
-                blob_id,
-
-                callback,
-            } => {
-                let state = self.repos.get(&username).unwrap().clone();
-
-                self.task_manager.spawn(async move {
-                    let handler = match get_handler(state).await {
-                        Ok(handler) => handler,
-                        Err(()) => return vec![],
-                    };
-
-                    callback(handler.get_blob(account_id, blob_id).await)
-                });
-
-                vec![]
-            }
-            Message::EditDraftMail {
-                username,
-                account_id,
-                new_draft,
-            } => {
-                let state = self.repos.get(&username).unwrap().clone();
-
-                self.task_manager.spawn(async move {
-                    let handler = match get_handler(state).await {
-                        Ok(handler) => handler,
-                        Err(()) => return vec![],
-                    };
-
-                    vec![
-                        pager::Message::SetMail(
-                            handler.edit_draft_mail(account_id, new_draft).await,
-                        )
-                        .into(),
-                    ]
-                });
-
-                vec![]
-            }
         }
+    }
+
+    fn navigate_open_editor(
+        &mut self,
+        content: String,
+        ty: EditorContentType,
+        callback: Box<dyn Fn(Result<String, OpenEditorError>) -> Vec<Message> + Send>,
+    ) -> Vec<Message> {
+        self.pending_editor = Some(PendingEditor {
+            content,
+            ty,
+            callback,
+        });
+
+        vec![]
     }
 }
 
-pub trait Layer<LayerMsg, ParentLayerMsg = Message> {
+// Layers
+impl Ui {
+    fn handle_mailfs(&mut self, msg: mailfs::Message) -> Vec<Message> {
+        self.layers
+            .iter_mut()
+            .rev()
+            .find_map(|layer| {
+                if let ActiveLayer::Mailfs(state) = layer {
+                    Some(state)
+                } else {
+                    None
+                }
+            })
+            .map(|mailfs| mailfs.update(msg).into_iter().map(Message::from).collect())
+            .unwrap_or_default()
+    }
+
+    fn handle_pager(&mut self, msg: pager::Message) -> Vec<Message> {
+        self.layers
+            .iter_mut()
+            .rev()
+            .find_map(|layer| {
+                if let ActiveLayer::Pager(pager) = layer {
+                    Some(pager)
+                } else {
+                    None
+                }
+            })
+            .map(|pager| pager.update(msg))
+            .unwrap_or_default()
+    }
+}
+
+pub trait Layer<LayerMsg, ParentMsg = Message> {
     #[must_use]
-    fn update(&mut self, msg: LayerMsg) -> Vec<ParentLayerMsg>;
-}
-
-async fn mailfs_repository_create(
-    user_config: config::UserConfig,
-    tx: watch::Sender<RepositoryState>,
-) -> Vec<Message> {
-    let remote = match user_config.backend {
-        config::Backend::Jmap => {
-            let desc = JmapDescriptor {
-                credentials: jmap_client::client::Credentials::basic(
-                    user_config.username.as_str(),
-                    &user_config.password,
-                ),
-                server_url: user_config.server_url.clone(),
-            };
-
-            match datasource::jmap::JmapSession::connect(desc).await {
-                Ok(remote) => Box::new(remote) as Box<dyn RemoteSession>,
-                Err(err) => {
-                    error!("Couldn't connect to jmap account: {}", err);
-
-                    tx.send_replace(RepositoryState::Error(err.to_string()));
-
-                    return vec![
-                        mailfs::Message::SetUserAccounts {
-                            username: user_config.username.clone(),
-                            accounts: Err(err.into()),
-                        }
-                        .into(),
-                    ];
-                }
-            }
-        }
-    };
-
-    let accounts = remote.get_accounts();
-
-    let caches = accounts
-        .clone()
-        .into_iter()
-        .map(|account| {
-            let cache: Box<dyn Cache> = match user_config.cache {
-                config::Cache::Internal => {
-                    Box::new(datasource::hashmap::HashMapDataSource::new()) as Box<dyn Cache>
-                }
-            };
-
-            (account.id, RwLock::new(cache))
-        })
-        .collect();
-
-    tx.send_replace(RepositoryState::Loaded(RepositoryHandler::new(
-        caches, remote,
-    )));
-
-    vec![
-        mailfs::Message::SetUserAccounts {
-            username: user_config.username.clone(),
-            accounts: Ok(accounts),
-        }
-        .into(),
-    ]
-}
-
-async fn get_handler(
-    mut waiter: watch::Receiver<RepositoryState>,
-) -> Result<RepositoryHandler, ()> {
-    let state = waiter
-        .wait_for(|current_state| !matches!(current_state, RepositoryState::Loading))
-        .await
-        .expect("Repository creation should finish.")
-        .clone();
-
-    match state {
-        RepositoryState::Loading => unreachable!(),
-        RepositoryState::Loaded(handler) => Ok(handler.clone()),
-        RepositoryState::Error(err) => {
-            error!("Can't get handler: {err}");
-            Err(())
-        }
-    }
-}
-
-#[derive(Clone)]
-enum RepositoryState {
-    Loading,
-    Loaded(RepositoryHandler),
-    Error(String),
-}
-
-async fn init_user(user: config::UserConfig) -> Vec<Message> {
-    vec![Message::MailfsRequest(
-        mailfs::MessageRequest::GetAccountsOf(user),
-    )]
+    fn update(&mut self, msg: LayerMsg) -> Vec<ParentMsg>;
 }
 
 enum ActiveLayer {
@@ -665,12 +359,12 @@ pub enum OpenEditorError {
 struct PendingEditor {
     content: String,
     ty: EditorContentType,
-    on_exit: Box<dyn Fn(Result<String, OpenEditorError>) -> Vec<Message> + Send>,
+    callback: Box<dyn Fn(Result<String, OpenEditorError>) -> Vec<Message> + Send>,
 }
 
 impl PendingEditor {
     fn run(self) -> Vec<Message> {
-        (self.on_exit)(Self::open_editor(self.content, self.ty))
+        (self.callback)(Self::open_editor(self.content, self.ty))
     }
 
     fn open_editor(content: String, ty: EditorContentType) -> Result<String, OpenEditorError> {
@@ -721,4 +415,35 @@ impl PendingEditor {
 pub enum OpenPagerMode {
     Reader(MailId),
     Composer(Option<MailId>),
+}
+
+pub enum Navigation {
+    Back,
+    Quit,
+
+    OpenPrompt {
+        description: String,
+        map: Box<dyn Fn(String) -> Message + Send>,
+    },
+    OpenPalette {
+        entries: Vec<PaletteEntry>,
+        map: fn(String) -> Message,
+    },
+    OpenPager {
+        username: Username,
+        account_id: AccountId,
+        mode: OpenPagerMode,
+    },
+    OpenEditor {
+        content: String,
+        ty: EditorContentType,
+
+        callback: Box<dyn Fn(Result<String, OpenEditorError>) -> Vec<Message> + Send>,
+    },
+}
+
+impl From<Navigation> for Message {
+    fn from(navigation: Navigation) -> Self {
+        Self::Navigation(navigation)
+    }
 }

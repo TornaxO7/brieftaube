@@ -13,7 +13,7 @@ use crate::{
         ROOT_MAILBOX_ID, ThreadId,
     },
     ui::{
-        Layer, Loadable,
+        Layer, Loadable, Navigation,
         mailfs::{
             columns::*,
             types::{MailColumnEntry, MailPreview},
@@ -100,8 +100,8 @@ impl State {
     }
 }
 
-impl Layer<Message> for State {
-    fn update(&mut self, msg: Message) -> Vec<super::Message> {
+impl Layer<Message, crate::ui::Message> for State {
+    fn update(&mut self, msg: Message) -> Vec<crate::ui::Message> {
         self.throbber.calc_next();
         let mut response_msgs = match msg {
             Message::Event(event) => self.handle_event(event),
@@ -144,12 +144,15 @@ impl Layer<Message> for State {
         response_msgs.extend(self.ensure_right_column_data());
 
         response_msgs
+            .into_iter()
+            .map(crate::ui::Message::from)
+            .collect()
     }
 }
 
 // Message handling
 impl State {
-    fn handle_event(&mut self, event: Event) -> Vec<super::Message> {
+    fn handle_event(&mut self, event: Event) -> Vec<crate::ui::Message> {
         match event {
             Event::Mouse(_) | Event::Paste(_) | Event::FocusGained | Event::FocusLost => vec![],
             Event::Resize(_, _) => {
@@ -173,7 +176,8 @@ impl State {
         }
     }
 
-    fn handle_user_action(&mut self, action: UserAction) -> Vec<super::Message> {
+    #[must_use]
+    fn handle_user_action(&mut self, action: UserAction) -> Vec<crate::ui::Message> {
         debug!("{:?}", action);
 
         match action {
@@ -204,16 +208,16 @@ impl State {
         }
     }
 
-    fn handle_selected_palette_entry(&mut self, entry: String) -> Vec<super::Message> {
+    fn handle_selected_palette_entry(&mut self, entry: String) -> Vec<crate::ui::Message> {
         let action = UserAction::from_str(entry.as_str()).unwrap();
-        vec![super::Message::Mailfs(Message::UserAction(action))]
+        self.handle_user_action(action)
     }
 
     fn handle_set_user_accounts(
         &mut self,
         username: config::Username,
         accounts: color_eyre::Result<Vec<AccountData>>,
-    ) -> Vec<super::Message> {
+    ) -> Vec<crate::ui::Message> {
         match accounts {
             Ok(accounts) => {
                 let res = self.accounts_column.insert(
@@ -236,7 +240,7 @@ impl State {
         account_id: AccountId,
         mailbox_id: ParentMailboxId,
         data: color_eyre::Result<InitMailboxData>,
-    ) -> Vec<super::Message> {
+    ) -> Vec<crate::ui::Message> {
         let key = (username, account_id, mailbox_id.clone());
         let column = self.mailbox_columns.get_mut(&key).unwrap();
 
@@ -273,7 +277,7 @@ impl State {
         mailbox_id: MailboxId,
         window: QueryWindow,
         result: color_eyre::Result<Vec<CachedMail>>,
-    ) -> Vec<super::Message> {
+    ) -> Vec<crate::ui::Message> {
         let key = (username, account_id, Some(mailbox_id.clone()));
 
         let column = self
@@ -293,7 +297,7 @@ impl State {
         account_id: AccountId,
         thread_id: ThreadId,
         thread_mails: color_eyre::Result<Vec<CachedMail>>,
-    ) -> Vec<super::Message> {
+    ) -> Vec<crate::ui::Message> {
         let key = (username, account_id, thread_id);
 
         match thread_mails {
@@ -320,7 +324,7 @@ impl State {
         account_id: AccountId,
         mail_id: MailId,
         mail_preview: color_eyre::Result<MailPreview>,
-    ) -> Vec<super::Message> {
+    ) -> Vec<crate::ui::Message> {
         let key = (username, account_id, mail_id);
 
         let current_preview = self.mail_previews.get_mut(&key).unwrap();
@@ -333,12 +337,12 @@ impl State {
         vec![]
     }
 
-    fn handle_set_column_area_size(&mut self, new_size: Size) -> Vec<super::Message> {
+    fn handle_set_column_area_size(&mut self, new_size: Size) -> Vec<crate::ui::Message> {
         self.column_area_size = Some(new_size);
         vec![]
     }
 
-    fn handle_reload_column_entries(&mut self) -> Vec<super::Message> {
+    fn handle_reload_column_entries(&mut self) -> Vec<crate::ui::Message> {
         // TODO: HERE
         todo!("Some entries changed => Unload every column")
     }
@@ -346,19 +350,22 @@ impl State {
 
 /// Action implementations
 impl State {
-    fn quit(&self) -> Vec<super::Message> {
-        vec![super::Message::Quit]
+    fn quit(&self) -> Vec<crate::ui::Message> {
+        vec![Navigation::Quit.into()]
     }
 
-    fn open_command_palette(&self) -> Vec<super::Message> {
+    fn open_command_palette(&self) -> Vec<crate::ui::Message> {
         let entries = UserAction::palette_options();
-        vec![super::Message::OpenPalette {
-            entries,
-            map: |entry| Message::SelectedPaletteEntry(entry).into(),
-        }]
+        vec![
+            Navigation::OpenPalette {
+                entries,
+                map: |entry| Message::SelectedPaletteEntry(entry).into(),
+            }
+            .into(),
+        ]
     }
 
-    fn navigate_down(&mut self) -> Vec<super::Message> {
+    fn navigate_down(&mut self) -> Vec<crate::ui::Message> {
         match self.column_stack.last().unwrap().clone() {
             ColumnStackEntry::Users => {
                 self.users_column.navigate_down(1);
@@ -427,7 +434,7 @@ impl State {
         }
     }
 
-    fn navigate_up(&mut self) -> Vec<super::Message> {
+    fn navigate_up(&mut self) -> Vec<crate::ui::Message> {
         match self.column_stack.last().unwrap().clone() {
             ColumnStackEntry::Users => {
                 self.users_column.navigate_up(1);
@@ -490,7 +497,7 @@ impl State {
         }
     }
 
-    fn navigate_to_top(&mut self) -> Vec<super::Message> {
+    fn navigate_to_top(&mut self) -> Vec<crate::ui::Message> {
         match self.column_stack.last().unwrap() {
             ColumnStackEntry::Users => {
                 self.users_column.navigate_to_top();
@@ -554,7 +561,7 @@ impl State {
         }
     }
 
-    fn navigate_to_bottom(&mut self) -> Vec<super::Message> {
+    fn navigate_to_bottom(&mut self) -> Vec<crate::ui::Message> {
         match self.column_stack.last().unwrap() {
             ColumnStackEntry::Users => {
                 self.users_column.navigate_to_bottom();
@@ -616,7 +623,7 @@ impl State {
         }
     }
 
-    fn navigate_right(&mut self) -> Vec<super::Message> {
+    fn navigate_right(&mut self) -> Vec<crate::ui::Message> {
         match self.column_stack.last().cloned().unwrap() {
             ColumnStackEntry::Users => {
                 let selected_user = self.users_column.get_selected_entry();
@@ -686,18 +693,21 @@ impl State {
                     }
                     Loadable::Loaded(column) => {
                         let selected_mail = column.get_selected_entry();
-                        vec![super::Message::OpenPager {
-                            username: key.0,
-                            account_id: key.1,
-                            mode: crate::ui::OpenPagerMode::Reader(selected_mail.id.clone()),
-                        }]
+                        vec![
+                            Navigation::OpenPager {
+                                username: key.0,
+                                account_id: key.1,
+                                mode: crate::ui::OpenPagerMode::Reader(selected_mail.id.clone()),
+                            }
+                            .into(),
+                        ]
                     }
                 }
             }
         }
     }
 
-    fn navigate_left(&mut self) -> Vec<super::Message> {
+    fn navigate_left(&mut self) -> Vec<crate::ui::Message> {
         match self.column_stack.last().unwrap() {
             ColumnStackEntry::Users => {
                 vec![]
@@ -711,7 +721,7 @@ impl State {
         }
     }
 
-    fn navigate_half_page_down(&mut self) -> Vec<super::Message> {
+    fn navigate_half_page_down(&mut self) -> Vec<crate::ui::Message> {
         let Some(size) = self.column_area_size else {
             return vec![];
         };
@@ -786,7 +796,7 @@ impl State {
         }
     }
 
-    fn navigate_half_page_up(&mut self) -> Vec<super::Message> {
+    fn navigate_half_page_up(&mut self) -> Vec<crate::ui::Message> {
         let Some(size) = self.column_area_size else {
             return vec![];
         };
@@ -861,41 +871,44 @@ impl State {
         }
     }
 
-    fn select_entry(&mut self) -> Vec<super::Message> {
+    fn select_entry(&mut self) -> Vec<crate::ui::Message> {
         todo!();
     }
 
-    fn cut_selected_entries(&mut self) -> Vec<super::Message> {
+    fn cut_selected_entries(&mut self) -> Vec<crate::ui::Message> {
         todo!();
     }
 
-    fn paste_selected_entries(&mut self) -> Vec<super::Message> {
+    fn paste_selected_entries(&mut self) -> Vec<crate::ui::Message> {
         todo!();
     }
 
-    fn move_mailbox_up(&mut self) -> Vec<super::Message> {
+    fn move_mailbox_up(&mut self) -> Vec<crate::ui::Message> {
         todo!();
     }
 
-    fn move_mailbox_down(&mut self) -> Vec<super::Message> {
+    fn move_mailbox_down(&mut self) -> Vec<crate::ui::Message> {
         todo!();
     }
 
-    fn compose_markdown_mail(&mut self) -> Vec<super::Message> {
+    fn compose_markdown_mail(&mut self) -> Vec<crate::ui::Message> {
         let account_ctx = self.get_account_ctx();
 
-        vec![super::Message::OpenPager {
-            username: account_ctx.username,
-            account_id: account_ctx.account_id,
-            mode: crate::ui::OpenPagerMode::Composer(None),
-        }]
+        vec![
+            Navigation::OpenPager {
+                username: account_ctx.username,
+                account_id: account_ctx.account_id,
+                mode: crate::ui::OpenPagerMode::Composer(None),
+            }
+            .into(),
+        ]
     }
 
-    fn create_mailbox(&mut self) -> Vec<super::Message> {
+    fn create_mailbox(&mut self) -> Vec<crate::ui::Message> {
         todo!();
     }
 
-    fn remove_mailbox(&mut self) -> Vec<super::Message> {
+    fn remove_mailbox(&mut self) -> Vec<crate::ui::Message> {
         todo!();
     }
 }

@@ -1,6 +1,6 @@
 mod view;
 
-use crate::ui::Layer;
+use crate::ui::{Layer, Navigation};
 use crossterm::event::{Event, KeyCode};
 use ratatui::style::Style;
 use ratatui_textarea::TextArea;
@@ -47,11 +47,11 @@ impl State {
                 KeyCode::Enter => {
                     let input = self.input.lines()[0].clone();
                     let msg = (self.map)(input);
-                    vec![super::Message::Back, msg]
+                    vec![Navigation::Back.into(), msg]
                 }
                 KeyCode::Esc => {
                     self.input.clear();
-                    vec![super::Message::Back]
+                    vec![Navigation::Back.into()]
                 }
                 _ => {
                     self.input.input(event);

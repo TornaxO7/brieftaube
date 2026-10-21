@@ -1,6 +1,10 @@
 mod view;
 
-use crate::{THEME, ui::Layer, utils::IntoColor};
+use crate::{
+    THEME,
+    ui::{Layer, Navigation},
+    utils::IntoColor,
+};
 use crossterm::event::{Event, KeyCode};
 use nucleo::Nucleo;
 use ratatui::{style::Style, widgets::ListState};
@@ -99,7 +103,7 @@ impl State {
                             false,
                         );
                         self.nucleo.tick(10);
-                        return vec![super::Message::Back];
+                        return vec![Navigation::Back.into()];
                     }
                     KeyCode::Enter => {
                         let mut matches = self.nucleo.snapshot().matched_items(..);
@@ -108,10 +112,10 @@ impl State {
                             let item = matches.nth(idx).unwrap();
 
                             let value = item.data.0.clone();
-                            return vec![(self.map)(value), super::Message::Back];
+                            return vec![(self.map)(value), Navigation::Back.into()];
                         }
 
-                        return vec![super::Message::Back];
+                        return vec![Navigation::Back.into()];
                     }
                     KeyCode::Down => {
                         self.list_state.select_next();
