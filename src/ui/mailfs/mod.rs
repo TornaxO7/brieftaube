@@ -16,7 +16,7 @@ use crate::{
         Layer, Loadable, Navigation,
         mailfs::{
             columns::*,
-            types::{MailColumnEntry, MailPreview},
+            types::{MailEntry, MailPreview},
         },
         statusbar::StatusbarState,
         utils::keybindmanager::{self, KeybindManager},
@@ -254,8 +254,8 @@ impl State {
                     debug_assert!(first_mails.is_empty());
                 }
 
-                let first_mails: Vec<MailColumnEntry> =
-                    first_mails.into_iter().map(MailColumnEntry::from).collect();
+                let first_mails: Vec<MailEntry> =
+                    first_mails.into_iter().map(MailEntry::from).collect();
 
                 Loadable::Loaded(MailboxColumn::new(
                     child_mailboxes,
@@ -301,7 +301,7 @@ impl State {
 
         match thread_mails {
             Ok(mails) => {
-                let mail_entries = mails.into_iter().map(MailColumnEntry::from).collect();
+                let mail_entries = mails.into_iter().map(MailEntry::from).collect();
 
                 let res = self
                     .thread_columns
@@ -405,7 +405,7 @@ impl State {
                                 username: key.0.clone(),
                                 account_id: key.1.clone(),
                                 mailbox: mailbox_id.clone(),
-                                mail_properties: MailColumnEntry::MAIL_PROPERTIES.to_vec(),
+                                mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
                                 window,
                             }
                             .into()
@@ -469,7 +469,7 @@ impl State {
                                 username: key.0.clone(),
                                 account_id: key.1.clone(),
                                 mailbox: mailbox_id.clone(),
-                                mail_properties: MailColumnEntry::MAIL_PROPERTIES.to_vec(),
+                                mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
                                 window,
                             }
                             .into()
@@ -532,7 +532,7 @@ impl State {
                                 username: key.0.clone(),
                                 account_id: key.1.clone(),
                                 mailbox: mailbox_id.clone(),
-                                mail_properties: MailColumnEntry::MAIL_PROPERTIES.to_vec(),
+                                mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
                                 window,
                             }
                             .into()
@@ -594,7 +594,7 @@ impl State {
                                 username: key.0.clone(),
                                 account_id: key.1.clone(),
                                 mailbox: mailbox_id.clone(),
-                                mail_properties: MailColumnEntry::MAIL_PROPERTIES.to_vec(),
+                                mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
                                 window,
                             }
                             .into()
@@ -767,7 +767,7 @@ impl State {
                                 username: key.0.clone(),
                                 account_id: key.1.clone(),
                                 mailbox: mailbox_id.clone(),
-                                mail_properties: MailColumnEntry::MAIL_PROPERTIES.to_vec(),
+                                mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
                                 window,
                             }
                             .into()
@@ -842,7 +842,7 @@ impl State {
                                 username: key.0.clone(),
                                 account_id: key.1.clone(),
                                 mailbox: mailbox_id.clone(),
-                                mail_properties: MailColumnEntry::MAIL_PROPERTIES.to_vec(),
+                                mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
                                 window,
                             }
                             .into()
@@ -961,7 +961,7 @@ impl State {
                             username: key.0,
                             account_id: key.1,
                             mailbox_id: key.2,
-                            mail_properties: MailColumnEntry::MAIL_PROPERTIES.to_vec(),
+                            mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
                             max_init_mails: self
                                 .column_area_size
                                 .map(|size| size.height as usize)
@@ -1001,7 +1001,7 @@ impl State {
                                     username: key.0,
                                     account_id: key.1,
                                     mailbox_id: key.2,
-                                    mail_properties: MailColumnEntry::MAIL_PROPERTIES.to_vec(),
+                                    mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
                                     max_init_mails: self
                                         .column_area_size
                                         .map(|size| size.height as usize)
@@ -1028,7 +1028,7 @@ impl State {
                                         username: key.0,
                                         account_id: key.1,
                                         thread_id: key.2,
-                                        mail_properties: MailColumnEntry::MAIL_PROPERTIES.to_vec(),
+                                        mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
                                     }
                                     .into(),
                                 ]

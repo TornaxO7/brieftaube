@@ -3,7 +3,10 @@ use crate::{
     types::{CachedMail, CachedMailbox},
     ui::{
         Loadable,
-        mailfs::{columns::MailfsColumn, types::MailColumnEntry},
+        mailfs::{
+            columns::MailfsColumn,
+            types::{MailEntry, MailboxEntry},
+        },
     },
 };
 use ratatui::widgets::TableState;
@@ -12,8 +15,8 @@ pub const DEFAULT_SECTION_SIZE: usize = 32;
 
 #[derive(Debug)]
 pub struct MailboxColumn {
-    pub child_mailboxes: Vec<CachedMailbox>,
-    pub mails: Vec<Loadable<MailColumnEntry>>,
+    pub child_mailboxes: Vec<MailboxEntry>,
+    pub mails: Vec<Loadable<MailEntry>>,
 
     pub mailbox_state: TableState,
     pub mail_state: TableState,
@@ -23,7 +26,7 @@ impl MailboxColumn {
     pub fn new(
         mut child_mailboxes: Vec<CachedMailbox>,
         total_threads: usize,
-        init_mails: Vec<MailColumnEntry>,
+        init_mails: Vec<MailEntry>,
     ) -> Self {
         debug_assert!(init_mails.len() <= total_threads);
 
@@ -55,7 +58,10 @@ impl MailboxColumn {
         });
 
         Self {
-            child_mailboxes,
+            child_mailboxes: child_mailboxes
+                .into_iter()
+                .map(MailboxEntry::from)
+                .collect(),
             mails,
 
             mailbox_state,
@@ -87,9 +93,9 @@ impl MailboxColumn {
 
         match result {
             Ok(mails) => {
-                let mail_entries: Vec<Loadable<MailColumnEntry>> = mails
+                let mail_entries: Vec<Loadable<MailEntry>> = mails
                     .into_iter()
-                    .map(|cached_mail| Loadable::Loaded(MailColumnEntry::from(cached_mail)))
+                    .map(|cached_mail| Loadable::Loaded(MailEntry::from(cached_mail)))
                     .collect();
 
                 self.mails.splice(window_range, mail_entries);
@@ -256,6 +262,6 @@ impl MailfsColumn for MailboxColumn {
 
 #[derive(Debug)]
 pub enum MailboxColumnEntry<'a> {
-    Mailbox(&'a CachedMailbox),
-    RootMail(&'a Loadable<MailColumnEntry>),
+    Mailbox(&'a MailboxEntry),
+    RootMail(&'a Loadable<MailEntry>),
 }

@@ -1,18 +1,23 @@
-use crate::types::{CachedMail, MailId, MailKeyword, MailProperty, ThreadId};
+use crate::{
+    types::{CachedMail, MailId, MailKeyword, MailProperty, ThreadId},
+    ui::mailfs::types::Selectable,
+};
 use chrono::{DateTime, Local};
 use std::collections::HashSet;
 
 #[derive(Debug, Clone)]
-pub struct MailColumnEntry {
+pub struct MailEntry {
     pub id: MailId,
     pub keywords: HashSet<MailKeyword>,
     pub subject: Option<String>,
     pub received_at: DateTime<Local>,
     pub has_attachment: bool,
     pub thread_id: ThreadId,
+
+    pub is_selected: bool,
 }
 
-impl MailColumnEntry {
+impl MailEntry {
     pub const MAIL_PROPERTIES: [MailProperty; 6] = [
         MailProperty::Id,
         MailProperty::Keywords,
@@ -23,7 +28,7 @@ impl MailColumnEntry {
     ];
 }
 
-impl From<CachedMail> for MailColumnEntry {
+impl From<CachedMail> for MailEntry {
     fn from(cached_mail: CachedMail) -> Self {
         let id = cached_mail.id;
         let keywords = cached_mail.keywords.into_inner().unwrap();
@@ -39,6 +44,14 @@ impl From<CachedMail> for MailColumnEntry {
             received_at,
             has_attachment,
             thread_id,
+
+            is_selected: false,
         }
+    }
+}
+
+impl Selectable for MailEntry {
+    fn is_selected(&self) -> bool {
+        self.is_selected
     }
 }

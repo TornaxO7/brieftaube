@@ -1,14 +1,14 @@
-use crate::ui::mailfs::{columns::MailfsColumn, types::MailColumnEntry};
+use crate::ui::mailfs::{columns::MailfsColumn, types::MailEntry};
 use ratatui::widgets::TableState;
 
 #[derive(Debug)]
 pub struct ThreadColumn {
-    pub mails: Vec<MailColumnEntry>,
+    pub mails: Vec<MailEntry>,
     pub state: TableState,
 }
 
 impl ThreadColumn {
-    pub fn new(mails: Vec<MailColumnEntry>) -> Self {
+    pub fn new(mails: Vec<MailEntry>) -> Self {
         debug_assert!(!mails.is_empty());
 
         Self {
@@ -17,11 +17,11 @@ impl ThreadColumn {
         }
     }
 
-    pub fn set_mails(&mut self, mails: Vec<MailColumnEntry>) {
+    pub fn set_mails(&mut self, mails: Vec<MailEntry>) {
         self.mails = mails;
     }
 
-    pub fn get_selected_entry<'a>(&'a self) -> &'a MailColumnEntry {
+    pub fn get_selected_entry<'a>(&'a self) -> &'a MailEntry {
         let idx = self.state.selected().unwrap();
         &self.mails[idx]
     }

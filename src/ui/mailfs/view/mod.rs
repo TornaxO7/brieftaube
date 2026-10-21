@@ -1,3 +1,5 @@
+mod account_column;
+
 use crate::{
     types::{MailId, MailKeyword, ParentMailboxId, ROOT_MAILBOX_ID, ThreadId},
     ui::{
@@ -42,6 +44,8 @@ pub fn view(
     ])
     .areas(area);
 
+    // TODO: HERE
+    // How to render the separation lines?
     render_path(scheme, state, frame, path_area);
     render_columns(scheme, state, frame, columns_area);
     render_statusbar(scheme, state, frame, statusbar_area);
@@ -156,9 +160,9 @@ fn render_columns(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, 
     .areas(area);
 
     render_left_column(scheme, state, frame, left_area);
-    render_left_separation_lines(scheme, frame, sep1);
+    // render_left_separation_lines(scheme, frame, sep1);
     render_middle_column(scheme, state, frame, middle_area);
-    render_left_separation_lines(scheme, frame, sep2);
+    // render_left_separation_lines(scheme, frame, sep2);
     render_right_column(scheme, state, frame, right_area);
 }
 
