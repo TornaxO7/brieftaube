@@ -156,12 +156,16 @@ impl Ui {
                 Navigation::OpenPalette { entries, map } => {
                     self.navigate_open_palette(entries, map)
                 }
-                // TODO: Split up into `reader` and `composer`
-                Navigation::OpenPager {
+                Navigation::OpenReader {
                     username,
                     account_id,
-                    mode,
-                } => self.navigate_open_pager(username, account_id, mode),
+                    mail_id,
+                } => self.navigate_open_reader(username, account_id, mail_id),
+                Navigation::OpenComposer {
+                    username,
+                    account_id,
+                    mail_id,
+                } => self.navigate_open_composer(username, account_id, mail_id),
                 Navigation::OpenEditor {
                     content,
                     ty,
@@ -212,66 +216,68 @@ impl Ui {
         vec![]
     }
 
-    fn navigate_open_pager(
+    fn navigate_open_reader(
         &mut self,
         username: Username,
         account_id: AccountId,
-        mode: OpenPagerMode,
+        mail_id: MailId,
     ) -> Vec<Message> {
-        match mode {
-            OpenPagerMode::Reader(mail_id) => {
+        self.layers.push(ActiveLayer::Pager(pager::State::new(
+            username.clone(),
+            account_id.clone(),
+            pager::Mode::Reader,
+        )));
+
+        let properties = {
+            let mut properties = pager::MailHeaders::MAIL_PROPERTIES.to_vec();
+            properties.extend([
+                MailProperty::HtmlBody,
+                MailProperty::TextBody,
+                MailProperty::Attachments,
+            ]);
+            properties
+        };
+
+        vec![
+            pager::MessageRequest::GetMail {
+                username,
+                account_id,
+                mail_id,
+                properties,
+                callback: Box::new(move |cached_mail: color_eyre::Result<CachedMail>| {
+                    vec![pager::Message::SetMail(cached_mail).into()]
+                }),
+            }
+            .into(),
+        ]
+    }
+
+    fn navigate_open_composer(
+        &mut self,
+        username: Username,
+        account_id: AccountId,
+        mail_id: Option<MailId>,
+    ) -> Vec<Message> {
+        match mail_id {
+            Some(_) => todo!("Open already existing mailid"),
+            None => {
+                let mail_id = MailId::new_intern();
+
                 self.layers.push(ActiveLayer::Pager(pager::State::new(
                     username.clone(),
                     account_id.clone(),
-                    pager::Mode::Reader,
+                    pager::Mode::Composer,
                 )));
 
-                let properties = {
-                    let mut properties = pager::MailHeaders::MAIL_PROPERTIES.to_vec();
-                    properties.extend([
-                        MailProperty::HtmlBody,
-                        MailProperty::TextBody,
-                        MailProperty::Attachments,
-                    ]);
-                    properties
-                };
-
-                vec![
-                    pager::MessageRequest::GetMail {
-                        username,
-                        account_id,
-                        mail_id,
-                        properties,
-                        callback: Box::new(move |cached_mail: color_eyre::Result<CachedMail>| {
-                            vec![pager::Message::SetMail(cached_mail).into()]
-                        }),
-                    }
-                    .into(),
-                ]
-            }
-            OpenPagerMode::Composer(mail_id) => match mail_id {
-                Some(_) => todo!("Open already existing mailid"),
-                None => {
-                    let mail_id = MailId::new_intern();
-
-                    self.layers.push(ActiveLayer::Pager(pager::State::new(
-                        username.clone(),
-                        account_id.clone(),
-                        pager::Mode::Composer,
-                    )));
-
-                    self.manager.with_handler(&username, async move |handler| {
-                        vec![
-                            pager::Message::SetMail(
-                                handler.create_new_mail(account_id, mail_id).await,
-                            )
+                self.manager.with_handler(&username, async move |handler| {
+                    vec![
+                        pager::Message::SetMail(handler.create_new_mail(account_id, mail_id).await)
                             .into(),
-                        ]
-                    });
+                    ]
+                });
 
-                    vec![]
-                }
-            },
+                vec![]
+            }
         }
     }
 
@@ -412,11 +418,6 @@ impl PendingEditor {
     }
 }
 
-pub enum OpenPagerMode {
-    Reader(MailId),
-    Composer(Option<MailId>),
-}
-
 pub enum Navigation {
     Back,
     Quit,
@@ -429,10 +430,15 @@ pub enum Navigation {
         entries: Vec<PaletteEntry>,
         map: fn(String) -> Message,
     },
-    OpenPager {
+    OpenReader {
         username: Username,
         account_id: AccountId,
-        mode: OpenPagerMode,
+        mail_id: MailId,
+    },
+    OpenComposer {
+        username: Username,
+        account_id: AccountId,
+        mail_id: Option<MailId>,
     },
     OpenEditor {
         content: String,

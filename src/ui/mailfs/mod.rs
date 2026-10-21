@@ -694,10 +694,10 @@ impl State {
                     Loadable::Loaded(column) => {
                         let selected_mail = column.get_selected_entry();
                         vec![
-                            Navigation::OpenPager {
+                            Navigation::OpenReader {
                                 username: key.0,
                                 account_id: key.1,
-                                mode: crate::ui::OpenPagerMode::Reader(selected_mail.id.clone()),
+                                mail_id: selected_mail.id.clone(),
                             }
                             .into(),
                         ]
@@ -895,10 +895,10 @@ impl State {
         let account_ctx = self.get_account_ctx();
 
         vec![
-            Navigation::OpenPager {
+            Navigation::OpenComposer {
                 username: account_ctx.username,
                 account_id: account_ctx.account_id,
-                mode: crate::ui::OpenPagerMode::Composer(None),
+                mail_id: None,
             }
             .into(),
         ]
