@@ -43,8 +43,6 @@ pub fn view(
     ])
     .areas(area);
 
-    // TODO: HERE
-    // How to render the separation lines?
     render_path(scheme, state, frame, path_area);
     render_columns(scheme, state, frame, columns_area);
     render_statusbar(scheme, state, frame, statusbar_area);
