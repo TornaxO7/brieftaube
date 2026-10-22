@@ -663,7 +663,7 @@ impl State {
     }
 
     fn read_html_body_in_editor(&mut self) -> Vec<super::Message> {
-        if !self.is_in_state(Some(Mode::Reader), SelectedTab::Body) {
+        if !self.is_in_state(None, SelectedTab::Body) {
             return vec![];
         }
 
