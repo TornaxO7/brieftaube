@@ -1,5 +1,3 @@
-mod account_column;
-
 use crate::{
     types::{MailId, MailKeyword, ParentMailboxId, ROOT_MAILBOX_ID, ThreadId},
     ui::{
@@ -7,6 +5,7 @@ use crate::{
         mailfs::{
             ColumnStackEntry,
             columns::{MailboxColumnEntry, MailfsColumn},
+            types::Selectable,
         },
         statusbar::StatusbarWidget,
     },
@@ -18,7 +17,7 @@ use ratatui::{
     layout::{Constraint, HorizontalAlignment, Layout, Rect},
     style::Style,
     text::{Line, Span, Text},
-    widgets::{Block, Borders, Cell, Fill, Paragraph, Row, Table, Wrap},
+    widgets::{Block, Borders, Cell, List, ListDirection, ListItem, Paragraph, Row, Table, Wrap},
 };
 use throbber_widgets_tui::Throbber;
 
@@ -142,27 +141,15 @@ fn render_statusbar(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
 }
 
 fn render_columns(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
-    let [
-        _left_padding,
-        left_area,
-        sep1,
-        middle_area,
-        sep2,
-        right_area,
-    ] = Layout::horizontal([
-        Constraint::Length(1),
+    let [left_area, middle_area, right_area] = Layout::horizontal([
         Constraint::Fill(1),
-        Constraint::Length(1),
         Constraint::Fill(1),
-        Constraint::Length(1),
         Constraint::Fill(1),
     ])
     .areas(area);
 
     render_left_column(scheme, state, frame, left_area);
-    // render_left_separation_lines(scheme, frame, sep1);
     render_middle_column(scheme, state, frame, middle_area);
-    // render_left_separation_lines(scheme, frame, sep2);
     render_right_column(scheme, state, frame, right_area);
 }
 
@@ -274,6 +261,9 @@ fn render_column(
 }
 
 fn render_users_column(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
+    let [gutter_area, content_area] =
+        Layout::horizontal([Constraint::Length(1), Constraint::Fill(1)]).areas(area);
+
     let rows: Vec<Row<'_>> = {
         let mut rows = Vec::new();
 
@@ -295,9 +285,11 @@ fn render_users_column(scheme: &Scheme, state: &mut super::State, frame: &mut Fr
                 .bg(scheme.primary_container.into_color())
                 .fg(scheme.on_primary_container.into_color()),
         ),
-        area,
+        content_area,
         &mut state.users_column.state,
     );
+
+    render_gutter(scheme, frame, gutter_area, std::iter::repeat(false));
 }
 
 fn render_accounts_column(
@@ -308,6 +300,9 @@ fn render_accounts_column(
 ) {
     let selected_user = &state.users_column.get_selected_entry().username;
 
+    let [gutter_area, content_area] =
+        Layout::horizontal([Constraint::Length(1), Constraint::Fill(1)]).areas(area);
+
     match state
         .accounts_column
         .get_mut(selected_user)
@@ -317,17 +312,21 @@ fn render_accounts_column(
         Loadable::Loading => {
             frame.render_stateful_widget(
                 Throbber::default().label("Login user..."),
-                area,
+                content_area,
                 &mut state.throbber,
             );
+
+            render_gutter(scheme, frame, gutter_area, std::iter::repeat(false));
         }
         Loadable::Error(err) => {
             frame.render_widget(
                 Paragraph::new(format!("Couldn't connect to server:\n{}", err))
                     .wrap(Wrap { trim: false })
                     .style(Style::new().fg(scheme.error.into_color())),
-                area,
+                content_area,
             );
+
+            render_gutter(scheme, frame, gutter_area, std::iter::repeat(false));
         }
         Loadable::Loaded(accounts) => {
             let rows: Vec<Row<'_>> = {
@@ -351,8 +350,19 @@ fn render_accounts_column(
                         .bg(scheme.primary_container.into_color())
                         .fg(scheme.on_primary_container.into_color()),
                 ),
-                area,
+                content_area,
                 &mut accounts.state,
+            );
+
+            render_gutter(
+                scheme,
+                frame,
+                gutter_area,
+                accounts
+                    .accounts
+                    .iter()
+                    .skip(accounts.state.offset())
+                    .map(|account| account.is_selected()),
             );
         }
     }
@@ -370,11 +380,13 @@ fn render_mailbox_column(
         Loadable::NotLoaded => unreachable!(),
         Loadable::Loading => {
             render_loading_column(scheme, state, frame, area);
+            render_gutter(scheme, frame, area, std::iter::repeat(false));
             return;
         }
         Loadable::Loaded(column) => column,
         Loadable::Error(err) => {
             render_error_column(scheme, frame, area, format!("Couldn't load column:\n{err}"));
+            render_gutter(scheme, frame, area, std::iter::repeat(false));
             return;
         }
     };
@@ -394,6 +406,9 @@ fn render_mailbox_column(
 
     // mailboxes
     if mailbox_area.height > 0 {
+        let [mailbox_gutter_area, mailbox_content_area] =
+            Layout::horizontal([Constraint::Length(1), Constraint::Fill(1)]).areas(mailbox_area);
+
         let mailbox_rows: Vec<Row<'_>> = mailbox_column
             .child_mailboxes
             .iter()
@@ -418,13 +433,27 @@ fn render_mailbox_column(
                     .bg(scheme.primary_container.into_color())
                     .fg(scheme.on_primary_container.into_color()),
             ),
-            mailbox_area,
+            mailbox_content_area,
             &mut mailbox_column.mailbox_state,
+        );
+
+        render_gutter(
+            scheme,
+            frame,
+            mailbox_gutter_area,
+            mailbox_column
+                .child_mailboxes
+                .iter()
+                .skip(mailbox_column.mailbox_state.offset())
+                .map(|mailbox| mailbox.is_selected()),
         );
     }
 
     // mails
     if mails_area.height > 0 {
+        let [mail_gutter_area, mail_content_area] =
+            Layout::horizontal([Constraint::Length(1), Constraint::Fill(1)]).areas(mails_area);
+
         let mail_rows: Vec<Row<'_>> = mailbox_column
             .mails
             .iter()
@@ -487,9 +516,20 @@ fn render_mailbox_column(
                     .bg(scheme.primary_container.into_color())
                     .fg(scheme.on_primary_container.into_color()),
             ),
-            mails_area,
+            mail_content_area,
             &mut mailbox_column.mail_state,
         );
+
+        render_gutter(
+            scheme,
+            frame,
+            mail_gutter_area,
+            mailbox_column
+                .mails
+                .iter()
+                .skip(mailbox_column.mail_state.offset())
+                .map(|mail| mail.is_selected()),
+        )
     }
 }
 
@@ -500,21 +540,26 @@ fn render_thread_column(
     frame: &mut Frame,
     area: Rect,
 ) {
+    let [gutter_area, content_area] =
+        Layout::horizontal([Constraint::Length(1), Constraint::Fill(1)]).areas(area);
+
     let key = state.get_account_ctx().as_key(thread_id);
     match state.thread_columns.get_mut(&key).unwrap() {
         Loadable::NotLoaded => unreachable!(),
         Loadable::Loading => {
             frame.render_stateful_widget(
                 Throbber::default().label("Loading thread"),
-                area,
+                content_area,
                 &mut state.throbber,
             );
+            render_gutter(scheme, frame, gutter_area, std::iter::repeat(false));
         }
         Loadable::Error(err) => {
             frame.render_widget(
                 Paragraph::new(err.as_str()).style(Style::new().fg(scheme.error.into_color())),
-                area,
+                content_area,
             );
+            render_gutter(scheme, frame, gutter_area, std::iter::repeat(false));
         }
         Loadable::Loaded(column) => {
             let widths = [
@@ -565,8 +610,19 @@ fn render_thread_column(
                         .bg(scheme.primary_container.into_color())
                         .fg(scheme.on_primary_container.into_color()),
                 ),
-                area,
+                content_area,
                 &mut column.state,
+            );
+
+            render_gutter(
+                scheme,
+                frame,
+                gutter_area,
+                column
+                    .mails
+                    .iter()
+                    .skip(column.state.offset())
+                    .map(|mail| mail.is_selected()),
             );
         }
     }
@@ -579,30 +635,39 @@ fn render_mail_preview(
     frame: &mut Frame,
     area: Rect,
 ) {
+    let [gutter_area, content_area] =
+        Layout::horizontal([Constraint::Length(1), Constraint::Fill(1)]).areas(area);
+
     let key = state.get_account_ctx().as_key(mail_id);
     match state.mail_previews.get(&key).expect("State is there") {
         Loadable::NotLoaded => {
             frame.render_widget(
                 Paragraph::new("Preview not loaded yet.")
                     .style(Style::new().fg(scheme.tertiary.into_color())),
-                area,
+                content_area,
             );
+
+            render_gutter(scheme, frame, gutter_area, std::iter::repeat(false));
         }
         Loadable::Loading => {
             frame.render_stateful_widget(
                 Throbber::default()
                     .label("Loading preview...")
                     .throbber_style(Style::new().fg(scheme.primary.into_color())),
-                area,
+                content_area,
                 &mut state.throbber,
             );
+
+            render_gutter(scheme, frame, gutter_area, std::iter::repeat(false));
         }
         Loadable::Error(err) => {
             frame.render_widget(
                 Paragraph::new(format!("Couldn't load mail preview:\n{err}"))
                     .style(Style::new().fg(scheme.error.into_color())),
-                area,
+                content_area,
             );
+
+            render_gutter(scheme, frame, gutter_area, std::iter::repeat(false));
         }
         Loadable::Loaded(mail) => {
             let received_at = mail.received_at.format("%c").to_string();
@@ -668,7 +733,7 @@ fn render_mail_preview(
                     Constraint::Fill(1),
                 ])
                 .spacing(1)
-                .areas(area)
+                .areas(content_area)
             };
 
             frame.render_widget(
@@ -747,15 +812,39 @@ fn render_mail_preview(
             }
         }
     }
+
+    render_gutter(scheme, frame, gutter_area, std::iter::repeat(false));
 }
 
-fn render_left_separation_lines(scheme: &Scheme, frame: &mut Frame, area: Rect) {
-    let [left_area, _rest] =
-        Layout::horizontal([Constraint::Length(1), Constraint::Fill(1)]).areas(area);
+fn render_gutter(
+    scheme: &Scheme,
+    frame: &mut Frame,
+    area: Rect,
+    selected: impl Iterator<Item = bool>,
+) {
+    let list_items = {
+        let mut list_items = Vec::with_capacity(area.height as usize);
+
+        for is_selected in selected.take(area.height as usize) {
+            let style = if is_selected {
+                Style::new().bg(scheme.tertiary.into_color())
+            } else {
+                Style::new()
+            };
+
+            list_items.push(ListItem::new(SEPARATION_LINE).style(style));
+        }
+
+        if list_items.len() < area.height as usize {
+            list_items.resize(area.height as usize, ListItem::new(SEPARATION_LINE));
+        }
+
+        list_items
+    };
 
     frame.render_widget(
-        Fill::new(SEPARATION_LINE).style(Style::new().fg(scheme.outline.into_color())),
-        left_area,
+        List::new(list_items).direction(ListDirection::TopToBottom),
+        area,
     );
 }
 
