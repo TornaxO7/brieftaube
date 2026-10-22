@@ -25,6 +25,11 @@ impl ThreadColumn {
         let idx = self.state.selected().unwrap();
         &self.mails[idx]
     }
+
+    pub fn get_selected_entry_mut<'a>(&'a mut self) -> &'a mut MailEntry {
+        let idx = self.state.selected().unwrap();
+        &mut self.mails[idx]
+    }
 }
 
 impl MailfsColumn for ThreadColumn {

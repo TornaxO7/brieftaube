@@ -27,6 +27,11 @@ impl AccountsColumn {
         let idx = self.state.selected().expect("Must select an entry");
         &self.accounts[idx]
     }
+
+    pub fn get_selected_entry_mut<'a>(&'a mut self) -> &'a mut AccountEntry {
+        let idx = self.state.selected().expect("Must select an entry");
+        &mut self.accounts[idx]
+    }
 }
 
 impl MailfsColumn for AccountsColumn {

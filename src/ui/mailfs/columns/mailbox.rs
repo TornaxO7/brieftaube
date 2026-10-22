@@ -84,6 +84,21 @@ impl MailboxColumn {
         }
     }
 
+    pub fn get_selected_entry_mut<'a>(&'a mut self) -> Option<MailboxColumnEntryMut<'a>> {
+        match (self.mailbox_state.selected(), self.mail_state.selected()) {
+            (Some(idx), None) => self
+                .child_mailboxes
+                .get_mut(idx)
+                .map(|mailbox| MailboxColumnEntryMut::Mailbox(mailbox)),
+            (None, Some(idx)) => self
+                .mails
+                .get_mut(idx)
+                .map(|mail| MailboxColumnEntryMut::RootMail(mail)),
+            (Some(_), Some(_)) => unreachable!(),
+            (None, None) => None,
+        }
+    }
+
     pub fn set_mailbox_mails(
         &mut self,
         window: QueryWindow,
@@ -264,4 +279,10 @@ impl MailfsColumn for MailboxColumn {
 pub enum MailboxColumnEntry<'a> {
     Mailbox(&'a MailboxEntry),
     RootMail(&'a Loadable<MailEntry>),
+}
+
+#[derive(Debug)]
+pub enum MailboxColumnEntryMut<'a> {
+    Mailbox(&'a mut MailboxEntry),
+    RootMail(&'a mut Loadable<MailEntry>),
 }

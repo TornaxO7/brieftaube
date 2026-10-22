@@ -873,7 +873,87 @@ impl State {
     }
 
     fn select_entry(&mut self) -> Vec<crate::ui::Message> {
-        todo!();
+        match self.column_stack.last().unwrap() {
+            ColumnStackEntry::Users => {
+                let entry = self.users_column.get_selected_entry_mut();
+                entry.is_selected = !entry.is_selected;
+            }
+            ColumnStackEntry::Accounts => {
+                let username = &self.users_column.get_selected_entry().username;
+                let Some(column) = self
+                    .accounts_column
+                    .get_mut(username)
+                    .expect("Account column exists")
+                    .loaded_mut()
+                else {
+                    return vec![];
+                };
+
+                let entry = column.get_selected_entry_mut();
+                entry.is_selected = !entry.is_selected;
+            }
+            ColumnStackEntry::Mailbox(mailbox_id) => {
+                let account_ctx = self.get_account_ctx();
+                let key = account_ctx.as_key(mailbox_id.clone());
+                let Some(column) = self
+                    .mailbox_columns
+                    .get_mut(&key)
+                    .expect("Mailbox column exists")
+                    .loaded_mut()
+                else {
+                    return vec![];
+                };
+
+                let Some(entry) = column.get_selected_entry_mut() else {
+                    return vec![];
+                };
+
+                match entry {
+                    MailboxColumnEntryMut::Mailbox(mailbox_entry) => {
+                        mailbox_entry.is_selected = !mailbox_entry.is_selected;
+                    }
+                    MailboxColumnEntryMut::RootMail(loadable_mail) => {
+                        let Some(mail_entry) = loadable_mail.loaded_mut() else {
+                            return vec![];
+                        };
+
+                        mail_entry.is_selected = !mail_entry.is_selected;
+
+                        // also select every mail in the thread
+                        let key = account_ctx.as_key(mail_entry.thread_id.clone());
+                        let Some(column) = self
+                            .thread_columns
+                            .get_mut(&key)
+                            .expect("Thread column exists")
+                            .loaded_mut()
+                        else {
+                            return vec![];
+                        };
+
+                        for mail in column.mails.iter_mut() {
+                            mail.is_selected = !mail.is_selected;
+                        }
+                    }
+                }
+            }
+            ColumnStackEntry::Thread(thread_id) => {
+                let key = self.get_account_ctx().as_key(thread_id.clone());
+
+                let Some(column) = self
+                    .thread_columns
+                    .get_mut(&key)
+                    .expect("Thread column exists")
+                    .loaded_mut()
+                else {
+                    return vec![];
+                };
+
+                let selected_mail = column.get_selected_entry_mut();
+                selected_mail.is_selected = !selected_mail.is_selected;
+            }
+        };
+
+        self.navigate_down()
     }
 
     fn cut_selected_entries(&mut self) -> Vec<crate::ui::Message> {

@@ -36,6 +36,11 @@ impl UserColumn {
         let idx = self.state.selected().expect("User is selected");
         &self.users[idx]
     }
+
+    pub fn get_selected_entry_mut<'a>(&'a mut self) -> &'a mut UserEntry {
+        let idx = self.state.selected().expect("User is selected");
+        &mut self.users[idx]
+    }
 }
 
 impl MailfsColumn for UserColumn {
