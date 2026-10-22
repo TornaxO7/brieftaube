@@ -1,9 +1,12 @@
-use crate::{CONFIG, config::UserConfig, ui::mailfs::columns::MailfsColumn};
+use crate::{
+    CONFIG,
+    ui::mailfs::{columns::MailfsColumn, types::UserEntry},
+};
 use ratatui::widgets::TableState;
 
 #[derive(Debug, Clone)]
 pub struct UserColumn {
-    pub users: Vec<UserConfig>,
+    pub users: Vec<UserEntry>,
     pub state: TableState,
 }
 
@@ -11,7 +14,12 @@ impl UserColumn {
     pub fn new() -> Self {
         let config = CONFIG.get().unwrap();
 
-        let users: Vec<UserConfig> = config.users.clone();
+        let users = config
+            .users
+            .iter()
+            .cloned()
+            .map(UserEntry::from)
+            .collect::<Vec<UserEntry>>();
 
         let state = if users.is_empty() {
             TableState::new()
@@ -24,7 +32,7 @@ impl UserColumn {
         Self { users, state }
     }
 
-    pub fn get_selected_entry<'a>(&'a self) -> &'a UserConfig {
+    pub fn get_selected_entry<'a>(&'a self) -> &'a UserEntry {
         let idx = self.state.selected().expect("User is selected");
         &self.users[idx]
     }

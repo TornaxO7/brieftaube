@@ -1,4 +1,5 @@
 use crate::{
+    CONFIG,
     config::{self, UserConfig, Username},
     datasource::{self, Cache, RemoteSession, jmap::JmapDescriptor},
     repository::RepositoryHandler,
@@ -32,7 +33,16 @@ impl RepositoryManager {
         self.task_manager.has_tasks_running()
     }
 
-    pub fn load_user(&mut self, user_config: UserConfig) {
+    pub fn load_user(&mut self, username: Username) {
+        let user_config = CONFIG
+            .get()
+            .unwrap()
+            .users
+            .iter()
+            .find(|user_config| user_config.username == username)
+            .cloned()
+            .unwrap();
+
         let (tx, rx) = watch::channel(RepositoryState::Loading);
         self.repos.insert(user_config.username.clone(), rx);
         self.task_manager

@@ -53,7 +53,7 @@ impl Ui {
         let mut manager = RepositoryManager::new();
 
         let (mailfs, initial_user) = mailfs::State::new();
-        manager.load_user(initial_user);
+        manager.load_user(initial_user.username);
 
         let scheme = {
             let theme = THEME.get().unwrap();

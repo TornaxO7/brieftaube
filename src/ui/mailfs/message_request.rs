@@ -1,15 +1,19 @@
 use crate::{
-    config::{UserConfig, Username},
+    CONFIG,
+    config::Username,
     datasource::types::{MutateAttribute, QueryWindow},
     types::{
         AccountId, CachedMail, MailId, MailKeyword, MailProperty, MailboxId, ParentMailboxId,
         ThreadId,
     },
-    ui::{mailfs::Message, repository_manager::RepositoryManager},
+    ui::{
+        mailfs::{Message, types::UserEntry},
+        repository_manager::RepositoryManager,
+    },
 };
 
 pub enum MessageRequest {
-    GetAccountsOf(UserConfig),
+    GetAccountsOf(UserEntry),
 
     GetMail {
         username: Username,
@@ -64,8 +68,8 @@ pub fn handle_request(
     manager: &mut RepositoryManager,
 ) -> Vec<crate::ui::Message> {
     match msg {
-        MessageRequest::GetAccountsOf(user_config) => {
-            manager.load_user(user_config);
+        MessageRequest::GetAccountsOf(user) => {
+            manager.load_user(user.username);
             vec![]
         }
         MessageRequest::InitMailbox {

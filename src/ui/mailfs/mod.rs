@@ -6,7 +6,7 @@ mod user_action;
 mod view;
 
 use crate::{
-    config::{self, UserConfig, Username},
+    config::{self, Username},
     datasource::types::QueryWindow,
     types::{
         AccountData, AccountId, CachedMail, InitMailboxData, MailId, MailboxId, ParentMailboxId,
@@ -16,7 +16,7 @@ use crate::{
         Layer, Loadable, Navigation,
         mailfs::{
             columns::*,
-            types::{MailEntry, MailPreview},
+            types::{MailEntry, MailPreview, UserEntry},
         },
         statusbar::StatusbarState,
         utils::keybindmanager::{self, KeybindManager},
@@ -50,10 +50,11 @@ pub struct State {
     mail_previews: HashMap<(Username, AccountId, MailId), Loadable<MailPreview>>,
 
     column_area_size: Option<Size>,
+    selection: HashMap<(Username, AccountId), SelectionType>,
 }
 
 impl State {
-    pub fn new() -> (Self, UserConfig) {
+    pub fn new() -> (Self, UserEntry) {
         let users_column = columns::UserColumn::new();
         let (accounts_column, initial_user) = {
             let selected_user = users_column.get_selected_entry().clone();
@@ -80,6 +81,7 @@ impl State {
                 mail_previews,
 
                 column_area_size: None,
+                selection: HashMap::new(),
 
                 keybindings: KeybindManager::new(HashMap::from([
                     ("q", UserAction::Quit),
@@ -1104,4 +1106,11 @@ impl AccountCtx {
     pub fn as_key<T>(&self, other: T) -> (Username, AccountId, T) {
         (self.username.clone(), self.account_id.clone(), other)
     }
+}
+
+enum SelectionType {
+    User(Username),
+    Mailbox(MailboxId),
+    Mail(MailId),
+    Thread(ThreadId),
 }

@@ -287,7 +287,16 @@ fn render_users_column(scheme: &Scheme, state: &mut super::State, frame: &mut Fr
         &mut state.users_column.state,
     );
 
-    render_gutter(scheme, frame, gutter_area, std::iter::repeat(false));
+    render_gutter(
+        scheme,
+        frame,
+        gutter_area,
+        state
+            .users_column
+            .users
+            .iter()
+            .map(|user| user.is_selected()),
+    );
 }
 
 fn render_accounts_column(
