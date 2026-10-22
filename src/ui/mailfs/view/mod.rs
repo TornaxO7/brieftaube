@@ -259,8 +259,12 @@ fn render_column(
 }
 
 fn render_users_column(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
-    let [gutter_area, content_area] =
-        Layout::horizontal([Constraint::Length(1), Constraint::Fill(1)]).areas(area);
+    let [gutter_area, _padding, content_area] = Layout::horizontal([
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Fill(1),
+    ])
+    .areas(area);
 
     let rows: Vec<Row<'_>> = {
         let mut rows = Vec::new();
@@ -307,8 +311,12 @@ fn render_accounts_column(
 ) {
     let selected_user = &state.users_column.get_selected_entry().username;
 
-    let [gutter_area, content_area] =
-        Layout::horizontal([Constraint::Length(1), Constraint::Fill(1)]).areas(area);
+    let [gutter_area, _padding, content_area] = Layout::horizontal([
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Fill(1),
+    ])
+    .areas(area);
 
     match state
         .accounts_column
@@ -413,8 +421,18 @@ fn render_mailbox_column(
 
     // mailboxes
     if mailbox_area.height > 0 {
-        let [mailbox_gutter_area, mailbox_content_area] =
-            Layout::horizontal([Constraint::Length(1), Constraint::Fill(1)]).areas(mailbox_area);
+        let [
+            mailbox_gutter_area,
+            _padding1,
+            mailbox_content_area,
+            _padding2,
+        ] = Layout::horizontal([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Fill(1),
+            Constraint::Length(1),
+        ])
+        .areas(mailbox_area);
 
         let mailbox_rows: Vec<Row<'_>> = mailbox_column
             .child_mailboxes
@@ -458,8 +476,13 @@ fn render_mailbox_column(
 
     // mails
     if mails_area.height > 0 {
-        let [mail_gutter_area, mail_content_area] =
-            Layout::horizontal([Constraint::Length(1), Constraint::Fill(1)]).areas(mails_area);
+        let [mail_gutter_area, _padding1, mail_content_area, _padding2] = Layout::horizontal([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Fill(1),
+            Constraint::Length(1),
+        ])
+        .areas(mails_area);
 
         let mail_rows: Vec<Row<'_>> = mailbox_column
             .mails
@@ -547,8 +570,12 @@ fn render_thread_column(
     frame: &mut Frame,
     area: Rect,
 ) {
-    let [gutter_area, content_area] =
-        Layout::horizontal([Constraint::Length(1), Constraint::Fill(1)]).areas(area);
+    let [gutter_area, _padding, content_area] = Layout::horizontal([
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Fill(1),
+    ])
+    .areas(area);
 
     let key = state.get_account_ctx().as_key(thread_id);
     match state.thread_columns.get_mut(&key).unwrap() {
