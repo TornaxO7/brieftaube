@@ -42,6 +42,8 @@ pub struct State {
 
     column_stack: Vec<ColumnStackEntry>,
 
+    // TODO: Improve abstraction
+    //  - Introduce `Column` trait (`get_selected_entry`, `get_selected_entry_mut`, navigation, selection, etc.)
     users_column: columns::UserColumn,
     accounts_column: HashMap<Username, Loadable<columns::AccountsColumn>>,
     mailbox_columns:
