@@ -1,6 +1,6 @@
 use crate::{
     CONFIG,
-    config::{self, UserConfig, Username},
+    config::{self, Username},
     datasource::{self, Cache, RemoteSession, jmap::JmapDescriptor},
     repository::RepositoryHandler,
     ui::{Message, mailfs, task_manager::TaskManager},

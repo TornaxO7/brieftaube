@@ -1,5 +1,4 @@
 use crate::{
-    CONFIG,
     config::Username,
     datasource::types::{MutateAttribute, QueryWindow},
     types::{
