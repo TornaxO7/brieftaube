@@ -1,11 +1,11 @@
 use crate::{
-    types::{AccountData, AccountId},
-    ui::mailfs::{columns::MailfsColumn, types::Selectable},
+    types::AccountData,
+    ui::mailfs::{columns::MailfsColumn, types::AccountEntry},
 };
 use ratatui::widgets::TableState;
 
 pub struct AccountsColumn {
-    pub accounts: Vec<AccountsColumnEntry>,
+    pub accounts: Vec<AccountEntry>,
     pub state: TableState,
 }
 
@@ -13,23 +13,17 @@ impl AccountsColumn {
     pub fn new(accounts: Vec<AccountData>) -> Self {
         debug_assert!(!accounts.is_empty());
         Self {
-            accounts: accounts
-                .into_iter()
-                .map(AccountsColumnEntry::from)
-                .collect(),
+            accounts: accounts.into_iter().map(AccountEntry::from).collect(),
             state: TableState::new().with_selected(Some(0)),
         }
     }
 
-    pub fn set_accounts(&mut self, accounts: Vec<AccountData>) {
-        debug_assert!(!accounts.is_empty());
-        self.accounts = accounts
-            .into_iter()
-            .map(AccountsColumnEntry::from)
-            .collect();
-    }
+    // pub fn set_accounts(&mut self, accounts: Vec<AccountData>) {
+    //     debug_assert!(!accounts.is_empty());
+    //     self.accounts = accounts.into_iter().map(AccountEntry::from).collect();
+    // }
 
-    pub fn get_selected_entry<'a>(&'a self) -> &'a AccountsColumnEntry {
+    pub fn get_selected_entry<'a>(&'a self) -> &'a AccountEntry {
         let idx = self.state.selected().expect("Must select an entry");
         &self.accounts[idx]
     }
@@ -63,25 +57,5 @@ impl MailfsColumn for AccountsColumn {
 
     fn len(&self) -> usize {
         self.accounts.len()
-    }
-}
-
-pub struct AccountsColumnEntry {
-    pub id: AccountId,
-    pub name: String,
-}
-
-impl From<AccountData> for AccountsColumnEntry {
-    fn from(data: AccountData) -> Self {
-        Self {
-            id: data.id,
-            name: data.name,
-        }
-    }
-}
-
-impl Selectable for AccountsColumnEntry {
-    fn is_selected(&self) -> bool {
-        false
     }
 }
