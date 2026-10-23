@@ -279,7 +279,7 @@ impl State {
     }
 
     fn open_text_body(&mut self) -> Vec<super::Message> {
-        if !self.is_in_state(Some(Mode::Reader), SelectedTab::Body) {
+        if !self.is_in_state(None, SelectedTab::Body) {
             return vec![];
         }
 
@@ -288,7 +288,7 @@ impl State {
     }
 
     fn open_html_body(&mut self) -> Vec<super::Message> {
-        if !self.is_in_state(Some(Mode::Reader), SelectedTab::Body) {
+        if !self.is_in_state(None, SelectedTab::Body) {
             return vec![];
         }
 

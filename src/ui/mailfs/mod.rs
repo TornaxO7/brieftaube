@@ -203,7 +203,7 @@ impl State {
             UserAction::MoveMailboxUp => self.move_mailbox_up(),
             UserAction::MoveMailboxDown => self.move_mailbox_down(),
 
-            UserAction::ComposeMarkdownMail => self.compose_markdown_mail(),
+            UserAction::ComposeNewMail => self.compose_markdown_mail(),
 
             UserAction::ClearSelection => self.clear_selection(),
             UserAction::ClearStatusMessage => self.clear_status_msg(),

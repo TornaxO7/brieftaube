@@ -58,7 +58,7 @@ pub enum UserAction {
     #[strum(message = "")]
     ClearStatusMessage,
 
-    ComposeMarkdownMail,
+    ComposeNewMail,
 
     #[strum(message = "Create a new mailbox in the current mailbox.")]
     CreateMailbox,
