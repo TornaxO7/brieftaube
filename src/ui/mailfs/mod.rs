@@ -20,7 +20,7 @@ use crate::{
                 ThreadColumn, UserColumn,
             },
         },
-        statusbar::StatusbarState,
+        statusbar::{StatusMsgType, StatusbarState},
         utils::keybindmanager::{self, KeybindManager},
     },
 };
@@ -878,6 +878,10 @@ impl State {
     fn select_entry(&mut self) -> Vec<crate::ui::Message> {
         match self.column_stack.last().unwrap() {
             ColumnStackEntry::Users | ColumnStackEntry::Accounts => {
+                self.statusbar.set_message(
+                    "Only, threads, mails and mailboxes can be selected.".to_string(),
+                    StatusMsgType::Error,
+                );
                 return vec![];
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
