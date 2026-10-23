@@ -30,4 +30,8 @@ impl Selectable for MailboxEntry {
     fn is_selected(&self) -> bool {
         self.is_selected
     }
+
+    fn set_selection(&mut self, selected: bool) {
+        self.is_selected = selected;
+    }
 }

@@ -217,6 +217,13 @@ impl Selectable for MailboxColumnEntry {
             MailboxColumnEntry::RootMail(mail) => mail.is_selected(),
         }
     }
+
+    fn set_selection(&mut self, selected: bool) {
+        match self {
+            MailboxColumnEntry::Mailbox(mailbox) => mailbox.set_selection(selected),
+            MailboxColumnEntry::RootMail(mail) => mail.set_selection(selected),
+        }
+    }
 }
 
 // #[derive(Debug)]

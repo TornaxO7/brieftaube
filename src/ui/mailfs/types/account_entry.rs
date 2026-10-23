@@ -21,4 +21,6 @@ impl Selectable for AccountEntry {
     fn is_selected(&self) -> bool {
         false
     }
+
+    fn set_selection(&mut self, _selected: bool) {}
 }
