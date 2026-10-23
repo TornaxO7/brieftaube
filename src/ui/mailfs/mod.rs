@@ -46,10 +46,9 @@ pub struct State {
     //  - Introduce `Column` trait (`get_selected_entry`, `get_selected_entry_mut`, navigation, selection, etc.)
     users_column: columns::UserColumn,
     accounts_column: HashMap<Username, Loadable<columns::AccountsColumn>>,
-    mailbox_columns:
-        HashMap<(Username, AccountId, ParentMailboxId), Loadable<columns::MailboxColumn>>,
-    thread_columns: HashMap<(Username, AccountId, ThreadId), Loadable<columns::ThreadColumn>>,
-    mail_previews: HashMap<(Username, AccountId, MailId), Loadable<MailPreview>>,
+    mailbox_columns: HashMap<(AccountId, ParentMailboxId), Loadable<columns::MailboxColumn>>,
+    thread_columns: HashMap<(AccountId, ThreadId), Loadable<columns::ThreadColumn>>,
+    mail_previews: HashMap<(AccountId, MailId), Loadable<MailPreview>>,
 
     column_area_size: Option<Size>,
     selection: HashMap<(Username, AccountId), SelectionType>,
@@ -244,7 +243,7 @@ impl State {
         mailbox_id: ParentMailboxId,
         data: color_eyre::Result<InitMailboxData>,
     ) -> Vec<crate::ui::Message> {
-        let key = (username, account_id, mailbox_id.clone());
+        let key = (account_id, mailbox_id.clone());
         let column = self.mailbox_columns.get_mut(&key).unwrap();
 
         *column = match data {
@@ -281,7 +280,7 @@ impl State {
         window: QueryWindow,
         result: color_eyre::Result<Vec<CachedMail>>,
     ) -> Vec<crate::ui::Message> {
-        let key = (username, account_id, Some(mailbox_id.clone()));
+        let key = (account_id, Some(mailbox_id.clone()));
 
         let column = self
             .mailbox_columns
@@ -301,7 +300,7 @@ impl State {
         thread_id: ThreadId,
         thread_mails: color_eyre::Result<Vec<CachedMail>>,
     ) -> Vec<crate::ui::Message> {
-        let key = (username, account_id, thread_id);
+        let key = (account_id, thread_id);
 
         match thread_mails {
             Ok(mails) => {
@@ -328,7 +327,7 @@ impl State {
         mail_id: MailId,
         mail_preview: color_eyre::Result<MailPreview>,
     ) -> Vec<crate::ui::Message> {
-        let key = (username, account_id, mail_id);
+        let key = (account_id, mail_id);
 
         let current_preview = self.mail_previews.get_mut(&key).unwrap();
 
@@ -389,7 +388,7 @@ impl State {
                 self.ensure_right_column_data()
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
-                let key = self.get_account_ctx().as_key(mailbox_id.clone());
+                let key = (self.get_selected_account_id(), mailbox_id.clone());
                 let Some(column) = self
                     .mailbox_columns
                     .get_mut(&key)
@@ -406,8 +405,8 @@ impl State {
                     msgs.extend(column.ensure_loaded_mails(section_size).into_iter().map(
                         |window| {
                             MessageRequest::QueryMails {
-                                username: key.0.clone(),
-                                account_id: key.1.clone(),
+                                username: self.get_selected_username(),
+                                account_id: self.get_selected_account_id(),
                                 mailbox: mailbox_id.clone(),
                                 mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
                                 window,
@@ -421,7 +420,7 @@ impl State {
                 msgs
             }
             ColumnStackEntry::Thread(thread_id) => {
-                let key = self.get_account_ctx().as_key(thread_id);
+                let key = (self.get_selected_account_id(), thread_id);
                 let Some(column) = self
                     .thread_columns
                     .get_mut(&key)
@@ -458,7 +457,7 @@ impl State {
                 self.ensure_right_column_data()
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
-                let key = self.get_account_ctx().as_key(mailbox_id.clone());
+                let key = (self.get_selected_account_id(), mailbox_id.clone());
                 let Some(column) = self.mailbox_columns.get_mut(&key).unwrap().loaded_mut() else {
                     return vec![];
                 };
@@ -470,8 +469,8 @@ impl State {
                     msgs.extend(column.ensure_loaded_mails(section_size).into_iter().map(
                         |window| {
                             MessageRequest::QueryMails {
-                                username: key.0.clone(),
-                                account_id: key.1.clone(),
+                                username: self.get_selected_username(),
+                                account_id: self.get_selected_account_id(),
                                 mailbox: mailbox_id.clone(),
                                 mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
                                 window,
@@ -484,7 +483,7 @@ impl State {
                 msgs
             }
             ColumnStackEntry::Thread(thread_id) => {
-                let key = self.get_account_ctx().as_key(thread_id);
+                let key = (self.get_selected_account_id(), thread_id);
                 let Some(column) = self
                     .thread_columns
                     .get_mut(&key)
@@ -521,7 +520,7 @@ impl State {
                 self.ensure_right_column_data()
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
-                let key = self.get_account_ctx().as_key(mailbox_id.clone());
+                let key = (self.get_selected_account_id(), mailbox_id.clone());
                 let Some(column) = self.mailbox_columns.get_mut(&key).unwrap().loaded_mut() else {
                     return vec![];
                 };
@@ -533,8 +532,8 @@ impl State {
                     msgs.extend(column.ensure_loaded_mails(section_size).into_iter().map(
                         |window| {
                             MessageRequest::QueryMails {
-                                username: key.0.clone(),
-                                account_id: key.1.clone(),
+                                username: self.get_selected_username(),
+                                account_id: self.get_selected_account_id(),
                                 mailbox: mailbox_id.clone(),
                                 mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
                                 window,
@@ -548,7 +547,7 @@ impl State {
                 msgs
             }
             ColumnStackEntry::Thread(thread_id) => {
-                let key = self.get_account_ctx().as_key(thread_id.clone());
+                let key = (self.get_selected_account_id(), thread_id.clone());
                 let Some(column) = self
                     .thread_columns
                     .get_mut(&key)
@@ -584,7 +583,7 @@ impl State {
                 self.ensure_right_column_data()
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
-                let key = self.get_account_ctx().as_key(mailbox_id.clone());
+                let key = (self.get_selected_account_id(), mailbox_id.clone());
                 let Some(column) = self.mailbox_columns.get_mut(&key).unwrap().loaded_mut() else {
                     return vec![];
                 };
@@ -595,8 +594,8 @@ impl State {
                     msgs.extend(column.ensure_loaded_mails(section_size).into_iter().map(
                         |window| {
                             MessageRequest::QueryMails {
-                                username: key.0.clone(),
-                                account_id: key.1.clone(),
+                                username: self.get_selected_username(),
+                                account_id: self.get_selected_account_id(),
                                 mailbox: mailbox_id.clone(),
                                 mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
                                 window,
@@ -610,7 +609,7 @@ impl State {
                 msgs
             }
             ColumnStackEntry::Thread(thread_id) => {
-                let key = self.get_account_ctx().as_key(thread_id.clone());
+                let key = (self.get_selected_account_id(), thread_id.clone());
                 let Some(column) = self
                     .thread_columns
                     .get_mut(&key)
@@ -653,7 +652,7 @@ impl State {
                 self.ensure_right_column_data()
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
-                let key = self.get_account_ctx().as_key(mailbox_id);
+                let key = (self.get_selected_account_id(), mailbox_id);
                 let column = self.mailbox_columns.get(&key).unwrap().loaded().unwrap();
                 let Some(selected_entry) = column.get_selected_entry() else {
                     // mailbox could be empty
@@ -662,7 +661,10 @@ impl State {
 
                 match selected_entry {
                     MailboxColumnEntry::Mailbox(mailbox_data) => {
-                        let key = self.get_account_ctx().as_key(Some(mailbox_data.id.clone()));
+                        let key = (
+                            self.get_selected_account_id(),
+                            Some(mailbox_data.id.clone()),
+                        );
                         let next_mailbox_column_is_loaded =
                             self.mailbox_columns.get(&key).unwrap().loaded().is_some();
 
@@ -686,7 +688,7 @@ impl State {
                 }
             }
             ColumnStackEntry::Thread(thread_id) => {
-                let key = self.get_account_ctx().as_key(thread_id);
+                let key = (self.get_selected_account_id(), thread_id);
 
                 match self.thread_columns.get(&key).expect("Column exists") {
                     Loadable::NotLoaded => unreachable!("Start loading?"),
@@ -698,8 +700,8 @@ impl State {
                         let selected_mail = column.get_selected_entry();
                         vec![
                             Navigation::OpenReader {
-                                username: key.0,
-                                account_id: key.1,
+                                username: self.get_selected_username(),
+                                account_id: self.get_selected_account_id(),
                                 mail_id: selected_mail.id.clone(),
                             }
                             .into(),
@@ -751,7 +753,7 @@ impl State {
                 self.ensure_right_column_data()
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
-                let key = self.get_account_ctx().as_key(mailbox_id.clone());
+                let key = (self.get_selected_account_id(), mailbox_id.clone());
                 let Some(column) = self
                     .mailbox_columns
                     .get_mut(&key)
@@ -768,8 +770,8 @@ impl State {
                     msgs.extend(column.ensure_loaded_mails(section_size).into_iter().map(
                         |window| {
                             MessageRequest::QueryMails {
-                                username: key.0.clone(),
-                                account_id: key.1.clone(),
+                                username: self.get_selected_username(),
+                                account_id: self.get_selected_account_id(),
                                 mailbox: mailbox_id.clone(),
                                 mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
                                 window,
@@ -783,7 +785,7 @@ impl State {
                 msgs
             }
             ColumnStackEntry::Thread(thread_id) => {
-                let key = self.get_account_ctx().as_key(thread_id.clone());
+                let key = (self.get_selected_account_id(), thread_id.clone());
                 let Some(column) = self
                     .thread_columns
                     .get_mut(&key)
@@ -826,7 +828,7 @@ impl State {
                 self.ensure_right_column_data()
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
-                let key = self.get_account_ctx().as_key(mailbox_id.clone());
+                let key = (self.get_selected_account_id(), mailbox_id.clone());
                 let Some(column) = self
                     .mailbox_columns
                     .get_mut(&key)
@@ -843,8 +845,8 @@ impl State {
                     msgs.extend(column.ensure_loaded_mails(section_size).into_iter().map(
                         |window| {
                             MessageRequest::QueryMails {
-                                username: key.0.clone(),
-                                account_id: key.1.clone(),
+                                username: self.get_selected_username(),
+                                account_id: self.get_selected_account_id(),
                                 mailbox: mailbox_id.clone(),
                                 mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
                                 window,
@@ -858,7 +860,7 @@ impl State {
                 msgs
             }
             ColumnStackEntry::Thread(thread_id) => {
-                let key = self.get_account_ctx().as_key(thread_id.clone());
+                let key = (self.get_selected_account_id(), thread_id.clone());
                 let Some(column) = self
                     .thread_columns
                     .get_mut(&key)
@@ -895,8 +897,8 @@ impl State {
                 entry.is_selected = !entry.is_selected;
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
-                let account_ctx = self.get_account_ctx();
-                let key = account_ctx.as_key(mailbox_id.clone());
+                let selected_account_id = self.get_selected_account_id();
+                let key = (selected_account_id.clone(), mailbox_id.clone());
                 let Some(column) = self
                     .mailbox_columns
                     .get_mut(&key)
@@ -922,7 +924,7 @@ impl State {
                         mail_entry.is_selected = !mail_entry.is_selected;
 
                         // also select every mail in the thread
-                        let key = account_ctx.as_key(mail_entry.thread_id.clone());
+                        let key = (selected_account_id.clone(), mail_entry.thread_id.clone());
                         let Some(column) = self
                             .thread_columns
                             .get_mut(&key)
@@ -939,7 +941,7 @@ impl State {
                 }
             }
             ColumnStackEntry::Thread(thread_id) => {
-                let key = self.get_account_ctx().as_key(thread_id.clone());
+                let key = (self.get_selected_account_id(), thread_id.clone());
 
                 let Some(column) = self
                     .thread_columns
@@ -975,12 +977,10 @@ impl State {
     }
 
     fn compose_markdown_mail(&mut self) -> Vec<crate::ui::Message> {
-        let account_ctx = self.get_account_ctx();
-
         vec![
             Navigation::OpenComposer {
-                username: account_ctx.username,
-                account_id: account_ctx.account_id,
+                username: self.get_selected_username(),
+                account_id: self.get_selected_account_id(),
                 mail_id: None,
             }
             .into(),
@@ -998,23 +998,39 @@ impl State {
 
 // helpers
 impl State {
-    fn get_account_ctx(&self) -> AccountCtx {
-        let selected_username = self.users_column.get_selected_entry().username.clone();
-        let selected_account_id = self
-            .accounts_column
-            .get(&selected_username)
-            .expect("Account column exists")
+    fn get_selected_username(&self) -> Username {
+        self.users_column.get_selected_entry().username.clone()
+    }
+
+    fn get_selected_account_id(&self) -> AccountId {
+        let selected_user = self.get_selected_username();
+        self.accounts_column
+            .get(&selected_user)
+            .unwrap()
             .loaded()
-            .expect("Account column is loaded")
+            .unwrap()
             .get_selected_entry()
             .id
-            .clone();
-
-        AccountCtx {
-            username: selected_username,
-            account_id: selected_account_id,
-        }
+            .clone()
     }
+
+    // fn get_account_ctx(&self) -> AccountCtx {
+    //     let selected_username = self.users_column.get_selected_entry().username.clone();
+    //     let selected_account_id = self
+    //         .accounts_column
+    //         .get(&selected_username)
+    //         .expect("Account column exists")
+    //         .loaded()
+    //         .expect("Account column is loaded")
+    //         .get_selected_entry()
+    //         .id
+    //         .clone();
+
+    //     AccountCtx {
+    //         username: selected_username,
+    //         account_id: selected_account_id,
+    //     }
+    // }
 
     /// Depending on what is selected in the middle column it will return the suitable requests so that the
     /// right column can display things.
@@ -1033,7 +1049,7 @@ impl State {
                 }
             }
             ColumnStackEntry::Accounts => {
-                let key = self.get_account_ctx().as_key(ROOT_MAILBOX_ID);
+                let key = (self.get_selected_account_id(), ROOT_MAILBOX_ID);
 
                 if self.mailbox_columns.contains_key(&key) {
                     vec![]
@@ -1042,9 +1058,9 @@ impl State {
 
                     vec![
                         MessageRequest::InitMailbox {
-                            username: key.0,
-                            account_id: key.1,
-                            mailbox_id: key.2,
+                            username: self.get_selected_username(),
+                            account_id: self.get_selected_account_id(),
+                            mailbox_id: ROOT_MAILBOX_ID,
                             mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
                             max_init_mails: self
                                 .column_area_size
@@ -1056,7 +1072,7 @@ impl State {
                 }
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
-                let key = self.get_account_ctx().as_key(mailbox_id);
+                let key = (self.get_selected_account_id(), mailbox_id);
                 let Some(middle_mailbox_column) = self
                     .mailbox_columns
                     .get(&key)
@@ -1073,7 +1089,8 @@ impl State {
 
                 match middle_column_selected_entry {
                     MailboxColumnEntry::Mailbox(mailbox_data) => {
-                        let key = self.get_account_ctx().as_key(Some(mailbox_data.id.clone()));
+                        let mailbox_id = mailbox_data.id.clone();
+                        let key = (self.get_selected_account_id(), Some(mailbox_id.clone()));
 
                         if self.mailbox_columns.contains_key(&key) {
                             vec![]
@@ -1082,9 +1099,9 @@ impl State {
 
                             vec![
                                 MessageRequest::InitMailbox {
-                                    username: key.0,
-                                    account_id: key.1,
-                                    mailbox_id: key.2,
+                                    username: self.get_selected_username(),
+                                    account_id: self.get_selected_account_id(),
+                                    mailbox_id: Some(mailbox_id),
                                     mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
                                     max_init_mails: self
                                         .column_area_size
@@ -1100,7 +1117,8 @@ impl State {
                             vec![]
                         }
                         Loadable::Loaded(root_mail) => {
-                            let key = self.get_account_ctx().as_key(root_mail.thread_id.clone());
+                            let thread_id = root_mail.thread_id.clone();
+                            let key = (self.get_selected_account_id(), thread_id.clone());
 
                             if self.thread_columns.contains_key(&key) {
                                 vec![]
@@ -1109,9 +1127,9 @@ impl State {
 
                                 vec![
                                     MessageRequest::GetThreadMails {
-                                        username: key.0,
-                                        account_id: key.1,
-                                        thread_id: key.2,
+                                        username: self.get_selected_username(),
+                                        account_id: self.get_selected_account_id(),
+                                        thread_id,
                                         mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
                                     }
                                     .into(),
@@ -1122,22 +1140,22 @@ impl State {
                 }
             }
             ColumnStackEntry::Thread(thread_id) => {
-                let thread_key = self.get_account_ctx().as_key(thread_id);
+                let thread_key = (self.get_selected_account_id(), thread_id);
                 let Some(column) = self.thread_columns.get(&thread_key).unwrap().loaded() else {
                     return vec![];
                 };
                 let selected_mail = column.get_selected_entry();
 
-                let preview_key = self.get_account_ctx().as_key(selected_mail.id.clone());
+                let mail_id = selected_mail.id.clone();
+                let preview_key = (self.get_selected_account_id(), mail_id.clone());
                 if self.mail_previews.contains_key(&preview_key) {
                     vec![]
                 } else {
                     self.mail_previews
                         .insert(preview_key.clone(), Loadable::Loading);
 
-                    let username = preview_key.0;
-                    let account_id = preview_key.1;
-                    let mail_id = preview_key.2;
+                    let username = self.get_selected_username();
+                    let account_id = self.get_selected_account_id();
 
                     vec![
                         MessageRequest::GetMail {
