@@ -206,6 +206,7 @@ impl State {
             UserAction::ComposeMarkdownMail => self.compose_markdown_mail(),
 
             UserAction::ClearSelection => self.clear_selection(),
+            UserAction::ClearStatusMessage => self.clear_status_msg(),
 
             UserAction::CreateMailbox => self.create_mailbox(),
             UserAction::RemoveMailbox => self.remove_mailbox(),
@@ -988,6 +989,11 @@ impl State {
 
     fn clear_selection(&mut self) -> Vec<crate::ui::Message> {
         self.selection.clear();
+        vec![]
+    }
+
+    fn clear_status_msg(&mut self) -> Vec<crate::ui::Message> {
+        self.statusbar.clear_message();
         vec![]
     }
 

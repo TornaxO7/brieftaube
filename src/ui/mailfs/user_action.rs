@@ -55,6 +55,8 @@ pub enum UserAction {
 
     #[strum(message = "")]
     ClearSelection,
+    #[strum(message = "")]
+    ClearStatusMessage,
 
     ComposeMarkdownMail,
 
