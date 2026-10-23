@@ -242,14 +242,28 @@ fn render_text_body(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
 
     text_body.state.set_content_height(body_area.as_size());
 
-    frame.render_widget(
-        text_body
-            .state
-            .default_paragraph()
-            .style(Style::new().fg(scheme.primary.into_color()))
-            .scroll((text_body.state.scroll_offset as u16, 0)),
-        body_area,
-    );
+    if text_body.state.content.is_empty() {
+        const EMPTY_BODY_MSG: &str = "<Body is empty>";
+
+        let body_area = body_area.centered(
+            Constraint::Length(EMPTY_BODY_MSG.len() as u16),
+            Constraint::Length(1),
+        );
+
+        frame.render_widget(
+            Paragraph::new(EMPTY_BODY_MSG).style(Style::new().italic()),
+            body_area,
+        );
+    } else {
+        frame.render_widget(
+            text_body
+                .state
+                .default_paragraph()
+                .style(Style::new().fg(scheme.primary.into_color()))
+                .scroll((text_body.state.scroll_offset as u16, 0)),
+            body_area,
+        );
+    }
 
     frame.render_stateful_widget(
         Scrollbar::new(ScrollbarOrientation::VerticalRight),
