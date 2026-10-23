@@ -53,6 +53,9 @@ pub enum UserAction {
     #[strum(message = "Move the selected mailbox down")]
     MoveMailboxDown,
 
+    #[strum(message = "")]
+    ClearSelection,
+
     ComposeMarkdownMail,
 
     #[strum(message = "Create a new mailbox in the current mailbox.")]

@@ -205,6 +205,8 @@ impl State {
 
             UserAction::ComposeMarkdownMail => self.compose_markdown_mail(),
 
+            UserAction::ClearSelection => self.clear_selection(),
+
             UserAction::CreateMailbox => self.create_mailbox(),
             UserAction::RemoveMailbox => self.remove_mailbox(),
             // UserAction::MarkMailAsUnseen => self.mail_patch_keywords(&[(MailKeyword::Seen, false)]),
@@ -978,6 +980,11 @@ impl State {
             }
             .into(),
         ]
+    }
+
+    fn clear_selection(&mut self) -> Vec<crate::ui::Message> {
+        self.selection.clear();
+        vec![]
     }
 
     fn create_mailbox(&mut self) -> Vec<crate::ui::Message> {
