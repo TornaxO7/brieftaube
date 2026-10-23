@@ -17,24 +17,11 @@ impl AccountsColumn {
             state: TableState::new().with_selected(Some(0)),
         }
     }
-
-    // pub fn set_accounts(&mut self, accounts: Vec<AccountData>) {
-    //     debug_assert!(!accounts.is_empty());
-    //     self.accounts = accounts.into_iter().map(AccountEntry::from).collect();
-    // }
-
-    pub fn get_selected_entry<'a>(&'a self) -> &'a AccountEntry {
-        let idx = self.state.selected().expect("Must select an entry");
-        &self.accounts[idx]
-    }
-
-    pub fn get_selected_entry_mut<'a>(&'a mut self) -> &'a mut AccountEntry {
-        let idx = self.state.selected().expect("Must select an entry");
-        &mut self.accounts[idx]
-    }
 }
 
-impl Column for AccountsColumn {
+impl Column<AccountEntry> for AccountsColumn {
+    type ColumnEntryResult<T> = T;
+
     fn navigate_up(&mut self, offset: u16) {
         let idx = self
             .state
@@ -62,5 +49,15 @@ impl Column for AccountsColumn {
 
     fn len(&self) -> usize {
         self.accounts.len()
+    }
+
+    fn get_selected_entry(&self) -> &AccountEntry {
+        let idx = self.state.selected().unwrap();
+        &self.accounts[idx]
+    }
+
+    fn get_selected_entry_mut(&mut self) -> &mut AccountEntry {
+        let idx = self.state.selected().unwrap();
+        &mut self.accounts[idx]
     }
 }

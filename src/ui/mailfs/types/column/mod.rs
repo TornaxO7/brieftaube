@@ -8,7 +8,9 @@ pub use mailbox::*;
 pub use thread::*;
 pub use users::*;
 
-pub trait Column {
+pub trait Column<ColumnEntry> {
+    type ColumnEntryResult<T>;
+
     fn navigate_up(&mut self, offset: u16);
 
     fn navigate_down(&mut self, offset: u16);
@@ -18,4 +20,8 @@ pub trait Column {
     fn navigate_to_top(&mut self);
 
     fn len(&self) -> usize;
+
+    fn get_selected_entry(&self) -> Self::ColumnEntryResult<&ColumnEntry>;
+
+    fn get_selected_entry_mut(&mut self) -> Self::ColumnEntryResult<&mut ColumnEntry>;
 }

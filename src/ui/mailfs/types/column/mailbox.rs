@@ -3,7 +3,7 @@ use crate::{
     types::{CachedMail, CachedMailbox},
     ui::{
         Loadable,
-        mailfs::types::{MailEntry, MailboxEntry, column::Column},
+        mailfs::types::{MailEntry, MailboxEntry, Selectable, column::Column},
     },
 };
 use ratatui::widgets::TableState;
@@ -12,11 +12,11 @@ pub const DEFAULT_SECTION_SIZE: usize = 32;
 
 #[derive(Debug)]
 pub struct MailboxColumn {
-    pub child_mailboxes: Vec<MailboxEntry>,
-    pub mails: Vec<Loadable<MailEntry>>,
+    pub entries: Vec<MailboxColumnEntry>,
+    pub state: TableState,
 
-    pub mailbox_state: TableState,
-    pub mail_state: TableState,
+    amount_child_mailboxes: usize,
+    total_threads: usize,
 }
 
 impl MailboxColumn {
@@ -27,25 +27,6 @@ impl MailboxColumn {
     ) -> Self {
         debug_assert!(init_mails.len() <= total_threads);
 
-        let (mailbox_state, mail_state) = {
-            let mut mailbox_state = TableState::new();
-            let mut mail_state = TableState::new();
-
-            if !child_mailboxes.is_empty() {
-                mailbox_state = mailbox_state.with_selected(Some(0));
-            } else if !init_mails.is_empty() {
-                mail_state = mail_state.with_selected(Some(0));
-            }
-
-            (mailbox_state, mail_state)
-        };
-
-        let mut mails = vec![Loadable::NotLoaded; total_threads];
-        mails.splice(
-            0..init_mails.len(),
-            init_mails.into_iter().map(|mail| Loadable::Loaded(mail)),
-        );
-
         child_mailboxes.sort_by(|a, b| {
             if a.sort_order != b.sort_order {
                 a.sort_order.cmp(&b.sort_order)
@@ -54,45 +35,47 @@ impl MailboxColumn {
             }
         });
 
+        let amount_child_mailboxes = child_mailboxes.len();
+
+        let state = {
+            let state = TableState::new();
+
+            if !child_mailboxes.is_empty() || init_mails.len() > 0 {
+                state.with_selected(Some(0))
+            } else {
+                state
+            }
+        };
+
+        let entries: Vec<MailboxColumnEntry> = {
+            let mut entries = Vec::with_capacity(amount_child_mailboxes + total_threads);
+
+            entries.extend(
+                child_mailboxes
+                    .into_iter()
+                    .map(MailboxEntry::from)
+                    .map(MailboxColumnEntry::Mailbox),
+            );
+
+            entries.extend(
+                init_mails
+                    .into_iter()
+                    .map(Loadable::Loaded)
+                    .map(MailboxColumnEntry::RootMail),
+            );
+
+            entries.resize_with(amount_child_mailboxes + total_threads, || {
+                MailboxColumnEntry::RootMail(Loadable::NotLoaded)
+            });
+
+            entries
+        };
+
         Self {
-            child_mailboxes: child_mailboxes
-                .into_iter()
-                .map(MailboxEntry::from)
-                .collect(),
-            mails,
-
-            mailbox_state,
-            mail_state,
-        }
-    }
-
-    pub fn get_selected_entry<'a>(&'a self) -> Option<MailboxColumnEntry<'a>> {
-        match (self.mailbox_state.selected(), self.mail_state.selected()) {
-            (Some(idx), None) => self
-                .child_mailboxes
-                .get(idx)
-                .map(|mailbox| MailboxColumnEntry::Mailbox(mailbox)),
-            (None, Some(idx)) => self
-                .mails
-                .get(idx)
-                .map(|mail| MailboxColumnEntry::RootMail(mail)),
-            (Some(_), Some(_)) => unreachable!(),
-            (None, None) => None,
-        }
-    }
-
-    pub fn get_selected_entry_mut<'a>(&'a mut self) -> Option<MailboxColumnEntryMut<'a>> {
-        match (self.mailbox_state.selected(), self.mail_state.selected()) {
-            (Some(idx), None) => self
-                .child_mailboxes
-                .get_mut(idx)
-                .map(|mailbox| MailboxColumnEntryMut::Mailbox(mailbox)),
-            (None, Some(idx)) => self
-                .mails
-                .get_mut(idx)
-                .map(|mail| MailboxColumnEntryMut::RootMail(mail)),
-            (Some(_), Some(_)) => unreachable!(),
-            (None, None) => None,
+            entries,
+            state,
+            amount_child_mailboxes,
+            total_threads,
         }
     }
 
@@ -101,19 +84,26 @@ impl MailboxColumn {
         window: QueryWindow,
         result: color_eyre::Result<Vec<CachedMail>>,
     ) {
-        let window_range = window.as_range();
+        let window_range = {
+            let range = window.as_range();
+            self.amount_child_mailboxes + range.start..self.amount_child_mailboxes + range.end
+        };
 
         match result {
             Ok(mails) => {
-                let mail_entries: Vec<Loadable<MailEntry>> = mails
+                let mail_entries: Vec<MailboxColumnEntry> = mails
                     .into_iter()
-                    .map(|cached_mail| Loadable::Loaded(MailEntry::from(cached_mail)))
+                    .map(|cached_mail| {
+                        MailboxColumnEntry::RootMail(Loadable::Loaded(MailEntry::from(cached_mail)))
+                    })
                     .collect();
 
-                self.mails.splice(window_range, mail_entries);
+                self.entries.splice(window_range, mail_entries);
             }
             Err(err) => {
-                self.mails[window_range].fill(Loadable::Error(err.to_string()));
+                self.entries[window_range].fill(MailboxColumnEntry::RootMail(Loadable::Error(
+                    err.to_string(),
+                )));
             }
         };
     }
@@ -127,20 +117,21 @@ impl MailboxColumn {
         // |---------|---------|---------|
         //           |         |
         //           `selected_idx` somewhere here
-        let selected_idx = self.mail_state.selected().unwrap_or(0);
-        let max_end =
-            (selected_idx.next_multiple_of(section_size) + section_size).min(self.mails.len());
-        let min_start = max_end.saturating_sub(section_size * 3);
+        let selected_idx = self.state.selected().unwrap_or(0);
+        let max_end = (selected_idx.next_multiple_of(section_size) + section_size).min(self.len());
+        let min_start = max_end
+            .saturating_sub(section_size * 3)
+            .max(self.amount_child_mailboxes);
 
         // 1. check above
-        if let Some(start_offset) = self.mails[min_start..selected_idx]
+        if let Some(start_offset) = self.entries[min_start..selected_idx]
             .iter()
             .rev()
-            .position(|mail| mail.loaded().is_none())
+            .position(|entry| matches!(entry, MailboxColumnEntry::RootMail(root_mail) if root_mail.loaded().is_none()))
         {
             let range = min_start..selected_idx - start_offset;
 
-            self.mails[range.clone()].fill(Loadable::Loading);
+            self.entries[range.clone()].fill(MailboxColumnEntry::RootMail(Loadable::Loading));
 
             query_windows.push(QueryWindow {
                 start: range.start as u32,
@@ -149,13 +140,13 @@ impl MailboxColumn {
         }
 
         // 2. check below
-        if let Some(start_offset) = self.mails[selected_idx..max_end]
+        if let Some(start_offset) = self.entries[selected_idx..max_end]
             .iter()
-            .position(|mail| mail.loaded().is_none())
+            .position(|entry| matches!(entry, MailboxColumnEntry::RootMail(root_mail) if root_mail.loaded().is_none()))
         {
             let range = selected_idx + start_offset..max_end;
 
-            self.mails[range.clone()].fill(Loadable::Loading);
+            self.entries[range.clone()].fill(MailboxColumnEntry::RootMail(Loadable::Loading));
 
             query_windows.push(QueryWindow {
                 start: range.start as u32,
@@ -169,117 +160,73 @@ impl MailboxColumn {
     }
 }
 
-impl Column for MailboxColumn {
+impl Column<MailboxColumnEntry> for MailboxColumn {
+    type ColumnEntryResult<T> = Option<T>;
+
     fn navigate_up(&mut self, offset: u16) {
-        match (self.mailbox_state.selected(), self.mail_state.selected()) {
-            (Some(current_idx), None) => {
-                self.mailbox_state
-                    .select(Some(current_idx.saturating_sub(offset as usize)));
-            }
-            (None, Some(current_idx)) => {
-                let overflows_to_mailbox = current_idx < offset as usize;
-
-                if overflows_to_mailbox {
-                    if self.child_mailboxes.is_empty() {
-                        self.mail_state.select(Some(0));
-                        return;
-                    }
-
-                    let mailbox_idx = self
-                        .child_mailboxes
-                        .len()
-                        .saturating_sub(offset as usize - current_idx);
-                    self.mailbox_state.select(Some(mailbox_idx));
-                    self.mail_state.select(None);
-                } else {
-                    let next_idx = current_idx - offset as usize;
-                    self.mail_state.select(Some(next_idx));
-                }
-            }
-            (None, None) => {}
-            (Some(_), Some(_)) => unreachable!(),
+        if let Some(idx) = self.state.selected() {
+            let new_idx = idx.saturating_sub(offset as usize);
+            self.state.select(Some(new_idx));
         }
     }
 
     fn navigate_down(&mut self, offset: u16) {
-        match (self.mailbox_state.selected(), self.mail_state.selected()) {
-            (Some(current_idx), None) => {
-                let overflows_to_mails =
-                    (self.child_mailboxes.len() - 1 - current_idx) < offset as usize;
-
-                if overflows_to_mails {
-                    if self.mails.is_empty() {
-                        self.mailbox_state
-                            .select(Some(self.child_mailboxes.len() - 1));
-                        return;
-                    }
-
-                    let next_mail_idx =
-                        offset as usize - (self.child_mailboxes.len() - 1 - current_idx);
-                    self.mail_state.select(Some(next_mail_idx));
-                    self.mailbox_state.select(None);
-                } else {
-                    let next_idx = current_idx + offset as usize;
-                    self.mailbox_state.select(Some(next_idx));
-                }
-            }
-            (None, Some(current_idx)) => {
-                let next_idx = (current_idx + offset as usize).min(self.mails.len() - 1);
-                self.mail_state.select(Some(next_idx));
-            }
-            (None, None) => {}
-            (Some(_), Some(_)) => unreachable!(),
+        if let Some(idx) = self.state.selected() {
+            let new_idx = (idx + offset as usize).min(self.len() - 1);
+            self.state.select(Some(new_idx));
         }
     }
 
     fn navigate_to_bottom(&mut self) {
-        if !self.mails.is_empty() {
-            self.mail_state.select(Some(self.mails.len() - 1));
-            self.mailbox_state.select(None);
-            return;
+        if !self.entries.is_empty() {
+            self.state.select(Some(self.len() - 1));
         }
-
-        if !self.child_mailboxes.is_empty() {
-            self.mail_state.select(None);
-            self.mailbox_state
-                .select(Some(self.child_mailboxes.len() - 1));
-        }
-
-        debug_assert!(
-            !(self.mailbox_state.selected().is_some() && self.mail_state.selected().is_some())
-        );
     }
 
     fn navigate_to_top(&mut self) {
-        if !self.child_mailboxes.is_empty() {
-            self.mail_state.select(None);
-            self.mailbox_state.select(Some(0));
-            return;
+        if !self.entries.is_empty() {
+            self.state.select(Some(0));
         }
-
-        if !self.mails.is_empty() {
-            self.mail_state.select(Some(0));
-            self.mailbox_state.select(None);
-        }
-
-        debug_assert!(
-            !(self.mailbox_state.selected().is_some() && self.mail_state.selected().is_some())
-        );
     }
 
     fn len(&self) -> usize {
-        self.child_mailboxes.len() + self.mails.len()
+        self.amount_child_mailboxes + self.total_threads
+    }
+
+    fn get_selected_entry(&self) -> Option<&MailboxColumnEntry> {
+        self.state.selected().and_then(|idx| self.entries.get(idx))
+    }
+
+    fn get_selected_entry_mut(&mut self) -> Option<&mut MailboxColumnEntry> {
+        self.state
+            .selected()
+            .and_then(|idx| self.entries.get_mut(idx))
     }
 }
 
-#[derive(Debug)]
-pub enum MailboxColumnEntry<'a> {
-    Mailbox(&'a MailboxEntry),
-    RootMail(&'a Loadable<MailEntry>),
+#[derive(Debug, Clone)]
+pub enum MailboxColumnEntry {
+    Mailbox(MailboxEntry),
+    RootMail(Loadable<MailEntry>),
 }
 
-#[derive(Debug)]
-pub enum MailboxColumnEntryMut<'a> {
-    Mailbox(&'a mut MailboxEntry),
-    RootMail(&'a mut Loadable<MailEntry>),
+impl Selectable for MailboxColumnEntry {
+    fn is_selected(&self) -> bool {
+        match self {
+            MailboxColumnEntry::Mailbox(mailbox) => mailbox.is_selected(),
+            MailboxColumnEntry::RootMail(mail) => mail.is_selected(),
+        }
+    }
 }
+
+// #[derive(Debug)]
+// pub enum MailboxColumnEntry<'a> {
+//     Mailbox(&'a MailboxEntry),
+//     RootMail(&'a Loadable<MailEntry>),
+// }
+
+// #[derive(Debug)]
+// pub enum MailboxColumnEntryMut<'a> {
+//     Mailbox(&'a mut MailboxEntry),
+//     RootMail(&'a mut Loadable<MailEntry>),
+// }

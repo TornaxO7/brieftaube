@@ -392,26 +392,29 @@ fn render_mailbox_column(
     frame: &mut Frame,
     area: Rect,
 ) {
-    let key = (state.get_selected_account_id(), mailbox_id);
-    let mailbox_column = match state.mailbox_columns.get_mut(&key).expect("Column exists") {
-        Loadable::NotLoaded => unreachable!(),
-        Loadable::Loading => {
-            render_loading_column(scheme, state, frame, area);
-            render_gutter(scheme, frame, area, std::iter::repeat(false));
-            return;
-        }
-        Loadable::Loaded(column) => column,
-        Loadable::Error(err) => {
-            render_error_column(scheme, frame, area, format!("Couldn't load column:\n{err}"));
-            render_gutter(scheme, frame, area, std::iter::repeat(false));
-            return;
+    let mailbox_column = {
+        let key = (state.get_selected_account_id(), mailbox_id);
+        match state.mailbox_columns.get_mut(&key).expect("Column exists") {
+            Loadable::NotLoaded => unreachable!(),
+            Loadable::Loading => {
+                render_loading_column(scheme, state, frame, area);
+                render_gutter(scheme, frame, area, std::iter::repeat(false));
+                return;
+            }
+            Loadable::Loaded(column) => column,
+            Loadable::Error(err) => {
+                render_error_column(scheme, frame, area, format!("Couldn't load column:\n{err}"));
+                render_gutter(scheme, frame, area, std::iter::repeat(false));
+                return;
+            }
         }
     };
 
-    let mailboxes_len = mailbox_column.child_mailboxes.len();
-    let [mailbox_area, mails_area] = Layout::vertical([
-        Constraint::Length(mailboxes_len.saturating_sub(mailbox_column.mail_state.offset()) as u16),
+    let [gutter_area, _padding1, content_area, _padding2] = Layout::horizontal([
+        Constraint::Length(1),
+        Constraint::Length(1),
         Constraint::Fill(1),
+        Constraint::Length(1),
     ])
     .areas(area);
 
@@ -421,148 +424,102 @@ fn render_mailbox_column(
         Constraint::Length(MAX_DATE_LENGTH as u16),
     ];
 
-    // mailboxes
-    if mailbox_area.height > 0 {
-        let [
-            mailbox_gutter_area,
-            _padding1,
-            mailbox_content_area,
-            _padding2,
-        ] = Layout::horizontal([
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Fill(1),
-            Constraint::Length(1),
-        ])
-        .areas(mailbox_area);
+    let rows = {
+        let mut rows = Vec::with_capacity(content_area.height as usize);
 
-        let mailbox_rows: Vec<Row<'_>> = mailbox_column
-            .child_mailboxes
-            .iter()
-            .map(|mailbox| {
-                let unread_style = if mailbox.unread_mails > 0 {
-                    Style::new().fg(scheme.primary_container.into_color())
-                } else {
-                    Style::new().fg(scheme.secondary.into_color())
-                };
-
-                Row::new([
-                    Cell::new(FOLDER_ICON).style(unread_style),
-                    Cell::new(mailbox.name.as_str()),
-                    Cell::new(format!("{}", mailbox.unread_mails)).style(unread_style),
-                ])
-            })
-            .collect();
-
-        frame.render_stateful_widget(
-            Table::new(mailbox_rows, widths).row_highlight_style(
-                Style::new()
-                    .bg(scheme.primary_container.into_color())
-                    .fg(scheme.on_primary_container.into_color()),
-            ),
-            mailbox_content_area,
-            &mut mailbox_column.mailbox_state,
-        );
-
-        render_gutter(
-            scheme,
-            frame,
-            mailbox_gutter_area,
-            mailbox_column
-                .child_mailboxes
-                .iter()
-                .skip(mailbox_column.mailbox_state.offset())
-                .map(|mailbox| mailbox.is_selected()),
-        );
-    }
-
-    // mails
-    if mails_area.height > 0 {
-        let [mail_gutter_area, _padding1, mail_content_area, _padding2] = Layout::horizontal([
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Fill(1),
-            Constraint::Length(1),
-        ])
-        .areas(mails_area);
-
-        let mail_rows: Vec<Row<'_>> = mailbox_column
-            .mails
-            .iter()
-            .map(|mail| match mail {
-                Loadable::NotLoaded => Row::new([Cell::from(
-                    Text::from("<Mail not requested yet>")
-                        .centered()
-                        .style(Style::new().italic()),
-                )
-                .column_span(widths.len() as u16)])
-                .style(Style::new().fg(scheme.tertiary.into_color())),
-                Loadable::Loading => {
-                    let throbber = Throbber::default()
-                        .throbber_style(Style::new().fg(scheme.primary.into_color()))
-                        .to_symbol_span(&state.throbber);
-
-                    let line = Cell::from(Line::from(vec![
-                        throbber,
-                        Span::styled(
-                            "Fetching mail...",
-                            Style::new().fg(scheme.primary.into_color()),
-                        ),
-                    ]))
-                    .column_span(widths.len() as u16);
-
-                    Row::new([line])
-                }
-                Loadable::Loaded(data) => {
-                    let unread_symbol = if !data.keywords.contains(&MailKeyword::Seen) {
-                        MAIL_UNREAD_ICON
+        for entry in mailbox_column.entries.iter() {
+            let row = match entry {
+                MailboxColumnEntry::Mailbox(mailbox) => {
+                    let unread_style = if mailbox.unread_mails > 0 {
+                        Style::new().fg(scheme.primary_container.into_color())
                     } else {
-                        PLACEHOLDER
+                        Style::new().fg(scheme.secondary.into_color())
                     };
 
-                    let subject = data
-                        .subject
-                        .as_ref()
-                        .map(|s| s.as_str())
-                        .unwrap_or("<No subject>");
-
-                    let received_at = data.received_at.format("%b %e, %Y").to_string();
-
                     Row::new([
-                        Cell::from(unread_symbol)
-                            .style(Style::new().fg(scheme.primary_container.into_color())),
-                        Cell::from(subject).style(Style::new().fg(scheme.primary.into_color())),
-                        Cell::from(received_at)
-                            .style(Style::new().fg(scheme.on_tertiary_container.into_color())),
+                        Cell::new(FOLDER_ICON).style(unread_style),
+                        Cell::new(mailbox.name.as_str()),
+                        Cell::new(format!("{}", mailbox.unread_mails)).style(unread_style),
                     ])
                 }
-                Loadable::Error(_) => Row::new([Cell::from("Couldn't fetch mail.")
-                    .column_span(widths.len() as u16)
-                    .style(Style::new().fg(scheme.error.into_color()))]),
-            })
-            .collect();
+                MailboxColumnEntry::RootMail(loadable_mail) => match loadable_mail {
+                    Loadable::NotLoaded => Row::new([Cell::from(
+                        Text::from("<Mail not requested yet>")
+                            .centered()
+                            .style(Style::new().italic()),
+                    )
+                    .column_span(widths.len() as u16)])
+                    .style(Style::new().fg(scheme.tertiary.into_color())),
+                    Loadable::Loading => {
+                        let throbber = Throbber::default()
+                            .throbber_style(Style::new().fg(scheme.primary.into_color()))
+                            .to_symbol_span(&state.throbber);
 
-        frame.render_stateful_widget(
-            Table::new(mail_rows, widths).row_highlight_style(
-                Style::new()
-                    .bg(scheme.primary_container.into_color())
-                    .fg(scheme.on_primary_container.into_color()),
-            ),
-            mail_content_area,
-            &mut mailbox_column.mail_state,
-        );
+                        let line = Cell::from(Line::from(vec![
+                            throbber,
+                            Span::styled(
+                                "Fetching mail...",
+                                Style::new().fg(scheme.primary.into_color()),
+                            ),
+                        ]))
+                        .column_span(widths.len() as u16);
 
-        render_gutter(
-            scheme,
-            frame,
-            mail_gutter_area,
-            mailbox_column
-                .mails
-                .iter()
-                .skip(mailbox_column.mail_state.offset())
-                .map(|mail| mail.is_selected()),
-        )
-    }
+                        Row::new([line])
+                    }
+                    Loadable::Loaded(data) => {
+                        let unread_symbol = if !data.keywords.contains(&MailKeyword::Seen) {
+                            MAIL_UNREAD_ICON
+                        } else {
+                            PLACEHOLDER
+                        };
+
+                        let subject = data
+                            .subject
+                            .as_ref()
+                            .map(|s| s.as_str())
+                            .unwrap_or("<No subject>");
+
+                        let received_at = data.received_at.format("%b %e, %Y").to_string();
+
+                        Row::new([
+                            Cell::from(unread_symbol)
+                                .style(Style::new().fg(scheme.primary_container.into_color())),
+                            Cell::from(subject).style(Style::new().fg(scheme.primary.into_color())),
+                            Cell::from(received_at)
+                                .style(Style::new().fg(scheme.on_tertiary_container.into_color())),
+                        ])
+                    }
+                    Loadable::Error(_) => Row::new([Cell::from("Couldn't fetch mail.")
+                        .column_span(widths.len() as u16)
+                        .style(Style::new().fg(scheme.error.into_color()))]),
+                },
+            };
+
+            rows.push(row);
+        }
+
+        rows
+    };
+
+    frame.render_stateful_widget(
+        Table::new(rows, widths).row_highlight_style(
+            Style::new()
+                .fg(scheme.on_primary_container.into_color())
+                .bg(scheme.primary_container.into_color()),
+        ),
+        content_area,
+        &mut mailbox_column.state,
+    );
+
+    render_gutter(
+        scheme,
+        frame,
+        gutter_area,
+        mailbox_column
+            .entries
+            .iter()
+            .map(|entry| entry.is_selected()),
+    );
 }
 
 fn render_thread_column(
@@ -856,6 +813,7 @@ fn render_gutter(
     scheme: &Scheme,
     frame: &mut Frame,
     area: Rect,
+    // TODO: Wrap in `Option`
     selected: impl Iterator<Item = bool>,
 ) {
     let list_items = {

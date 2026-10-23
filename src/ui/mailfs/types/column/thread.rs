@@ -20,19 +20,11 @@ impl ThreadColumn {
     pub fn set_mails(&mut self, mails: Vec<MailEntry>) {
         self.mails = mails;
     }
-
-    pub fn get_selected_entry<'a>(&'a self) -> &'a MailEntry {
-        let idx = self.state.selected().unwrap();
-        &self.mails[idx]
-    }
-
-    pub fn get_selected_entry_mut<'a>(&'a mut self) -> &'a mut MailEntry {
-        let idx = self.state.selected().unwrap();
-        &mut self.mails[idx]
-    }
 }
 
-impl Column for ThreadColumn {
+impl Column<MailEntry> for ThreadColumn {
+    type ColumnEntryResult<T> = T;
+
     fn navigate_up(&mut self, offset: u16) {
         let idx = self
             .state
@@ -58,5 +50,15 @@ impl Column for ThreadColumn {
 
     fn len(&self) -> usize {
         self.mails.len()
+    }
+
+    fn get_selected_entry<'a>(&'a self) -> &'a MailEntry {
+        let idx = self.state.selected().unwrap();
+        &self.mails[idx]
+    }
+
+    fn get_selected_entry_mut<'a>(&'a mut self) -> &'a mut MailEntry {
+        let idx = self.state.selected().unwrap();
+        &mut self.mails[idx]
     }
 }

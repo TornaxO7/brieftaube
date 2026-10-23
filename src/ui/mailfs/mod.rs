@@ -17,7 +17,7 @@ use crate::{
             MailEntry, MailPreview, UserEntry,
             column::{
                 AccountsColumn, Column, DEFAULT_SECTION_SIZE, MailboxColumn, MailboxColumnEntry,
-                MailboxColumnEntryMut, ThreadColumn, UserColumn,
+                ThreadColumn, UserColumn,
             },
         },
         statusbar::StatusbarState,
@@ -895,10 +895,10 @@ impl State {
                 };
 
                 match entry {
-                    MailboxColumnEntryMut::Mailbox(mailbox_entry) => {
+                    MailboxColumnEntry::Mailbox(mailbox_entry) => {
                         mailbox_entry.is_selected = !mailbox_entry.is_selected;
                     }
-                    MailboxColumnEntryMut::RootMail(loadable_mail) => {
+                    MailboxColumnEntry::RootMail(loadable_mail) => {
                         let Some(mail_entry) = loadable_mail.loaded_mut() else {
                             return vec![];
                         };

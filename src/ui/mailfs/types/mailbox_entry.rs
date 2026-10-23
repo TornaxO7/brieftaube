@@ -3,7 +3,7 @@ use crate::{
     ui::mailfs::types::Selectable,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MailboxEntry {
     pub id: MailboxId,
     pub name: String,

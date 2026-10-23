@@ -31,19 +31,11 @@ impl UserColumn {
 
         Self { users, state }
     }
-
-    pub fn get_selected_entry<'a>(&'a self) -> &'a UserEntry {
-        let idx = self.state.selected().expect("User is selected");
-        &self.users[idx]
-    }
-
-    pub fn get_selected_entry_mut<'a>(&'a mut self) -> &'a mut UserEntry {
-        let idx = self.state.selected().expect("User is selected");
-        &mut self.users[idx]
-    }
 }
 
-impl Column for UserColumn {
+impl Column<UserEntry> for UserColumn {
+    type ColumnEntryResult<T> = T;
+
     fn navigate_up(&mut self, offset: u16) {
         let new_idx = self
             .state
@@ -72,5 +64,15 @@ impl Column for UserColumn {
 
     fn len(&self) -> usize {
         self.users.len()
+    }
+
+    fn get_selected_entry<'a>(&'a self) -> &'a UserEntry {
+        let idx = self.state.selected().unwrap();
+        &self.users[idx]
+    }
+
+    fn get_selected_entry_mut<'a>(&'a mut self) -> &'a mut UserEntry {
+        let idx = self.state.selected().unwrap();
+        &mut self.users[idx]
     }
 }
