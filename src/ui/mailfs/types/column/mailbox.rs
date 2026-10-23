@@ -3,10 +3,7 @@ use crate::{
     types::{CachedMail, CachedMailbox},
     ui::{
         Loadable,
-        mailfs::{
-            columns::MailfsColumn,
-            types::{MailEntry, MailboxEntry},
-        },
+        mailfs::types::{MailEntry, MailboxEntry, column::Column},
     },
 };
 use ratatui::widgets::TableState;
@@ -172,7 +169,7 @@ impl MailboxColumn {
     }
 }
 
-impl MailfsColumn for MailboxColumn {
+impl Column for MailboxColumn {
     fn navigate_up(&mut self, offset: u16) {
         match (self.mailbox_state.selected(), self.mail_state.selected()) {
             (Some(current_idx), None) => {

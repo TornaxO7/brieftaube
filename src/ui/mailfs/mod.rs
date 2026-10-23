@@ -1,4 +1,3 @@
-mod columns;
 mod message;
 mod message_request;
 mod types;
@@ -14,9 +13,12 @@ use crate::{
     },
     ui::{
         Layer, Loadable, Navigation,
-        mailfs::{
-            columns::*,
-            types::{MailEntry, MailPreview, UserEntry},
+        mailfs::types::{
+            MailEntry, MailPreview, UserEntry,
+            column::{
+                AccountsColumn, Column, DEFAULT_SECTION_SIZE, MailboxColumn, MailboxColumnEntry,
+                MailboxColumnEntryMut, ThreadColumn, UserColumn,
+            },
         },
         statusbar::StatusbarState,
         utils::keybindmanager::{self, KeybindManager},
@@ -48,10 +50,10 @@ pub struct State {
 
     // TODO: Improve abstraction
     //  - Introduce `Column` trait (`get_selected_entry`, `get_selected_entry_mut`, navigation, selection, etc.)
-    users_column: columns::UserColumn,
-    accounts_column: HashMap<Username, Loadable<columns::AccountsColumn>>,
-    mailbox_columns: HashMap<MailboxColumnKey, Loadable<columns::MailboxColumn>>,
-    thread_columns: HashMap<ThreadColumnKey, Loadable<columns::ThreadColumn>>,
+    users_column: UserColumn,
+    accounts_column: HashMap<Username, Loadable<AccountsColumn>>,
+    mailbox_columns: HashMap<MailboxColumnKey, Loadable<MailboxColumn>>,
+    thread_columns: HashMap<ThreadColumnKey, Loadable<ThreadColumn>>,
     mail_previews: HashMap<MailPreviewKey, Loadable<MailPreview>>,
 
     column_area_size: Option<Size>,
@@ -60,7 +62,7 @@ pub struct State {
 
 impl State {
     pub fn new() -> (Self, UserEntry) {
-        let users_column = columns::UserColumn::new();
+        let users_column = UserColumn::new();
         let (accounts_column, initial_user) = {
             let selected_user = users_column.get_selected_entry().clone();
             (
@@ -222,10 +224,9 @@ impl State {
     ) -> Vec<crate::ui::Message> {
         match accounts {
             Ok(accounts) => {
-                let res = self.accounts_column.insert(
-                    username,
-                    Loadable::Loaded(columns::AccountsColumn::new(accounts)),
-                );
+                let res = self
+                    .accounts_column
+                    .insert(username, Loadable::Loaded(AccountsColumn::new(accounts)));
                 debug_assert!(res.is_some());
             }
             Err(err) => {
@@ -1046,7 +1047,7 @@ impl State {
                             max_init_mails: self
                                 .column_area_size
                                 .map(|size| size.height as usize)
-                                .unwrap_or(columns::DEFAULT_SECTION_SIZE),
+                                .unwrap_or(DEFAULT_SECTION_SIZE),
                         }
                         .into(),
                     ]
@@ -1087,7 +1088,7 @@ impl State {
                                     max_init_mails: self
                                         .column_area_size
                                         .map(|size| size.height as usize)
-                                        .unwrap_or(columns::DEFAULT_SECTION_SIZE),
+                                        .unwrap_or(DEFAULT_SECTION_SIZE),
                                 }
                                 .into(),
                             ]

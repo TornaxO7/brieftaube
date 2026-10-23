@@ -1,4 +1,4 @@
-use crate::ui::mailfs::{columns::MailfsColumn, types::MailEntry};
+use crate::ui::mailfs::types::{MailEntry, column::Column};
 use ratatui::widgets::TableState;
 
 #[derive(Debug)]
@@ -32,7 +32,7 @@ impl ThreadColumn {
     }
 }
 
-impl MailfsColumn for ThreadColumn {
+impl Column for ThreadColumn {
     fn navigate_up(&mut self, offset: u16) {
         let idx = self
             .state

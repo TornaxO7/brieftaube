@@ -4,8 +4,10 @@ use crate::{
         Loadable,
         mailfs::{
             ColumnStackEntry,
-            columns::{MailboxColumnEntry, MailfsColumn},
-            types::Selectable,
+            types::{
+                Selectable,
+                column::{Column, MailboxColumnEntry},
+            },
         },
         statusbar::StatusbarWidget,
     },

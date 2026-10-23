@@ -1,6 +1,6 @@
 use crate::{
     CONFIG,
-    ui::mailfs::{columns::MailfsColumn, types::UserEntry},
+    ui::mailfs::types::{UserEntry, column::Column},
 };
 use ratatui::widgets::TableState;
 
@@ -43,7 +43,7 @@ impl UserColumn {
     }
 }
 
-impl MailfsColumn for UserColumn {
+impl Column for UserColumn {
     fn navigate_up(&mut self, offset: u16) {
         let new_idx = self
             .state

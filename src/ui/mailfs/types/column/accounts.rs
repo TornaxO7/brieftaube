@@ -1,6 +1,6 @@
 use crate::{
     types::AccountData,
-    ui::mailfs::{columns::MailfsColumn, types::AccountEntry},
+    ui::mailfs::types::{AccountEntry, column::Column},
 };
 use ratatui::widgets::TableState;
 
@@ -34,7 +34,7 @@ impl AccountsColumn {
     }
 }
 
-impl MailfsColumn for AccountsColumn {
+impl Column for AccountsColumn {
     fn navigate_up(&mut self, offset: u16) {
         let idx = self
             .state

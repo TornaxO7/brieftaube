@@ -4,6 +4,8 @@ mod mail_preview;
 mod mailbox_entry;
 mod user_entry;
 
+pub mod column;
+
 pub use account_entry::*;
 pub use mail_entry::*;
 pub use mail_preview::*;
