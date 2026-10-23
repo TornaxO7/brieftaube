@@ -51,7 +51,7 @@ pub struct State {
     mail_previews: HashMap<(AccountId, MailId), Loadable<MailPreview>>,
 
     column_area_size: Option<Size>,
-    selection: HashMap<(Username, AccountId), SelectionType>,
+    _selection: HashMap<(Username, AccountId), SelectionType>,
 }
 
 impl State {
@@ -82,7 +82,7 @@ impl State {
                 mail_previews,
 
                 column_area_size: None,
-                selection: HashMap::new(),
+                _selection: HashMap::new(),
 
                 keybindings: KeybindManager::new(HashMap::from([
                     ("q", UserAction::Quit),
@@ -114,31 +114,27 @@ impl Layer<Message, crate::ui::Message> for State {
                 accounts,
             } => self.handle_set_user_accounts(to, accounts),
             Message::InitMailbox {
-                username,
                 account_id,
                 mailbox_id,
 
                 data,
-            } => self.handle_init_mailbox(username, account_id, mailbox_id, data),
+            } => self.handle_init_mailbox(account_id, mailbox_id, data),
             Message::SetRootMails {
-                username,
                 account_id,
                 mailbox,
                 window,
                 result,
-            } => self.handle_set_root_mails(username, account_id, mailbox, window, result),
+            } => self.handle_set_root_mails(account_id, mailbox, window, result),
             Message::SetThreadMails {
-                username,
                 account_id,
                 thread_id,
                 thread_mails,
-            } => self.handle_set_thread_mails(username, account_id, thread_id, thread_mails),
+            } => self.handle_set_thread_mails(account_id, thread_id, thread_mails),
             Message::SetMailPreview {
-                username,
                 account_id,
                 mail_id,
                 preview,
-            } => self.handle_set_mail_preview(username, account_id, mail_id, preview),
+            } => self.handle_set_mail_preview(account_id, mail_id, preview),
             Message::SetColumnAreaSize(size) => self.handle_set_column_area_size(size),
             Message::ReloadColumnEntries => self.handle_reload_column_entries(),
         };
@@ -238,7 +234,6 @@ impl State {
 
     fn handle_init_mailbox(
         &mut self,
-        username: Username,
         account_id: AccountId,
         mailbox_id: ParentMailboxId,
         data: color_eyre::Result<InitMailboxData>,
@@ -274,7 +269,6 @@ impl State {
 
     fn handle_set_root_mails(
         &mut self,
-        username: Username,
         account_id: AccountId,
         mailbox_id: MailboxId,
         window: QueryWindow,
@@ -295,7 +289,6 @@ impl State {
 
     fn handle_set_thread_mails(
         &mut self,
-        username: Username,
         account_id: AccountId,
         thread_id: ThreadId,
         thread_mails: color_eyre::Result<Vec<CachedMail>>,
@@ -322,7 +315,6 @@ impl State {
 
     fn handle_set_mail_preview(
         &mut self,
-        username: Username,
         account_id: AccountId,
         mail_id: MailId,
         mail_preview: color_eyre::Result<MailPreview>,
@@ -1166,7 +1158,6 @@ impl State {
                             callback: Box::new(
                                 move |cached_mail: color_eyre::Result<CachedMail>| {
                                     Message::SetMailPreview {
-                                        username: username.clone(),
                                         account_id: account_id.clone(),
                                         mail_id: mail_id.clone(),
                                         preview: cached_mail.map(MailPreview::from),
@@ -1194,18 +1185,6 @@ enum ColumnStackEntry {
     Accounts,
     Mailbox(ParentMailboxId),
     Thread(ThreadId),
-}
-
-#[derive(Clone, Hash)]
-struct AccountCtx {
-    username: Username,
-    account_id: AccountId,
-}
-
-impl AccountCtx {
-    pub fn as_key<T>(&self, other: T) -> (Username, AccountId, T) {
-        (self.username.clone(), self.account_id.clone(), other)
-    }
 }
 
 enum SelectionType {

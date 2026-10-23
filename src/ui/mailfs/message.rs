@@ -20,7 +20,6 @@ pub enum Message {
     },
 
     InitMailbox {
-        username: Username,
         account_id: AccountId,
         mailbox_id: ParentMailboxId,
 
@@ -28,23 +27,19 @@ pub enum Message {
     },
 
     SetRootMails {
-        username: Username,
         account_id: AccountId,
         mailbox: MailboxId,
 
         window: QueryWindow,
-
         result: color_eyre::Result<Vec<CachedMail>>,
     },
     SetThreadMails {
-        username: Username,
         account_id: AccountId,
         thread_id: ThreadId,
 
         thread_mails: color_eyre::Result<Vec<CachedMail>>,
     },
     SetMailPreview {
-        username: Username,
         account_id: AccountId,
         mail_id: MailId,
 

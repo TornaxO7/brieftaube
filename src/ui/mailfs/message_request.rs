@@ -78,10 +78,9 @@ pub fn handle_request(
             max_init_mails: amount_initial_mails,
             mail_properties,
         } => {
-            manager.with_handler(&username.clone(), async move |handler| {
+            manager.with_handler(&username, async move |handler| {
                 vec![
                     Message::InitMailbox {
-                        username,
                         account_id: account_id.clone(),
                         mailbox_id: mailbox_id.clone(),
 
@@ -106,7 +105,7 @@ pub fn handle_request(
             properties,
             callback,
         } => {
-            manager.with_handler(&username.clone(), async move |handler| {
+            manager.with_handler(&username, async move |handler| {
                 vec![callback(handler.get_mail(account_id, mail_id, properties).await).into()]
             });
             vec![]
@@ -118,10 +117,9 @@ pub fn handle_request(
             window,
             mail_properties,
         } => {
-            manager.with_handler(&username.clone(), async move |handler| {
+            manager.with_handler(&username, async move |handler| {
                 vec![
                     Message::SetRootMails {
-                        username,
                         account_id: account_id.clone(),
                         mailbox: mailbox.clone(),
                         window: window.clone(),
@@ -140,10 +138,9 @@ pub fn handle_request(
             thread_id,
             mail_properties,
         } => {
-            manager.with_handler(&username.clone(), async move |handler| {
+            manager.with_handler(&username, async move |handler| {
                 vec![
                     Message::SetThreadMails {
-                        username,
                         account_id: account_id.clone(),
                         thread_id: thread_id.clone(),
                         thread_mails: handler
@@ -163,7 +160,7 @@ pub fn handle_request(
             mailbox_ids,
             keywords,
         } => {
-            manager.with_handler(&username.clone(), async move |handler| {
+            manager.with_handler(&username, async move |handler| {
                 match handler
                     .mutate_mails(account_id, ids, mailbox_ids, keywords)
                     .await
