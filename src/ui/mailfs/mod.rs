@@ -33,6 +33,10 @@ pub use message::*;
 pub use message_request::*;
 pub use view::view;
 
+type MailboxColumnKey = (AccountId, ParentMailboxId);
+type ThreadColumnKey = (AccountId, ThreadId);
+type MailPreviewKey = (AccountId, MailId);
+
 pub struct State {
     keybindings: KeybindManager<UserAction>,
     statusbar: StatusbarState,
@@ -46,12 +50,12 @@ pub struct State {
     //  - Introduce `Column` trait (`get_selected_entry`, `get_selected_entry_mut`, navigation, selection, etc.)
     users_column: columns::UserColumn,
     accounts_column: HashMap<Username, Loadable<columns::AccountsColumn>>,
-    mailbox_columns: HashMap<(AccountId, ParentMailboxId), Loadable<columns::MailboxColumn>>,
-    thread_columns: HashMap<(AccountId, ThreadId), Loadable<columns::ThreadColumn>>,
-    mail_previews: HashMap<(AccountId, MailId), Loadable<MailPreview>>,
+    mailbox_columns: HashMap<MailboxColumnKey, Loadable<columns::MailboxColumn>>,
+    thread_columns: HashMap<ThreadColumnKey, Loadable<columns::ThreadColumn>>,
+    mail_previews: HashMap<MailPreviewKey, Loadable<MailPreview>>,
 
     column_area_size: Option<Size>,
-    _selection: HashMap<(Username, AccountId), SelectionType>,
+    _selection: HashMap<(AccountId), SelectionType>,
 }
 
 impl State {
