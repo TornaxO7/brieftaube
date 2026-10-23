@@ -874,23 +874,8 @@ impl State {
 
     fn select_entry(&mut self) -> Vec<crate::ui::Message> {
         match self.column_stack.last().unwrap() {
-            ColumnStackEntry::Users => {
-                let entry = self.users_column.get_selected_entry_mut();
-                entry.is_selected = !entry.is_selected;
-            }
-            ColumnStackEntry::Accounts => {
-                let username = &self.users_column.get_selected_entry().username;
-                let Some(column) = self
-                    .accounts_column
-                    .get_mut(username)
-                    .expect("Account column exists")
-                    .loaded_mut()
-                else {
-                    return vec![];
-                };
-
-                let entry = column.get_selected_entry_mut();
-                entry.is_selected = !entry.is_selected;
+            ColumnStackEntry::Users | ColumnStackEntry::Accounts => {
+                return vec![];
             }
             ColumnStackEntry::Mailbox(mailbox_id) => {
                 let selected_account_id = self.get_selected_account_id();
