@@ -1,7 +1,4 @@
-use crate::{
-    types::{CachedMail, MailId, MailKeyword, MailProperty, ThreadId},
-    ui::mailfs::types::Selectable,
-};
+use crate::types::{CachedMail, MailId, MailKeyword, MailProperty, ThreadId};
 use chrono::{DateTime, Local};
 use std::collections::HashSet;
 
@@ -13,8 +10,6 @@ pub struct MailEntry {
     pub received_at: DateTime<Local>,
     pub has_attachment: bool,
     pub thread_id: ThreadId,
-
-    pub is_selected: bool,
 }
 
 impl MailEntry {
@@ -44,18 +39,6 @@ impl From<CachedMail> for MailEntry {
             received_at,
             has_attachment,
             thread_id,
-
-            is_selected: false,
         }
-    }
-}
-
-impl Selectable for MailEntry {
-    fn is_selected(&self) -> bool {
-        self.is_selected
-    }
-
-    fn set_selection(&mut self, selected: bool) {
-        self.is_selected = selected;
     }
 }

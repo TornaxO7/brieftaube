@@ -1,7 +1,4 @@
-use crate::{
-    config::{UserConfig, Username},
-    ui::mailfs::types::Selectable,
-};
+use crate::config::{UserConfig, Username};
 
 #[derive(Debug, Clone)]
 pub struct UserEntry {
@@ -14,12 +11,4 @@ impl From<UserConfig> for UserEntry {
             username: conf.username,
         }
     }
-}
-
-impl Selectable for UserEntry {
-    fn is_selected(&self) -> bool {
-        false
-    }
-
-    fn set_selection(&mut self, _selected: bool) {}
 }

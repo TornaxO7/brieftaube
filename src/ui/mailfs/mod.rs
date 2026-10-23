@@ -14,7 +14,7 @@ use crate::{
     ui::{
         Layer, Loadable, Navigation,
         mailfs::types::{
-            MailEntry, MailPreview, Selectable, UserEntry,
+            MailEntry, MailPreview, UserEntry,
             column::{
                 AccountsColumn, Column, DEFAULT_SECTION_SIZE, MailboxColumn, MailboxColumnEntry,
                 ThreadColumn, UserColumn,
@@ -57,7 +57,7 @@ pub struct State {
     mail_previews: HashMap<MailPreviewKey, Loadable<MailPreview>>,
 
     column_area_size: Option<Size>,
-    selection: HashMap<(AccountId, ParentMailboxId), SelectionValue>,
+    selection: HashMap<SelectedValue, SelectionCtx>,
 }
 
 impl State {
@@ -873,7 +873,6 @@ impl State {
         }
     }
 
-    // TODO: How to add it?
     fn select_entry(&mut self) -> Vec<crate::ui::Message> {
         match self.column_stack.last().unwrap() {
             ColumnStackEntry::Users | ColumnStackEntry::Accounts => {
@@ -897,17 +896,19 @@ impl State {
 
                 match entry {
                     MailboxColumnEntry::Mailbox(mailbox) => {
-                        mailbox.toggle_selection();
+                        let selected = SelectedValue::Mailbox(mailbox.id.clone());
+                        if self.selection.remove(&selected).is_none() {
+                            self.selection.insert(selected, SelectionCtx {});
+                        }
                     }
                     MailboxColumnEntry::RootMail(loadable_mail) => {
-                        let Some(mail_entry) = loadable_mail.loaded_mut() else {
+                        let Some(thread_id) =
+                            loadable_mail.loaded().map(|mail| mail.thread_id.clone())
+                        else {
                             return vec![];
                         };
 
-                        mail_entry.toggle_selection();
-
-                        // also select every mail in the thread
-                        let key = (selected_account_id.clone(), mail_entry.thread_id.clone());
+                        let key = (selected_account_id.clone(), thread_id);
                         let Some(column) = self
                             .thread_columns
                             .get_mut(&key)
@@ -918,7 +919,10 @@ impl State {
                         };
 
                         for mail in column.mails.iter_mut() {
-                            mail.toggle_selection();
+                            let selected = SelectedValue::Mail(mail.id.clone());
+                            if self.selection.remove(&selected).is_none() {
+                                self.selection.insert(selected, SelectionCtx {});
+                            }
                         }
                     }
                 }
@@ -936,9 +940,15 @@ impl State {
                 };
 
                 let mail = column.get_selected_entry_mut();
-                mail.toggle_selection();
+
+                let selected = SelectedValue::Mail(mail.id.clone());
+                if self.selection.remove(&selected).is_none() {
+                    self.selection.insert(selected, SelectionCtx {});
+                }
             }
         };
+
+        tracing::debug!("Selection: {:#?}", self.selection);
 
         self.navigate_down()
     }
@@ -1178,8 +1188,17 @@ enum ColumnStackEntry {
     Thread(ThreadId),
 }
 
-enum SelectionValue {
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum SelectedValue {
     Mailbox(MailboxId),
     Mail(MailId),
-    Thread(ThreadId),
 }
+
+#[derive(Debug)]
+struct SelectionCtx {}
+
+// enum SelectionValue {
+//     Mailbox(MailboxId),
+//     Mail(MailId),
+//     Thread(ThreadId),
+// }

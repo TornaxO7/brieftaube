@@ -1,7 +1,4 @@
-use crate::{
-    types::{AccountData, AccountId},
-    ui::mailfs::types::Selectable,
-};
+use crate::types::{AccountData, AccountId};
 
 pub struct AccountEntry {
     pub id: AccountId,
@@ -15,12 +12,4 @@ impl From<AccountData> for AccountEntry {
             name: data.name,
         }
     }
-}
-
-impl Selectable for AccountEntry {
-    fn is_selected(&self) -> bool {
-        false
-    }
-
-    fn set_selection(&mut self, _selected: bool) {}
 }

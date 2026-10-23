@@ -3,7 +3,7 @@ use crate::{
     types::{CachedMail, CachedMailbox},
     ui::{
         Loadable,
-        mailfs::types::{MailEntry, MailboxEntry, Selectable, column::Column},
+        mailfs::types::{MailEntry, MailboxEntry, column::Column},
     },
 };
 use ratatui::widgets::TableState;
@@ -208,22 +208,6 @@ impl Column<MailboxColumnEntry> for MailboxColumn {
 pub enum MailboxColumnEntry {
     Mailbox(MailboxEntry),
     RootMail(Loadable<MailEntry>),
-}
-
-impl Selectable for MailboxColumnEntry {
-    fn is_selected(&self) -> bool {
-        match self {
-            MailboxColumnEntry::Mailbox(mailbox) => mailbox.is_selected(),
-            MailboxColumnEntry::RootMail(mail) => mail.is_selected(),
-        }
-    }
-
-    fn set_selection(&mut self, selected: bool) {
-        match self {
-            MailboxColumnEntry::Mailbox(mailbox) => mailbox.set_selection(selected),
-            MailboxColumnEntry::RootMail(mail) => mail.set_selection(selected),
-        }
-    }
 }
 
 // #[derive(Debug)]
