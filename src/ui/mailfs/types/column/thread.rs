@@ -18,7 +18,18 @@ impl ThreadColumn {
     }
 
     pub fn set_mails(&mut self, mails: Vec<MailEntry>) {
+        debug_assert!(!mails.is_empty());
+
         self.mails = mails;
+
+        match self.state.selected() {
+            Some(idx) => {
+                if idx >= self.mails.len() {
+                    self.state.select(Some(self.mails.len() - 1));
+                }
+            }
+            None => self.state.select(Some(0)),
+        }
     }
 }
 

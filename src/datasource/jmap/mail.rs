@@ -227,7 +227,7 @@ impl MailRemote for JmapAccount {
                         MutateAttribute::Set(ids) => {
                             update.mailbox_ids(ids);
                         }
-                        MutateAttribute::Mutate(changes) => {
+                        MutateAttribute::Patch(changes) => {
                             for (mailbox_id, set) in changes {
                                 update.mailbox_id(mailbox_id.as_str(), set);
                             }
@@ -240,7 +240,7 @@ impl MailRemote for JmapAccount {
                         MutateAttribute::Set(keywords) => {
                             update.keywords(keywords);
                         }
-                        MutateAttribute::Mutate(changes) => {
+                        MutateAttribute::Patch(changes) => {
                             for (keyword, set) in changes {
                                 update.keyword(keyword.as_str(), set);
                             }

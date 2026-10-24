@@ -37,7 +37,7 @@ pub enum CommandKind {
         new_draft: CachedMail,
         tx: oneshot::Sender<color_eyre::Result<CachedMail>>,
     },
-    MutateMail {
+    PatchMail {
         ids: Vec<MailId>,
         mailbox_ids: Option<MutateAttribute<MailboxId>>,
         keywords: Option<MutateAttribute<MailKeyword>>,
@@ -358,7 +358,7 @@ impl Repository {
         Ok(new_draft)
     }
 
-    pub async fn mutate_mail(
+    pub async fn patch_mail(
         &self,
         account_id: AccountId,
         ids: Vec<MailId>,
@@ -387,7 +387,7 @@ impl Repository {
                             MutateAttribute::Set(mailbox_ids) => {
                                 mail.mailbox_ids = OnceLock::from(mailbox_ids);
                             }
-                            MutateAttribute::Mutate(changes) => match mail.mailbox_ids.get_mut() {
+                            MutateAttribute::Patch(changes) => match mail.mailbox_ids.get_mut() {
                                 Some(current_mailbox_ids) => {
                                     for (mailbox_id, set) in changes {
                                         if set {
@@ -420,7 +420,7 @@ impl Repository {
                                     keywords.into_iter().collect::<HashSet<MailKeyword>>(),
                                 );
                             }
-                            MutateAttribute::Mutate(changes) => match mail.keywords.get_mut() {
+                            MutateAttribute::Patch(changes) => match mail.keywords.get_mut() {
                                 Some(current_keywords) => {
                                     for (keyword, set) in changes {
                                         if set {

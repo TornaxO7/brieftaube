@@ -7,10 +7,11 @@ use crate::{
     },
 };
 use ratatui::widgets::TableState;
+use std::ops::Range;
 
 pub const DEFAULT_SECTION_SIZE: usize = 32;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct MailboxColumn {
     pub entries: Vec<MailboxColumnEntry>,
     pub state: TableState,
@@ -21,13 +22,26 @@ pub struct MailboxColumn {
 
 impl MailboxColumn {
     pub fn new(
-        mut child_mailboxes: Vec<CachedMailbox>,
+        child_mailboxes: Vec<CachedMailbox>,
         total_threads: usize,
-        init_mails: Vec<MailEntry>,
+        init_mails: Vec<CachedMail>,
     ) -> Self {
-        debug_assert!(init_mails.len() <= total_threads);
+        let mut column = Self::default();
+        column.set_entries(total_threads, child_mailboxes, init_mails);
+        column
+    }
 
-        child_mailboxes.sort_by(|a, b| {
+    pub fn set_entries(
+        &mut self,
+        total_threads: usize,
+        mut mailboxes: Vec<CachedMailbox>,
+        first_mails: Vec<CachedMail>,
+    ) {
+        debug_assert!(first_mails.len() <= total_threads);
+
+        let amount_child_mailboxes = mailboxes.len();
+
+        mailboxes.sort_by(|a, b| {
             if a.sort_order != b.sort_order {
                 a.sort_order.cmp(&b.sort_order)
             } else {
@@ -35,31 +49,20 @@ impl MailboxColumn {
             }
         });
 
-        let amount_child_mailboxes = child_mailboxes.len();
-
-        let state = {
-            let state = TableState::new();
-
-            if !child_mailboxes.is_empty() || init_mails.len() > 0 {
-                state.with_selected(Some(0))
-            } else {
-                state
-            }
-        };
-
         let entries: Vec<MailboxColumnEntry> = {
             let mut entries = Vec::with_capacity(amount_child_mailboxes + total_threads);
 
             entries.extend(
-                child_mailboxes
+                mailboxes
                     .into_iter()
                     .map(MailboxEntry::from)
                     .map(MailboxColumnEntry::Mailbox),
             );
 
             entries.extend(
-                init_mails
+                first_mails
                     .into_iter()
+                    .map(MailEntry::from)
                     .map(Loadable::Loaded)
                     .map(MailboxColumnEntry::RootMail),
             );
@@ -71,19 +74,41 @@ impl MailboxColumn {
             entries
         };
 
-        Self {
-            entries,
-            state,
-            amount_child_mailboxes,
-            total_threads,
+        self.amount_child_mailboxes = amount_child_mailboxes;
+        self.total_threads = total_threads;
+        self.entries = entries;
+
+        match self.state.selected() {
+            Some(idx) => {
+                if self.entries.is_empty() {
+                    self.state.select(None);
+                } else {
+                    if idx >= self.entries.len() {
+                        self.state.select(Some(self.entries.len() - 1));
+                    }
+                }
+            }
+            None => {
+                if !self.entries.is_empty() {
+                    self.state.select(Some(0));
+                }
+            }
         }
     }
 
-    pub fn set_mailbox_mails(
-        &mut self,
-        window: QueryWindow,
-        result: color_eyre::Result<Vec<CachedMail>>,
-    ) {
+    pub fn set_mailboxes(&mut self, mailboxes: Vec<CachedMailbox>) {
+        let range = 0..self.amount_child_mailboxes;
+        self.amount_child_mailboxes = mailboxes.len();
+
+        let new_entries = mailboxes
+            .into_iter()
+            .map(MailboxEntry::from)
+            .map(MailboxColumnEntry::Mailbox);
+
+        self.entries.splice(range, new_entries);
+    }
+
+    pub fn set_mails(&mut self, window: QueryWindow, result: color_eyre::Result<Vec<CachedMail>>) {
         let window_range = {
             let range = window.as_range();
             self.amount_child_mailboxes + range.start..self.amount_child_mailboxes + range.end
@@ -108,9 +133,8 @@ impl MailboxColumn {
         };
     }
 
-    pub fn ensure_loaded_mails(&mut self, section_size: Option<usize>) -> Vec<QueryWindow> {
+    pub fn get_min_start_max_end(&self, section_size: Option<usize>) -> Range<usize> {
         let section_size = section_size.unwrap_or(DEFAULT_SECTION_SIZE);
-        let mut query_windows = Vec::new();
 
         // min_start                     max_end
         // |                             |
@@ -123,13 +147,22 @@ impl MailboxColumn {
             .saturating_sub(section_size * 3)
             .max(self.amount_child_mailboxes);
 
+        min_start..max_end
+    }
+
+    pub fn ensure_loaded_mails(&mut self, section_size: Option<usize>) -> Vec<QueryWindow> {
+        let mut query_windows = Vec::new();
+
+        let selected_idx = self.state.selected().unwrap_or(0);
+        let max_range = self.get_min_start_max_end(section_size);
+
         // 1. check above
-        if let Some(start_offset) = self.entries[min_start..selected_idx]
+        if let Some(start_offset) = self.entries[max_range.start..selected_idx]
             .iter()
             .rev()
             .position(|entry| matches!(entry, MailboxColumnEntry::RootMail(root_mail) if root_mail.loaded().is_none()))
         {
-            let range = min_start..selected_idx - start_offset;
+            let range = max_range.start..selected_idx - start_offset;
 
             self.entries[range.clone()].fill(MailboxColumnEntry::RootMail(Loadable::Loading));
 
@@ -140,11 +173,11 @@ impl MailboxColumn {
         }
 
         // 2. check below
-        if let Some(start_offset) = self.entries[selected_idx..max_end]
+        if let Some(start_offset) = self.entries[selected_idx..max_range.end]
             .iter()
             .position(|entry| matches!(entry, MailboxColumnEntry::RootMail(root_mail) if root_mail.loaded().is_none()))
         {
-            let range = selected_idx + start_offset..max_end;
+            let range = selected_idx + start_offset..max_range.end;
 
             self.entries[range.clone()].fill(MailboxColumnEntry::RootMail(Loadable::Loading));
 
@@ -209,15 +242,3 @@ pub enum MailboxColumnEntry {
     Mailbox(MailboxEntry),
     RootMail(Loadable<MailEntry>),
 }
-
-// #[derive(Debug)]
-// pub enum MailboxColumnEntry<'a> {
-//     Mailbox(&'a MailboxEntry),
-//     RootMail(&'a Loadable<MailEntry>),
-// }
-
-// #[derive(Debug)]
-// pub enum MailboxColumnEntryMut<'a> {
-//     Mailbox(&'a mut MailboxEntry),
-//     RootMail(&'a mut Loadable<MailEntry>),
-// }

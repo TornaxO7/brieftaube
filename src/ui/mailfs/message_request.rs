@@ -1,3 +1,5 @@
+use tracing::error;
+
 use crate::{
     config::Username,
     datasource::types::{MutateAttribute, QueryWindow},
@@ -46,7 +48,7 @@ pub enum MessageRequest {
         thread_id: ThreadId,
         mail_properties: Vec<MailProperty>,
     },
-    MutateMail {
+    PatchMail {
         username: Username,
         account_id: AccountId,
 
@@ -153,7 +155,7 @@ pub fn handle_request(
             vec![]
         }
 
-        MessageRequest::MutateMail {
+        MessageRequest::PatchMail {
             username,
             account_id,
             ids,
@@ -165,8 +167,11 @@ pub fn handle_request(
                     .mutate_mails(account_id, ids, mailbox_ids, keywords)
                     .await
                 {
-                    Ok(()) => vec![Message::ReloadColumnEntries.into()],
-                    Err(_err) => vec![],
+                    Ok(()) => vec![Message::Reload.into()],
+                    Err(err) => {
+                        error!("Couldn't patch mail: {}", err);
+                        vec![]
+                    }
                 }
             });
             vec![]

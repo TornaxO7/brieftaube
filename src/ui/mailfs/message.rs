@@ -12,6 +12,8 @@ use ratatui::layout::Size;
 
 #[derive(Debug)]
 pub enum Message {
+    Reload,
+
     Event(Event),
 
     SetUserAccounts {
@@ -45,8 +47,6 @@ pub enum Message {
 
         preview: color_eyre::Result<MailPreview>,
     },
-
-    ReloadColumnEntries,
 
     SelectedPaletteEntry(String),
 

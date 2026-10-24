@@ -75,14 +75,14 @@ impl Repository {
                     mail::CommandKind::EditDraftMail { new_draft, tx } => {
                         let _ = tx.send(repo.edit_draft(cmd.account_id, new_draft).await);
                     }
-                    mail::CommandKind::MutateMail {
+                    mail::CommandKind::PatchMail {
                         ids,
                         mailbox_ids,
                         keywords,
                         tx,
                     } => {
                         let _ = tx.send(
-                            repo.mutate_mail(cmd.account_id, ids, mailbox_ids, keywords)
+                            repo.patch_mail(cmd.account_id, ids, mailbox_ids, keywords)
                                 .await,
                         );
                     }
@@ -501,7 +501,7 @@ impl RepositoryHandler {
         self.execute(|tx| {
             mail::Command {
                 account_id,
-                kind: mail::CommandKind::MutateMail {
+                kind: mail::CommandKind::PatchMail {
                     ids,
                     mailbox_ids,
                     keywords,

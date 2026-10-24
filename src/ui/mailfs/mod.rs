@@ -6,10 +6,10 @@ mod view;
 
 use crate::{
     config::{self, Username},
-    datasource::types::QueryWindow,
+    datasource::types::{MutateAttribute, QueryWindow},
     types::{
-        AccountData, AccountId, CachedMail, InitMailboxData, MailId, MailboxId, ParentMailboxId,
-        ROOT_MAILBOX_ID, ThreadId,
+        AccountData, AccountId, CachedMail, InitMailboxData, MailId, MailKeyword, MailboxId,
+        ParentMailboxId, ROOT_MAILBOX_ID, ThreadId,
     },
     ui::{
         Layer, Loadable, Navigation,
@@ -26,9 +26,13 @@ use crate::{
 };
 use crossterm::event::Event;
 use ratatui::layout::Size;
-use std::{collections::HashMap, str::FromStr};
+use std::{
+    cell::OnceCell,
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 use throbber_widgets_tui::ThrobberState;
-use tracing::debug;
+use tracing::{debug, warn};
 use user_action::UserAction;
 
 pub use message::*;
@@ -140,7 +144,7 @@ impl Layer<Message, crate::ui::Message> for State {
                 preview,
             } => self.handle_set_mail_preview(account_id, mail_id, preview),
             Message::SetColumnAreaSize(size) => self.handle_set_column_area_size(size),
-            Message::ReloadColumnEntries => self.handle_reload_column_entries(),
+            Message::Reload => self.handle_reload(),
         };
 
         response_msgs.extend(self.ensure_right_column_data());
@@ -203,6 +207,8 @@ impl State {
 
             UserAction::ComposeNewMail => self.compose_markdown_mail(),
 
+            UserAction::MarkMailAsSeen => self.mark_mail_as_seen(),
+
             UserAction::ClearSelection => self.clear_selection(),
             UserAction::ClearStatusMessage => self.clear_status_msg(),
 
@@ -245,9 +251,8 @@ impl State {
         data: color_eyre::Result<InitMailboxData>,
     ) -> Vec<crate::ui::Message> {
         let key = (account_id, mailbox_id.clone());
-        let column = self.mailbox_columns.get_mut(&key).unwrap();
 
-        *column = match data {
+        match data {
             Ok(InitMailboxData {
                 total_threads,
                 child_mailboxes,
@@ -258,16 +263,27 @@ impl State {
                     debug_assert!(first_mails.is_empty());
                 }
 
-                let first_mails: Vec<MailEntry> =
-                    first_mails.into_iter().map(MailEntry::from).collect();
-
-                Loadable::Loaded(MailboxColumn::new(
-                    child_mailboxes,
-                    total_threads,
-                    first_mails,
-                ))
+                match self.mailbox_columns.get_mut(&key).unwrap() {
+                    Loadable::NotLoaded => unreachable!(),
+                    Loadable::Loading | Loadable::Error(_) => {
+                        self.mailbox_columns.insert(
+                            key,
+                            Loadable::Loaded(MailboxColumn::new(
+                                child_mailboxes,
+                                total_threads,
+                                first_mails,
+                            )),
+                        );
+                    }
+                    Loadable::Loaded(column) => {
+                        column.set_entries(total_threads, child_mailboxes, first_mails);
+                    }
+                }
             }
-            Err(err) => Loadable::Error(err.to_string()),
+            Err(err) => {
+                self.mailbox_columns
+                    .insert(key, Loadable::Error(err.to_string()));
+            }
         };
 
         vec![]
@@ -289,7 +305,7 @@ impl State {
             .loaded_mut()
             .expect("Request must've come from a loaded mailbox");
 
-        column.set_mailbox_mails(window, result);
+        column.set_mails(window, result);
         vec![]
     }
 
@@ -305,11 +321,19 @@ impl State {
             Ok(mails) => {
                 let mail_entries = mails.into_iter().map(MailEntry::from).collect();
 
-                let res = self
-                    .thread_columns
-                    .insert(key, Loadable::Loaded(ThreadColumn::new(mail_entries)));
+                match self.thread_columns.get_mut(&key) {
+                    Some(column) => match column.loaded_mut() {
+                        Some(column) => column.set_mails(mail_entries),
+                        None => *column = Loadable::Loaded(ThreadColumn::new(mail_entries)),
+                    },
+                    None => {
+                        let res = self
+                            .thread_columns
+                            .insert(key, Loadable::Loaded(ThreadColumn::new(mail_entries)));
 
-                debug_assert!(res.is_some());
+                        debug_assert!(res.is_some());
+                    }
+                }
             }
             Err(err) => {
                 self.thread_columns
@@ -342,9 +366,118 @@ impl State {
         vec![]
     }
 
-    fn handle_reload_column_entries(&mut self) -> Vec<crate::ui::Message> {
-        // TODO: HERE
-        todo!("Some entries changed => Unload every column")
+    fn handle_reload(&mut self) -> Vec<crate::ui::Message> {
+        let username = self.get_selected_username();
+        let account_id = self.get_selected_account_id();
+
+        let mut loaded_mailboxes_keys = HashSet::new();
+        let loaded_thread = OnceCell::new();
+        let loaded_preview = OnceCell::new();
+
+        let msgs = self
+            .column_stack
+            .iter()
+            .cloned()
+            .skip_while(|entry| matches!(entry, ColumnStackEntry::Users))
+            .fold(Vec::new(), |mut msgs, entry| match entry {
+                ColumnStackEntry::Users => unreachable!(),
+                ColumnStackEntry::Accounts => msgs,
+                ColumnStackEntry::Mailbox(mailbox_id) => {
+                    loaded_mailboxes_keys.insert((account_id.clone(), mailbox_id.clone()));
+
+                    msgs.push(
+                        MessageRequest::InitMailbox {
+                            username: username.clone(),
+                            account_id: account_id.clone(),
+                            mailbox_id: mailbox_id.clone(),
+                            // TODO: HERE
+                            // Use query window instead of counter...
+                            max_init_mails: 1,
+                            mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
+                        }
+                        .into(),
+                    );
+
+                    if let Some(non_root_mailbox) = mailbox_id.clone() {
+                        let section_size = self.column_area_size.map(|size| size.height as usize);
+                        let key = (account_id.clone(), mailbox_id.clone());
+                        let mailbox_column =
+                            self.mailbox_columns.get(&key).unwrap().loaded().unwrap();
+                        let window = {
+                            let range = mailbox_column.get_min_start_max_end(section_size);
+                            QueryWindow {
+                                start: range.start as u32,
+                                limit: range.len(),
+                            }
+                        };
+
+                        msgs.push(
+                            MessageRequest::QueryMails {
+                                username: username.clone(),
+                                account_id: account_id.clone(),
+                                mailbox: non_root_mailbox,
+                                window,
+                                mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
+                            }
+                            .into(),
+                        );
+                    }
+
+                    msgs
+                }
+                ColumnStackEntry::Thread(thread_id) => {
+                    loaded_thread
+                        .set((account_id.clone(), thread_id.clone()))
+                        .unwrap();
+
+                    let key = (account_id.clone(), thread_id.clone());
+                    let column = self.thread_columns.get_mut(&key).unwrap().loaded().unwrap();
+                    let previewed_mail = column.get_selected_entry();
+                    loaded_preview
+                        .set((account_id.clone(), previewed_mail.id.clone()))
+                        .unwrap();
+
+                    msgs.push(
+                        MessageRequest::GetThreadMails {
+                            username: username.clone(),
+                            account_id: account_id.clone(),
+                            thread_id,
+                            mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
+                        }
+                        .into(),
+                    );
+
+                    msgs
+                }
+            });
+
+        // clear mailboxes
+        self.mailbox_columns
+            .retain(|mailbox_key, _column| loaded_mailboxes_keys.remove(mailbox_key));
+
+        tracing::debug!("Mailboxes: {:#?}", self.mailbox_columns);
+
+        // thread
+        match loaded_thread.get() {
+            Some(key) => self
+                .thread_columns
+                .retain(|thread_key, _column| thread_key == key),
+            None => self.thread_columns.clear(),
+        }
+
+        tracing::debug!("Threads: {:#?}", self.thread_columns);
+
+        // preview
+        match loaded_preview.get() {
+            Some(key) => self
+                .mail_previews
+                .retain(|mail_key, _column| mail_key == key),
+            None => self.mail_previews.clear(),
+        }
+
+        tracing::debug!("Previews: {:#?}", self.mail_previews);
+
+        msgs
     }
 }
 
@@ -878,7 +1011,7 @@ impl State {
         match self.column_stack.last().unwrap() {
             ColumnStackEntry::Users | ColumnStackEntry::Accounts => {
                 self.statusbar.set_message(
-                    "Only, threads, mails and mailboxes can be selected.".to_string(),
+                    "This action can be only applied to threads, mails and mailboxes.".to_string(),
                     StatusMsgType::Error,
                 );
                 return vec![];
@@ -983,6 +1116,40 @@ impl State {
             }
             .into(),
         ]
+    }
+
+    fn mark_mail_as_seen(&mut self) -> Vec<crate::ui::Message> {
+        let mut msgs = Vec::with_capacity(2);
+        if self.selection.is_empty() {
+            msgs.extend(self.select_entry());
+            msgs.extend(self.navigate_up());
+        }
+
+        let ids: Vec<MailId> = self
+            .selection
+            .drain()
+            .filter_map(|(value, _ctx)| match value {
+                SelectedValue::Mailbox(_mailbox_id) => {
+                    warn!("Can't mark a mailbox as 'unseen'.");
+                    None
+                }
+                SelectedValue::Mail(mail_id) => Some(mail_id),
+            })
+            .collect();
+
+        msgs.push(
+            MessageRequest::PatchMail {
+                username: self.get_selected_username(),
+                account_id: self.get_selected_account_id(),
+
+                ids,
+                mailbox_ids: None,
+                keywords: Some(MutateAttribute::Patch(vec![(MailKeyword::Seen, true)])),
+            }
+            .into(),
+        );
+
+        msgs
     }
 
     fn clear_selection(&mut self) -> Vec<crate::ui::Message> {
