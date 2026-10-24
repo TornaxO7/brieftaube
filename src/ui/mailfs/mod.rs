@@ -198,7 +198,11 @@ impl State {
             UserAction::NavigateHalfPageDown => self.navigate_half_page_down(),
             UserAction::NavigateHalfPageUp => self.navigate_half_page_up(),
 
-            UserAction::SelectEntryToggle => self.select_entry(),
+            UserAction::SelectEntryToggle => {
+                let mut msgs = self.select_entry();
+                msgs.extend(self.navigate_down());
+                msgs
+            }
             UserAction::CutSelectedEntries => self.cut_selected_entries(),
             UserAction::PasteSelectedEntries => self.paste_selected_entries(),
 
@@ -1063,9 +1067,7 @@ impl State {
             }
         };
 
-        tracing::debug!("Selection: {:#?}", self.selection);
-
-        self.navigate_down()
+        vec![]
     }
 
     fn cut_selected_entries(&mut self) -> Vec<crate::ui::Message> {
@@ -1099,10 +1101,9 @@ impl State {
         let mut msgs = Vec::with_capacity(2);
         if self.selection.is_empty() {
             msgs.extend(self.select_entry());
-            // FIXME: this is wrong if we are at the bottom
-            msgs.extend(self.navigate_up());
         }
 
+        // TODO: Filter out mails which already have tags
         let ids: Vec<MailId> = self
             .selection
             .drain()
@@ -1134,9 +1135,9 @@ impl State {
         let mut msgs = Vec::with_capacity(2);
         if self.selection.is_empty() {
             msgs.extend(self.select_entry());
-            msgs.extend(self.navigate_up());
         }
 
+        // TODO: Filter out mails which already have tags
         let ids: Vec<MailId> = self
             .selection
             .drain()
