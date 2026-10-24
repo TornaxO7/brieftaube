@@ -90,7 +90,7 @@ impl Repository {
                 Command::Mailbox(cmd) => match cmd.kind {
                     mailbox::CommandKind::Init {
                         id,
-                        amount_init_mails,
+                        mail_window: amount_init_mails,
                         mail_properties,
                         tx,
                     } => {
@@ -370,7 +370,7 @@ impl RepositoryHandler {
         &self,
         account_id: AccountId,
         id: ParentMailboxId,
-        amount_init_mails: usize,
+        mail_window: QueryWindow,
         mail_properties: Vec<MailProperty>,
     ) -> color_eyre::Result<InitMailboxData> {
         self.execute(|tx| {
@@ -378,7 +378,7 @@ impl RepositoryHandler {
                 account_id,
                 kind: mailbox::CommandKind::Init {
                     id,
-                    amount_init_mails,
+                    mail_window,
                     mail_properties,
                     tx,
                 },

@@ -29,8 +29,7 @@ pub enum MessageRequest {
         username: Username,
         account_id: AccountId,
         mailbox_id: ParentMailboxId,
-        /// How many mails should be requested at the same time when getting the mailbox data
-        max_init_mails: usize,
+        mail_window: QueryWindow,
         mail_properties: Vec<MailProperty>,
     },
 
@@ -77,7 +76,7 @@ pub fn handle_request(
             username,
             account_id,
             mailbox_id,
-            max_init_mails: amount_initial_mails,
+            mail_window,
             mail_properties,
         } => {
             manager.with_handler(&username, async move |handler| {
@@ -87,12 +86,7 @@ pub fn handle_request(
                         mailbox_id: mailbox_id.clone(),
 
                         data: handler
-                            .get_init_mailbox(
-                                account_id,
-                                mailbox_id,
-                                amount_initial_mails,
-                                mail_properties,
-                            )
+                            .get_init_mailbox(account_id, mailbox_id, mail_window, mail_properties)
                             .await,
                     }
                     .into(),

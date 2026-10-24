@@ -15,16 +15,11 @@ pub struct Command {
 pub enum CommandKind {
     Init {
         id: ParentMailboxId,
-        amount_init_mails: usize,
+        mail_window: QueryWindow,
         mail_properties: Vec<MailProperty>,
 
         tx: oneshot::Sender<color_eyre::Result<InitMailboxData>>,
     },
-    // /// Get the child mailboxes of the given parent mailbox.
-    // GetChildren {
-    //     id: ParentMailboxId,
-    //     tx: oneshot::Sender<color_eyre::Result<Vec<MailboxData>>>,
-    // },
 }
 
 impl From<Command> for super::Command {
@@ -139,7 +134,7 @@ impl Repository {
         &self,
         account_id: AccountId,
         id: ParentMailboxId,
-        amount_first_mails: usize,
+        mail_window: QueryWindow,
         mail_properties: Vec<MailProperty>,
     ) -> color_eyre::Result<InitMailboxData> {
         let child_mailboxes = self
@@ -151,15 +146,7 @@ impl Repository {
                 let data = self.get_mailbox(account_id.clone(), id.clone()).await?;
 
                 let first_mails = self
-                    .query_root_mails(
-                        account_id,
-                        id,
-                        QueryWindow {
-                            start: 0,
-                            limit: amount_first_mails,
-                        },
-                        mail_properties,
-                    )
+                    .query_root_mails(account_id, id, mail_window, mail_properties)
                     .await?;
 
                 Ok(InitMailboxData {

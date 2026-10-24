@@ -328,11 +328,8 @@ impl State {
                         None => *column = Loadable::Loaded(ThreadColumn::new(mail_entries)),
                     },
                     None => {
-                        let res = self
-                            .thread_columns
+                        self.thread_columns
                             .insert(key, Loadable::Loaded(ThreadColumn::new(mail_entries)));
-
-                        debug_assert!(res.is_some());
                     }
                 }
             }
@@ -352,12 +349,12 @@ impl State {
     ) -> Vec<crate::ui::Message> {
         let key = (account_id, mail_id);
 
-        let current_preview = self.mail_previews.get_mut(&key).unwrap();
-
-        *current_preview = match mail_preview {
+        let preview = match mail_preview {
             Ok(preview) => Loadable::Loaded(preview),
             Err(err) => Loadable::Error(err.to_string()),
         };
+
+        self.mail_previews.insert(key, preview);
 
         vec![]
     }
@@ -386,43 +383,28 @@ impl State {
                 ColumnStackEntry::Mailbox(mailbox_id) => {
                     loaded_mailboxes_keys.insert((account_id.clone(), mailbox_id.clone()));
 
+                    let window = {
+                        let section_size = self.column_area_size.map(|size| size.height as usize);
+                        let key = (account_id.clone(), mailbox_id.clone());
+                        let mailbox_column =
+                            self.mailbox_columns.get(&key).unwrap().loaded().unwrap();
+                        let range = mailbox_column.get_min_start_max_end(section_size);
+                        QueryWindow {
+                            start: range.start as u32,
+                            limit: range.len(),
+                        }
+                    };
+
                     msgs.push(
                         MessageRequest::InitMailbox {
                             username: username.clone(),
                             account_id: account_id.clone(),
                             mailbox_id: mailbox_id.clone(),
-                            // TODO: HERE
-                            // Use query window instead of counter...
-                            max_init_mails: 1,
+                            mail_window: window,
                             mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
                         }
                         .into(),
                     );
-
-                    if let Some(non_root_mailbox) = mailbox_id.clone() {
-                        let section_size = self.column_area_size.map(|size| size.height as usize);
-                        let key = (account_id.clone(), mailbox_id.clone());
-                        let mailbox_column =
-                            self.mailbox_columns.get(&key).unwrap().loaded().unwrap();
-                        let window = {
-                            let range = mailbox_column.get_min_start_max_end(section_size);
-                            QueryWindow {
-                                start: range.start as u32,
-                                limit: range.len(),
-                            }
-                        };
-
-                        msgs.push(
-                            MessageRequest::QueryMails {
-                                username: username.clone(),
-                                account_id: account_id.clone(),
-                                mailbox: non_root_mailbox,
-                                window,
-                                mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
-                            }
-                            .into(),
-                        );
-                    }
 
                     msgs
                 }
@@ -456,8 +438,6 @@ impl State {
         self.mailbox_columns
             .retain(|mailbox_key, _column| loaded_mailboxes_keys.remove(mailbox_key));
 
-        tracing::debug!("Mailboxes: {:#?}", self.mailbox_columns);
-
         // thread
         match loaded_thread.get() {
             Some(key) => self
@@ -466,8 +446,6 @@ impl State {
             None => self.thread_columns.clear(),
         }
 
-        tracing::debug!("Threads: {:#?}", self.thread_columns);
-
         // preview
         match loaded_preview.get() {
             Some(key) => self
@@ -475,8 +453,6 @@ impl State {
                 .retain(|mail_key, _column| mail_key == key),
             None => self.mail_previews.clear(),
         }
-
-        tracing::debug!("Previews: {:#?}", self.mail_previews);
 
         msgs
     }
@@ -1272,10 +1248,13 @@ impl State {
                             account_id: self.get_selected_account_id(),
                             mailbox_id: ROOT_MAILBOX_ID,
                             mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
-                            max_init_mails: self
-                                .column_area_size
-                                .map(|size| size.height as usize)
-                                .unwrap_or(DEFAULT_SECTION_SIZE),
+                            mail_window: QueryWindow {
+                                start: 0,
+                                limit: self
+                                    .column_area_size
+                                    .map(|size| size.height as usize)
+                                    .unwrap_or(DEFAULT_SECTION_SIZE),
+                            },
                         }
                         .into(),
                     ]
@@ -1313,10 +1292,13 @@ impl State {
                                     account_id: self.get_selected_account_id(),
                                     mailbox_id: Some(mailbox_id),
                                     mail_properties: MailEntry::MAIL_PROPERTIES.to_vec(),
-                                    max_init_mails: self
-                                        .column_area_size
-                                        .map(|size| size.height as usize)
-                                        .unwrap_or(DEFAULT_SECTION_SIZE),
+                                    mail_window: QueryWindow {
+                                        start: 0,
+                                        limit: self
+                                            .column_area_size
+                                            .map(|size| size.height as usize)
+                                            .unwrap_or(DEFAULT_SECTION_SIZE),
+                                    },
                                 }
                                 .into(),
                             ]
