@@ -1,7 +1,7 @@
 pub mod cache;
 pub mod remote;
 
-use std::ops::Range;
+use std::{collections::HashSet, ops::Range};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GetState(pub String);
@@ -76,6 +76,6 @@ impl From<Range<usize>> for QueryWindow {
 
 #[derive(Debug, Clone)]
 pub enum MutateAttribute<T> {
-    Set(Vec<T>),
+    Set(HashSet<T>),
     Patch(Vec<(T, bool)>),
 }

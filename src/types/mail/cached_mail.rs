@@ -11,7 +11,7 @@ use std::{
 pub struct CachedMail {
     pub id: MailId,
     pub keywords: OnceLock<HashSet<MailKeyword>>,
-    pub mailbox_ids: OnceLock<Vec<MailboxId>>,
+    pub mailbox_ids: OnceLock<HashSet<MailboxId>>,
     pub subject: OnceLock<String>,
     pub received_at: OnceLock<DateTime<Local>>,
     pub has_attachment: OnceLock<bool>,
@@ -30,7 +30,7 @@ pub struct CachedMail {
 }
 
 impl CachedMail {
-    pub fn new_draft(id: MailId, mailbox_ids: Vec<MailboxId>) -> Self {
+    pub fn new_draft(id: MailId, mailbox_ids: HashSet<MailboxId>) -> Self {
         debug_assert!(id.is_intern());
 
         Self {
@@ -237,7 +237,7 @@ impl From<jmap_client::email::Email> for CachedMail {
                 let ids = mailbox_ids
                     .into_iter()
                     .map(MailboxId::from)
-                    .collect::<Vec<MailboxId>>();
+                    .collect::<HashSet<MailboxId>>();
 
                 OnceLock::from(ids)
             }),

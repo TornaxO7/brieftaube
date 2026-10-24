@@ -1,5 +1,3 @@
-use std::{collections::HashSet, sync::OnceLock};
-
 use crate::{
     datasource::types::{MutateAttribute, QueryWindow, cache, remote},
     repository::Repository,
@@ -7,6 +5,7 @@ use crate::{
 };
 use color_eyre::eyre::Context;
 use jmap_client::mailbox::Role;
+use std::{collections::HashSet, sync::OnceLock};
 use tokio::sync::{Mutex, oneshot};
 use tracing::{error, warn};
 
@@ -278,7 +277,7 @@ impl Repository {
             .find_map(|mailbox| (mailbox.role == Role::Drafts).then_some(mailbox.id))
             .expect("`Draft` mailbox exists");
 
-        let mut new_mail = CachedMail::new_draft(mail_id, vec![draft_mailbox_id]);
+        let mut new_mail = CachedMail::new_draft(mail_id, HashSet::from([draft_mailbox_id]));
 
         match self
             .remote
@@ -391,19 +390,14 @@ impl Repository {
                                 Some(current_mailbox_ids) => {
                                     for (mailbox_id, set) in changes {
                                         if set {
-                                            current_mailbox_ids.push(mailbox_id);
+                                            current_mailbox_ids.insert(mailbox_id);
                                         } else {
-                                            if let Some(idx) = current_mailbox_ids
-                                                .iter()
-                                                .position(|id| *id == mailbox_id)
-                                            {
-                                                current_mailbox_ids.remove(idx);
-                                            }
+                                            current_mailbox_ids.remove(&mailbox_id);
                                         }
                                     }
                                 }
                                 None => {
-                                    let new_mailbox_ids: Vec<MailboxId> = changes
+                                    let new_mailbox_ids: HashSet<MailboxId> = changes
                                         .into_iter()
                                         .filter_map(|(mailbox_id, set)| set.then_some(mailbox_id))
                                         .collect();
