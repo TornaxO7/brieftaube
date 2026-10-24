@@ -46,8 +46,8 @@ pub enum UserAction {
 
     #[strum(message = "Mark the given mail as seen.")]
     MarkMailAsSeen,
-    // #[strum(message = "Mark the given mail as unseen.")]
-    // MarkMailAsUnseen,
+    #[strum(message = "Mark the given mail as unseen.")]
+    MarkMailAsUnseen,
     #[strum(message = "Move the selected mailbox up")]
     MoveMailboxUp,
     #[strum(message = "Move the selected mailbox down")]

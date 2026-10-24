@@ -208,6 +208,7 @@ impl State {
             UserAction::ComposeNewMail => self.compose_markdown_mail(),
 
             UserAction::MarkMailAsSeen => self.mark_mail_as_seen(),
+            UserAction::MarkMailAsUnseen => self.mark_mail_as_unseen(),
 
             UserAction::ClearSelection => self.clear_selection(),
             UserAction::ClearStatusMessage => self.clear_status_msg(),
@@ -1122,6 +1123,7 @@ impl State {
         let mut msgs = Vec::with_capacity(2);
         if self.selection.is_empty() {
             msgs.extend(self.select_entry());
+            // FIXME: this is wrong if we are at the bottom
             msgs.extend(self.navigate_up());
         }
 
@@ -1145,6 +1147,39 @@ impl State {
                 ids,
                 mailbox_ids: None,
                 keywords: Some(MutateAttribute::Patch(vec![(MailKeyword::Seen, true)])),
+            }
+            .into(),
+        );
+
+        msgs
+    }
+
+    fn mark_mail_as_unseen(&mut self) -> Vec<crate::ui::Message> {
+        let mut msgs = Vec::with_capacity(2);
+        if self.selection.is_empty() {
+            msgs.extend(self.select_entry());
+            msgs.extend(self.navigate_up());
+        }
+
+        let ids: Vec<MailId> = self
+            .selection
+            .drain()
+            .filter_map(|(value, _ctx)| match value {
+                SelectedValue::Mailbox(_mailbox_id) => {
+                    warn!("Can't mark a mailbox as 'seen'.");
+                    None
+                }
+                SelectedValue::Mail(mail_id) => Some(mail_id),
+            })
+            .collect();
+
+        msgs.push(
+            MessageRequest::PatchMail {
+                username: self.get_selected_username(),
+                account_id: self.get_selected_account_id(),
+                ids,
+                mailbox_ids: None,
+                keywords: Some(MutateAttribute::Patch(vec![(MailKeyword::Seen, false)])),
             }
             .into(),
         );
