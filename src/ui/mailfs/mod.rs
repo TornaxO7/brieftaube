@@ -808,14 +808,32 @@ impl State {
                     }
                     Loadable::Loaded(column) => {
                         let selected_mail = column.get_selected_entry();
-                        vec![
+                        let mut msgs = vec![
                             Navigation::OpenReader {
                                 username: self.get_selected_username(),
                                 account_id: self.get_selected_account_id(),
                                 mail_id: selected_mail.id.clone(),
                             }
                             .into(),
-                        ]
+                        ];
+
+                        if !selected_mail.keywords.contains(&MailKeyword::Seen) {
+                            msgs.push(
+                                MessageRequest::PatchMail {
+                                    username: self.get_selected_username(),
+                                    account_id: self.get_selected_account_id(),
+                                    ids: vec![selected_mail.id.clone()],
+                                    mailbox_ids: None,
+                                    keywords: Some(MutateAttribute::Patch(vec![(
+                                        MailKeyword::Seen,
+                                        true,
+                                    )])),
+                                }
+                                .into(),
+                            );
+                        }
+
+                        msgs
                     }
                 }
             }
