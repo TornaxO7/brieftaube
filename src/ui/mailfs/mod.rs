@@ -48,7 +48,7 @@ pub struct State {
     statusbar: StatusbarState,
 
     throbber: ThrobberState,
-    mode: Mode,
+    selection_mode: SelectionMode,
 
     column_stack: Vec<ColumnStackEntry>,
 
@@ -60,7 +60,6 @@ pub struct State {
 
     column_area_size: Option<Size>,
     selection: HashMap<SelectedValue, SelectionCtx>,
-    cut_selection: HashMap<SelectedValue, SelectionCtx>,
 }
 
 impl State {
@@ -81,7 +80,7 @@ impl State {
             Self {
                 statusbar: StatusbarState::new(),
                 throbber: ThrobberState::default(),
-                mode: Mode::Normal,
+                selection_mode: SelectionMode::Normal,
                 column_stack: vec![ColumnStackEntry::Users],
 
                 accounts_column,
@@ -93,7 +92,6 @@ impl State {
                 column_area_size: None,
 
                 selection: HashMap::new(),
-                cut_selection: HashMap::new(),
 
                 keybindings: KeybindManager::new(HashMap::from([
                     ("q", UserAction::Quit),
@@ -1144,8 +1142,7 @@ impl State {
             msgs.extend(self.action_select_entry());
         }
 
-        self.cut_selection = std::mem::take(&mut self.selection);
-        self.mode = Mode::Cut;
+        self.selection_mode = SelectionMode::Cut;
         vec![]
     }
 
@@ -1240,7 +1237,6 @@ impl State {
 
     fn action_clear_selection(&mut self) -> Vec<crate::ui::Message> {
         self.selection.clear();
-        self.cut_selection.clear();
         vec![]
     }
 
@@ -1507,7 +1503,7 @@ impl State {
 }
 
 #[derive(strum::Display, Debug, Clone, Copy)]
-enum Mode {
+enum SelectionMode {
     Normal,
     Cut,
 }
