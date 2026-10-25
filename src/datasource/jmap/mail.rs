@@ -2,9 +2,9 @@ use super::JmapAccount;
 use crate::{
     datasource::{
         MailRemote,
-        types::{GetState, MutateAttribute, remote},
+        types::{GetState, remote},
     },
-    types::{CachedMail, MailId, MailKeyword, MailProperty, MailboxId},
+    types::{CachedMail, MailId, MailProperty},
 };
 use async_trait::async_trait;
 use color_eyre::{Result, eyre::Context};
@@ -208,58 +208,58 @@ impl MailRemote for JmapAccount {
         })
     }
 
-    async fn patch_mails(
-        &self,
-        ids: &[MailId],
-        mailbox_ids: Option<MutateAttribute<MailboxId>>,
-        keywords: Option<MutateAttribute<MailKeyword>>,
-    ) -> Result<remote::SetResult<()>> {
-        let mut response = {
-            let mut request = self.build_request();
+    // async fn patch_mails(
+    //     &self,
+    //     ids: &[MailId],
+    //     mailbox_ids: Option<UpdateMailAttribute<MailboxId>>,
+    //     keywords: Option<UpdateMailAttribute<MailKeyword>>,
+    // ) -> Result<remote::SetResult<()>> {
+    //     let mut response = {
+    //         let mut request = self.build_request();
 
-            let set_email = request.set_email();
+    //         let set_email = request.set_email();
 
-            for id in ids {
-                let update = set_email.update(id);
+    //         for id in ids {
+    //             let update = set_email.update(id);
 
-                if let Some(mailbox_ids) = mailbox_ids.clone() {
-                    match mailbox_ids {
-                        MutateAttribute::Set(ids) => {
-                            update.mailbox_ids(ids);
-                        }
-                        MutateAttribute::Patch(changes) => {
-                            for (mailbox_id, set) in changes {
-                                update.mailbox_id(mailbox_id.as_str(), set);
-                            }
-                        }
-                    };
-                }
+    //             if let Some(mailbox_ids) = mailbox_ids.clone() {
+    //                 match mailbox_ids {
+    //                     UpdateMailAttribute::Set(ids) => {
+    //                         update.mailbox_ids(ids);
+    //                     }
+    //                     UpdateMailAttribute::Patch(changes) => {
+    //                         for (mailbox_id, set) in changes {
+    //                             update.mailbox_id(mailbox_id.as_str(), set);
+    //                         }
+    //                     }
+    //                 };
+    //             }
 
-                if let Some(keywords) = keywords.clone() {
-                    match keywords {
-                        MutateAttribute::Set(keywords) => {
-                            update.keywords(keywords);
-                        }
-                        MutateAttribute::Patch(changes) => {
-                            for (keyword, set) in changes {
-                                update.keyword(keyword.as_str(), set);
-                            }
-                        }
-                    }
-                }
-            }
+    //             if let Some(keywords) = keywords.clone() {
+    //                 match keywords {
+    //                     UpdateMailAttribute::Set(keywords) => {
+    //                         update.keywords(keywords);
+    //                     }
+    //                     UpdateMailAttribute::Patch(changes) => {
+    //                         for (keyword, set) in changes {
+    //                             update.keyword(keyword.as_str(), set);
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //         }
 
-            request.send_set_email().await?
-        };
+    //         request.send_set_email().await?
+    //     };
 
-        response.unwrap_update_errors().unwrap();
+    //     response.unwrap_update_errors().unwrap();
 
-        Ok(remote::SetResult {
-            value: Ok(()),
-            old_state: response.old_state().map(|state| state.to_string().into()),
-            new_state: response.take_new_state().into(),
-        })
-    }
+    //     Ok(remote::SetResult {
+    //         value: Ok(()),
+    //         old_state: response.old_state().map(|state| state.to_string().into()),
+    //         new_state: response.take_new_state().into(),
+    //     })
+    // }
 }
 
 fn setup_create(

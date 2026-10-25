@@ -1,7 +1,7 @@
 pub mod cache;
 pub mod remote;
 
-use crate::types::{MailboxId, ParentMailboxId};
+use crate::types::{MailId, MailKeyword, MailboxId, ParentMailboxId};
 use std::{collections::HashSet, ops::Range};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -82,16 +82,31 @@ impl From<Range<usize>> for QueryWindow {
 }
 
 #[derive(Debug, Clone)]
-pub enum MutateAttribute<T> {
-    Set(HashSet<T>),
-    Patch(Vec<(T, bool)>),
+pub struct Patches {
+    pub mailbox_patches: Vec<MailboxPatch>,
+    pub mail_patches: Vec<MailPatch>,
 }
 
 #[derive(Debug, Clone)]
 pub struct MailboxPatch {
     pub id: MailboxId,
+
     pub new_name: Option<String>,
     pub new_parent_id: Option<ParentMailboxId>,
     pub new_role: Option<jmap_client::mailbox::Role>,
     pub new_sort_order: Option<u32>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MailPatch {
+    pub id: MailId,
+
+    pub new_mailbox_ids: Option<MailPatchType<MailboxId>>,
+    pub new_keywords: Option<MailPatchType<MailKeyword>>,
+}
+
+#[derive(Debug, Clone)]
+pub enum MailPatchType<T> {
+    Set(HashSet<T>),
+    Patch(Vec<(T, bool)>),
 }

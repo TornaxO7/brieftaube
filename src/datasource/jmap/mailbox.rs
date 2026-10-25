@@ -2,7 +2,7 @@ use crate::{
     datasource::{
         MailboxRemote,
         jmap::JmapAccount,
-        types::{GetState, MailboxPatch, remote},
+        types::{GetState, remote},
     },
     types::{CachedMailbox, MailboxId, MailboxProperty},
 };
@@ -91,43 +91,43 @@ impl MailboxRemote for JmapAccount {
         })
     }
 
-    async fn patch_mailboxes(&self, patches: Vec<MailboxPatch>) -> Result<remote::SetResult<()>> {
-        let mut response = {
-            let mut request = self.build_request();
+    // async fn patch_mailboxes(&self, patches: Vec<MailboxPatch>) -> Result<remote::SetResult<()>> {
+    //     let mut response = {
+    //         let mut request = self.build_request();
 
-            let set_request = request.set_mailbox();
+    //         let set_request = request.set_mailbox();
 
-            for patch in patches {
-                let set = set_request.update(&patch.id);
+    //         for patch in patches {
+    //             let set = set_request.update(&patch.id);
 
-                if let Some(new_name) = patch.new_name {
-                    set.name(new_name);
-                }
+    //             if let Some(new_name) = patch.new_name {
+    //                 set.name(new_name);
+    //             }
 
-                if let Some(new_parent_id) = patch.new_parent_id {
-                    set.parent_id(new_parent_id);
-                }
+    //             if let Some(new_parent_id) = patch.new_parent_id {
+    //                 set.parent_id(new_parent_id);
+    //             }
 
-                if let Some(new_role) = patch.new_role {
-                    set.role(new_role);
-                }
+    //             if let Some(new_role) = patch.new_role {
+    //                 set.role(new_role);
+    //             }
 
-                if let Some(new_sort_order) = patch.new_sort_order {
-                    set.sort_order(new_sort_order);
-                }
-            }
+    //             if let Some(new_sort_order) = patch.new_sort_order {
+    //                 set.sort_order(new_sort_order);
+    //             }
+    //         }
 
-            request.send_set_mailbox().await?
-        };
+    //         request.send_set_mailbox().await?
+    //     };
 
-        response.unwrap_update_errors().unwrap();
+    //     response.unwrap_update_errors().unwrap();
 
-        Ok(remote::SetResult {
-            value: Ok(()),
-            old_state: response.old_state().map(GetState::from),
-            new_state: response.take_new_state().into(),
-        })
-    }
+    //     Ok(remote::SetResult {
+    //         value: Ok(()),
+    //         old_state: response.old_state().map(GetState::from),
+    //         new_state: response.take_new_state().into(),
+    //     })
+    // }
 
     async fn destroy_mailboxes(
         &self,

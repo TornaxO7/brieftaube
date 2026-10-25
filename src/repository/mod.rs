@@ -1,16 +1,17 @@
 pub mod blob;
 pub mod mail;
+pub mod mail_and_mailbox;
 pub mod mailbox;
 pub mod thread;
 
 use crate::{
     datasource::{
         Cache, RemoteSession,
-        types::{GetState, MailboxPatch, MutateAttribute, QueryState, QueryWindow, cache, remote},
+        types::{GetState, Patches, QueryState, QueryWindow, cache, remote},
     },
     types::{
-        AccountId, BlobId, CachedMail, CachedMailbox, InitMailboxData, MailId, MailKeyword,
-        MailProperty, MailboxId, ParentMailboxId, ThreadId,
+        AccountId, BlobId, CachedMail, CachedMailbox, InitMailboxData, MailId, MailProperty,
+        MailboxId, ParentMailboxId, ThreadId,
     },
 };
 use std::collections::HashMap;
@@ -22,6 +23,7 @@ enum Command {
     Mailbox(mailbox::Command),
     Thread(thread::Command),
     Blob(blob::Command),
+    MailAndMailbox(mail_and_mailbox::Command),
     Quit,
 }
 
@@ -75,17 +77,6 @@ impl Repository {
                     mail::CommandKind::EditDraftMail { new_draft, tx } => {
                         let _ = tx.send(repo.edit_draft(cmd.account_id, new_draft).await);
                     }
-                    mail::CommandKind::PatchMail {
-                        ids,
-                        mailbox_ids,
-                        keywords,
-                        tx,
-                    } => {
-                        let _ = tx.send(
-                            repo.patch_mail(cmd.account_id, ids, mailbox_ids, keywords)
-                                .await,
-                        );
-                    }
                 },
                 Command::Mailbox(cmd) => match cmd.kind {
                     mailbox::CommandKind::Init {
@@ -104,9 +95,6 @@ impl Repository {
                             .await,
                         );
                     }
-                    mailbox::CommandKind::Patch { patches, tx } => {
-                        let _ = tx.send(repo.patch_mailboxes(cmd.account_id, patches).await);
-                    }
                 },
                 Command::Thread(cmd) => match cmd.kind {
                     thread::CommandKind::GetThread { id, properties, tx } => {
@@ -116,6 +104,11 @@ impl Repository {
                 Command::Blob(cmd) => match cmd.kind {
                     blob::CommandKind::GetBlob { id, tx } => {
                         let _ = tx.send(repo.get_blob(cmd.account_id, id).await);
+                    }
+                },
+                Command::MailAndMailbox(cmd) => match cmd.kind {
+                    mail_and_mailbox::CommandKind::PatchMailAndMailbox { patches, tx } => {
+                        let _ = tx.send(repo.patch_mail_and_mailbox(cmd.account_id, patches).await);
                     }
                 },
                 Command::Quit => repo.quit(),
@@ -562,37 +555,15 @@ impl RepositoryHandler {
         .await
     }
 
-    pub async fn patch_mails(
+    pub async fn patch_mails_and_mailboxes(
         &self,
         account_id: AccountId,
-        ids: Vec<MailId>,
-        mailbox_ids: Option<MutateAttribute<MailboxId>>,
-        keywords: Option<MutateAttribute<MailKeyword>>,
+        patches: Patches,
     ) -> color_eyre::Result<()> {
         self.execute(|tx| {
-            mail::Command {
+            mail_and_mailbox::Command {
                 account_id,
-                kind: mail::CommandKind::PatchMail {
-                    ids,
-                    mailbox_ids,
-                    keywords,
-                    tx,
-                },
-            }
-            .into()
-        })
-        .await
-    }
-
-    pub async fn patch_mailboxes(
-        &self,
-        account_id: AccountId,
-        patches: Vec<MailboxPatch>,
-    ) -> color_eyre::Result<()> {
-        self.execute(|tx| {
-            mailbox::Command {
-                account_id,
-                kind: mailbox::CommandKind::Patch { patches, tx },
+                kind: mail_and_mailbox::CommandKind::PatchMailAndMailbox { patches, tx },
             }
             .into()
         })

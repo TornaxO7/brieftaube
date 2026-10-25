@@ -1,6 +1,7 @@
 mod blob;
 mod identity;
 mod mail;
+mod mail_and_mailbox;
 mod mailbox;
 mod root_mails;
 mod thread;

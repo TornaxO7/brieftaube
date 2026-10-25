@@ -1,17 +1,13 @@
-use tracing::error;
-
 use crate::{
     config::Username,
-    datasource::types::{MailboxPatch, MutateAttribute, QueryWindow},
-    types::{
-        AccountId, CachedMail, MailId, MailKeyword, MailProperty, MailboxId, ParentMailboxId,
-        ThreadId,
-    },
+    datasource::types::{Patches, QueryWindow},
+    types::{AccountId, CachedMail, MailId, MailProperty, MailboxId, ParentMailboxId, ThreadId},
     ui::{
         mailfs::{Message, types::UserEntry},
         repository_manager::RepositoryManager,
     },
 };
+use tracing::error;
 
 pub enum MessageRequest {
     GetAccountsOf(UserEntry),
@@ -51,19 +47,11 @@ pub enum MessageRequest {
     // TODO:
     // - Use one single patch
     // - Creates _one_ huge patch request
-    PatchMail {
+    PatchMailAndMailboxes {
         username: Username,
         account_id: AccountId,
 
-        ids: Vec<MailId>,
-        mailbox_ids: Option<MutateAttribute<MailboxId>>,
-        keywords: Option<MutateAttribute<MailKeyword>>,
-    },
-    PatchMailboxes {
-        username: Username,
-        account_id: AccountId,
-
-        patches: Vec<MailboxPatch>,
+        patches: Patches,
     },
 }
 
@@ -159,38 +147,16 @@ pub fn handle_request(
             vec![]
         }
 
-        MessageRequest::PatchMail {
-            username,
-            account_id,
-            ids,
-            mailbox_ids,
-            keywords,
-        } => {
-            manager.with_handler(&username, async move |handler| {
-                match handler
-                    .patch_mails(account_id, ids, mailbox_ids, keywords)
-                    .await
-                {
-                    Ok(()) => vec![Message::Reload.into()],
-                    Err(err) => {
-                        error!("Couldn't patch mail: {}", err);
-                        vec![]
-                    }
-                }
-            });
-            vec![]
-        }
-
-        MessageRequest::PatchMailboxes {
+        MessageRequest::PatchMailAndMailboxes {
             username,
             account_id,
             patches,
         } => {
             manager.with_handler(&username, async move |handler| {
-                match handler.patch_mailboxes(account_id, patches).await {
+                match handler.patch_mails_and_mailboxes(account_id, patches).await {
                     Ok(()) => vec![Message::Reload.into()],
                     Err(err) => {
-                        error!("Couldn't patch mailboxes: {}", err);
+                        error!("Couldn't patch mail: {}", err);
                         vec![]
                     }
                 }

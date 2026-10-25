@@ -6,7 +6,7 @@ mod view;
 
 use crate::{
     config::{self, Username},
-    datasource::types::{MailboxPatch, MutateAttribute, QueryWindow},
+    datasource::types::{MailPatch, MailPatchType, MailboxPatch, Patches, QueryWindow},
     types::{
         AccountData, AccountId, CachedMail, InitMailboxData, MailId, MailKeyword, MailboxId,
         ParentMailboxId, ROOT_MAILBOX_ID, ThreadId,
@@ -295,20 +295,27 @@ impl State {
                         );
 
                         msgs.push(
-                            MessageRequest::PatchMailboxes {
+                            MessageRequest::PatchMailAndMailboxes {
                                 username: self.get_selected_username(),
                                 account_id: account_id.clone(),
-                                patches: mailboxes
-                                    .iter()
-                                    .enumerate()
-                                    .map(|(idx, mailbox)| MailboxPatch {
-                                        id: mailbox.id.clone(),
-                                        new_name: None,
-                                        new_parent_id: None,
-                                        new_role: None,
-                                        new_sort_order: Some(idx as u32 * 4),
-                                    })
-                                    .collect(),
+                                patches: {
+                                    let mailbox_patches = mailboxes
+                                        .iter()
+                                        .enumerate()
+                                        .map(|(idx, mailbox)| MailboxPatch {
+                                            id: mailbox.id.clone(),
+                                            new_name: None,
+                                            new_parent_id: None,
+                                            new_role: None,
+                                            new_sort_order: Some(idx as u32 * 4),
+                                        })
+                                        .collect();
+
+                                    Patches {
+                                        mailbox_patches,
+                                        mail_patches: vec![],
+                                    }
+                                },
                             }
                             .into(),
                         );
@@ -868,15 +875,25 @@ impl State {
 
                         if !selected_mail.keywords.contains(&MailKeyword::Seen) {
                             msgs.push(
-                                MessageRequest::PatchMail {
+                                MessageRequest::PatchMailAndMailboxes {
                                     username: self.get_selected_username(),
                                     account_id: self.get_selected_account_id(),
-                                    ids: vec![selected_mail.id.clone()],
-                                    mailbox_ids: None,
-                                    keywords: Some(MutateAttribute::Patch(vec![(
-                                        MailKeyword::Seen,
-                                        true,
-                                    )])),
+
+                                    patches: {
+                                        let mail_patches = vec![MailPatch {
+                                            id: selected_mail.id.clone(),
+                                            new_mailbox_ids: None,
+                                            new_keywords: Some(MailPatchType::Patch(vec![(
+                                                MailKeyword::Seen,
+                                                true,
+                                            )])),
+                                        }];
+
+                                        Patches {
+                                            mailbox_patches: vec![],
+                                            mail_patches,
+                                        }
+                                    },
                                 }
                                 .into(),
                             );
@@ -1214,13 +1231,28 @@ impl State {
             .collect();
 
         msgs.push(
-            MessageRequest::PatchMail {
+            MessageRequest::PatchMailAndMailboxes {
                 username: self.get_selected_username(),
                 account_id: self.get_selected_account_id(),
 
-                ids,
-                mailbox_ids: None,
-                keywords: Some(MutateAttribute::Patch(vec![(MailKeyword::Seen, true)])),
+                patches: {
+                    let mail_patches = ids
+                        .into_iter()
+                        .map(|id| MailPatch {
+                            id,
+                            new_mailbox_ids: None,
+                            new_keywords: Some(MailPatchType::Patch(vec![(
+                                MailKeyword::Seen,
+                                true,
+                            )])),
+                        })
+                        .collect();
+
+                    Patches {
+                        mailbox_patches: vec![],
+                        mail_patches,
+                    }
+                },
             }
             .into(),
         );
@@ -1247,12 +1279,28 @@ impl State {
             .collect();
 
         msgs.push(
-            MessageRequest::PatchMail {
+            MessageRequest::PatchMailAndMailboxes {
                 username: self.get_selected_username(),
                 account_id: self.get_selected_account_id(),
-                ids,
-                mailbox_ids: None,
-                keywords: Some(MutateAttribute::Patch(vec![(MailKeyword::Seen, false)])),
+
+                patches: {
+                    let mail_patches = ids
+                        .into_iter()
+                        .map(|id| MailPatch {
+                            id,
+                            new_mailbox_ids: None,
+                            new_keywords: Some(MailPatchType::Patch(vec![(
+                                MailKeyword::Seen,
+                                false,
+                            )])),
+                        })
+                        .collect();
+
+                    Patches {
+                        mailbox_patches: vec![],
+                        mail_patches,
+                    }
+                },
             }
             .into(),
         );
@@ -1497,25 +1545,32 @@ impl State {
             let account_id = self.get_selected_account_id();
 
             msgs.push(
-                MessageRequest::PatchMailboxes {
+                MessageRequest::PatchMailAndMailboxes {
                     username: username.clone(),
                     account_id: account_id.clone(),
-                    patches: vec![
-                        MailboxPatch {
-                            id: mailbox.id.clone(),
-                            new_name: None,
-                            new_parent_id: None,
-                            new_role: None,
-                            new_sort_order: Some(entry_over_selected_entry.sort_order),
-                        },
-                        MailboxPatch {
-                            id: entry_over_selected_entry.id.clone(),
-                            new_name: None,
-                            new_parent_id: None,
-                            new_role: None,
-                            new_sort_order: Some(mailbox.sort_order),
-                        },
-                    ],
+                    patches: {
+                        let mailbox_patches = vec![
+                            MailboxPatch {
+                                id: mailbox.id.clone(),
+                                new_name: None,
+                                new_parent_id: None,
+                                new_role: None,
+                                new_sort_order: Some(entry_over_selected_entry.sort_order),
+                            },
+                            MailboxPatch {
+                                id: entry_over_selected_entry.id.clone(),
+                                new_name: None,
+                                new_parent_id: None,
+                                new_role: None,
+                                new_sort_order: Some(mailbox.sort_order),
+                            },
+                        ];
+
+                        Patches {
+                            mailbox_patches,
+                            mail_patches: vec![],
+                        }
+                    },
                 }
                 .into(),
             );

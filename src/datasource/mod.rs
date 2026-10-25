@@ -4,10 +4,10 @@ pub mod jmap;
 pub mod types;
 
 use crate::{
-    datasource::types::{MailboxPatch, MutateAttribute},
+    datasource::types::Patches,
     types::{
         AccountData, AccountId, BlobId, CachedIdentity, CachedMail, CachedMailbox, MailId,
-        MailKeyword, MailProperty, MailboxId, MailboxProperty, ParentMailboxId, ThreadId,
+        MailProperty, MailboxId, MailboxProperty, ParentMailboxId, ThreadId,
     },
 };
 use async_trait::async_trait;
@@ -30,6 +30,7 @@ pub trait RemoteAccount:
     MailRemote
     + RootMailsRemote
     + MailboxRemote
+    + MailMailboxRemote
     + ThreadRemote
     + BlobRemote
     + IdentityRemote
@@ -103,14 +104,14 @@ pub trait MailRemote {
 
     async fn create_mail(&self, mail: CachedMail) -> Result<remote::SetResult<CachedMail>>;
 
-    // TODO:
-    // - Maybe include mailbox-changes-request
-    async fn patch_mails(
-        &self,
-        ids: &[MailId],
-        mailbox_ids: Option<MutateAttribute<MailboxId>>,
-        keywords: Option<MutateAttribute<MailKeyword>>,
-    ) -> Result<remote::SetResult<()>>;
+    // // TODO:
+    // // - Maybe include mailbox-changes-request
+    // async fn patch_mails(
+    //     &self,
+    //     ids: &[MailId],
+    //     mailbox_ids: Option<UpdateMailAttribute<MailboxId>>,
+    //     keywords: Option<UpdateMailAttribute<MailKeyword>>,
+    // ) -> Result<remote::SetResult<()>>;
 
     async fn edit_draft(&self, mail: CachedMail) -> Result<remote::SetResult<CachedMail>>;
 }
@@ -208,13 +209,24 @@ pub trait MailboxRemote {
         since: &GetState,
     ) -> Result<remote::GetChangeResult<MailboxId>>;
 
-    async fn patch_mailboxes(&self, patches: Vec<MailboxPatch>) -> Result<remote::SetResult<()>>;
+    // async fn patch_mailboxes(&self, patches: Vec<MailboxPatch>) -> Result<remote::SetResult<()>>;
 
     async fn destroy_mailboxes(
         &self,
         ids: &[MailboxId],
         on_destroy_remove_emails: bool,
     ) -> Result<remote::DestroyResult<MailboxId>>;
+}
+
+#[async_trait]
+pub trait MailMailboxRemote {
+    async fn patch_mails_and_mailboxes(
+        &self,
+        patches: Patches,
+    ) -> Result<(
+        remote::SetResult<Vec<MailboxId>>,
+        remote::SetResult<Vec<MailId>>,
+    )>;
 }
 
 #[async_trait]
