@@ -38,6 +38,10 @@ impl Repository {
         account_id: AccountId,
         patches: Patches,
     ) -> color_eyre::Result<()> {
+        // TODO: HERE
+        // Sanitize-Check that there's no mailbox-patch where a mailbox itself should be moved
+        // into itself!!!
+
         match self
             .remote
             .get_remote_account(account_id.clone())

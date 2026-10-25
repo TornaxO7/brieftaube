@@ -121,8 +121,6 @@ impl RootMails {
     }
 
     pub fn query(&self, range: Range<usize>) -> cache::QueryResponse<MailId> {
-        debug_assert!(!range.is_empty());
-
         if self.ids.len() <= range.start {
             return cache::QueryResponse {
                 values: vec![],

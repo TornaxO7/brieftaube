@@ -40,7 +40,6 @@ pub enum UserAction {
     SelectEntryToggle,
     #[strum(message = "Mark the current selection as 'cut'.")]
     CutSelectedEntries,
-
     #[strum(message = "Paste the entries which are marked as 'cut'.")]
     PasteSelectedEntries,
 

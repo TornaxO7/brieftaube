@@ -1095,18 +1095,16 @@ impl State {
                     return vec![];
                 };
 
-                let parent_mailbox = match self.column_stack.iter().rev().skip(1).next().unwrap() {
-                    ColumnStackEntry::Users | ColumnStackEntry::Thread(_) => unreachable!(),
-                    ColumnStackEntry::Accounts => None,
-                    ColumnStackEntry::Mailbox(mailbox_id) => mailbox_id.clone(),
-                };
-
                 match selected_entry {
                     MailboxColumnEntry::Mailbox(mailbox) => {
                         let selected = SelectedValue::Mailbox(mailbox.id.clone());
                         if self.selection.remove(&selected).is_none() {
-                            self.selection
-                                .insert(selected, SelectionCtx { parent_mailbox });
+                            self.selection.insert(
+                                selected,
+                                SelectionCtx {
+                                    parent_mailbox: mailbox_id.clone(),
+                                },
+                            );
                         }
                     }
                     MailboxColumnEntry::RootMail(loadable_mail) => {
@@ -1132,7 +1130,7 @@ impl State {
                                 self.selection.insert(
                                     selected,
                                     SelectionCtx {
-                                        parent_mailbox: parent_mailbox.clone(),
+                                        parent_mailbox: mailbox_id.clone(),
                                     },
                                 );
                             }
@@ -1189,7 +1187,82 @@ impl State {
     }
 
     fn action_paste_selected_entries(&mut self) -> Vec<crate::ui::Message> {
-        todo!();
+        if !matches!(self.selection_mode, SelectionMode::Cut) {
+            error!("Can't paste selected entries. Not in selection-cut-mode.");
+            self.statusbar.set_message(
+                "You need to cut the selected entries first.".to_string(),
+                StatusMsgType::Error,
+            );
+            return vec![];
+        }
+
+        if self.selection.is_empty() {
+            warn!("Selection is empty. Skipping pasting.");
+            return vec![];
+        }
+
+        let ColumnStackEntry::Mailbox(new_parent_mailbox) =
+            self.column_stack.last().cloned().unwrap()
+        else {
+            const MSG: &str = "You can only paste the cut-selected entries in a mailbox!";
+            error!(MSG);
+
+            self.statusbar
+                .set_message(MSG.to_string(), StatusMsgType::Error);
+            return vec![];
+        };
+
+        let mut mailbox_patches = vec![];
+        let mut mail_patches = vec![];
+
+        for (selection, ctx) in self.selection.drain() {
+            match selection {
+                SelectedValue::Mailbox(mailbox_id) => {
+                    mailbox_patches.push(MailboxPatch {
+                        id: mailbox_id,
+                        new_name: None,
+                        new_parent_id: Some(new_parent_mailbox.clone()),
+                        new_role: None,
+                        new_sort_order: None,
+                    });
+                }
+                SelectedValue::Mail(mail_id) => match new_parent_mailbox.clone() {
+                    None => {
+                        warn!(
+                            "You can't paste/move mails to the root-mailbox! Mail movement will be skipped..."
+                        )
+                    }
+                    Some(new_parent_mailbox) => {
+                        mail_patches.push(MailPatch {
+                            id: mail_id,
+                            new_mailbox_ids: Some(MailPatchType::Patch(vec![
+                                (new_parent_mailbox.clone(), true),
+                                (ctx.parent_mailbox.clone().unwrap(), false),
+                            ])),
+                            new_keywords: None,
+                        });
+                    }
+                },
+            }
+        }
+
+        self.selection_mode = SelectionMode::Normal;
+
+        let mut msgs = self.action_clear_selection();
+
+        msgs.push(
+            MessageRequest::PatchMailAndMailboxes {
+                username: self.get_selected_username(),
+                account_id: self.get_selected_account_id(),
+                patches: Patches {
+                    mailbox_patches,
+                    mail_patches,
+                },
+            }
+            .into(),
+        );
+
+        msgs
     }
 
     fn action_move_mailbox_up(&mut self) -> Vec<crate::ui::Message> {
