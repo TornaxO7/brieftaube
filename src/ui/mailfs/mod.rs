@@ -187,38 +187,38 @@ impl State {
         debug!("{:?}", action);
 
         match action {
-            UserAction::Quit => self.quit(),
-            UserAction::OpenCommandPalette => self.open_command_palette(),
-            UserAction::NavigateDown => self.navigate_down(),
-            UserAction::NavigateUp => self.navigate_up(),
-            UserAction::NavigateToTop => self.navigate_to_top(),
-            UserAction::NavigateToBottom => self.navigate_to_bottom(),
-            UserAction::NavigateRight => self.navigate_right(),
-            UserAction::NavigateLeft => self.navigate_left(),
-            UserAction::NavigateHalfPageDown => self.navigate_half_page_down(),
-            UserAction::NavigateHalfPageUp => self.navigate_half_page_up(),
+            UserAction::Quit => self.action_quit(),
+            UserAction::OpenCommandPalette => self.action_open_command_palette(),
+            UserAction::NavigateDown => self.action_navigate_down(),
+            UserAction::NavigateUp => self.action_navigate_up(),
+            UserAction::NavigateToTop => self.action_navigate_to_top(),
+            UserAction::NavigateToBottom => self.action_navigate_to_bottom(),
+            UserAction::NavigateRight => self.action_navigate_right(),
+            UserAction::NavigateLeft => self.action_navigate_left(),
+            UserAction::NavigateHalfPageDown => self.action_navigate_half_page_down(),
+            UserAction::NavigateHalfPageUp => self.action_navigate_half_page_up(),
 
             UserAction::SelectEntryToggle => {
-                let mut msgs = self.select_entry();
-                msgs.extend(self.navigate_down());
+                let mut msgs = self.action_select_entry();
+                msgs.extend(self.action_navigate_down());
                 msgs
             }
-            UserAction::CutSelectedEntries => self.cut_selected_entries(),
-            UserAction::PasteSelectedEntries => self.paste_selected_entries(),
+            UserAction::CutSelectedEntries => self.action_cut_selected_entries(),
+            UserAction::PasteSelectedEntries => self.action_paste_selected_entries(),
 
-            UserAction::MoveMailboxUp => self.move_mailbox_up(),
-            UserAction::MoveMailboxDown => self.move_mailbox_down(),
+            UserAction::MoveMailboxUp => self.action_move_mailbox_up(),
+            UserAction::MoveMailboxDown => self.action_move_mailbox_down(),
 
-            UserAction::ComposeNewMail => self.compose_new_mail(),
+            UserAction::ComposeNewMail => self.action_compose_new_mail(),
 
-            UserAction::MarkMailAsSeen => self.mark_mail_as_seen(),
-            UserAction::MarkMailAsUnseen => self.mark_mail_as_unseen(),
+            UserAction::MarkMailAsSeen => self.action_mark_mail_as_seen(),
+            UserAction::MarkMailAsUnseen => self.action_mark_mail_as_unseen(),
 
-            UserAction::ClearSelection => self.clear_selection(),
-            UserAction::ClearStatusMessage => self.clear_status_msg(),
+            UserAction::ClearSelection => self.action_clear_selection(),
+            UserAction::ClearStatusMessage => self.action_clear_status_msg(),
 
-            UserAction::CreateMailbox => self.create_mailbox(),
-            UserAction::RemoveMailbox => self.remove_mailbox(),
+            UserAction::CreateMailbox => self.action_create_mailbox(),
+            UserAction::RemoveMailbox => self.action_remove_mailbox(),
         }
     }
 
@@ -462,11 +462,11 @@ impl State {
 
 /// Action implementations
 impl State {
-    fn quit(&self) -> Vec<crate::ui::Message> {
+    fn action_quit(&self) -> Vec<crate::ui::Message> {
         vec![Navigation::Quit.into()]
     }
 
-    fn open_command_palette(&self) -> Vec<crate::ui::Message> {
+    fn action_open_command_palette(&self) -> Vec<crate::ui::Message> {
         let entries = UserAction::palette_options();
         vec![
             Navigation::OpenPalette {
@@ -477,7 +477,7 @@ impl State {
         ]
     }
 
-    fn navigate_down(&mut self) -> Vec<crate::ui::Message> {
+    fn action_navigate_down(&mut self) -> Vec<crate::ui::Message> {
         match self.column_stack.last().unwrap().clone() {
             ColumnStackEntry::Users => {
                 self.users_column.navigate_down(1);
@@ -546,7 +546,7 @@ impl State {
         }
     }
 
-    fn navigate_up(&mut self) -> Vec<crate::ui::Message> {
+    fn action_navigate_up(&mut self) -> Vec<crate::ui::Message> {
         match self.column_stack.last().unwrap().clone() {
             ColumnStackEntry::Users => {
                 self.users_column.navigate_up(1);
@@ -609,7 +609,7 @@ impl State {
         }
     }
 
-    fn navigate_to_top(&mut self) -> Vec<crate::ui::Message> {
+    fn action_navigate_to_top(&mut self) -> Vec<crate::ui::Message> {
         match self.column_stack.last().unwrap() {
             ColumnStackEntry::Users => {
                 self.users_column.navigate_to_top();
@@ -673,7 +673,7 @@ impl State {
         }
     }
 
-    fn navigate_to_bottom(&mut self) -> Vec<crate::ui::Message> {
+    fn action_navigate_to_bottom(&mut self) -> Vec<crate::ui::Message> {
         match self.column_stack.last().unwrap() {
             ColumnStackEntry::Users => {
                 self.users_column.navigate_to_bottom();
@@ -735,7 +735,7 @@ impl State {
         }
     }
 
-    fn navigate_right(&mut self) -> Vec<crate::ui::Message> {
+    fn action_navigate_right(&mut self) -> Vec<crate::ui::Message> {
         match self.column_stack.last().cloned().unwrap() {
             ColumnStackEntry::Users => {
                 let selected_user = self.users_column.get_selected_entry();
@@ -822,7 +822,7 @@ impl State {
         }
     }
 
-    fn navigate_left(&mut self) -> Vec<crate::ui::Message> {
+    fn action_navigate_left(&mut self) -> Vec<crate::ui::Message> {
         match self.column_stack.last().unwrap() {
             ColumnStackEntry::Users => {
                 vec![]
@@ -836,7 +836,7 @@ impl State {
         }
     }
 
-    fn navigate_half_page_down(&mut self) -> Vec<crate::ui::Message> {
+    fn action_navigate_half_page_down(&mut self) -> Vec<crate::ui::Message> {
         let Some(size) = self.column_area_size else {
             return vec![];
         };
@@ -911,7 +911,7 @@ impl State {
         }
     }
 
-    fn navigate_half_page_up(&mut self) -> Vec<crate::ui::Message> {
+    fn action_navigate_half_page_up(&mut self) -> Vec<crate::ui::Message> {
         let Some(size) = self.column_area_size else {
             return vec![];
         };
@@ -986,7 +986,7 @@ impl State {
         }
     }
 
-    fn select_entry(&mut self) -> Vec<crate::ui::Message> {
+    fn action_select_entry(&mut self) -> Vec<crate::ui::Message> {
         match self.column_stack.last().unwrap() {
             ColumnStackEntry::Users | ColumnStackEntry::Accounts => {
                 self.statusbar.set_message(
@@ -1068,23 +1068,23 @@ impl State {
         vec![]
     }
 
-    fn cut_selected_entries(&mut self) -> Vec<crate::ui::Message> {
+    fn action_cut_selected_entries(&mut self) -> Vec<crate::ui::Message> {
         todo!();
     }
 
-    fn paste_selected_entries(&mut self) -> Vec<crate::ui::Message> {
+    fn action_paste_selected_entries(&mut self) -> Vec<crate::ui::Message> {
         todo!();
     }
 
-    fn move_mailbox_up(&mut self) -> Vec<crate::ui::Message> {
+    fn action_move_mailbox_up(&mut self) -> Vec<crate::ui::Message> {
         todo!();
     }
 
-    fn move_mailbox_down(&mut self) -> Vec<crate::ui::Message> {
+    fn action_move_mailbox_down(&mut self) -> Vec<crate::ui::Message> {
         todo!();
     }
 
-    fn compose_new_mail(&mut self) -> Vec<crate::ui::Message> {
+    fn action_compose_new_mail(&mut self) -> Vec<crate::ui::Message> {
         vec![
             Navigation::OpenComposer {
                 username: self.get_selected_username(),
@@ -1095,10 +1095,10 @@ impl State {
         ]
     }
 
-    fn mark_mail_as_seen(&mut self) -> Vec<crate::ui::Message> {
+    fn action_mark_mail_as_seen(&mut self) -> Vec<crate::ui::Message> {
         let mut msgs = Vec::with_capacity(2);
         if self.selection.is_empty() {
-            msgs.extend(self.select_entry());
+            msgs.extend(self.action_select_entry());
         }
 
         // TODO: Filter out mails which already have tags
@@ -1129,10 +1129,10 @@ impl State {
         msgs
     }
 
-    fn mark_mail_as_unseen(&mut self) -> Vec<crate::ui::Message> {
+    fn action_mark_mail_as_unseen(&mut self) -> Vec<crate::ui::Message> {
         let mut msgs = Vec::with_capacity(2);
         if self.selection.is_empty() {
-            msgs.extend(self.select_entry());
+            msgs.extend(self.action_select_entry());
         }
 
         // TODO: Filter out mails which already have tags
@@ -1162,21 +1162,21 @@ impl State {
         msgs
     }
 
-    fn clear_selection(&mut self) -> Vec<crate::ui::Message> {
+    fn action_clear_selection(&mut self) -> Vec<crate::ui::Message> {
         self.selection.clear();
         vec![]
     }
 
-    fn clear_status_msg(&mut self) -> Vec<crate::ui::Message> {
+    fn action_clear_status_msg(&mut self) -> Vec<crate::ui::Message> {
         self.statusbar.clear_message();
         vec![]
     }
 
-    fn create_mailbox(&mut self) -> Vec<crate::ui::Message> {
+    fn action_create_mailbox(&mut self) -> Vec<crate::ui::Message> {
         todo!();
     }
 
-    fn remove_mailbox(&mut self) -> Vec<crate::ui::Message> {
+    fn action_remove_mailbox(&mut self) -> Vec<crate::ui::Message> {
         todo!();
     }
 }
