@@ -219,8 +219,6 @@ impl State {
 
             UserAction::CreateMailbox => self.create_mailbox(),
             UserAction::RemoveMailbox => self.remove_mailbox(),
-            // UserAction::MarkMailAsUnseen => self.mail_patch_keywords(&[(MailKeyword::Seen, false)]),
-            // UserAction::MarkMailAsSeen => self.mail_patch_keywords(&[(MailKeyword::Seen, true)]),
         }
     }
 
