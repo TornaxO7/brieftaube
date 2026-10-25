@@ -209,7 +209,7 @@ impl State {
             UserAction::MoveMailboxUp => self.move_mailbox_up(),
             UserAction::MoveMailboxDown => self.move_mailbox_down(),
 
-            UserAction::ComposeNewMail => self.compose_markdown_mail(),
+            UserAction::ComposeNewMail => self.compose_new_mail(),
 
             UserAction::MarkMailAsSeen => self.mark_mail_as_seen(),
             UserAction::MarkMailAsUnseen => self.mark_mail_as_unseen(),
@@ -1086,7 +1086,7 @@ impl State {
         todo!();
     }
 
-    fn compose_markdown_mail(&mut self) -> Vec<crate::ui::Message> {
+    fn compose_new_mail(&mut self) -> Vec<crate::ui::Message> {
         vec![
             Navigation::OpenComposer {
                 username: self.get_selected_username(),
