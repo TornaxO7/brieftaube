@@ -301,6 +301,9 @@ impl Repository {
                         .await?;
                 }
 
+                self.apply_mailbox_get_changes(&account_id, &mut cache_lock)
+                    .await?;
+
                 cache_lock.set_mail_state(result.new_state).await?;
             }
             Err(err) => {
