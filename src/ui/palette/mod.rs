@@ -138,6 +138,7 @@ impl State {
                     nucleo::pattern::Normalization::Smart,
                     false,
                 );
+                self.nucleo.tick(10);
 
                 vec![]
             }
