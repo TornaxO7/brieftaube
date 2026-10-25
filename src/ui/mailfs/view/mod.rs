@@ -115,7 +115,7 @@ fn render_path(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, are
 }
 
 fn render_statusbar(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, area: Rect) {
-    let layer_name = {
+    let (layer_name, layer_name_style) = {
         let column_type = match state.column_stack.last().unwrap() {
             ColumnStackEntry::Users => "Users",
             ColumnStackEntry::Accounts => "Accounts",
@@ -123,17 +123,28 @@ fn render_statusbar(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
             ColumnStackEntry::Thread(_) => "Thread",
         };
 
-        let mode = match state.selection_mode {
-            SelectionMode::Normal => "normal",
-            SelectionMode::Cut => "cut",
+        let (mode, style) = match state.selection_mode {
+            SelectionMode::Normal => (
+                "normal",
+                Style::new()
+                    .fg(scheme.on_primary_container.into_color())
+                    .bg(scheme.primary_container.into_color()),
+            ),
+            SelectionMode::Cut => (
+                "cut",
+                Style::new()
+                    .fg(scheme.on_error_container.into_color())
+                    .bg(scheme.error_container.into_color()),
+            ),
         };
 
-        format!("{}({})", column_type, mode)
+        (format!("{}({})", column_type, mode), style)
     };
 
-    // TODO: Also change style
     frame.render_stateful_widget(
-        StatusbarWidget::new(scheme).layer_name(layer_name.as_str()),
+        StatusbarWidget::new(scheme)
+            .layer_name(layer_name.as_str())
+            .layer_name_style(layer_name_style),
         area,
         &mut state.statusbar,
     );

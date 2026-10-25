@@ -85,6 +85,7 @@ impl StatusbarState {
 
 pub struct StatusbarWidget<'a> {
     layer_name: Option<&'a str>,
+    layer_name_style: Option<Style>,
     scheme: &'a Scheme,
 }
 
@@ -93,11 +94,17 @@ impl<'a> StatusbarWidget<'a> {
         Self {
             scheme,
             layer_name: None,
+            layer_name_style: None,
         }
     }
 
     pub fn layer_name(mut self, layer_name: &'a str) -> Self {
         self.layer_name = Some(layer_name);
+        self
+    }
+
+    pub fn layer_name_style(mut self, style: Style) -> Self {
+        self.layer_name_style = Some(style);
         self
     }
 }
@@ -125,9 +132,11 @@ impl<'a> StatefulWidget for StatusbarWidget<'a> {
 
         Widget::render(
             Text::from(layer_name).style(
-                Style::new()
-                    .fg(self.scheme.on_primary_container.into_color())
-                    .bg(self.scheme.primary_container.into_color()),
+                self.layer_name_style.unwrap_or(
+                    Style::new()
+                        .fg(self.scheme.on_primary_container.into_color())
+                        .bg(self.scheme.primary_container.into_color()),
+                ),
             ),
             left_area,
             buf,
