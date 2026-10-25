@@ -60,6 +60,7 @@ pub struct State {
 
     column_area_size: Option<Size>,
     selection: HashMap<SelectedValue, SelectionCtx>,
+    cut_selection: HashMap<SelectedValue, SelectionCtx>,
 }
 
 impl State {
@@ -90,7 +91,9 @@ impl State {
                 mail_previews,
 
                 column_area_size: None,
+
                 selection: HashMap::new(),
+                cut_selection: HashMap::new(),
 
                 keybindings: KeybindManager::new(HashMap::from([
                     ("q", UserAction::Quit),
@@ -1135,7 +1138,15 @@ impl State {
     }
 
     fn action_cut_selected_entries(&mut self) -> Vec<crate::ui::Message> {
-        todo!();
+        let mut msgs = vec![];
+
+        if self.selection.is_empty() {
+            msgs.extend(self.action_select_entry());
+        }
+
+        self.cut_selection = std::mem::take(&mut self.selection);
+        self.mode = Mode::Cut;
+        vec![]
     }
 
     fn action_paste_selected_entries(&mut self) -> Vec<crate::ui::Message> {
@@ -1503,6 +1514,7 @@ impl State {
 #[derive(strum::Display, Debug, Clone, Copy)]
 enum Mode {
     Normal,
+    Cut,
 }
 
 #[derive(Debug, Clone, Hash)]

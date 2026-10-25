@@ -3,7 +3,7 @@ use crate::{
     ui::{
         Loadable,
         mailfs::{
-            ColumnStackEntry, SelectedValue,
+            ColumnStackEntry, Mode, SelectedValue,
             types::column::{Column, MailboxColumnEntry},
         },
         statusbar::StatusbarWidget,
@@ -124,12 +124,14 @@ fn render_statusbar(scheme: &Scheme, state: &mut super::State, frame: &mut Frame
         };
 
         let mode = match state.mode {
-            super::Mode::Normal => "normal",
+            Mode::Normal => "normal",
+            Mode::Cut => "cut",
         };
 
         format!("{}({})", column_type, mode)
     };
 
+    // TODO: Also change style
     frame.render_stateful_widget(
         StatusbarWidget::new(scheme).layer_name(layer_name.as_str()),
         area,
