@@ -371,6 +371,9 @@ impl Repository {
     ) -> color_eyre::Result<()> {
         let _enter = self.mail_locks.get_mail.lock().await;
 
+        // TODO: Only let required mails to be sent.
+        // Example:
+        // If patch adds the `Seen` keyword but the mails already have it => Don't send request
         match self
             .remote
             .get_remote_account(account_id.clone())

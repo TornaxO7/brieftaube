@@ -1205,7 +1205,6 @@ impl State {
             msgs.extend(self.action_select_entry());
         }
 
-        // TODO: Filter out mails which already have tags
         let ids: Vec<MailId> = self
             .selection
             .drain()
