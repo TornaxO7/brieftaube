@@ -1154,15 +1154,11 @@ impl State {
     }
 
     fn action_move_mailbox_up(&mut self) -> Vec<crate::ui::Message> {
-        self.move_mailbox_inner(|idx, _len| idx > 0, |idx| idx - 1, UserAction::NavigateUp)
+        self.move_mailbox_inner(|idx| idx - 1, UserAction::NavigateUp)
     }
 
     fn action_move_mailbox_down(&mut self) -> Vec<crate::ui::Message> {
-        self.move_mailbox_inner(
-            |idx, len| idx < len,
-            |idx| idx + 1,
-            UserAction::NavigateDown,
-        )
+        self.move_mailbox_inner(|idx| idx + 1, UserAction::NavigateDown)
     }
 
     fn action_compose_new_mail(&mut self) -> Vec<crate::ui::Message> {
@@ -1435,14 +1431,12 @@ impl State {
         }
     }
 
-    fn move_mailbox_inner<NotAtEnd, GetOtherIndex>(
+    fn move_mailbox_inner<GetOtherIndex>(
         &mut self,
-        not_at_end: NotAtEnd,
         get_other_index: GetOtherIndex,
         callback_navigation: UserAction,
     ) -> Vec<crate::ui::Message>
     where
-        NotAtEnd: FnOnce(usize, usize) -> bool,
         GetOtherIndex: FnOnce(usize) -> usize,
     {
         let Some(ColumnStackEntry::Mailbox(mailbox_id)) = self.column_stack.last() else {
@@ -1470,7 +1464,7 @@ impl State {
 
         let mut msgs = vec![];
 
-        if not_at_end(idx, column.len()) {
+        if 0 < idx && idx + 1 < column.get_amount_mailboxes() {
             let MailboxColumnEntry::Mailbox(entry_over_selected_entry) =
                 column.get_entry(get_other_index(idx)).unwrap()
             else {

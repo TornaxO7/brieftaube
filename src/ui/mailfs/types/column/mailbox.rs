@@ -178,6 +178,10 @@ impl MailboxColumn {
 
         query_windows
     }
+
+    pub fn get_amount_mailboxes(&self) -> usize {
+        self.amount_child_mailboxes
+    }
 }
 
 impl Column<MailboxColumnEntry> for MailboxColumn {
