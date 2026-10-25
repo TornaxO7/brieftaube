@@ -1143,73 +1143,15 @@ impl State {
     }
 
     fn action_move_mailbox_up(&mut self) -> Vec<crate::ui::Message> {
-        let Some(ColumnStackEntry::Mailbox(mailbox_id)) = self.column_stack.last() else {
-            const MSG: &str = "Action can be only executed in a mailbox-column.";
-
-            error!(MSG);
-            self.statusbar
-                .set_message(MSG.to_string(), StatusMsgType::Error);
-            return vec![];
-        };
-
-        let key = (self.get_selected_account_id(), mailbox_id.clone());
-        let Some(Loadable::Loaded(column)) = self.mailbox_columns.get(&key) else {
-            return vec![];
-        };
-
-        let Some((idx, MailboxColumnEntry::Mailbox(mailbox))) = column.get_selected_entry() else {
-            const MSG: &str = "This action can be only applied to a mailbox on a mailbox entry.";
-
-            error!(MSG);
-            self.statusbar
-                .set_message(MSG.to_string(), StatusMsgType::Error);
-            return vec![];
-        };
-
-        let mut msgs = vec![];
-
-        if idx > 0 {
-            let MailboxColumnEntry::Mailbox(entry_over_selected_entry) =
-                column.get_entry(idx - 1).unwrap()
-            else {
-                unreachable!();
-            };
-
-            let username = self.get_selected_username();
-            let account_id = self.get_selected_account_id();
-
-            msgs.push(
-                MessageRequest::PatchMailboxes {
-                    username: username.clone(),
-                    account_id: account_id.clone(),
-                    patches: vec![
-                        MailboxPatch {
-                            id: mailbox.id.clone(),
-                            new_name: None,
-                            new_parent_id: None,
-                            new_role: None,
-                            new_sort_order: Some(entry_over_selected_entry.sort_order),
-                        },
-                        MailboxPatch {
-                            id: entry_over_selected_entry.id.clone(),
-                            new_name: None,
-                            new_parent_id: None,
-                            new_role: None,
-                            new_sort_order: Some(mailbox.sort_order),
-                        },
-                    ],
-                }
-                .into(),
-            );
-
-            msgs.extend(self.action_navigate_up());
-        }
-
-        msgs
+        self.move_mailbox_inner(|idx, _len| idx > 0, |idx| idx - 1, UserAction::NavigateUp)
     }
 
     fn action_move_mailbox_down(&mut self) -> Vec<crate::ui::Message> {
-        todo!();
+        self.move_mailbox_inner(
+            |idx, len| idx < len,
+            |idx| idx + 1,
+            UserAction::NavigateDown,
+        )
     }
 
     fn action_compose_new_mail(&mut self) -> Vec<crate::ui::Message> {
@@ -1326,24 +1268,6 @@ impl State {
             .id
             .clone()
     }
-
-    // fn get_account_ctx(&self) -> AccountCtx {
-    //     let selected_username = self.users_column.get_selected_entry().username.clone();
-    //     let selected_account_id = self
-    //         .accounts_column
-    //         .get(&selected_username)
-    //         .expect("Account column exists")
-    //         .loaded()
-    //         .expect("Account column is loaded")
-    //         .get_selected_entry()
-    //         .id
-    //         .clone();
-
-    //     AccountCtx {
-    //         username: selected_username,
-    //         account_id: selected_account_id,
-    //     }
-    // }
 
     /// Depending on what is selected in the middle column it will return the suitable requests so that the
     /// right column can display things.
@@ -1499,6 +1423,81 @@ impl State {
                 }
             }
         }
+    }
+
+    fn move_mailbox_inner<NotAtEnd, GetOtherIndex>(
+        &mut self,
+        not_at_end: NotAtEnd,
+        get_other_index: GetOtherIndex,
+        callback_navigation: UserAction,
+    ) -> Vec<crate::ui::Message>
+    where
+        NotAtEnd: FnOnce(usize, usize) -> bool,
+        GetOtherIndex: FnOnce(usize) -> usize,
+    {
+        let Some(ColumnStackEntry::Mailbox(mailbox_id)) = self.column_stack.last() else {
+            const MSG: &str = "Action can be only executed in a mailbox-column.";
+
+            error!(MSG);
+            self.statusbar
+                .set_message(MSG.to_string(), StatusMsgType::Error);
+            return vec![];
+        };
+
+        let key = (self.get_selected_account_id(), mailbox_id.clone());
+        let Some(Loadable::Loaded(column)) = self.mailbox_columns.get(&key) else {
+            return vec![];
+        };
+
+        let Some((idx, MailboxColumnEntry::Mailbox(mailbox))) = column.get_selected_entry() else {
+            const MSG: &str = "This action can be only applied to a mailbox on a mailbox entry.";
+
+            error!(MSG);
+            self.statusbar
+                .set_message(MSG.to_string(), StatusMsgType::Error);
+            return vec![];
+        };
+
+        let mut msgs = vec![];
+
+        if not_at_end(idx, column.len()) {
+            let MailboxColumnEntry::Mailbox(entry_over_selected_entry) =
+                column.get_entry(get_other_index(idx)).unwrap()
+            else {
+                unreachable!();
+            };
+
+            let username = self.get_selected_username();
+            let account_id = self.get_selected_account_id();
+
+            msgs.push(
+                MessageRequest::PatchMailboxes {
+                    username: username.clone(),
+                    account_id: account_id.clone(),
+                    patches: vec![
+                        MailboxPatch {
+                            id: mailbox.id.clone(),
+                            new_name: None,
+                            new_parent_id: None,
+                            new_role: None,
+                            new_sort_order: Some(entry_over_selected_entry.sort_order),
+                        },
+                        MailboxPatch {
+                            id: entry_over_selected_entry.id.clone(),
+                            new_name: None,
+                            new_parent_id: None,
+                            new_role: None,
+                            new_sort_order: Some(mailbox.sort_order),
+                        },
+                    ],
+                }
+                .into(),
+            );
+
+            msgs.extend(self.handle_user_action(callback_navigation));
+        }
+
+        msgs
     }
 }
 
