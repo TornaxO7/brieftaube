@@ -48,6 +48,7 @@ pub struct State {
     statusbar: StatusbarState,
 
     throbber: ThrobberState,
+    selection: HashMap<SelectedValue, SelectionCtx>,
     selection_mode: SelectionMode,
 
     column_stack: Vec<ColumnStackEntry>,
@@ -59,7 +60,6 @@ pub struct State {
     mail_previews: HashMap<MailPreviewKey, Loadable<MailPreview>>,
 
     column_area_size: Option<Size>,
-    selection: HashMap<SelectedValue, SelectionCtx>,
 }
 
 impl State {
