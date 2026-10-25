@@ -9,7 +9,7 @@ pub use thread::*;
 pub use users::*;
 
 pub trait Column<ColumnEntry> {
-    type ColumnEntryResult<T>;
+    type SelectedEntryResult<T>;
 
     fn navigate_up(&mut self, offset: u16);
 
@@ -21,7 +21,9 @@ pub trait Column<ColumnEntry> {
 
     fn len(&self) -> usize;
 
-    fn get_selected_entry(&self) -> Self::ColumnEntryResult<&ColumnEntry>;
+    fn get_entry(&self, idx: usize) -> Option<&ColumnEntry>;
 
-    fn get_selected_entry_mut(&mut self) -> Self::ColumnEntryResult<&mut ColumnEntry>;
+    fn get_selected_entry(&self) -> Self::SelectedEntryResult<&ColumnEntry>;
+
+    fn get_selected_entry_mut(&mut self) -> Self::SelectedEntryResult<&mut ColumnEntry>;
 }

@@ -80,7 +80,7 @@ fn render_path(scheme: &Scheme, state: &mut super::State, frame: &mut Frame, are
                     .loaded()
                     .expect("If it's in the center, it must be loaded");
 
-                let Some(selected_entry) = column.get_selected_entry() else {
+                let Some((_idx, selected_entry)) = column.get_selected_entry() else {
                     break;
                 };
 
@@ -180,7 +180,7 @@ fn render_right_column(scheme: &Scheme, state: &mut super::State, frame: &mut Fr
                 .loaded()
                 .expect("Center column must be loaded");
 
-            let Some(entry) = center_column.get_selected_entry() else {
+            let Some((_idx, entry)) = center_column.get_selected_entry() else {
                 return;
             };
 

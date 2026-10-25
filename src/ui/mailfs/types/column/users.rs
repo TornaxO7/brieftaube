@@ -34,7 +34,7 @@ impl UserColumn {
 }
 
 impl Column<UserEntry> for UserColumn {
-    type ColumnEntryResult<T> = T;
+    type SelectedEntryResult<T> = T;
 
     fn navigate_up(&mut self, offset: u16) {
         let new_idx = self
@@ -64,6 +64,10 @@ impl Column<UserEntry> for UserColumn {
 
     fn len(&self) -> usize {
         self.users.len()
+    }
+
+    fn get_entry(&self, idx: usize) -> Option<&UserEntry> {
+        self.users.get(idx)
     }
 
     fn get_selected_entry<'a>(&'a self) -> &'a UserEntry {

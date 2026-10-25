@@ -181,7 +181,7 @@ impl MailboxColumn {
 }
 
 impl Column<MailboxColumnEntry> for MailboxColumn {
-    type ColumnEntryResult<T> = Option<T>;
+    type SelectedEntryResult<T> = Option<(usize, T)>;
 
     fn navigate_up(&mut self, offset: u16) {
         if let Some(idx) = self.state.selected() {
@@ -213,14 +213,20 @@ impl Column<MailboxColumnEntry> for MailboxColumn {
         self.amount_child_mailboxes + self.total_threads
     }
 
-    fn get_selected_entry(&self) -> Option<&MailboxColumnEntry> {
-        self.state.selected().and_then(|idx| self.entries.get(idx))
+    fn get_entry(&self, idx: usize) -> Option<&MailboxColumnEntry> {
+        self.entries.get(idx)
     }
 
-    fn get_selected_entry_mut(&mut self) -> Option<&mut MailboxColumnEntry> {
+    fn get_selected_entry(&self) -> Option<(usize, &MailboxColumnEntry)> {
         self.state
             .selected()
-            .and_then(|idx| self.entries.get_mut(idx))
+            .and_then(|idx| self.entries.get(idx).map(|entry| (idx, entry)))
+    }
+
+    fn get_selected_entry_mut(&mut self) -> Option<(usize, &mut MailboxColumnEntry)> {
+        self.state
+            .selected()
+            .and_then(|idx| self.entries.get_mut(idx).map(|entry| (idx, entry)))
     }
 }
 

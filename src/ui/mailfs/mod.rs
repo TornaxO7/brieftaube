@@ -32,7 +32,7 @@ use std::{
     str::FromStr,
 };
 use throbber_widgets_tui::ThrobberState;
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 use user_action::UserAction;
 
 pub use message::*;
@@ -812,7 +812,7 @@ impl State {
             ColumnStackEntry::Mailbox(mailbox_id) => {
                 let key = (self.get_selected_account_id(), mailbox_id);
                 let column = self.mailbox_columns.get(&key).unwrap().loaded().unwrap();
-                let Some(selected_entry) = column.get_selected_entry() else {
+                let Some((_idx, selected_entry)) = column.get_selected_entry() else {
                     // mailbox could be empty
                     return vec![];
                 };
@@ -1073,11 +1073,11 @@ impl State {
                     return vec![];
                 };
 
-                let Some(entry) = column.get_selected_entry_mut() else {
+                let Some((_idx, selected_entry)) = column.get_selected_entry_mut() else {
                     return vec![];
                 };
 
-                match entry {
+                match selected_entry {
                     MailboxColumnEntry::Mailbox(mailbox) => {
                         let selected = SelectedValue::Mailbox(mailbox.id.clone());
                         if self.selection.remove(&selected).is_none() {
@@ -1143,7 +1143,69 @@ impl State {
     }
 
     fn action_move_mailbox_up(&mut self) -> Vec<crate::ui::Message> {
-        todo!();
+        let Some(ColumnStackEntry::Mailbox(mailbox_id)) = self.column_stack.last() else {
+            const MSG: &str = "Action can be only executed in a mailbox-column.";
+
+            error!(MSG);
+            self.statusbar
+                .set_message(MSG.to_string(), StatusMsgType::Error);
+            return vec![];
+        };
+
+        let key = (self.get_selected_account_id(), mailbox_id.clone());
+        let Some(Loadable::Loaded(column)) = self.mailbox_columns.get(&key) else {
+            return vec![];
+        };
+
+        let Some((idx, MailboxColumnEntry::Mailbox(mailbox))) = column.get_selected_entry() else {
+            const MSG: &str = "This action can be only applied to a mailbox on a mailbox entry.";
+
+            error!(MSG);
+            self.statusbar
+                .set_message(MSG.to_string(), StatusMsgType::Error);
+            return vec![];
+        };
+
+        let mut msgs = vec![];
+
+        if idx > 0 {
+            let MailboxColumnEntry::Mailbox(entry_over_selected_entry) =
+                column.get_entry(idx - 1).unwrap()
+            else {
+                unreachable!();
+            };
+
+            let username = self.get_selected_username();
+            let account_id = self.get_selected_account_id();
+
+            msgs.push(
+                MessageRequest::PatchMailboxes {
+                    username: username.clone(),
+                    account_id: account_id.clone(),
+                    patches: vec![
+                        MailboxPatch {
+                            id: mailbox.id.clone(),
+                            new_name: None,
+                            new_parent_id: None,
+                            new_role: None,
+                            new_sort_order: Some(entry_over_selected_entry.sort_order),
+                        },
+                        MailboxPatch {
+                            id: entry_over_selected_entry.id.clone(),
+                            new_name: None,
+                            new_parent_id: None,
+                            new_role: None,
+                            new_sort_order: Some(mailbox.sort_order),
+                        },
+                    ],
+                }
+                .into(),
+            );
+
+            msgs.extend(self.action_navigate_up());
+        }
+
+        msgs
     }
 
     fn action_move_mailbox_down(&mut self) -> Vec<crate::ui::Message> {
@@ -1336,7 +1398,8 @@ impl State {
                     return vec![];
                 };
 
-                let Some(middle_column_selected_entry) = middle_mailbox_column.get_selected_entry()
+                let Some((_idx, middle_column_selected_entry)) =
+                    middle_mailbox_column.get_selected_entry()
                 else {
                     return vec![];
                 };
@@ -1460,9 +1523,3 @@ enum SelectedValue {
 
 #[derive(Debug)]
 struct SelectionCtx {}
-
-// enum SelectionValue {
-//     Mailbox(MailboxId),
-//     Mail(MailId),
-//     Thread(ThreadId),
-// }

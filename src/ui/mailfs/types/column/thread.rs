@@ -34,7 +34,7 @@ impl ThreadColumn {
 }
 
 impl Column<MailEntry> for ThreadColumn {
-    type ColumnEntryResult<T> = T;
+    type SelectedEntryResult<T> = T;
 
     fn navigate_up(&mut self, offset: u16) {
         let idx = self
@@ -61,6 +61,10 @@ impl Column<MailEntry> for ThreadColumn {
 
     fn len(&self) -> usize {
         self.mails.len()
+    }
+
+    fn get_entry(&self, idx: usize) -> Option<&MailEntry> {
+        self.mails.get(idx)
     }
 
     fn get_selected_entry<'a>(&'a self) -> &'a MailEntry {

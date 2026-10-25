@@ -20,7 +20,7 @@ impl AccountsColumn {
 }
 
 impl Column<AccountEntry> for AccountsColumn {
-    type ColumnEntryResult<T> = T;
+    type SelectedEntryResult<T> = T;
 
     fn navigate_up(&mut self, offset: u16) {
         let idx = self
@@ -49,6 +49,10 @@ impl Column<AccountEntry> for AccountsColumn {
 
     fn len(&self) -> usize {
         self.accounts.len()
+    }
+
+    fn get_entry(&self, idx: usize) -> Option<&AccountEntry> {
+        self.accounts.get(idx)
     }
 
     fn get_selected_entry(&self) -> &AccountEntry {
