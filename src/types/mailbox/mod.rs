@@ -1,9 +1,9 @@
 mod cached_mailbox;
 mod id;
 mod init;
-mod update;
+mod property;
 
 pub use cached_mailbox::*;
 pub use id::*;
 pub use init::*;
-pub use update::*;
+pub use property::*;

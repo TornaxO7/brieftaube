@@ -57,16 +57,14 @@ impl Repository {
         } = self
             .remote
             .get_remote_account(account_id.clone())
-            .fetch_mailboxes_all()
+            .fetch_mailboxes_all(CachedMailbox::PROPERTIES.to_vec())
             .await?;
 
-        self.caches
-            .get(&account_id)
-            .unwrap()
-            .write()
-            .await
-            .upsert_mailboxes(mailboxes, state)
-            .await?;
+        tracing::debug!("{:#?}", mailboxes);
+
+        let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
+        cache_lock.upsert_mailboxes(mailboxes).await?;
+        cache_lock.set_mailbox_state(state).await?;
 
         Ok(())
     }
@@ -150,7 +148,7 @@ impl Repository {
                     .await?;
 
                 Ok(InitMailboxData {
-                    total_threads: data.total_threads,
+                    total_threads: data.total_threads.get().copied().unwrap(),
                     child_mailboxes,
                     first_mails,
                 })

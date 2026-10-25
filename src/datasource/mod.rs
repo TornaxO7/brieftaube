@@ -7,7 +7,7 @@ use crate::{
     datasource::types::MutateAttribute,
     types::{
         AccountData, AccountId, BlobId, CachedIdentity, CachedMail, CachedMailbox, MailId,
-        MailKeyword, MailProperty, MailboxId, MailboxUpdate, ParentMailboxId, ThreadId,
+        MailKeyword, MailProperty, MailboxId, MailboxProperty, ParentMailboxId, ThreadId,
     },
 };
 use async_trait::async_trait;
@@ -103,6 +103,9 @@ pub trait MailRemote {
 
     async fn create_mail(&self, mail: CachedMail) -> Result<remote::SetResult<CachedMail>>;
 
+    // TODO:
+    // - Rename to `patch`
+    // - Also maybe include mailbox-changes-request
     async fn mutate_mails(
         &self,
         ids: &[MailId],
@@ -161,6 +164,8 @@ pub trait RootMailsRemote: MailRemote {
 pub trait MailboxCache {
     async fn get_mailbox_state(&self) -> Option<&GetState>;
 
+    async fn set_mailbox_state(&mut self, new_state: GetState) -> Result<()>;
+
     async fn get_mailbox(&self, id: MailboxId) -> Result<Option<CachedMailbox>>
     where
         Self: Sync,
@@ -181,18 +186,23 @@ pub trait MailboxCache {
         parent: &ParentMailboxId,
     ) -> Result<Option<Vec<CachedMailbox>>>;
 
-    async fn upsert_mailboxes(
-        &mut self,
-        mailboxes: Vec<CachedMailbox>,
-        state: GetState,
-    ) -> Result<()>;
+    async fn upsert_mailboxes(&mut self, mailboxes: Vec<CachedMailbox>) -> Result<()>;
 
-    async fn evict_mailboxes(&mut self, ids: &[MailboxId], new_state: GetState) -> Result<()>;
+    async fn evict_mailboxes(&mut self, ids: &[MailboxId]) -> Result<()>;
 }
 
 #[async_trait]
 pub trait MailboxRemote {
-    async fn fetch_mailboxes_all(&self) -> Result<remote::GetOneResult<Vec<CachedMailbox>>>;
+    async fn fetch_mailboxes_all(
+        &self,
+        properties: Vec<MailboxProperty>,
+    ) -> Result<remote::GetOneResult<Vec<CachedMailbox>>>;
+
+    async fn fetch_mailboxes(
+        &self,
+        ids: &[MailboxId],
+        properties: Vec<MailboxProperty>,
+    ) -> Result<remote::GetBatchResult<Vec<CachedMailbox>, Vec<MailboxId>>>;
 
     async fn fetch_mailbox_changes(
         &self,
@@ -203,12 +213,6 @@ pub trait MailboxRemote {
     //     &self,
     //     new: MailboxNew,
     // ) -> Result<remote::CreateResult<jmap_client::mailbox::Mailbox>>;
-
-    async fn update_mailboxes(
-        &self,
-        updates: Vec<(CachedMailbox, MailboxUpdate)>,
-        since: &GetState,
-    ) -> Result<remote::UpdateResult<MailboxId, CachedMailbox>>;
 
     async fn destroy_mailboxes(
         &self,

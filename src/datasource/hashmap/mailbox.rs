@@ -15,6 +15,11 @@ impl MailboxCache for HashMapDataSource {
         self.mailboxes_get_state.as_ref()
     }
 
+    async fn set_mailbox_state(&mut self, new_state: GetState) -> Result<()> {
+        self.mailboxes_get_state = Some(new_state);
+        Ok(())
+    }
+
     async fn get_mailboxes(
         &self,
         ids: &[MailboxId],
@@ -44,27 +49,20 @@ impl MailboxCache for HashMapDataSource {
         }
     }
 
-    async fn upsert_mailboxes(
-        &mut self,
-        mailboxes: Vec<CachedMailbox>,
-        new_state: GetState,
-    ) -> Result<()> {
+    async fn upsert_mailboxes(&mut self, mailboxes: Vec<CachedMailbox>) -> Result<()> {
         for mailbox in mailboxes {
             let id = mailbox.id.clone();
             self.mailboxes.insert(id, mailbox);
         }
-
-        self.mailboxes_get_state = Some(new_state);
         Ok(())
     }
 
-    async fn evict_mailboxes(&mut self, ids: &[MailboxId], new_state: GetState) -> Result<()> {
+    async fn evict_mailboxes(&mut self, ids: &[MailboxId]) -> Result<()> {
         for id in ids {
             self.mailboxes.remove(id);
             self.root_mails.remove(id);
         }
 
-        self.mailboxes_get_state = Some(new_state);
         Ok(())
     }
 
@@ -75,7 +73,7 @@ impl MailboxCache for HashMapDataSource {
         let children = self.mailboxes_get_state.is_some().then_some(
             self.mailboxes
                 .values()
-                .filter(|mailbox| &mailbox.parent_id == parent)
+                .filter(|mailbox| mailbox.parent_id.get().unwrap() == parent)
                 .cloned()
                 .collect(),
         );

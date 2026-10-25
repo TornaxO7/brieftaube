@@ -9,8 +9,8 @@ use crate::{
         types::{GetState, MutateAttribute, QueryState, QueryWindow, cache, remote},
     },
     types::{
-        AccountId, BlobId, CachedMail, InitMailboxData, MailId, MailKeyword, MailProperty,
-        MailboxId, ParentMailboxId, ThreadId,
+        AccountId, BlobId, CachedMail, CachedMailbox, InitMailboxData, MailId, MailKeyword,
+        MailProperty, MailboxId, ParentMailboxId, ThreadId,
     },
 };
 use std::collections::HashMap;
@@ -261,13 +261,61 @@ impl Repository {
 
     async fn apply_mailbox_get_changes(
         &self,
+        account_id: &AccountId,
         cache_lock: &mut RwLockWriteGuard<'_, Box<dyn Cache>>,
     ) -> color_eyre::Result<()> {
-        let Some(mut _current_state) = cache_lock.get_mailbox_state().await.cloned() else {
+        let Some(mut current_state) = cache_lock.get_mailbox_state().await.cloned() else {
             return Ok(());
         };
 
-        todo!()
+        let remote = self.remote.get_remote_account(account_id.clone());
+
+        loop {
+            let changes = remote.fetch_mailbox_changes(&current_state).await?;
+
+            if !changes.updated.is_empty() {
+                let mut cached_mailboxes = cache_lock.get_mailboxes(&changes.updated).await?.value;
+
+                let cached_mailboxes_ids = cached_mailboxes
+                    .iter()
+                    .map(|mailbox| mailbox.id.clone())
+                    .collect::<Vec<MailboxId>>();
+
+                let remote::GetBatchResult {
+                    values: updated_mailboxes,
+                    not_found,
+                    state: _,
+                } = self
+                    .remote
+                    .get_remote_account(account_id.clone())
+                    .fetch_mailboxes(&cached_mailboxes_ids, CachedMailbox::PROPERTIES.to_vec())
+                    .await?;
+
+                debug_assert!(not_found.is_empty());
+
+                for updated_mailbox in updated_mailboxes {
+                    let cached_mailbox = cached_mailboxes
+                        .iter_mut()
+                        .find(|cached_mailbox| cached_mailbox.id == updated_mailbox.id)
+                        .unwrap();
+
+                    cached_mailbox.merge(updated_mailbox);
+                }
+
+                cache_lock.upsert_mailboxes(cached_mailboxes).await?;
+            }
+
+            cache_lock.evict_mailboxes(&changes.destroyed).await?;
+
+            current_state = changes.new_state;
+            cache_lock.set_mailbox_state(current_state.clone()).await?;
+
+            if !changes.has_more_changes {
+                break;
+            }
+        }
+
+        Ok(())
     }
 
     async fn ensure_thread_changes(

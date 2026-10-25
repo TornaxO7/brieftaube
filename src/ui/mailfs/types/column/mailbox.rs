@@ -34,30 +34,34 @@ impl MailboxColumn {
     pub fn set_entries(
         &mut self,
         total_threads: usize,
-        mut mailboxes: Vec<CachedMailbox>,
+        mailboxes: Vec<CachedMailbox>,
         first_mails: Vec<CachedMail>,
     ) {
         debug_assert!(first_mails.len() <= total_threads);
 
         let amount_child_mailboxes = mailboxes.len();
 
-        mailboxes.sort_by(|a, b| {
-            if a.sort_order != b.sort_order {
-                a.sort_order.cmp(&b.sort_order)
-            } else {
-                a.name.cmp(&b.name)
-            }
-        });
+        let mailboxes = {
+            let mut mailboxes = mailboxes
+                .into_iter()
+                .map(MailboxEntry::from)
+                .collect::<Vec<MailboxEntry>>();
+
+            mailboxes.sort_by(|a, b| {
+                if a.sort_order != b.sort_order {
+                    a.sort_order.cmp(&b.sort_order)
+                } else {
+                    a.name.cmp(&b.name)
+                }
+            });
+
+            mailboxes
+        };
 
         let entries: Vec<MailboxColumnEntry> = {
             let mut entries = Vec::with_capacity(amount_child_mailboxes + total_threads);
 
-            entries.extend(
-                mailboxes
-                    .into_iter()
-                    .map(MailboxEntry::from)
-                    .map(MailboxColumnEntry::Mailbox),
-            );
+            entries.extend(mailboxes.into_iter().map(MailboxColumnEntry::Mailbox));
 
             entries.extend(
                 first_mails

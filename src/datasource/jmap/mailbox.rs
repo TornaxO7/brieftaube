@@ -4,7 +4,7 @@ use crate::{
         jmap::JmapAccount,
         types::{GetState, remote},
     },
-    types::{CachedMailbox, MailboxId, MailboxUpdate},
+    types::{CachedMailbox, MailboxId, MailboxProperty},
 };
 use async_trait::async_trait;
 use color_eyre::Result;
@@ -13,10 +13,15 @@ use tracing::instrument;
 #[async_trait]
 impl MailboxRemote for JmapAccount {
     #[instrument(skip(self))]
-    async fn fetch_mailboxes_all(&self) -> Result<remote::GetOneResult<Vec<CachedMailbox>>> {
+    async fn fetch_mailboxes_all(
+        &self,
+        properties: Vec<MailboxProperty>,
+    ) -> Result<remote::GetOneResult<Vec<CachedMailbox>>> {
         let mut response = {
             let mut request = self.build_request();
-            request.get_mailbox().properties(CachedMailbox::PROPERTIES);
+            request
+                .get_mailbox()
+                .properties(properties.into_iter().map(|property| property.into()));
             request.send_get_mailbox().await?
         };
 
@@ -25,6 +30,37 @@ impl MailboxRemote for JmapAccount {
                 .take_list()
                 .into_iter()
                 .map(CachedMailbox::from)
+                .collect(),
+            state: response.take_state().into(),
+        })
+    }
+
+    async fn fetch_mailboxes(
+        &self,
+        ids: &[MailboxId],
+        properties: Vec<MailboxProperty>,
+    ) -> Result<remote::GetBatchResult<Vec<CachedMailbox>, Vec<MailboxId>>> {
+        let mut response = {
+            let mut request = self.build_request();
+
+            request
+                .get_mailbox()
+                .ids(ids)
+                .properties(properties.into_iter().map(|property| property.into()));
+
+            request.send_get_mailbox().await?
+        };
+
+        Ok(remote::GetBatchResult {
+            values: response
+                .take_list()
+                .into_iter()
+                .map(CachedMailbox::from)
+                .collect(),
+            not_found: response
+                .take_not_found()
+                .into_iter()
+                .map(MailboxId::from)
                 .collect(),
             state: response.take_state().into(),
         })
@@ -86,79 +122,6 @@ impl MailboxRemote for JmapAccount {
     //         state: response.take_new_state().into(),
     //     })
     // }
-
-    async fn update_mailboxes(
-        &self,
-        updates: Vec<(CachedMailbox, MailboxUpdate)>,
-        since: &GetState,
-    ) -> Result<remote::UpdateResult<MailboxId, CachedMailbox>> {
-        let mut response = {
-            let mut request = self.build_request();
-            let set = request.set_mailbox().if_in_state(since.as_ref());
-
-            for (data, update) in &updates {
-                let u = set.update(&data.id);
-
-                if let Some(name) = &update.name {
-                    u.name(name);
-                }
-
-                if let Some(role) = update.role.clone() {
-                    u.role(role);
-                }
-
-                if let Some(sort_order) = update.sort_order {
-                    u.sort_order(sort_order);
-                }
-
-                if let Some(parent_id) = update.parent_id.clone() {
-                    u.parent_id(parent_id);
-                }
-            }
-
-            request.send_set_mailbox().await?
-        };
-
-        let mut updated = Vec::new();
-        let mut failed = Vec::new();
-
-        for (mut data, update) in updates {
-            let id = data.id.clone();
-            match response.updated(id.as_str()) {
-                Ok(None) => {
-                    data.update(update);
-                    updated.push(data);
-                }
-                Ok(Some(extra)) => {
-                    tracing::warn!(
-                        "The server responded with extra data to be updated:{:#?}\nMight not take everything :/",
-                        extra
-                    );
-
-                    data.update(update);
-
-                    if let Some(my_rights) = extra.my_rights() {
-                        data.my_rights = my_rights.clone();
-                    }
-
-                    updated.push(data);
-                }
-                Err(err) => {
-                    let jmap_client::Error::Set(error) = err else {
-                        unreachable!("No");
-                    };
-
-                    failed.push((id, error));
-                }
-            }
-        }
-
-        Ok(remote::UpdateResult {
-            updated,
-            failed,
-            new_state: response.take_new_state().into(),
-        })
-    }
 
     async fn destroy_mailboxes(
         &self,

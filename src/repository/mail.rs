@@ -274,7 +274,9 @@ impl Repository {
             .get_all_mailboxes(account_id.clone())
             .await?
             .into_iter()
-            .find_map(|mailbox| (mailbox.role == Role::Drafts).then_some(mailbox.id))
+            .find_map(|mailbox| {
+                (mailbox.role.get().unwrap() == &Role::Drafts).then_some(mailbox.id)
+            })
             .expect("`Draft` mailbox exists");
 
         let mut new_mail = CachedMail::new_draft(mail_id, HashSet::from([draft_mailbox_id]));
@@ -376,6 +378,9 @@ impl Repository {
                 let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
 
                 self.ensure_mail_changes(&account_id, &result.new_state, &mut cache_lock)
+                    .await?;
+
+                self.apply_mailbox_get_changes(&account_id, &mut cache_lock)
                     .await?;
 
                 let mut impacted_mails = cache_lock.get_mails(&ids).await?.value;

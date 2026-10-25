@@ -73,66 +73,66 @@ impl CachedMail {
         })
     }
 
-    pub fn merge(&mut self, mut other: CachedMail) {
+    pub fn merge(&mut self, other: CachedMail) {
         self.id = other.id;
 
-        if let Some(keywords) = other.keywords.take() {
+        if let Some(keywords) = other.keywords.into_inner() {
             self.keywords = OnceLock::from(keywords);
         }
 
-        if let Some(mailbox_ids) = other.mailbox_ids.take() {
+        if let Some(mailbox_ids) = other.mailbox_ids.into_inner() {
             self.mailbox_ids = OnceLock::from(mailbox_ids);
         }
 
-        if let Some(subject) = other.subject.take() {
+        if let Some(subject) = other.subject.into_inner() {
             self.subject = OnceLock::from(subject);
         }
 
-        if let Some(received_at) = other.received_at.take() {
+        if let Some(received_at) = other.received_at.into_inner() {
             self.received_at = OnceLock::from(received_at);
         }
 
-        if let Some(has_attachment) = other.has_attachment.take() {
+        if let Some(has_attachment) = other.has_attachment.into_inner() {
             self.has_attachment = OnceLock::from(has_attachment);
         }
 
-        if let Some(thread_id) = other.thread_id.take() {
+        if let Some(thread_id) = other.thread_id.into_inner() {
             self.thread_id = OnceLock::from(thread_id);
         }
 
-        if let Some(from) = other.from.take() {
+        if let Some(from) = other.from.into_inner() {
             self.from = OnceLock::from(from);
         }
 
-        if let Some(to) = other.to.take() {
+        if let Some(to) = other.to.into_inner() {
             self.to = OnceLock::from(to);
         }
 
-        if let Some(cc) = other.cc.take() {
+        if let Some(cc) = other.cc.into_inner() {
             self.cc = OnceLock::from(cc);
         }
 
-        if let Some(bcc) = other.bcc.take() {
+        if let Some(bcc) = other.bcc.into_inner() {
             self.bcc = OnceLock::from(bcc);
         }
 
-        if let Some(preview) = other.preview.take() {
+        if let Some(preview) = other.preview.into_inner() {
             self.preview = OnceLock::from(preview);
         }
 
-        if let Some(attachments) = other.attachments.take() {
+        if let Some(attachments) = other.attachments.into_inner() {
             self.attachments = OnceLock::from(attachments);
         }
 
-        if let Some(text_part_ids) = other.text_part_ids.take() {
+        if let Some(text_part_ids) = other.text_part_ids.into_inner() {
             self.text_part_ids = OnceLock::from(text_part_ids);
         }
 
-        if let Some(html_part_ids) = other.html_part_ids.take() {
+        if let Some(html_part_ids) = other.html_part_ids.into_inner() {
             self.html_part_ids = OnceLock::from(html_part_ids);
         }
 
-        if let Some(body_parts) = other.body_parts.take() {
+        if let Some(body_parts) = other.body_parts.into_inner() {
             self.body_parts = OnceLock::from(body_parts);
         }
     }
