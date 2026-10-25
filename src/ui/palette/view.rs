@@ -111,6 +111,7 @@ pub fn view(
                         .fg(scheme.on_primary.into_color())
                         .bg(scheme.primary.into_color()),
                 )
+                .highlight_symbol(" > ")
                 .direction(ListDirection::TopToBottom),
             options_area,
             &mut state.list_state,
