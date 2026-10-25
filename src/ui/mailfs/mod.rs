@@ -1240,6 +1240,7 @@ impl State {
 
     fn action_clear_selection(&mut self) -> Vec<crate::ui::Message> {
         self.selection.clear();
+        self.cut_selection.clear();
         vec![]
     }
 
