@@ -106,7 +106,7 @@ pub trait MailRemote {
     // TODO:
     // - Rename to `patch`
     // - Also maybe include mailbox-changes-request
-    async fn mutate_mails(
+    async fn patch_mails(
         &self,
         ids: &[MailId],
         mailbox_ids: Option<MutateAttribute<MailboxId>>,

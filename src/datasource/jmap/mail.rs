@@ -208,7 +208,7 @@ impl MailRemote for JmapAccount {
         })
     }
 
-    async fn mutate_mails(
+    async fn patch_mails(
         &self,
         ids: &[MailId],
         mailbox_ids: Option<MutateAttribute<MailboxId>>,

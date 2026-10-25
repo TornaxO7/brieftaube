@@ -374,7 +374,7 @@ impl Repository {
         match self
             .remote
             .get_remote_account(account_id.clone())
-            .mutate_mails(&ids, mailbox_ids.clone(), keywords.clone())
+            .patch_mails(&ids, mailbox_ids.clone(), keywords.clone())
             .await
         {
             Ok(result) => {
