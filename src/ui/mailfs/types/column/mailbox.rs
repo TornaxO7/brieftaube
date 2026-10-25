@@ -22,7 +22,7 @@ pub struct MailboxColumn {
 
 impl MailboxColumn {
     pub fn new(
-        child_mailboxes: Vec<CachedMailbox>,
+        child_mailboxes: Vec<MailboxEntry>,
         total_threads: usize,
         init_mails: Vec<CachedMail>,
     ) -> Self {
@@ -34,29 +34,12 @@ impl MailboxColumn {
     pub fn set_entries(
         &mut self,
         total_threads: usize,
-        mailboxes: Vec<CachedMailbox>,
+        mailboxes: Vec<MailboxEntry>,
         first_mails: Vec<CachedMail>,
     ) {
         debug_assert!(first_mails.len() <= total_threads);
 
         let amount_child_mailboxes = mailboxes.len();
-
-        let mailboxes = {
-            let mut mailboxes = mailboxes
-                .into_iter()
-                .map(MailboxEntry::from)
-                .collect::<Vec<MailboxEntry>>();
-
-            mailboxes.sort_by(|a, b| {
-                if a.sort_order != b.sort_order {
-                    a.sort_order.cmp(&b.sort_order)
-                } else {
-                    a.name.cmp(&b.name)
-                }
-            });
-
-            mailboxes
-        };
 
         let entries: Vec<MailboxColumnEntry> = {
             let mut entries = Vec::with_capacity(amount_child_mailboxes + total_threads);

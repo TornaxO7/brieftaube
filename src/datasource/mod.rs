@@ -4,7 +4,7 @@ pub mod jmap;
 pub mod types;
 
 use crate::{
-    datasource::types::MutateAttribute,
+    datasource::types::{MailboxPatch, MutateAttribute},
     types::{
         AccountData, AccountId, BlobId, CachedIdentity, CachedMail, CachedMailbox, MailId,
         MailKeyword, MailProperty, MailboxId, MailboxProperty, ParentMailboxId, ThreadId,
@@ -104,8 +104,7 @@ pub trait MailRemote {
     async fn create_mail(&self, mail: CachedMail) -> Result<remote::SetResult<CachedMail>>;
 
     // TODO:
-    // - Rename to `patch`
-    // - Also maybe include mailbox-changes-request
+    // - Maybe include mailbox-changes-request
     async fn patch_mails(
         &self,
         ids: &[MailId],
@@ -209,10 +208,7 @@ pub trait MailboxRemote {
         since: &GetState,
     ) -> Result<remote::GetChangeResult<MailboxId>>;
 
-    // async fn create_mailbox(
-    //     &self,
-    //     new: MailboxNew,
-    // ) -> Result<remote::CreateResult<jmap_client::mailbox::Mailbox>>;
+    async fn patch_mailboxes(&self, patches: Vec<MailboxPatch>) -> Result<remote::SetResult<()>>;
 
     async fn destroy_mailboxes(
         &self,

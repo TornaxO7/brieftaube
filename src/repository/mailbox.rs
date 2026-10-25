@@ -1,9 +1,11 @@
 use crate::{
-    datasource::types::{QueryWindow, remote},
+    datasource::types::{MailboxPatch, QueryWindow, remote},
     repository::Repository,
     types::{AccountId, CachedMailbox, InitMailboxData, MailProperty, MailboxId, ParentMailboxId},
 };
+use std::{collections::HashMap, sync::OnceLock};
 use tokio::sync::{Mutex, oneshot};
+use tracing::error;
 
 #[derive(Debug)]
 pub struct Command {
@@ -20,6 +22,11 @@ pub enum CommandKind {
 
         tx: oneshot::Sender<color_eyre::Result<InitMailboxData>>,
     },
+    Patch {
+        patches: Vec<MailboxPatch>,
+
+        tx: oneshot::Sender<color_eyre::Result<()>>,
+    },
 }
 
 impl From<Command> for super::Command {
@@ -30,12 +37,12 @@ impl From<Command> for super::Command {
 
 #[derive(Default)]
 pub struct Locks {
-    ensure_mailboxes_are_cached: Mutex<()>,
+    get_mailbox: Mutex<()>,
 }
 
 impl Repository {
     async fn ensure_mailboxes_are_cached(&self, account_id: AccountId) -> color_eyre::Result<()> {
-        let _enter = self.mailbox_locks.ensure_mailboxes_are_cached.lock().await;
+        let _enter = self.mailbox_locks.get_mailbox.lock().await;
 
         let mailboxes_are_fetched = self
             .caches
@@ -59,8 +66,6 @@ impl Repository {
             .get_remote_account(account_id.clone())
             .fetch_mailboxes_all(CachedMailbox::PROPERTIES.to_vec())
             .await?;
-
-        tracing::debug!("{:#?}", mailboxes);
 
         let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
         cache_lock.upsert_mailboxes(mailboxes).await?;
@@ -158,6 +163,67 @@ impl Repository {
                 child_mailboxes,
                 first_mails: vec![],
             }),
+        }
+    }
+
+    pub async fn patch_mailboxes(
+        &self,
+        account_id: AccountId,
+        patches: Vec<MailboxPatch>,
+    ) -> color_eyre::Result<()> {
+        let _enter = self.mailbox_locks.get_mailbox.lock().await;
+
+        let ids: Vec<MailboxId> = patches.iter().map(|mailbox| mailbox.id.clone()).collect();
+
+        match self
+            .remote
+            .get_remote_account(account_id.clone())
+            .patch_mailboxes(patches.clone())
+            .await
+        {
+            Ok(result) => {
+                let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
+
+                self.ensure_mailbox_changes(&account_id, &result.new_state, &mut cache_lock)
+                    .await?;
+
+                let mut impacted_mailboxes = cache_lock
+                    .get_mailboxes(&ids)
+                    .await?
+                    .value
+                    .into_iter()
+                    .map(|mailbox| (mailbox.id.clone(), mailbox))
+                    .collect::<HashMap<MailboxId, CachedMailbox>>();
+
+                for patch in patches {
+                    let mailbox = impacted_mailboxes.get_mut(&patch.id).unwrap();
+
+                    if let Some(new_name) = patch.new_name {
+                        mailbox.name = OnceLock::from(new_name);
+                    }
+
+                    if let Some(new_parent_id) = patch.new_parent_id {
+                        mailbox.parent_id = OnceLock::from(new_parent_id);
+                    }
+
+                    if let Some(new_role) = patch.new_role {
+                        mailbox.role = OnceLock::from(new_role);
+                    }
+
+                    if let Some(new_sort_order) = patch.new_sort_order {
+                        mailbox.sort_order = OnceLock::from(new_sort_order);
+                    }
+                }
+
+                cache_lock
+                    .upsert_mailboxes(impacted_mailboxes.into_values().collect())
+                    .await?;
+                Ok(())
+            }
+            Err(err) => {
+                error!("Couldn't udpate mailboxes: {}", err);
+                Err(err)
+            }
         }
     }
 }

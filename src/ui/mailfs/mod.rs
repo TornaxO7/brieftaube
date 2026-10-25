@@ -6,7 +6,7 @@ mod view;
 
 use crate::{
     config::{self, Username},
-    datasource::types::{MutateAttribute, QueryWindow},
+    datasource::types::{MailboxPatch, MutateAttribute, QueryWindow},
     types::{
         AccountData, AccountId, CachedMail, InitMailboxData, MailId, MailKeyword, MailboxId,
         ParentMailboxId, ROOT_MAILBOX_ID, ThreadId,
@@ -14,7 +14,7 @@ use crate::{
     ui::{
         Layer, Loadable, Navigation,
         mailfs::types::{
-            MailEntry, MailPreview, UserEntry,
+            MailEntry, MailPreview, MailboxEntry, UserEntry,
             column::{
                 AccountsColumn, Column, DEFAULT_SECTION_SIZE, MailboxColumn, MailboxColumnEntry,
                 ThreadColumn, UserColumn,
@@ -253,7 +253,9 @@ impl State {
         mailbox_id: ParentMailboxId,
         data: color_eyre::Result<InitMailboxData>,
     ) -> Vec<crate::ui::Message> {
-        let key = (account_id, mailbox_id.clone());
+        let key = (account_id.clone(), mailbox_id.clone());
+
+        let mut msgs = vec![];
 
         match data {
             Ok(InitMailboxData {
@@ -266,22 +268,68 @@ impl State {
                     debug_assert!(first_mails.is_empty());
                 }
 
+                let mut mailboxes = child_mailboxes
+                    .into_iter()
+                    .map(MailboxEntry::from)
+                    .collect::<Vec<MailboxEntry>>();
+
+                mailboxes.sort_by(|a, b| {
+                    if a.sort_order != b.sort_order {
+                        a.sort_order.cmp(&b.sort_order)
+                    } else {
+                        a.name.cmp(&b.name)
+                    }
+                });
+
+                // fix sort order if not done yet by any other client
+                {
+                    let used_sort_orders = mailboxes
+                        .iter()
+                        .map(|mailbox| mailbox.sort_order)
+                        .collect::<HashSet<u32>>();
+
+                    if used_sort_orders.len() < mailboxes.len() {
+                        tracing::debug!(
+                            "Mailboxes not normalized => Sending request for normalizing mailbox sort orders."
+                        );
+
+                        msgs.push(
+                            MessageRequest::PatchMailboxes {
+                                username: self.get_selected_username(),
+                                account_id: account_id.clone(),
+                                patches: mailboxes
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(idx, mailbox)| MailboxPatch {
+                                        id: mailbox.id.clone(),
+                                        new_name: None,
+                                        new_parent_id: None,
+                                        new_role: None,
+                                        new_sort_order: Some(idx as u32 * 4),
+                                    })
+                                    .collect(),
+                            }
+                            .into(),
+                        );
+                    }
+                }
+
                 match self.mailbox_columns.get_mut(&key).unwrap() {
                     Loadable::NotLoaded => unreachable!(),
                     Loadable::Loading | Loadable::Error(_) => {
                         self.mailbox_columns.insert(
                             key,
                             Loadable::Loaded(MailboxColumn::new(
-                                child_mailboxes,
+                                mailboxes,
                                 total_threads,
                                 first_mails,
                             )),
                         );
                     }
                     Loadable::Loaded(column) => {
-                        column.set_entries(total_threads, child_mailboxes, first_mails);
+                        column.set_entries(total_threads, mailboxes, first_mails);
                     }
-                }
+                };
             }
             Err(err) => {
                 self.mailbox_columns
@@ -289,7 +337,7 @@ impl State {
             }
         };
 
-        vec![]
+        msgs
     }
 
     fn handle_set_root_mails(

@@ -2,7 +2,7 @@ use crate::{
     datasource::{
         MailboxRemote,
         jmap::JmapAccount,
-        types::{GetState, remote},
+        types::{GetState, MailboxPatch, remote},
     },
     types::{CachedMailbox, MailboxId, MailboxProperty},
 };
@@ -91,37 +91,43 @@ impl MailboxRemote for JmapAccount {
         })
     }
 
-    // async fn create_mailbox(&self, new: MailboxNew) -> Result<remote::CreateResult<CachedMailbox>> {
-    //     let (mut response, tmp_id) = {
-    //         let mut request = self.build_request();
-    //         let tmp_id = request
-    //             .set_mailbox()
-    //             .create()
-    //             .name(new.name.as_str())
-    //             .parent_id(new.parent_id.clone())
-    //             .sort_order(new.sort_order)
-    //             .create_id()
-    //             .unwrap();
+    async fn patch_mailboxes(&self, patches: Vec<MailboxPatch>) -> Result<remote::SetResult<()>> {
+        let mut response = {
+            let mut request = self.build_request();
 
-    //         (request.send_set_mailbox().await?, tmp_id)
-    //     };
+            let set_request = request.set_mailbox();
 
-    //     let value = match response.created(&tmp_id) {
-    //         Ok(server_mailbox) => Ok(CachedMailbox::from_new(new, server_mailbox)),
-    //         Err(err) => {
-    //             let jmap_client::Error::Set(error) = err else {
-    //                 unreachable!("Weird");
-    //             };
+            for patch in patches {
+                let set = set_request.update(&patch.id);
 
-    //             Err(error)
-    //         }
-    //     };
+                if let Some(new_name) = patch.new_name {
+                    set.name(new_name);
+                }
 
-    //     Ok(remote::CreateResult {
-    //         value,
-    //         state: response.take_new_state().into(),
-    //     })
-    // }
+                if let Some(new_parent_id) = patch.new_parent_id {
+                    set.parent_id(new_parent_id);
+                }
+
+                if let Some(new_role) = patch.new_role {
+                    set.role(new_role);
+                }
+
+                if let Some(new_sort_order) = patch.new_sort_order {
+                    set.sort_order(new_sort_order);
+                }
+            }
+
+            request.send_set_mailbox().await?
+        };
+
+        response.unwrap_update_errors().unwrap();
+
+        Ok(remote::SetResult {
+            value: Ok(()),
+            old_state: response.old_state().map(GetState::from),
+            new_state: response.take_new_state().into(),
+        })
+    }
 
     async fn destroy_mailboxes(
         &self,

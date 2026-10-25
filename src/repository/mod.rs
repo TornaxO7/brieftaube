@@ -6,7 +6,7 @@ pub mod thread;
 use crate::{
     datasource::{
         Cache, RemoteSession,
-        types::{GetState, MutateAttribute, QueryState, QueryWindow, cache, remote},
+        types::{GetState, MailboxPatch, MutateAttribute, QueryState, QueryWindow, cache, remote},
     },
     types::{
         AccountId, BlobId, CachedMail, CachedMailbox, InitMailboxData, MailId, MailKeyword,
@@ -103,6 +103,9 @@ impl Repository {
                             )
                             .await,
                         );
+                    }
+                    mailbox::CommandKind::Patch { patches, tx } => {
+                        let _ = tx.send(repo.patch_mailboxes(cmd.account_id, patches).await);
                     }
                 },
                 Command::Thread(cmd) => match cmd.kind {
@@ -257,6 +260,26 @@ impl Repository {
             .await?;
 
         Ok(())
+    }
+
+    async fn ensure_mailbox_changes(
+        &self,
+        account_id: &AccountId,
+        new_state: &GetState,
+        cache_lock: &mut RwLockWriteGuard<'_, Box<dyn Cache>>,
+    ) -> color_eyre::Result<()> {
+        match cache_lock.get_mailbox_state().await {
+            Some(current_state) => {
+                if current_state != new_state {
+                    self.apply_mailbox_get_changes(account_id, cache_lock)
+                        .await?;
+                }
+
+                debug_assert_eq!(cache_lock.get_mailbox_state().await.unwrap(), new_state);
+                Ok(())
+            }
+            None => cache_lock.set_mailbox_state(new_state.clone()).await,
+        }
     }
 
     async fn apply_mailbox_get_changes(
@@ -539,7 +562,7 @@ impl RepositoryHandler {
         .await
     }
 
-    pub async fn mutate_mails(
+    pub async fn patch_mails(
         &self,
         account_id: AccountId,
         ids: Vec<MailId>,
@@ -555,6 +578,21 @@ impl RepositoryHandler {
                     keywords,
                     tx,
                 },
+            }
+            .into()
+        })
+        .await
+    }
+
+    pub async fn patch_mailboxes(
+        &self,
+        account_id: AccountId,
+        patches: Vec<MailboxPatch>,
+    ) -> color_eyre::Result<()> {
+        self.execute(|tx| {
+            mailbox::Command {
+                account_id,
+                kind: mailbox::CommandKind::Patch { patches, tx },
             }
             .into()
         })

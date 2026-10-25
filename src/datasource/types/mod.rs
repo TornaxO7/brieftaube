@@ -1,10 +1,17 @@
 pub mod cache;
 pub mod remote;
 
+use crate::types::{MailboxId, ParentMailboxId};
 use std::{collections::HashSet, ops::Range};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GetState(pub String);
+
+impl From<&str> for GetState {
+    fn from(state: &str) -> Self {
+        Self(state.to_string())
+    }
+}
 
 impl From<String> for GetState {
     fn from(state: String) -> Self {
@@ -78,4 +85,13 @@ impl From<Range<usize>> for QueryWindow {
 pub enum MutateAttribute<T> {
     Set(HashSet<T>),
     Patch(Vec<(T, bool)>),
+}
+
+#[derive(Debug, Clone)]
+pub struct MailboxPatch {
+    pub id: MailboxId,
+    pub new_name: Option<String>,
+    pub new_parent_id: Option<ParentMailboxId>,
+    pub new_role: Option<jmap_client::mailbox::Role>,
+    pub new_sort_order: Option<u32>,
 }

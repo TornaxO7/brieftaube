@@ -2,7 +2,7 @@ use tracing::error;
 
 use crate::{
     config::Username,
-    datasource::types::{MutateAttribute, QueryWindow},
+    datasource::types::{MailboxPatch, MutateAttribute, QueryWindow},
     types::{
         AccountId, CachedMail, MailId, MailKeyword, MailProperty, MailboxId, ParentMailboxId,
         ThreadId,
@@ -54,6 +54,13 @@ pub enum MessageRequest {
         ids: Vec<MailId>,
         mailbox_ids: Option<MutateAttribute<MailboxId>>,
         keywords: Option<MutateAttribute<MailKeyword>>,
+    },
+
+    PatchMailboxes {
+        username: Username,
+        account_id: AccountId,
+
+        patches: Vec<MailboxPatch>,
     },
 }
 
@@ -158,12 +165,29 @@ pub fn handle_request(
         } => {
             manager.with_handler(&username, async move |handler| {
                 match handler
-                    .mutate_mails(account_id, ids, mailbox_ids, keywords)
+                    .patch_mails(account_id, ids, mailbox_ids, keywords)
                     .await
                 {
                     Ok(()) => vec![Message::Reload.into()],
                     Err(err) => {
                         error!("Couldn't patch mail: {}", err);
+                        vec![]
+                    }
+                }
+            });
+            vec![]
+        }
+
+        MessageRequest::PatchMailboxes {
+            username,
+            account_id,
+            patches,
+        } => {
+            manager.with_handler(&username, async move |handler| {
+                match handler.patch_mailboxes(account_id, patches).await {
+                    Ok(()) => vec![Message::Reload.into()],
+                    Err(err) => {
+                        error!("Couldn't patch mailboxes: {}", err);
                         vec![]
                     }
                 }
