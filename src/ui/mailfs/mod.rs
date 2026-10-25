@@ -1078,11 +1078,18 @@ impl State {
                     return vec![];
                 };
 
+                let parent_mailbox = match self.column_stack.iter().rev().skip(1).next().unwrap() {
+                    ColumnStackEntry::Users | ColumnStackEntry::Thread(_) => unreachable!(),
+                    ColumnStackEntry::Accounts => None,
+                    ColumnStackEntry::Mailbox(mailbox_id) => mailbox_id.clone(),
+                };
+
                 match selected_entry {
                     MailboxColumnEntry::Mailbox(mailbox) => {
                         let selected = SelectedValue::Mailbox(mailbox.id.clone());
                         if self.selection.remove(&selected).is_none() {
-                            self.selection.insert(selected, SelectionCtx {});
+                            self.selection
+                                .insert(selected, SelectionCtx { parent_mailbox });
                         }
                     }
                     MailboxColumnEntry::RootMail(loadable_mail) => {
@@ -1105,7 +1112,12 @@ impl State {
                         for mail in column.mails.iter_mut() {
                             let selected = SelectedValue::Mail(mail.id.clone());
                             if self.selection.remove(&selected).is_none() {
-                                self.selection.insert(selected, SelectionCtx {});
+                                self.selection.insert(
+                                    selected,
+                                    SelectionCtx {
+                                        parent_mailbox: parent_mailbox.clone(),
+                                    },
+                                );
                             }
                         }
                     }
@@ -1123,11 +1135,24 @@ impl State {
                     return vec![];
                 };
 
+                let ColumnStackEntry::Mailbox(parent_mailbox) = self
+                    .column_stack
+                    .iter()
+                    .rev()
+                    .skip(1)
+                    .next()
+                    .cloned()
+                    .unwrap()
+                else {
+                    unreachable!();
+                };
+
                 let mail = column.get_selected_entry_mut();
 
                 let selected = SelectedValue::Mail(mail.id.clone());
                 if self.selection.remove(&selected).is_none() {
-                    self.selection.insert(selected, SelectionCtx {});
+                    self.selection
+                        .insert(selected, SelectionCtx { parent_mailbox });
                 }
             }
         };
@@ -1523,4 +1548,6 @@ enum SelectedValue {
 }
 
 #[derive(Debug)]
-struct SelectionCtx {}
+struct SelectionCtx {
+    pub parent_mailbox: ParentMailboxId,
+}

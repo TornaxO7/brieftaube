@@ -47,6 +47,10 @@ pub enum MessageRequest {
         thread_id: ThreadId,
         mail_properties: Vec<MailProperty>,
     },
+
+    // TODO:
+    // - Use one single patch
+    // - Creates _one_ huge patch request
     PatchMail {
         username: Username,
         account_id: AccountId,
@@ -55,7 +59,6 @@ pub enum MessageRequest {
         mailbox_ids: Option<MutateAttribute<MailboxId>>,
         keywords: Option<MutateAttribute<MailKeyword>>,
     },
-
     PatchMailboxes {
         username: Username,
         account_id: AccountId,
