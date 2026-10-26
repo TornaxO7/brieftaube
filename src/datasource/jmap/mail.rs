@@ -63,8 +63,6 @@ impl MailRemote for JmapAccount {
             .map(CachedMail::from)
             .collect();
 
-        tracing::debug!("CachedMails: {:#?}", values);
-
         let not_found = response.take_not_found().into_iter().map(MailId).collect();
 
         Ok(remote::GetBatchResult {

@@ -43,6 +43,7 @@ pub struct GetChangeResult<Id> {
     pub destroyed: Vec<Id>,
 }
 
+#[derive(Debug)]
 pub struct QueryChangeResult<Id> {
     pub new_state: QueryState,
     pub removed: Vec<Id>,

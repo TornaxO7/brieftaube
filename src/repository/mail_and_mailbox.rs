@@ -98,6 +98,8 @@ impl Repository {
 
                 // ...then mails
                 {
+                    let mut impacted_mailboxes = HashSet::new();
+
                     let mut impacted_mails = cache_lock
                         .get_mails(&mail_result.value.unwrap())
                         .await?
@@ -112,28 +114,40 @@ impl Repository {
                         if let Some(new_mailbox_ids) = patch.new_mailbox_ids {
                             match new_mailbox_ids {
                                 MailPatchType::Set(mailbox_ids) => {
+                                    if let Some(current_mailboxes) = mail.mailbox_ids.get().cloned()
+                                    {
+                                        impacted_mailboxes.extend(current_mailboxes);
+                                    }
+
+                                    impacted_mailboxes.extend(mailbox_ids.clone());
+
                                     mail.mailbox_ids = OnceLock::from(mailbox_ids);
                                 }
-                                MailPatchType::Patch(changes) => match mail.mailbox_ids.get_mut() {
-                                    Some(current_mailbox_ids) => {
-                                        for (mailbox_id, set) in changes {
-                                            if set {
-                                                current_mailbox_ids.insert(mailbox_id);
-                                            } else {
-                                                current_mailbox_ids.remove(&mailbox_id);
+                                MailPatchType::Patch(changes) => {
+                                    impacted_mailboxes
+                                        .extend(changes.iter().map(|(id, _set)| id.clone()));
+
+                                    match mail.mailbox_ids.get_mut() {
+                                        Some(current_mailbox_ids) => {
+                                            for (mailbox_id, set) in changes {
+                                                if set {
+                                                    current_mailbox_ids.insert(mailbox_id);
+                                                } else {
+                                                    current_mailbox_ids.remove(&mailbox_id);
+                                                }
                                             }
                                         }
-                                    }
-                                    None => {
-                                        let new_mailbox_ids: HashSet<MailboxId> = changes
-                                            .into_iter()
-                                            .filter_map(|(mailbox_id, set)| {
-                                                set.then_some(mailbox_id)
-                                            })
-                                            .collect();
-                                        mail.mailbox_ids = OnceLock::from(new_mailbox_ids);
-                                    }
-                                },
+                                        None => {
+                                            let new_mailbox_ids: HashSet<MailboxId> = changes
+                                                .into_iter()
+                                                .filter_map(|(mailbox_id, set)| {
+                                                    set.then_some(mailbox_id)
+                                                })
+                                                .collect();
+                                            mail.mailbox_ids = OnceLock::from(new_mailbox_ids);
+                                        }
+                                    };
+                                }
                             }
                         }
 
@@ -164,6 +178,11 @@ impl Repository {
                                 },
                             }
                         }
+                    }
+
+                    for id in impacted_mailboxes {
+                        self.apply_root_mail_query_changes(&account_id, &id, &mut cache_lock)
+                            .await?;
                     }
 
                     cache_lock

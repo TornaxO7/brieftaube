@@ -121,6 +121,8 @@ impl Repository {
     ) -> color_eyre::Result<Vec<CachedMail>> {
         let _enter = self.mail_locks.query_root_mails.lock().await;
 
+        tracing::debug!("Window: {:#?}", window);
+
         let opt_root_mail_ids = self
             .caches
             .get(&account_id)

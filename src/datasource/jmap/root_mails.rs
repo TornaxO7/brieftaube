@@ -81,7 +81,9 @@ impl RootMailsRemote for JmapAccount {
                 .filter(jmap_client::email::query::Filter::InMailbox {
                     value: mailbox.0.clone(),
                 })
-                .sort([jmap_client::email::query::Comparator::received_at().descending()]);
+                .sort([jmap_client::email::query::Comparator::received_at().descending()])
+                .arguments()
+                .collapse_threads(true);
 
             if let Some(id) = up_to_id {
                 changes.up_to_id(id);

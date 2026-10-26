@@ -120,12 +120,16 @@ impl RootMails {
         }
     }
 
-    pub fn query(&self, range: Range<usize>) -> cache::QueryResponse<MailId> {
+    pub fn query(&self, mut range: Range<usize>) -> cache::QueryResponse<MailId> {
         if self.ids.len() <= range.start {
             return cache::QueryResponse {
                 values: vec![],
                 missing: vec![range],
             };
+        }
+
+        if range.is_empty() {
+            range.end = self.ids.len();
         }
 
         let end = range.end.min(self.ids.len());
