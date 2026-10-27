@@ -8,6 +8,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use color_eyre::Result;
+use jmap_client::core::request::ResultReference;
 use tracing::instrument;
 
 #[async_trait]
@@ -91,44 +92,6 @@ impl MailboxRemote for JmapAccount {
         })
     }
 
-    // async fn patch_mailboxes(&self, patches: Vec<MailboxPatch>) -> Result<remote::SetResult<()>> {
-    //     let mut response = {
-    //         let mut request = self.build_request();
-
-    //         let set_request = request.set_mailbox();
-
-    //         for patch in patches {
-    //             let set = set_request.update(&patch.id);
-
-    //             if let Some(new_name) = patch.new_name {
-    //                 set.name(new_name);
-    //             }
-
-    //             if let Some(new_parent_id) = patch.new_parent_id {
-    //                 set.parent_id(new_parent_id);
-    //             }
-
-    //             if let Some(new_role) = patch.new_role {
-    //                 set.role(new_role);
-    //             }
-
-    //             if let Some(new_sort_order) = patch.new_sort_order {
-    //                 set.sort_order(new_sort_order);
-    //             }
-    //         }
-
-    //         request.send_set_mailbox().await?
-    //     };
-
-    //     response.unwrap_update_errors().unwrap();
-
-    //     Ok(remote::SetResult {
-    //         value: Ok(()),
-    //         old_state: response.old_state().map(GetState::from),
-    //         new_state: response.take_new_state().into(),
-    //     })
-    // }
-
     async fn destroy_mailboxes(
         &self,
         ids: &[MailboxId],
@@ -191,23 +154,48 @@ impl MailboxRemote for JmapAccount {
                 set.parent_id(parent_id);
             }
 
-            request.send_set_mailbox().await?
+            request
+                .get_mailbox()
+                // fine, I'm gonna do the result reference myself >:(
+                .ids_ref(ResultReference::new(
+                    jmap_client::Method::SetMailbox,
+                    0,
+                    format!("/created/{}/id", new_mailbox.id.as_str()),
+                ))
+                .properties(
+                    CachedMailbox::PROPERTIES
+                        .into_iter()
+                        .map(|property| property.into()),
+                );
+
+            request.send().await?
         };
 
-        let created_mailbox = response
-            .created(new_mailbox.id.as_str())
-            .inspect(|x| tracing::debug!("{:#?}", x))
-            .map(CachedMailbox::from)
+        let mut get_method_call = response
+            .pop_method_response()
+            .unwrap()
+            .unwrap_get_mailbox()
             .unwrap();
 
-        tracing::debug!("Remote mailbox: {:#?}", created_mailbox);
+        let mut set_method_call = response
+            .pop_method_response()
+            .unwrap()
+            .unwrap_set_mailbox()
+            .unwrap();
+
+        let created_mailbox = get_method_call
+            .take_list()
+            .into_iter()
+            .next()
+            .map(CachedMailbox::from)
+            .unwrap();
 
         new_mailbox.merge(created_mailbox);
 
         Ok(remote::SetResult {
             value: Ok(new_mailbox),
-            old_state: response.old_state().map(GetState::from),
-            new_state: response.take_new_state().into(),
+            old_state: set_method_call.old_state().map(GetState::from),
+            new_state: set_method_call.take_new_state().into(),
         })
     }
 }
