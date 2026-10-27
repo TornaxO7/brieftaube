@@ -140,8 +140,8 @@ impl MailboxColumn {
     pub fn ensure_loaded_mails(&mut self, section_size: Option<usize>) -> Vec<QueryWindow> {
         let mut query_windows = Vec::new();
 
-        let selected_idx = self.state.selected().unwrap_or(0);
         let max_range = self.get_min_start_max_end(section_size);
+        let selected_idx = self.state.selected().unwrap_or(0).max(max_range.start);
 
         // 1. check above
         if let Some(start_offset) = self.entries[max_range.start..selected_idx]

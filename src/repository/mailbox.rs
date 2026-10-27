@@ -223,7 +223,9 @@ impl Repository {
                 cache_lock.evict_mailboxes(&result.destroyed).await?;
 
                 if !result.failed.is_empty() {
-                    todo!("Return error");
+                    // TODO: HERE
+                    // Don't panic => Return error messages instead
+                    todo!("Return all failed ones...");
                 }
 
                 Ok(())
