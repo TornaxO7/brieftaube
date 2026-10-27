@@ -56,6 +56,7 @@ pub enum Message {
 
     CreateMailboxStep(CreateMailboxStep),
     RemoveMailboxes(HashSet<MailboxId>),
+    RenameMailboxStep(RenameMailboxStep),
 }
 
 impl From<Message> for crate::ui::Message {
@@ -70,4 +71,10 @@ type SortOrder = u32;
 pub enum CreateMailboxStep {
     PromptName(ParentMailboxId, SortOrder),
     CreateWithName(String, ParentMailboxId, SortOrder),
+}
+
+#[derive(Debug)]
+pub enum RenameMailboxStep {
+    PromptName(MailboxId),
+    RenameMailbox(MailboxId, String),
 }

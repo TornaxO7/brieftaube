@@ -148,6 +148,7 @@ impl Layer<Message, crate::ui::Message> for State {
             Message::Reload => self.handle_reload(),
             Message::CreateMailboxStep(step) => self.handle_create_mailbox_step(step),
             Message::RemoveMailboxes(mailboxes) => self.handle_remove_mailboxes(mailboxes),
+            Message::RenameMailboxStep(step) => self.handle_rename_mailbox_step(step),
         };
 
         response_msgs.extend(self.ensure_right_column_data());
@@ -609,6 +610,45 @@ impl State {
         }
 
         vec![Message::Reload.into()]
+    }
+
+    fn handle_rename_mailbox_step(&mut self, step: RenameMailboxStep) -> Vec<crate::ui::Message> {
+        match step {
+            RenameMailboxStep::PromptName(mailbox_id) => {
+                vec![
+                    Navigation::OpenPrompt {
+                        description: "New mailbox name".to_string(),
+                        map: Box::new(move |name| {
+                            Message::RenameMailboxStep(RenameMailboxStep::RenameMailbox(
+                                mailbox_id.clone(),
+                                name,
+                            ))
+                            .into()
+                        }),
+                    }
+                    .into(),
+                ]
+            }
+            RenameMailboxStep::RenameMailbox(mailbox_id, name) => {
+                vec![
+                    MessageRequest::PatchMailAndMailboxes {
+                        username: self.get_selected_username(),
+                        account_id: self.get_selected_account_id(),
+                        patches: Patches {
+                            mail_patches: vec![],
+                            mailbox_patches: vec![MailboxPatch {
+                                id: mailbox_id,
+                                new_name: Some(name),
+                                new_parent_id: None,
+                                new_role: None,
+                                new_sort_order: None,
+                            }],
+                        },
+                    }
+                    .into(),
+                ]
+            }
+        }
     }
 }
 
@@ -1530,7 +1570,40 @@ impl State {
     }
 
     fn action_rename_mailbox(&mut self) -> Vec<crate::ui::Message> {
-        todo!();
+        let ColumnStackEntry::Mailbox(id) = self.column_stack.last().unwrap() else {
+            self.statusbar.set_message(
+                "You need to be in a mailbox-column to execute this action.".to_string(),
+                StatusMsgType::Error,
+            );
+            return vec![];
+        };
+
+        let key = (self.get_selected_account_id(), id.clone());
+        let Some(column) = self.mailbox_columns.get(&key).unwrap().loaded() else {
+            return vec![];
+        };
+
+        let Some((_idx, selected_entry)) = column.get_selected_entry() else {
+            return vec![];
+        };
+
+        match selected_entry {
+            MailboxColumnEntry::RootMail(_) => {
+                self.statusbar.set_message(
+                    "You need to select a mailbox to execute this".to_string(),
+                    StatusMsgType::Error,
+                );
+                return vec![];
+            }
+            MailboxColumnEntry::Mailbox(mailbox_entry) => {
+                vec![
+                    Message::RenameMailboxStep(RenameMailboxStep::PromptName(
+                        mailbox_entry.id.clone(),
+                    ))
+                    .into(),
+                ]
+            }
+        }
     }
 }
 
