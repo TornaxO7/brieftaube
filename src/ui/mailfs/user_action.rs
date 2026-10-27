@@ -63,6 +63,8 @@ pub enum UserAction {
     CreateMailbox,
     #[strum(message = "Remove mailbox only, if it's empty.")]
     RemoveMailbox,
+    #[strum(message = "Rename the current selected mailbox.")]
+    RenameMailbox,
 
     #[strum(message = "Quit the application")]
     Quit,

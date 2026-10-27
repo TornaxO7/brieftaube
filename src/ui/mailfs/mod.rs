@@ -220,6 +220,7 @@ impl State {
 
             UserAction::CreateMailbox => self.action_create_mailbox(),
             UserAction::RemoveMailbox => self.action_remove_mailbox(),
+            UserAction::RenameMailbox => self.action_rename_mailbox(),
         }
     }
 
@@ -1396,6 +1397,10 @@ impl State {
     }
 
     fn action_remove_mailbox(&mut self) -> Vec<crate::ui::Message> {
+        todo!();
+    }
+
+    fn action_rename_mailbox(&mut self) -> Vec<crate::ui::Message> {
         todo!();
     }
 }
