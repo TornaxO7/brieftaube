@@ -95,6 +95,9 @@ impl Repository {
                             .await,
                         );
                     }
+                    mailbox::CommandKind::CreateMailbox { new_mailbox, tx } => {
+                        let _ = tx.send(repo.create_mailbox(cmd.account_id, new_mailbox).await);
+                    }
                 },
                 Command::Thread(cmd) => match cmd.kind {
                     thread::CommandKind::GetThread { id, properties, tx } => {
@@ -564,6 +567,21 @@ impl RepositoryHandler {
             mail_and_mailbox::Command {
                 account_id,
                 kind: mail_and_mailbox::CommandKind::PatchMailAndMailbox { patches, tx },
+            }
+            .into()
+        })
+        .await
+    }
+
+    pub async fn create_mailbox(
+        &self,
+        account_id: AccountId,
+        new_mailbox: CachedMailbox,
+    ) -> color_eyre::Result<CachedMailbox> {
+        self.execute(|tx| {
+            mailbox::Command {
+                account_id,
+                kind: mailbox::CommandKind::CreateMailbox { new_mailbox, tx },
             }
             .into()
         })

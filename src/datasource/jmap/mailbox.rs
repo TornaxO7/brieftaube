@@ -165,4 +165,49 @@ impl MailboxRemote for JmapAccount {
             new_state: response.take_new_state().into(),
         })
     }
+
+    async fn create_mailbox(
+        &self,
+        mut new_mailbox: CachedMailbox,
+    ) -> Result<remote::SetResult<CachedMailbox>> {
+        let mut response = {
+            let mut request = self.build_request();
+
+            let set = request.set_mailbox().create_with_id(new_mailbox.id.clone());
+
+            if let Some(name) = new_mailbox.name.get().cloned() {
+                set.name(name);
+            }
+
+            if let Some(role) = new_mailbox.role.get().cloned() {
+                set.role(role);
+            }
+
+            if let Some(sort_order) = new_mailbox.sort_order.get().cloned() {
+                set.sort_order(sort_order);
+            }
+
+            if let Some(parent_id) = new_mailbox.parent_id.get().cloned() {
+                set.parent_id(parent_id);
+            }
+
+            request.send_set_mailbox().await?
+        };
+
+        let created_mailbox = response
+            .created(new_mailbox.id.as_str())
+            .inspect(|x| tracing::debug!("{:#?}", x))
+            .map(CachedMailbox::from)
+            .unwrap();
+
+        tracing::debug!("Remote mailbox: {:#?}", created_mailbox);
+
+        new_mailbox.merge(created_mailbox);
+
+        Ok(remote::SetResult {
+            value: Ok(new_mailbox),
+            old_state: response.old_state().map(GetState::from),
+            new_state: response.take_new_state().into(),
+        })
+    }
 }

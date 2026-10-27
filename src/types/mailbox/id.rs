@@ -1,3 +1,5 @@
+use crate::types::INTERN_ID_PREFIX;
+
 pub const ROOT_MAILBOX_ID: ParentMailboxId = None;
 pub type ParentMailboxId = Option<MailboxId>;
 
@@ -5,6 +7,18 @@ pub type ParentMailboxId = Option<MailboxId>;
 pub struct MailboxId(pub String);
 
 impl MailboxId {
+    pub fn new_intern() -> Self {
+        let suffix: String = std::iter::repeat_with(fastrand::alphanumeric)
+            .take(10)
+            .collect();
+
+        Self(format!("{}{}", INTERN_ID_PREFIX, suffix))
+    }
+
+    pub fn is_intern(&self) -> bool {
+        self.0.starts_with(INTERN_ID_PREFIX)
+    }
+
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }

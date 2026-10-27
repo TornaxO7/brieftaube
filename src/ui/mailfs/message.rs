@@ -51,10 +51,18 @@ pub enum Message {
     SelectedPaletteEntry(String),
 
     SetColumnAreaSize(Size),
+
+    CreateMailboxStep(CreateMailboxStep),
 }
 
 impl From<Message> for crate::ui::Message {
     fn from(msg: Message) -> Self {
         Self::Mailfs(msg)
     }
+}
+
+#[derive(Debug)]
+pub enum CreateMailboxStep {
+    PromptName(ParentMailboxId),
+    CreateWithName(String, ParentMailboxId),
 }

@@ -11,3 +11,5 @@ pub use identity::*;
 pub use mail::*;
 pub use mailbox::*;
 pub use thread_id::*;
+
+const INTERN_ID_PREFIX: &str = "brieftaube-";

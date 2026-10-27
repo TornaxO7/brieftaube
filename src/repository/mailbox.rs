@@ -4,6 +4,7 @@ use crate::{
     types::{AccountId, CachedMailbox, InitMailboxData, MailProperty, MailboxId, ParentMailboxId},
 };
 use tokio::sync::{Mutex, oneshot};
+use tracing::error;
 
 #[derive(Debug)]
 pub struct Command {
@@ -19,6 +20,10 @@ pub enum CommandKind {
         mail_properties: Vec<MailProperty>,
 
         tx: oneshot::Sender<color_eyre::Result<InitMailboxData>>,
+    },
+    CreateMailbox {
+        new_mailbox: CachedMailbox,
+        tx: oneshot::Sender<color_eyre::Result<CachedMailbox>>,
     },
 }
 
@@ -156,6 +161,38 @@ impl Repository {
                 child_mailboxes,
                 first_mails: vec![],
             }),
+        }
+    }
+
+    pub async fn create_mailbox(
+        &self,
+        account_id: AccountId,
+        mailbox: CachedMailbox,
+    ) -> color_eyre::Result<CachedMailbox> {
+        match self
+            .remote
+            .get_remote_account(account_id.clone())
+            .create_mailbox(mailbox)
+            .await
+        {
+            Ok(result) => {
+                let server_mailbox = result.value.unwrap();
+
+                let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
+
+                self.ensure_mailbox_changes(&account_id, &result.new_state, &mut cache_lock)
+                    .await?;
+
+                cache_lock
+                    .upsert_mailboxes(vec![server_mailbox.clone()])
+                    .await?;
+                cache_lock.set_mailbox_state(result.new_state).await?;
+                Ok(server_mailbox)
+            }
+            Err(err) => {
+                error!("Couldn't create mailbox:\n{}", err);
+                Err(err)
+            }
         }
     }
 }

@@ -8,8 +8,8 @@ use crate::{
     config::{self, Username},
     datasource::types::{MailPatch, MailPatchType, MailboxPatch, Patches, QueryWindow},
     types::{
-        AccountData, AccountId, CachedMail, InitMailboxData, MailId, MailKeyword, MailboxId,
-        ParentMailboxId, ROOT_MAILBOX_ID, ThreadId,
+        AccountData, AccountId, CachedMail, CachedMailbox, InitMailboxData, MailId, MailKeyword,
+        MailboxId, ParentMailboxId, ROOT_MAILBOX_ID, ThreadId,
     },
     ui::{
         Layer, Loadable, Navigation,
@@ -146,6 +146,7 @@ impl Layer<Message, crate::ui::Message> for State {
             } => self.handle_set_mail_preview(account_id, mail_id, preview),
             Message::SetColumnAreaSize(size) => self.handle_set_column_area_size(size),
             Message::Reload => self.handle_reload(),
+            Message::CreateMailboxStep(step) => self.handle_create_mailbox_step(step),
         };
 
         response_msgs.extend(self.ensure_right_column_data());
@@ -514,6 +515,39 @@ impl State {
         }
 
         msgs
+    }
+
+    fn handle_create_mailbox_step(&mut self, step: CreateMailboxStep) -> Vec<crate::ui::Message> {
+        match step {
+            CreateMailboxStep::PromptName(parent) => {
+                self.statusbar
+                    .set_message("[1/2] Creating mailbox".to_string(), StatusMsgType::Loading);
+
+                vec![
+                    Navigation::OpenPrompt {
+                        description: "Mailbox name".to_string(),
+                        map: Box::new(move |name| {
+                            Message::CreateMailboxStep(CreateMailboxStep::CreateWithName(
+                                name,
+                                parent.clone(),
+                            ))
+                            .into()
+                        }),
+                    }
+                    .into(),
+                ]
+            }
+            CreateMailboxStep::CreateWithName(name, parent) => {
+                vec![
+                    MessageRequest::CreateMailbox {
+                        username: self.get_selected_username(),
+                        account_id: self.get_selected_account_id(),
+                        new_mailbox: CachedMailbox::new(name, parent),
+                    }
+                    .into(),
+                ]
+            }
+        }
     }
 }
 
@@ -1393,7 +1427,19 @@ impl State {
     }
 
     fn action_create_mailbox(&mut self) -> Vec<crate::ui::Message> {
-        todo!();
+        match self.column_stack.last().unwrap() {
+            ColumnStackEntry::Users | ColumnStackEntry::Accounts | ColumnStackEntry::Thread(_) => {
+                todo!("Throw error ");
+            }
+            ColumnStackEntry::Mailbox(parent_of_new_mailbox) => {
+                vec![
+                    Message::CreateMailboxStep(CreateMailboxStep::PromptName(
+                        parent_of_new_mailbox.clone(),
+                    ))
+                    .into(),
+                ]
+            }
+        }
     }
 
     fn action_remove_mailbox(&mut self) -> Vec<crate::ui::Message> {

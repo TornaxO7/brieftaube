@@ -1,7 +1,10 @@
 use crate::{
     config::Username,
     datasource::types::{Patches, QueryWindow},
-    types::{AccountId, CachedMail, MailId, MailProperty, MailboxId, ParentMailboxId, ThreadId},
+    types::{
+        AccountId, CachedMail, CachedMailbox, MailId, MailProperty, MailboxId, ParentMailboxId,
+        ThreadId,
+    },
     ui::{
         mailfs::{Message, types::UserEntry},
         repository_manager::RepositoryManager,
@@ -44,14 +47,18 @@ pub enum MessageRequest {
         mail_properties: Vec<MailProperty>,
     },
 
-    // TODO:
-    // - Use one single patch
-    // - Creates _one_ huge patch request
     PatchMailAndMailboxes {
         username: Username,
         account_id: AccountId,
 
         patches: Patches,
+    },
+
+    CreateMailbox {
+        username: Username,
+        account_id: AccountId,
+
+        new_mailbox: CachedMailbox,
     },
 }
 
@@ -161,6 +168,23 @@ pub fn handle_request(
                     }
                 }
             });
+            vec![]
+        }
+        MessageRequest::CreateMailbox {
+            username,
+            account_id,
+            new_mailbox,
+        } => {
+            manager.with_handler(&username, async move |handler| {
+                match handler.create_mailbox(account_id, new_mailbox).await {
+                    Ok(_new_mailbox) => vec![Message::Reload.into()],
+                    Err(err) => {
+                        error!("Couldn't create mailbox: {}", err);
+                        vec![]
+                    }
+                }
+            });
+
             vec![]
         }
     }

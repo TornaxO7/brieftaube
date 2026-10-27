@@ -1,5 +1,5 @@
 use super::MailboxId;
-use crate::types::MailboxProperty;
+use crate::types::{MailboxProperty, ParentMailboxId};
 use jmap_client::mailbox::{MailboxRights, Role};
 use std::sync::OnceLock;
 
@@ -26,6 +26,19 @@ impl CachedMailbox {
         MailboxProperty::TotalThreads,
         MailboxProperty::MyRights,
     ];
+
+    pub fn new(name: String, parent_id: ParentMailboxId) -> Self {
+        Self {
+            id: MailboxId::new_intern(),
+            name: OnceLock::from(name),
+            role: OnceLock::from(Role::None),
+            sort_order: OnceLock::new(),
+            unread_mails: OnceLock::new(),
+            parent_id: OnceLock::from(parent_id),
+            total_threads: OnceLock::new(),
+            my_rights: OnceLock::new(),
+        }
+    }
 
     pub fn merge(&mut self, other: CachedMailbox) {
         self.id = other.id;

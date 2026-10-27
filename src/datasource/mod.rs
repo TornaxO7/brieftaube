@@ -209,13 +209,16 @@ pub trait MailboxRemote {
         since: &GetState,
     ) -> Result<remote::GetChangeResult<MailboxId>>;
 
-    // async fn patch_mailboxes(&self, patches: Vec<MailboxPatch>) -> Result<remote::SetResult<()>>;
-
     async fn destroy_mailboxes(
         &self,
         ids: &[MailboxId],
         on_destroy_remove_emails: bool,
     ) -> Result<remote::DestroyResult<MailboxId>>;
+
+    async fn create_mailbox(
+        &self,
+        new_mailbox: CachedMailbox,
+    ) -> Result<remote::SetResult<CachedMailbox>>;
 }
 
 #[async_trait]

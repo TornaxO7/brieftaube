@@ -1,4 +1,4 @@
-const INTERN_ID_PREFIX: &str = "brieftaube-";
+use crate::types::INTERN_ID_PREFIX;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct MailId(pub String);
