@@ -25,6 +25,12 @@ pub enum CommandKind {
         new_mailbox: CachedMailbox,
         tx: oneshot::Sender<color_eyre::Result<CachedMailbox>>,
     },
+    RemoveMailbox {
+        ids: Vec<MailboxId>,
+        on_destroy_remove_mails: bool,
+
+        tx: oneshot::Sender<color_eyre::Result<()>>,
+    },
 }
 
 impl From<Command> for super::Command {
@@ -191,6 +197,39 @@ impl Repository {
             }
             Err(err) => {
                 error!("Couldn't create mailbox:\n{}", err);
+                Err(err)
+            }
+        }
+    }
+
+    pub async fn remove_mailbox(
+        &self,
+        account_id: AccountId,
+        ids: Vec<MailboxId>,
+        on_destroy_remove_mails: bool,
+    ) -> color_eyre::Result<()> {
+        match self
+            .remote
+            .get_remote_account(account_id.clone())
+            .destroy_mailboxes(&ids, on_destroy_remove_mails)
+            .await
+        {
+            Ok(result) => {
+                let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
+
+                self.ensure_mailbox_changes(&account_id, &result.new_state, &mut cache_lock)
+                    .await?;
+
+                cache_lock.evict_mailboxes(&result.destroyed).await?;
+
+                if !result.failed.is_empty() {
+                    todo!("Return error");
+                }
+
+                Ok(())
+            }
+            Err(err) => {
+                error!("Couldn't destroy mailboxes: {}", err);
                 Err(err)
             }
         }

@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::{
     config::Username,
     datasource::types::QueryWindow,
@@ -53,6 +55,7 @@ pub enum Message {
     SetColumnAreaSize(Size),
 
     CreateMailboxStep(CreateMailboxStep),
+    RemoveMailboxes(HashSet<MailboxId>),
 }
 
 impl From<Message> for crate::ui::Message {

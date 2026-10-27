@@ -60,6 +60,14 @@ pub enum MessageRequest {
 
         new_mailbox: CachedMailbox,
     },
+
+    RemoveMailboxes {
+        username: Username,
+        account_id: AccountId,
+
+        ids: Vec<MailboxId>,
+        on_destroy_remove_mails: bool,
+    },
 }
 
 impl From<MessageRequest> for crate::ui::Message {
@@ -185,6 +193,26 @@ pub fn handle_request(
                 }
             });
 
+            vec![]
+        }
+        MessageRequest::RemoveMailboxes {
+            username,
+            account_id,
+            ids,
+            on_destroy_remove_mails,
+        } => {
+            manager.with_handler(&username, async move |handler| {
+                match handler
+                    .remove_mailbox(account_id, ids.clone(), on_destroy_remove_mails)
+                    .await
+                {
+                    Ok(()) => vec![Message::RemoveMailboxes(ids.into_iter().collect()).into()],
+                    Err(err) => {
+                        error!("Couldn't create mailbox: {}", err);
+                        vec![]
+                    }
+                }
+            });
             vec![]
         }
     }

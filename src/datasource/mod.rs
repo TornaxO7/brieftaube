@@ -212,7 +212,7 @@ pub trait MailboxRemote {
     async fn destroy_mailboxes(
         &self,
         ids: &[MailboxId],
-        on_destroy_remove_emails: bool,
+        on_destroy_remove_mails: bool,
     ) -> Result<remote::DestroyResult<MailboxId>>;
 
     async fn create_mailbox(

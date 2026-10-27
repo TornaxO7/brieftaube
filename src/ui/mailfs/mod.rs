@@ -147,6 +147,7 @@ impl Layer<Message, crate::ui::Message> for State {
             Message::SetColumnAreaSize(size) => self.handle_set_column_area_size(size),
             Message::Reload => self.handle_reload(),
             Message::CreateMailboxStep(step) => self.handle_create_mailbox_step(step),
+            Message::RemoveMailboxes(mailboxes) => self.handle_remove_mailboxes(mailboxes),
         };
 
         response_msgs.extend(self.ensure_right_column_data());
@@ -220,7 +221,7 @@ impl State {
             UserAction::ClearStatusMessage => self.action_clear_status_msg(),
 
             UserAction::CreateMailbox => self.action_create_mailbox(),
-            UserAction::RemoveMailbox => self.action_remove_mailbox(),
+            UserAction::RemoveEmptyMailboxes => self.action_remove_empty_mailboxes(),
             UserAction::RenameMailbox => self.action_rename_mailbox(),
         }
     }
@@ -549,6 +550,65 @@ impl State {
                 ]
             }
         }
+    }
+
+    fn handle_remove_mailboxes(
+        &mut self,
+        mailboxes: HashSet<MailboxId>,
+    ) -> Vec<crate::ui::Message> {
+        let mailbox_to_be_removed = self.column_stack.iter().enumerate().find(
+            |(_idx, entry)| matches!(entry, ColumnStackEntry::Mailbox(Some(id)) if mailboxes.contains(&id)),
+        );
+
+        if let Some((idx, _entry)) = mailbox_to_be_removed {
+            while self.column_stack.len() > idx + 1 {
+                self.column_stack.pop();
+            }
+        }
+
+        if let ColumnStackEntry::Mailbox(mailbox_id) = self.column_stack.last().unwrap() {
+            let key = (self.get_selected_account_id(), mailbox_id.clone());
+            let column = self
+                .mailbox_columns
+                .get_mut(&key)
+                .unwrap()
+                .loaded_mut()
+                .unwrap();
+
+            let selected_idx = column.state.selected().unwrap_or(0);
+
+            let next_unremoved_entry_below = column
+                .entries[selected_idx..]
+                .iter()
+                .enumerate()
+                .skip(1)
+                .find(|(_offset, entry)| !matches!(entry, MailboxColumnEntry::Mailbox(entry) if mailboxes.contains(&entry.id)));
+
+            match next_unremoved_entry_below {
+                Some((offset, _entry)) => {
+                    column.state.select(Some(selected_idx + offset));
+                }
+                None => {
+                    // try above
+                    let next_unremoved_entry_above = column.entries[0..selected_idx]
+                            .iter()
+                            .rev()
+                            .enumerate()
+                            .find(|(_offset, entry)| !matches!(entry, MailboxColumnEntry::Mailbox(entry) if mailboxes.contains(&entry.id)));
+
+                    match next_unremoved_entry_above {
+                        Some((offset, _entry)) => {
+                            column.state.select(Some(selected_idx - offset - 1));
+                        }
+                        None => {
+                            self.column_stack.pop();
+                        }
+                    }
+                }
+            }
+        }
+
+        vec![Message::Reload.into()]
     }
 }
 
@@ -1465,8 +1525,8 @@ impl State {
         }
     }
 
-    fn action_remove_mailbox(&mut self) -> Vec<crate::ui::Message> {
-        todo!();
+    fn action_remove_empty_mailboxes(&mut self) -> Vec<crate::ui::Message> {
+        self.remove_mailbox_inner(false)
     }
 
     fn action_rename_mailbox(&mut self) -> Vec<crate::ui::Message> {
@@ -1726,6 +1786,38 @@ impl State {
         }
 
         msgs
+    }
+
+    fn remove_mailbox_inner(&mut self, on_destroy_remove_mails: bool) -> Vec<crate::ui::Message> {
+        let mut msgs = vec![];
+        if self.selection.is_empty() {
+            msgs.extend(self.action_select_entry());
+        }
+
+        let ids = self.selection.drain()
+            .filter_map(|(selection, _ctx)| match selection {
+                SelectedValue::Mail(_) => {
+                    warn!("The 'remove-mailbox-action' is only effective on mailboxes. Skipping mail...");
+                    None
+                },
+                SelectedValue::Mailbox(mailbox_id) => {
+                    Some(mailbox_id)
+                },
+            }).collect::<HashSet<MailboxId>>();
+
+        if ids.is_empty() {
+            return vec![];
+        }
+
+        vec![
+            MessageRequest::RemoveMailboxes {
+                username: self.get_selected_username(),
+                account_id: self.get_selected_account_id(),
+                ids: ids.into_iter().collect(),
+                on_destroy_remove_mails,
+            }
+            .into(),
+        ]
     }
 }
 

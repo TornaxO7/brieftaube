@@ -98,6 +98,16 @@ impl Repository {
                     mailbox::CommandKind::CreateMailbox { new_mailbox, tx } => {
                         let _ = tx.send(repo.create_mailbox(cmd.account_id, new_mailbox).await);
                     }
+                    mailbox::CommandKind::RemoveMailbox {
+                        ids,
+                        on_destroy_remove_mails,
+                        tx,
+                    } => {
+                        let _ = tx.send(
+                            repo.remove_mailbox(cmd.account_id, ids, on_destroy_remove_mails)
+                                .await,
+                        );
+                    }
                 },
                 Command::Thread(cmd) => match cmd.kind {
                     thread::CommandKind::GetThread { id, properties, tx } => {
@@ -582,6 +592,26 @@ impl RepositoryHandler {
             mailbox::Command {
                 account_id,
                 kind: mailbox::CommandKind::CreateMailbox { new_mailbox, tx },
+            }
+            .into()
+        })
+        .await
+    }
+
+    pub async fn remove_mailbox(
+        &self,
+        account_id: AccountId,
+        ids: Vec<MailboxId>,
+        on_destroy_remove_mails: bool,
+    ) -> color_eyre::Result<()> {
+        self.execute(|tx| {
+            mailbox::Command {
+                account_id,
+                kind: mailbox::CommandKind::RemoveMailbox {
+                    ids,
+                    on_destroy_remove_mails,
+                    tx,
+                },
             }
             .into()
         })
