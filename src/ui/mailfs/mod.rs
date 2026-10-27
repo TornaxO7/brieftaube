@@ -519,7 +519,7 @@ impl State {
 
     fn handle_create_mailbox_step(&mut self, step: CreateMailboxStep) -> Vec<crate::ui::Message> {
         match step {
-            CreateMailboxStep::PromptName(parent) => {
+            CreateMailboxStep::PromptName(parent, sort_order) => {
                 self.statusbar
                     .set_message("[1/2] Creating mailbox".to_string(), StatusMsgType::Loading);
 
@@ -530,6 +530,7 @@ impl State {
                             Message::CreateMailboxStep(CreateMailboxStep::CreateWithName(
                                 name,
                                 parent.clone(),
+                                sort_order,
                             ))
                             .into()
                         }),
@@ -537,12 +538,12 @@ impl State {
                     .into(),
                 ]
             }
-            CreateMailboxStep::CreateWithName(name, parent) => {
+            CreateMailboxStep::CreateWithName(name, parent, sort_order) => {
                 vec![
                     MessageRequest::CreateMailbox {
                         username: self.get_selected_username(),
                         account_id: self.get_selected_account_id(),
-                        new_mailbox: CachedMailbox::new(name, parent),
+                        new_mailbox: CachedMailbox::new(name, parent, sort_order),
                     }
                     .into(),
                 ]
@@ -1432,9 +1433,31 @@ impl State {
                 todo!("Throw error ");
             }
             ColumnStackEntry::Mailbox(parent_of_new_mailbox) => {
+                let key = (
+                    self.get_selected_account_id(),
+                    parent_of_new_mailbox.clone(),
+                );
+                let Some(column) = self.mailbox_columns.get(&key).unwrap().loaded() else {
+                    return vec![];
+                };
+
+                let amount_mailboxes = column.get_amount_mailboxes();
+                let sort_order = if amount_mailboxes > 0 {
+                    let Some(MailboxColumnEntry::Mailbox(last_mailbox)) =
+                        column.get_entry(amount_mailboxes - 1)
+                    else {
+                        unreachable!();
+                    };
+
+                    last_mailbox.sort_order + 1
+                } else {
+                    0
+                };
+
                 vec![
                     Message::CreateMailboxStep(CreateMailboxStep::PromptName(
                         parent_of_new_mailbox.clone(),
+                        sort_order,
                     ))
                     .into(),
                 ]

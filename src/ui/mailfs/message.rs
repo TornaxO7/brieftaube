@@ -61,8 +61,10 @@ impl From<Message> for crate::ui::Message {
     }
 }
 
+type SortOrder = u32;
+
 #[derive(Debug)]
 pub enum CreateMailboxStep {
-    PromptName(ParentMailboxId),
-    CreateWithName(String, ParentMailboxId),
+    PromptName(ParentMailboxId, SortOrder),
+    CreateWithName(String, ParentMailboxId, SortOrder),
 }

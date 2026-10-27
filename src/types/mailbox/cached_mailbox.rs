@@ -27,12 +27,12 @@ impl CachedMailbox {
         MailboxProperty::MyRights,
     ];
 
-    pub fn new(name: String, parent_id: ParentMailboxId) -> Self {
+    pub fn new(name: String, parent_id: ParentMailboxId, sort_order: u32) -> Self {
         Self {
             id: MailboxId::new_intern(),
             name: OnceLock::from(name),
             role: OnceLock::from(Role::None),
-            sort_order: OnceLock::new(),
+            sort_order: OnceLock::from(sort_order),
             unread_mails: OnceLock::new(),
             parent_id: OnceLock::from(parent_id),
             total_threads: OnceLock::new(),
