@@ -177,6 +177,7 @@ impl MailboxRemote for JmapAccount {
             .unwrap_get_mailbox()
             .unwrap();
 
+        // TODO: After stalwart update, add check first if it got created an so on.
         let mut set_method_call = response
             .pop_method_response()
             .unwrap()

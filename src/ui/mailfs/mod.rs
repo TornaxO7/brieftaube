@@ -223,6 +223,7 @@ impl State {
 
             UserAction::CreateMailbox => self.action_create_mailbox(),
             UserAction::RemoveEmptyMailboxes => self.action_remove_empty_mailboxes(),
+            UserAction::RemoveMailboxesWithMails => self.action_remove_mailboxes_with_mails(),
             UserAction::RenameMailbox => self.action_rename_mailbox(),
         }
     }
@@ -1568,6 +1569,10 @@ impl State {
 
     fn action_remove_empty_mailboxes(&mut self) -> Vec<crate::ui::Message> {
         self.remove_mailbox_inner(false)
+    }
+
+    fn action_remove_mailboxes_with_mails(&mut self) -> Vec<crate::ui::Message> {
+        self.remove_mailbox_inner(true)
     }
 
     fn action_rename_mailbox(&mut self) -> Vec<crate::ui::Message> {
