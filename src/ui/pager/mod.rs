@@ -10,7 +10,7 @@ use crate::{
     config::Username,
     types::{AccountId, BlobId, CachedMail, MailAddresses, MailKeyword},
     ui::{
-        EditorContentType, Layer, Loadable, Navigation,
+        EditorContentType, Layer, Loadable, Navigation, mailfs,
         pager::{attachments_tab::AttachmentsTab, message::SaveAttachmentStep},
         statusbar::{StatusMsgType, StatusbarState},
         utils::keybindmanager::{HandleEvent, KeybindManager},
@@ -33,6 +33,9 @@ pub use message_request::*;
 pub use types::*;
 pub use view::view;
 
+// TODO: HERE
+// - Be able to add attachments
+// - Be able to send the mail
 pub struct State {
     keybindings: KeybindManager<UserAction>,
     throbber: ThrobberState,
@@ -536,7 +539,7 @@ impl State {
                             let text_body_content = text_body_content.to_string();
 
                             let part_id = std::iter::repeat_with(fastrand::alphanumeric)
-                                .take(10)
+                                .take(1)
                                 .collect::<String>();
 
                             match body_type {
@@ -551,6 +554,8 @@ impl State {
                                     }
                                 }
                                 SelectedBodyType::Html => {
+                                    let raw_markdown = text_body_content.clone();
+
                                     let html = {
                                         let mut html_output = String::new();
 
@@ -565,10 +570,18 @@ impl State {
                                         html_output
                                     };
 
-                                    let body_parts = HashMap::from([(part_id.clone(), html)]);
+                                    let html_part_id = part_id;
+                                    let text_part_id =
+                                        format!("{}{}", html_part_id, fastrand::alphanumeric());
+
+                                    let body_parts = HashMap::from([
+                                        (html_part_id.clone(), html),
+                                        (text_part_id.clone(), raw_markdown),
+                                    ]);
 
                                     CachedMail {
-                                        html_part_ids: OnceLock::from(vec![part_id]),
+                                        html_part_ids: OnceLock::from(vec![html_part_id]),
+                                        text_part_ids: OnceLock::from(vec![text_part_id]),
                                         body_parts: OnceLock::from(body_parts),
                                         ..new_draft
                                     }
@@ -738,7 +751,7 @@ impl State {
     }
 
     fn back(&self) -> Vec<super::Message> {
-        vec![Navigation::Back.into()]
+        vec![mailfs::Message::Reload.into(), Navigation::Back.into()]
     }
 }
 
