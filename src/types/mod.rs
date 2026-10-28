@@ -1,12 +1,12 @@
 mod account;
-mod blob_id;
+mod blob;
 mod identity;
 mod mail;
 mod mailbox;
 mod thread_id;
 
 pub use account::*;
-pub use blob_id::*;
+pub use blob::*;
 pub use identity::*;
 pub use mail::*;
 pub use mailbox::*;

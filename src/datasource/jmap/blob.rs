@@ -1,6 +1,6 @@
 use crate::{
     datasource::{BlobRemote, jmap::JmapAccount},
-    types::BlobId,
+    types::{AccountId, BlobId, UploadResponse},
 };
 use async_trait::async_trait;
 use color_eyre::Result;
@@ -11,6 +11,14 @@ impl BlobRemote for JmapAccount {
         self.client
             .download(id.as_str())
             .await
+            .map_err(|err| err.into())
+    }
+
+    async fn upload_blob(&self, account_id: AccountId, blob: Vec<u8>) -> Result<UploadResponse> {
+        self.client
+            .upload(Some(account_id.as_str()), blob, None)
+            .await
+            .map(UploadResponse::from)
             .map_err(|err| err.into())
     }
 }

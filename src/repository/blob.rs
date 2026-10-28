@@ -1,8 +1,8 @@
 use crate::{
     repository::Repository,
-    types::{AccountId, BlobId},
+    types::{AccountId, BlobId, UploadResponse},
 };
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::oneshot;
 
 #[derive(Debug)]
 pub struct Command {
@@ -16,6 +16,10 @@ pub enum CommandKind {
         id: BlobId,
         tx: oneshot::Sender<color_eyre::Result<Vec<u8>>>,
     },
+    UploadBlob {
+        blob: Vec<u8>,
+        tx: oneshot::Sender<color_eyre::Result<UploadResponse>>,
+    },
 }
 
 impl From<Command> for super::Command {
@@ -25,14 +29,9 @@ impl From<Command> for super::Command {
 }
 
 #[derive(Default)]
-pub struct Locks {
-    download_blob: Mutex<()>,
-}
-
+pub struct Locks {}
 impl Repository {
     pub async fn get_blob(&self, account_id: AccountId, id: BlobId) -> color_eyre::Result<Vec<u8>> {
-        let _entry = self.blob_locks.download_blob.lock().await;
-
         let opt_blob = self
             .caches
             .get(&account_id)
@@ -58,5 +57,24 @@ impl Repository {
                 Ok(blob)
             }
         }
+    }
+
+    pub async fn upload_blob(
+        &self,
+        account_id: AccountId,
+        blob: Vec<u8>,
+    ) -> color_eyre::Result<UploadResponse> {
+        let result = self
+            .remote
+            .get_remote_account(account_id.clone())
+            .upload_blob(account_id.clone(), blob.clone())
+            .await;
+
+        if let Ok(result) = result.as_ref() {
+            let mut cache_lock = self.caches.get(&account_id).unwrap().write().await;
+            cache_lock.upsert_blob(result.blob_id.clone(), blob).await?;
+        }
+
+        result
     }
 }

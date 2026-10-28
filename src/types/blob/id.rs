@@ -12,3 +12,9 @@ impl From<String> for BlobId {
         Self(id)
     }
 }
+
+impl From<&str> for BlobId {
+    fn from(id: &str) -> Self {
+        Self(id.to_string())
+    }
+}

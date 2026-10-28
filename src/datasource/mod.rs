@@ -6,8 +6,9 @@ pub mod types;
 use crate::{
     datasource::types::Patches,
     types::{
-        AccountData, AccountId, BlobId, CachedIdentity, CachedMail, CachedMailbox, MailId,
-        MailProperty, MailboxId, MailboxProperty, ParentMailboxId, ThreadId,
+        AccountData, AccountId, BlobId, CachedAttachment, CachedIdentity, CachedMail,
+        CachedMailbox, MailId, MailProperty, MailboxId, MailboxProperty, ParentMailboxId, ThreadId,
+        UploadResponse,
     },
 };
 use async_trait::async_trait;
@@ -342,4 +343,6 @@ pub trait BlobCache {
 #[async_trait]
 pub trait BlobRemote {
     async fn fetch_blob(&self, id: BlobId) -> Result<Vec<u8>>;
+
+    async fn upload_blob(&self, account_id: AccountId, blob: Vec<u8>) -> Result<UploadResponse>;
 }
