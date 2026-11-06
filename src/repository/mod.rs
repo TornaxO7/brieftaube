@@ -118,6 +118,9 @@ impl Repository {
                     blob::CommandKind::GetBlob { id, tx } => {
                         let _ = tx.send(repo.get_blob(cmd.account_id, id).await);
                     }
+                    blob::CommandKind::UploadBlob { blob, tx } => {
+                        let _ = tx.send(repo.upload_blob(cmd.account_id, blob).await);
+                    }
                 },
                 Command::MailAndMailbox(cmd) => match cmd.kind {
                     mail_and_mailbox::CommandKind::PatchMailAndMailbox { patches, tx } => {
