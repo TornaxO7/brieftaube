@@ -23,7 +23,7 @@ jmap-client = { git = "https://github.com/TornaxO7/jmap-client", branch = "my" }
 mail-parser = "0.11"
 material-theme-loader = "0.1"
 nucleo = "0.5"
-htmd = "0.5"
+htmd = "0.6"
 pulldown-cmark = "0.13"
 pulldown-cmark-mdcat = { version = "2.13", default-features = false, features = [
   "ratatui",
